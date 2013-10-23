@@ -945,10 +945,6 @@ class pipeline():
             return MatrixInfo.blosum60
         else:
             print 'specified matrix not found!'
-            
-    
-    
-
         
         
 
@@ -1261,7 +1257,3 @@ if __name__ == '__main__':
         except ConfigError, e:
             print 'Error: option', e.option, ' not found!'
             print 'exiting...'
-    
-
-
-

@@ -211,11 +211,11 @@ class Task(object):
         
         self.HOME = getcwd() + '/'
         
-        self.savePDB = self.HOME + savePDB
+        self.savePDB = self.HOME + savePDB #AS changed so files don't get overwritter
         self.tmpPath = tmpPath
         self.outputPath = outputPath
         self.pdbPath = pdbPath
-        self.saveAlignments = self.HOME + outputPath + 'alignments/'
+        self.saveAlignments = self.HOME + outputPath + 'alignments/' + self.uniprotKB + '_' + mutation + '_' #AS changed so files don't get overwritten
         
         # stuff like modeller_path can't be specified here since self.unique
         # is not yet set. This happens after initialising the Task for each
@@ -233,14 +233,11 @@ class Task(object):
         self.get_uniprot_sequence    = get_uniprot_sequence
         self.pdb_resolution_database = pdb_resolution_database
         self.core_template_database  = core_template_database
-
         
         self.pool = None
         self.semaphore = None
         
         self.log = None
-
-        
         
         self.PWD = None
         
