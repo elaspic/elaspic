@@ -56,7 +56,9 @@ class tcoffee_alignment:
         """
         write the alignment in clustal format to the folder specified for the class instance
         """
-        AlignIO.write(alignment, self.alnPath + seqID, self.alnFormat)
+        alignmentID = [aln.id for aln in alignment]
+#        AlignIO.write(alignment, self.alnPath + seqID, self.alnFormat)
+        AlignIO.write(alignment, self.alnPath + alignmentID[0] + '_' + alignmentID[-1], self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
 
 
     def __call_tcoffee_system_command(self, alignInFile, out, mode):

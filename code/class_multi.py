@@ -211,11 +211,11 @@ class Task(object):
         
         self.HOME = getcwd() + '/'
         
-        self.savePDB = self.HOME + savePDB #AS changed so files don't get overwritter
+        self.savePDB = self.HOME + savePDB 
         self.tmpPath = tmpPath
         self.outputPath = outputPath
         self.pdbPath = pdbPath
-        self.saveAlignments = self.HOME + outputPath + 'alignments/' + self.uniprotKB + '_' + mutation + '_' #AS changed so files don't get overwritten
+        self.saveAlignments = self.HOME + outputPath + 'alignments/' + uniprotKB + '_' + mutation + '-'
         
         # stuff like modeller_path can't be specified here since self.unique
         # is not yet set. This happens after initialising the Task for each
@@ -544,9 +544,6 @@ class Task(object):
                                                  self.get_uniprot_sequence, 
                                                  self.core_template_database
                                                  )
-        
-
-                    
 
         
         # if not, check if it is in the interface and find a template    
@@ -635,6 +632,8 @@ class Task(object):
         subprocess.check_call(system_command, shell=True)
         pdbFile_wt = self.uniprotKB + '_' + self.mutation_uniprot + '.pdb'
         
+        shutil.copyfile(modeller_path + pdbFile_wt_renamed, self.savePDB + self.uniprotKB + '_' + self.mutation_uniprot + '-' + pdbCode + ''.join(chains) + '.pdb')
+
         return normDOPE_wt, pdbFile_wt_renamed, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores
     
     
@@ -695,7 +694,8 @@ class Task(object):
             mutations_foldX = self.prepareMutationFoldX(sequence, [mutation_foldX, ])
 
             
-            normDOPE_wt, pdbFile_wt, SWITCH_CHAIN, chains_get_pdb = self.__getCrystalStructure(pdbCode, chains_get_pdb, self.tmpPath + self.unique + '/')
+            normDOPE_wt, pdbFile_wt, SWITCH_CHAIN, chains_get_pdb = self.__getCrystalStructure(pdbCode, chains_get_pdb, self.tmpPath + self.unique + '/')        
+        
         
         ########################################
         ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
@@ -766,8 +766,6 @@ class Task(object):
                                
         repairedPDB_mut_list = mutatedPDB
         repairedPDB_wt_list = referenceWT
-            
-
             
         
         ########################################
@@ -919,8 +917,8 @@ class Task(object):
             physChem_mut_ownChain.append(res_mut_ownChain)
             
             # copy the pdb file
-#            shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/Mut_R_' + item.split('/')[-1])
-            shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/Mut_R_' + item.split('/')[-1] + '_' + str(mutation))
+#           shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/Mut_R_' + item.split('/')[-1])
+            shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/Mut_' + item.split('/')[-1] + str(mutation))
         
         for item in repairedPDB_wt_list:
             # calculate the contact vector
@@ -940,11 +938,10 @@ class Task(object):
                     res_wt_ownChain[index] += atomicContactVector_ownChain[index]
             physChem_wt.append(res_wt)
             physChem_wt_ownChain.append(res_wt_ownChain)
-            
 
             # copy the pdb file
-#            shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/WT_R_' + item.split('/')[-1])
-            shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/WT_R_' + item.split('/')[-1] + '_' + str(mutation))
+#           shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/WT_R_' + item.split('/')[-1])
+            shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/' + item.split('/')[-1] + str(mutation))
         
 
         DSSP = getDSSP()
