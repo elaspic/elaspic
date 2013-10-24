@@ -215,7 +215,7 @@ class Task(object):
         self.tmpPath = tmpPath
         self.outputPath = outputPath
         self.pdbPath = pdbPath
-        self.saveAlignments = self.HOME + outputPath + 'alignments/' + uniprotKB + '_' + mutation + '-'
+        self.saveAlignments = self.HOME + self.outputPath + 'alignments/'
         
         # stuff like modeller_path can't be specified here since self.unique
         # is not yet set. This happens after initialising the Task for each
@@ -522,11 +522,14 @@ class Task(object):
         # initialise the template selection classes
         # the unique variable is set after the __init__ is called, therefore
         # they need to be 'initialised' here.
+    
+        alignments_path = self.tmpPath + self.unique + '/tcoffee/'
+        
         self.getTemplateInterface = get_template_interface(self.tmpPath, 
                                                            self.unique, 
                                                            self.pdbPath, 
                                                            self.savePDB, 
-                                                           self.saveAlignments,
+                                                           alignments_path,
                                                            self.pool, 
                                                            self.semaphore, 
                                                            self.get_uniprot_sequence, 
@@ -534,17 +537,17 @@ class Task(object):
                                                            self.threeDID_database, 
                                                            self.pdb_resolution_database
                                                            )
+                                                           
         self.getTemplateCore = get_template_core(self.tmpPath, 
                                                  self.unique, 
                                                  self.pdbPath, 
                                                  self.savePDB,
-                                                 self.saveAlignments,
+                                                 alignments_path,
                                                  self.pool, 
                                                  self.semaphore, 
                                                  self.get_uniprot_sequence, 
                                                  self.core_template_database
                                                  )
-
         
         # if not, check if it is in the interface and find a template    
         is_in_core = True
@@ -597,6 +600,16 @@ class Task(object):
 #        if float(scores[0]) >= 99.0:
 #            do_modelling = False
         
+        # save final alignments to the output alignmetns folder
+        chains_template = chains # chain for the first guy, chain for the second guy, irrespective of the PDB order
+        for alignment in alignments:
+            alnIDs = [aln.id for aln in alignment]
+            shutil.copyfile(alignments_path + alnIDs[0],
+                            self.saveAlignments + self.uniprotKB + '_' + self.mutation_uniprot + '-' + alnIDs[0] + '_' + alnIDs[1])
+
+        
+        
+        
         sequences, alignments, chains, SWITCH_CHAIN, HETflag, HETATMsInChain_SEQnumbering = self.prepareInput(pdbCode, chains, domains_pdb, sequences, alignments)
         
         if SWITCH_CHAIN:
@@ -632,7 +645,9 @@ class Task(object):
         subprocess.check_call(system_command, shell=True)
         pdbFile_wt = self.uniprotKB + '_' + self.mutation_uniprot + '.pdb'
         
-        shutil.copyfile(modeller_path + pdbFile_wt_renamed, self.savePDB + self.uniprotKB + '_' + self.mutation_uniprot + '-' + pdbCode + ''.join(chains) + '.pdb')
+        # save modeller PDB file to the outputs pdbFiles folder
+        shutil.copyfile(modeller_path + pdbFile_wt_renamed, 
+                        self.savePDB + self.uniprotKB + '_' + self.mutation_uniprot + '-' + pdbCode + ''.join(chains_template) + '.pdb')
 
         return normDOPE_wt, pdbFile_wt_renamed, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores
     

@@ -58,7 +58,7 @@ class tcoffee_alignment:
         """
         alignmentID = [aln.id for aln in alignment]
 #        AlignIO.write(alignment, self.alnPath + seqID, self.alnFormat)
-        AlignIO.write(alignment, self.alnPath + alignmentID[0] + '_' + alignmentID[-1], self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
+        AlignIO.write(alignment, self.alnPath + alignmentID[0], self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
 
 
     def __call_tcoffee_system_command(self, alignInFile, out, mode):
