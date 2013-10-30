@@ -1,0 +1,12 @@
+# Compiled source code
+*.pyc
+*.o
+
+# Binary and configuration files
+*.pickle
+*.dat
+*.ini
+
+# Logs and databases
+*.log
+*.sql

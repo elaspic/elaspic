@@ -914,8 +914,11 @@ class get_template_interface(get_template):
             # check if the mutation falls into the interface
             if interaction[4] == 'NULL' or interaction[4] == '':
                 continue
-            elif int(mutation[1:-1]) not in [ int(x) for x in interaction[4].split(',') ]:
-                continue
+#            AS commented out the following two lines because errors in Sabastian's interface file 
+#                may be preventing interfaces from being detected
+#            elif int(mutation[1:-1]) not in [ int(x) for x in interaction[4].split(',') ]:
+#                continue
+            
             
             # skip ELM interactions. This should probably be included in future
             # versions            
