@@ -286,8 +286,10 @@ class get3DID(myDatabases):
                     Pfam1, Pfam2 = line.split('\t')[1], line.split('\t')[2]
                 
                 # read the entries for the above set pfam family
-                if line[:4] == '#=3D':
-                    skip, pdb, chain1, chain2, trash, garbage = line.split('\t')
+                if line[:4] == '#=3D':                    
+                    pdb = line.split('\t')[1]
+                    chain1 = line.split('\t')[2]
+                    chain2 = line.split('\t')[3]
                     
                     # there often are interactions with one chain
                     # we are only interested in interactions between different chains
