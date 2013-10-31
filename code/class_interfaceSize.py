@@ -88,6 +88,7 @@ class interfaceSize():
                 return '0', '0', '0'
             else:
                 print 'Warning in pops for pdb', pdb
+                print error
         result = self.__read_pops(self.tmpPath + 'pops.out')
         # Distinguish the surface area by hydrophobic, hydrophilic, and total
         for item in result:
@@ -108,6 +109,7 @@ class interfaceSize():
                 return '0', '0', '0'
             else:
                 print 'Warning in pops for pdb', pdb
+                print error
         result = self.__read_pops(self.tmpPath + 'pops.out')
         # Distinguish the surface area by hydrophobic, hydrophilic, and total
         for item in result:
@@ -128,6 +130,7 @@ class interfaceSize():
                 return '0', '0', '0'
             else:
                 print 'Warning in pops for pdb', pdb
+                print error
         result = self.__read_pops(self.tmpPath + 'pops.out')
         for item in result:
             if item[0] == 'hydrophobic:':
