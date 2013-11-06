@@ -714,7 +714,7 @@ class get_template_core(get_template):
             if not int(mutation[1:-1]) in range(template[1][0], template[1][1]):
                 continue
             
-            
+            pfamID         = template[0]
             uniprot_domain = template[1]
             pdbCode        = template[3]
             chain          = template[4]
@@ -748,9 +748,9 @@ class get_template_core(get_template):
             # if the sequence was not found in the database but could be retreived
             # from the website it is added to the database
             if new_sequence:
-                return [pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot], [[uniprotKB, uniprot_sequence], ]
+                return [pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID], [[uniprotKB, uniprot_sequence], ]
             else:
-                return [pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot], []
+                return [pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID], []
         
         # if no template was found
         return 'not in core', []
@@ -764,7 +764,7 @@ class get_template_interface(get_template):
     
     """
     
-    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, semaphore, get_uniprot_seq, get_interactions, get_3did_entries, get_resolution):
+    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, semaphore, get_uniprot_seq, get_interactions, get_3did_entries, get_resolution, include_all_pfam_interactions):
         """
         input
         
@@ -782,6 +782,10 @@ class get_template_interface(get_template):
         """
         # call the __init__ from the parent class
         get_template.__init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, semaphore, get_uniprot_seq)
+        
+        # AS to output all pfam pairs
+
+        self.include_all_pfam_interactions = include_all_pfam_interactions
         
         # set the databases
         self.get_3did_entries = get_3did_entries
@@ -846,12 +850,16 @@ class get_template_interface(get_template):
             return [], new_sequences
         else:
             # select the best template
-            best_template = self.chose_best_template(templates)
-            # Refine the best template, i.e. check for errors in the alignment
-            # and realign
-            best_template_refined = self.run(uniprotKB, mutation, best_template)
-
-            return best_template_refined[0][0], new_sequences
+            best_templates = self.chose_best_template(templates)
+            
+            best_templates_refined = []
+            for template in best_templates:
+                # Refine the best template, i.e. check for errors in the alignment
+                # and realign
+                template_refined = self.run(uniprotKB, mutation, template)
+                best_templates_refined.append(template_refined[0][0])
+            
+            return best_templates_refined, new_sequences
     
         
         
@@ -1006,7 +1014,7 @@ class get_template_interface(get_template):
 
      
 
-    def chose_best_template(self, templates):
+    def chose_best_template(self, all_templates):
         """
         Selects the best template based on sequence identity and resolution
         of the pdb structure
@@ -1017,26 +1025,47 @@ class get_template_interface(get_template):
         return:
         compare __call__() method
         """
-        # first sort by identity score:
-        templates_sorted = sorted(templates, key=itemgetter(3), reverse=True)
-
-        max_score = templates_sorted[0][3]
-        templates_highest_identity = list()
-        for template in templates_sorted:
-            if template[3] == max_score:
-                templates_highest_identity.append(template)
         
-        # add the resolution if available
-        tmp = list()
-        for template in templates_highest_identity:
-            add = template
-            add.extend( self.get_resolution(template[0]) )
-            tmp.append(add)
-    
-        tmp_sorted = sorted(tmp, key=itemgetter(16,17), reverse=False)
+        clustered_templates = []
+        
+        if self.include_all_pfam_interactions:
+            unique_pfam_pairs = set()
+            for template in all_templates:
+                unique_pfam_pairs.add((template[6], template[7]))
 
-        # return the firt template in the list, i.e. the best template
-        return tmp_sorted[0]
+            for pfam_pair in unique_pfam_pairs:
+                pfam_pair_templates = []
+                for template in all_templates:
+                    if (template[6], template[7]) == pfam_pair:
+                        pfam_pair_templates.append(template)
+                clustered_templates.append(pfam_pair_templates)
+        else:
+            clustered_templates.append([all_templates])
+        
+        best_templates = []
+        for templates in clustered_templates:
+            # first sort by identity score:
+            templates_sorted = sorted(templates, key=itemgetter(3), reverse=True)
+    
+            max_score = templates_sorted[0][3]
+            templates_highest_identity = list()
+            for template in templates_sorted:
+                if template[3] == max_score:
+                    templates_highest_identity.append(template)
+            
+            # add the resolution if available
+            tmp = list()
+            for template in templates_highest_identity:
+                add = template
+                add.extend( self.get_resolution(template[0]) )
+                tmp.append(add)
+        
+            tmp_sorted = sorted(tmp, key=itemgetter(16,17), reverse=False)
+            
+            # return the firt template in the list, i.e. the best template
+            best_templates.append(tmp_sorted[0])
+            
+        return best_templates
 
 
     ###########

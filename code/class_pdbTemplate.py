@@ -12,6 +12,7 @@ import subprocess
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB import PDBIO
 from Bio.PDB.Polypeptide import PPBuilder
+from Bio.PDB.Polypeptide import is_aa # AS
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 
@@ -115,17 +116,19 @@ class pdbTemplate():
         model = self.pdbStructure[0]
         chain = model[chainID]
         
-        chainNumbering = list()
-        amino_acids = ['ARG', 'HIS', 'LYS', 'ASP', 'GLU', 'SER', 'THR', 'ASN', \
-                       'GLN', 'CYS', 'GLY', 'PRO', 'ALA', 'VAL', 'ILE', 'LEU', \
-                       'MET', 'PHE', 'TYR', 'TRP']
-                       
-        for residue in chain:
-            if residue.resname in amino_acids and residue.id[0] == ' ':
-                chainNumbering.append(residue.id[1])
-        
-        return chainNumbering
-    
+#        chainNumbering = list()
+#        amino_acids = ['ARG', 'HIS', 'LYS', 'ASP', 'GLU', 'SER', 'THR', 'ASN', \
+#                       'GLN', 'CYS', 'GLY', 'PRO', 'ALA', 'VAL', 'ILE', 'LEU', \
+#                       'MET', 'PHE', 'TYR', 'TRP']
+#                       
+#        for residue in chain:
+#            if residue.resname in amino_acids and residue.id[0] == ' ':
+#                chainNumbering.append(residue.id[1])
+#        
+#        return chainNumbering
+        chain_numbering = [residue.id[1] for residue in chain if is_aa(residue)] #AS
+        return chain_numbering #AS
+
         
     def getChainNumbering(self, chainID):
         """
@@ -138,12 +141,14 @@ class pdbTemplate():
         model = self.pdbStructure[0]
         chain = model[chainID]
         
-        chainNumbering = list()
-
-        for residue in chain:
-            chainNumbering.append(residue.id[1])
-        
-        return chainNumbering
+#        chainNumbering = list()
+#
+#        for residue in chain:
+#            chainNumbering.append(residue.id[1])
+#        
+#        return chainNumbering
+        chain_numbering = [residue.id[1] for residue in chain] #AS
+        return chain_numbering #AS
 
             
     def __getPDB(self, pdbCode):
@@ -207,49 +212,58 @@ class pdbTemplate():
             HETATMpositions[chainID] = []
             BEGIN = False
             END = False
-            for residue in residues:
+            for residue in chain:
                 ## add special treatment for some PDB files...
                 ## not elegant but as a first try
                 # this last residue is not connected to the main chain and not
                 # complete. It is not considered in the sequence and is thus
                 # removed in the PDB file for modeller
-                if self.pdbCode == '1H9D' and residue[1] == 178:
-                    chain.detach_child(residue)
-                    continue
+                if self.pdbCode == '1H9D' and residue.id[1] == 178:
+                    chain.detach_child(residue.id)
+                
                 # in chain A residue 1010-1016 are disconected and not needed for
                 # the structure. But they cause problems
                 # in chain B redisue 1004 is incomplete
-                if self.pdbCode == '2JIU' and residue[1] in [1004, 1010, 1011, 1012, 1013, 1014, 1015, 1016]:
-                    chain.detach_child(residue)
-                    continue
+                elif self.pdbCode == '2JIU' and residue.id[1] in [1004, 1010, 1011, 1012, 1013, 1014, 1015, 1016]:
+                    chain.detach_child(residue.id)
                 
                 #remove water
-                if residue[0] == 'W':
-                    chain.detach_child(residue)
+                elif residue.id[0] == 'W':
+                    chain.detach_child(residue.id)
+                
                 # select the domain only and remove the rest
                 else:
-                    # record the position of the HETATM
-                    if residue[0] != ' ':
-                        # H_MSE is Selenomethionine and is treated as M by modeller
-                        if residue[0] == 'H_MSE':
+#                    # record the position of the HETATM
+#                    if residue.id[0] != ' ':
+#                        # H_MSE is Selenomethionine and is treated as M by modeller
+#                        if residue.id[0] == 'H_MSE':
+#                            pass
+#                        else:
+#                            HETATMpositions[chainID].append(residue.id[1])
+#                    
+#                    # I had at least one case where a non-standard residue was
+#                    # not listed as HETATM in the pdb file. Thus a check if
+#                    # the residue is a standart residue and if not, consider
+#                    # it as HETATM
+#
+#                    amino_acids = ['ARG', 'HIS', 'LYS', 'ASP', 'GLU', 'SER', \
+#                                   'THR', 'ASN', 'GLN', 'CYS', 'GLY', 'PRO', \
+#                                   'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', \
+#                                   'TYR', 'TRP']
+#                    try:                    
+#                        if chain[residue[1]].resname not in amino_acids:
+#                            HETATMpositions[chainID].append(residue[1])
+#                    except KeyError:
+#                        pass
+
+                    # AS Mod
+                    if not is_aa(residue):
+                        if residue.id[0] == 'H_MSE':
                             pass
                         else:
-                            HETATMpositions[chainID].append(residue[1])
+                            HETATMpositions[chainID].append(residue.id[1])
                     
-                    # I had at least one case where a non-standard residue was
-                    # not listed as HETATM in the pdb file. Thus a check if
-                    # the residue is a standart residue and if not, consider
-                    # it as HETATM
-                    amino_acids = ['ARG', 'HIS', 'LYS', 'ASP', 'GLU', 'SER', \
-                                   'THR', 'ASN', 'GLN', 'CYS', 'GLY', 'PRO', \
-                                   'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', \
-                                   'TYR', 'TRP']
-                    try:                    
-                        if chain[residue[1]].resname not in amino_acids:
-                            HETATMpositions[chainID].append(residue[1])
-                    except KeyError:
-                        pass
-
+                    
                     if domainBoundaries[i] != ['Null', 'Null']:
                         # to select the domain boundaries one has to start counting
                         # when the first number appears and has to stop after the
@@ -261,24 +275,24 @@ class pdbTemplate():
                                                 
                         # Selenomethionine is consideres a normal residue and
                         # should be removed if outside of the domain boundaries
-                        if residue[0] == ' ' and residue[1] >= int(domainBoundaries[i][0]):
+                        if residue.id[0] == ' ' and residue.id[1] >= int(domainBoundaries[i][0]):
                             BEGIN = True # from now on, keep the residues
-                        if residue[0] == 'H_MSE' and residue[1] >= int(domainBoundaries[i][0]):
+                        if residue.id[0] == 'H_MSE' and residue.id[1] >= int(domainBoundaries[i][0]):
                             BEGIN = True # from now on, keep the residues
                         
-                        if residue[0] == ' ' and residue[1] >= int(domainBoundaries[i][1]) + 1:
+                        if residue.id[0] == ' ' and residue.id[1] >= int(domainBoundaries[i][1]) + 1:
                             END = True # now detach them again
-                        if residue[0] == 'H_MSE' and residue[1] >= int(domainBoundaries[i][1]) + 1:
+                        if residue.id[0] == 'H_MSE' and residue.id[1] >= int(domainBoundaries[i][1]) + 1:
                             END = True # now detach them again
                         
                         if BEGIN == False: # we are before the beginning
                                            # i.e. remove the residue
-                            if residue[0] == ' ' or residue[0] == 'H_MSE':
-                                chain.detach_child(residue)
-                        elif END: # we are after the end
+                            if residue.id[0] == ' ' or residue.id[0] == 'H_MSE':
+                                chain.detach_child(residue.id)
+                        elif END == True: # we are after the end
                                   # i.e. remove the residue
-                            if residue[0] == ' ' or residue[0] == 'H_MSE':
-                                chain.detach_child(residue)
+                            if residue.id[0] == ' ' or residue.id[0] == 'H_MSE':
+                                chain.detach_child(residue.id)
                         # else: we are inbetween the domain boundaries
                         #       i.e. keep the residues
 
@@ -320,15 +334,11 @@ class pdbTemplate():
         # see: http://biopython.org/DIST/docs/api/Bio.PDB.Polypeptide-module.html
         sequence = Seq('', IUPAC.protein)
 #        for pb in PPBuilder().build_peptides(chain, aa_only=False):
-        for pb in PPBuilder().build_peptides(chain, aa_only=True):
+        ppb = PPBuilder()
+        for pb in ppb.build_peptides(chain, aa_only=True):
             tmp = sequence + pb.get_sequence()
             sequence = tmp
         return sequence
-
-
-
-
-
 
 
         

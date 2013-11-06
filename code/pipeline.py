@@ -108,7 +108,7 @@ class getInteractions:
             self.database = pickle.load(f)
             f.close()
         else:
-            print 'Generating interaction database..'
+            print 'Generating interaction database...'
             self.database = dict()
             
             with open(database, 'r') as f:
@@ -124,19 +124,33 @@ class getInteractions:
                     # PfamID_secondGuy: Pfam family name
                     # domain2: domain boundaries of the uniprot sequence
                     firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain, \
-                    interface, NA, secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2 = l.split('\t')
-                    
+                    interface, NA, secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2 = l.strip().split('\t')
+                                        
                     if domain == 'NULL' or interface == 'NULL':
                         continue
 
+                    interface = tuple() # AS, the interfaces are wrong anyway. Needs to be implemented for both partners
+                    
                     self.database.setdefault(firstGuy, []).append([firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain, interface, \
                                                               secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2])
+                    
+                    # AS Always query for the first guy, so need to add values in reverse order as well
+                    self.database.setdefault(secondGuy, []).append([secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2, interface, \
+                                                              firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain])
 
+            # AS remove duplicates                                          
+            for key in self.database.keys():
+                list_of_tuples = [tuple(value_list) for value_list in self.database[key]]
+                list_of_unique_tuples = list(set(list_of_tuples))
+                list_of_unique_lists = [list(value_tuple) for value_tuple in list_of_unique_tuples]
+                self.database[key] = list_of_unique_lists
+                print len(list_of_tuples), len(list_of_unique_lists)
 
             # save the newly generated database
-            f = open(database_name, 'wb')    
+            f = open(database_name, 'wb')
             pickle.dump(self.database, f)
             f.close()
+
     
     def __call__(self, uniprotKB):
         """
@@ -163,7 +177,13 @@ class get3DID(myDatabases):
         database_name = 'pipeline_3DID_database.pickle'
         
         # check if the database was already created
-        if not isfile(database_name):
+        if isfile(database_name):
+            # load the database
+            print 'Loading the corrected 3DID table'
+            f = open(database_name, 'rb')
+            self.database = pickle.load(f)
+            f.close()
+        else:            
             print 'Generating the correceted 3DID table'
             # read the 3Did file and store the information in a dict()
             self.database_3did = self.__make_3did_table(threeDidFile)
@@ -175,19 +195,70 @@ class get3DID(myDatabases):
             f = open(database_name, 'wb')
             pickle.dump(self.database, f)
             f.close()
-        else:
-            # load the database
-            print 'Loading the corrected 3DID table'
-            f = open(database_name, 'rb')
-            self.database = pickle.load(f)
-            f.close()
-            
+          
     
     def __call__(self, PfamID_firstGuy, PfamID_secondGuy):
         if self.database.has_key((PfamID_firstGuy, PfamID_secondGuy)):
             return self.database[PfamID_firstGuy, PfamID_secondGuy]
         else:
             return 'no entry'
+
+    
+    def __make_3did_table(self, threeDidFile):
+        """
+        read the 3DID file and store the information in a dictionary
+        """
+        database = dict()
+        with open(threeDidFile, 'r') as f:
+            for line in f:
+                # go to the line corresponding to one family pair
+                if line[:4] == '#=ID':
+                    # get the two family ids
+                    Pfam1, Pfam2 = line.split('\t')[1], line.split('\t')[2]
+                
+                # read the entries for the above set pfam family
+                if line[:4] == '#=3D':                    
+                    pdb = line.split('\t')[1]
+                    chain1 = line.split('\t')[2]
+                    chain2 = line.split('\t')[3]
+                    
+                    # there often are interactions with one chain
+                    # we are only interested in interactions between different chains
+                    if chain1.split(':')[0] !=  chain2.split(':')[0]:
+                        chain1, domain_pdb1 = chain1.split(':')
+                        chain2, domain_pdb2 = chain2.split(':')
+                        add = [pdb.upper(), chain1, chain2, domain_pdb1, domain_pdb2]
+                        database.setdefault( (Pfam1, Pfam2), []).append(add)
+
+        return database
+
+    
+    def __make_domain_boundary_table(self, domainTableFile):
+        """
+        creates the domain boundary table Sebastian provided to correct the
+        domain boundaries of the 3did_flat file
+        """
+        domainTable = dict()
+        with open(domainTableFile, 'r') as f:
+            f.readline()
+            for line in f:
+                pdb, AutoPfamA, pfam_id, chain, domain_boundary = line.split('\t')
+                # it happend that Sebastian was "glueing" two Pfam domain together
+                # forming kind of a super domain (to get a "real", i.e. meaningful,
+                # domain). In that case he added them with '+'. I split them and
+                # add them in a list. Later it is checked wether the pfam ID is in
+                # this list, i.e. if it is either one or the other
+                pfam_id = pfam_id.strip('+').split('+')
+                domain_boundary = domain_boundary.strip().split(',')
+                for item in domain_boundary:
+                    # it can happen that the pdb numbering is negativ
+                    # see split_domain() function explanation
+                    domain = self.split_domain(item)
+
+                domainTable.setdefault(pdb + chain, []).append([pfam_id, domain])
+        
+        return domainTable
+
     
     def __correct_3did_domain_boundaries(self):
         """
@@ -272,34 +343,7 @@ class get3DID(myDatabases):
         
         return domain
     
-    
-    def __make_3did_table(self, threeDidFile):
-        """
-        read the 3DID file and store the information in a dictionary
-        """
-        database = dict()
-        with open(threeDidFile, 'r') as f:
-            for line in f:
-                # go to the line corresponding to one family pair
-                if line[:4] == '#=ID':
-                    # get the two family ids
-                    Pfam1, Pfam2 = line.split('\t')[1], line.split('\t')[2]
-                
-                # read the entries for the above set pfam family
-                if line[:4] == '#=3D':                    
-                    pdb = line.split('\t')[1]
-                    chain1 = line.split('\t')[2]
-                    chain2 = line.split('\t')[3]
-                    
-                    # there often are interactions with one chain
-                    # we are only interested in interactions between different chains
-                    if chain1.split(':')[0] !=  chain2.split(':')[0]:
-                        chain1, domain_pdb1 = chain1.split(':')
-                        chain2, domain_pdb2 = chain2.split(':')
-                        add = [pdb.upper(), chain1, chain2, domain_pdb1, domain_pdb2]
-                        database.setdefault( (Pfam1, Pfam2), []).append(add)
 
-        return database
     
     
     def __check_weird_domain_numbering(self, pdb, chain):
@@ -334,32 +378,7 @@ class get3DID(myDatabases):
         else:
             return False, []
             
-    
-    def __make_domain_boundary_table(self, domainTableFile):
-        """
-        creates the domain boundary table Sebastian provided to correct the
-        domain boundaries of the 3did_flat file
-        """
-        domainTable = dict()
-        with open(domainTableFile, 'r') as f:
-            f.readline()
-            for line in f:
-                pdb, AutoPfamA, pfam_id, chain, domain_boundary = line.split('\t')
-                # it happend that Sebastian was "glueing" two Pfam domain together
-                # forming kind of a super domain (to get a "real", i.e. meaningful,
-                # domain). In that case he added them with '+'. I split them and
-                # add them in a list. Later it is checked wether the pfam ID is in
-                # this list, i.e. if it is either one ore the other
-                pfam_id = pfam_id.strip('+').split('+')
-                domain_boundary = domain_boundary.strip().split(',')
-                for item in domain_boundary:
-                    # it can happen that the pdb numbering is negativ
-                    # see split_domain() function explanation
-                    domain = self.split_domain(item)
 
-                domainTable.setdefault(pdb + chain, []).append([pfam_id, domain])
-        
-        return domainTable
     
     
            
@@ -643,7 +662,16 @@ class pipeline():
             self.saveScinet = configParser.getboolean('DEFAULT', 'saveScinet')
         else:
             self.saveScinet = defaults['saveScinet']
-        
+        # 3DID or PDBFam interaction file
+        if configParser.has_option('DEFAULT', 'use_pdbfam_database'):
+            self.use_pdbfam_database = configParser.getboolean('DEFAULT', 'use_pdbfam_database')
+        else:
+            self.use_pdbfam_database = False
+        # output all pfam interacting pairs or select the best one
+        if configParser.has_option('DEFAULT', 'include_all_pfam_interactions'):
+            self.include_all_pfam_interactions = configParser.getboolean('DEFAULT', 'include_all_pfam_interactions')
+        else:
+            self.include_all_pfam_interactions = False
             
         ## from [SETTINGS]
         # name
@@ -1024,7 +1052,8 @@ class pipeline():
                                 self.threeDID_database,
                                 self.get_uniprot_sequence,
                                 self.pdb_resolution_database,
-                                self.core_template_database
+                                self.core_template_database,
+                                self.include_all_pfam_interactions
                                 )
                           )
 
@@ -1044,7 +1073,9 @@ class pipeline():
         
         # write header        
         res_wt.write('ID\t' + \
-                     'normDOPE\t' + \
+                    'pfamID1\t' + \
+                    'pfamID2\t' + \
+                    'normDOPE\t' + \
                     'intraclashesEnergy1_wt' + \
                     '\tintraclashesEnergy2_wt' + \
                     '\tinteractionEnergy_wt' + \
@@ -1094,7 +1125,11 @@ class pipeline():
                     '\tstability_Entropy_Complex' + \
                     '\tstability_Number_of_Residues' + \
                     '\n')
-        res_mut.write('ID\tnormDOPE\tintraclashesEnergy1_mut' + \
+        res_mut.write('ID\t' + \
+                    'pfamID1\t' + \
+                    'pfamID2\t' + \
+                    'normDOPE\t' + \
+                    'intraclashesEnergy1_mut' + \
                     '\tintraclashesEnergy2_mut' + \
                     '\tinteractionEnergy_mut' + \
                     '\tBackbone_Hbond_mut' + \
@@ -1143,7 +1178,10 @@ class pipeline():
                     '\tstability_Entropy_Complex' + \
                     '\tstability_Number_of_Residues' + \
                     '\n')
-        res_if.write('ID\tcore_or_interface\tseq_id_avg\tseq_id_chain1\tseq_id_chain2\t' + \
+        res_if.write('ID\t' + \
+                    'pfamID1\t' + \
+                    'pfamID2\t' + \
+                    'core_or_interface\tseq_id_avg\tseq_id_chain1\tseq_id_chain2\t' + \
                      'matrix_score\tif_hydrophobic\tif_hydrophilic\tif_total\t' + \
                      'contactVector_wt_ownChain\tcontactVector_wt\t' + \
                      'contactVector_mut_ownChain\tcontactVector_mut\t' + \
@@ -1162,65 +1200,74 @@ class pipeline():
             if results.empty():
                 break
             
-            modellerResult = results.get()
+            output_data = results.get()
             
-            if modellerResult[0] == None:
-                skiplog.write(modellerResult[1] + '\t' + modellerResult[2] + '\n')
-                continue
-            elif modellerResult[0] == 'no template found':
-                skiplog.write(modellerResult[1] + '\t' + 'no template found' + '\n')
-                continue
-            else:
-                try:
-                    solvent_accessibility_mut = modellerResult.pop()
-                except:
-                    print 'modellerResult', modellerResult
-                    raise
-                secondary_structure_mut = modellerResult.pop()
-                solvent_accessibility_wt = modellerResult.pop()
-                secondary_structure_wt = modellerResult.pop()
-                is_in_core = modellerResult.pop()
-                uniprotKB = modellerResult.pop()
-                mutation = modellerResult.pop()
-                self.get_uniprot_sequence.add(modellerResult.pop())
-                scores = modellerResult.pop()
-                matrix_score = modellerResult.pop()
-                physChem_wt_ownChain = modellerResult.pop()
-                physChem_wt = modellerResult.pop()
-                physChem_mut_ownChain = modellerResult.pop()
-                physChem_mut = modellerResult.pop()
-                interface_size = modellerResult.pop()
-                Stability_energy_wt = modellerResult.pop()
-                AnalyseComplex_energy_wt = modellerResult.pop()
-                Stability_energy_mut = modellerResult.pop()
-                AnalyseComplex_energy_mut = modellerResult.pop()
-                normDOPE_mut = modellerResult.pop()
-                normDOPE_wt = modellerResult.pop()
-                
-
-                resForWrite_wt = uniprotKB + '_' + mutation + '-wt' + '\t' + \
-                                 str(normDOPE_wt)[:6] + '\t' +\
-                                 '\t'.join(AnalyseComplex_energy_wt) + '\t' +\
-                                 '\t'.join(Stability_energy_wt) + \
-                                 '\n'
-                        
-                resForWrite_mut = uniprotKB + '_' + mutation + '-mut' + '\t' + \
-                                  str(normDOPE_mut)[:6] + '\t' +\
-                                  '\t'.join(AnalyseComplex_energy_mut) + '\t' +\
-                                  '\t'.join(Stability_energy_mut) + \
-                                  '\n'
+            for output_dict in output_data:
+                if isinstance(output_dict, list) and (output_dict[0] == None):
+                    skiplog.write(output_dict[1] + '\t' + output_dict[2] + '\n')
+                    continue
+                elif isinstance(output_dict, list) and (output_dict[0] == 'no template found'):
+                    skiplog.write(output_dict[1] + '\t' + 'no template found' + '\n')
+                    continue
+                else:
+                    try:
+                        solvent_accessibility_mut = output_dict['solvent_accessibility_mut']
+                    except:
+                        print 'modellerResult', output_dict
+                        raise
+                    secondary_structure_mut = output_dict['secondary_structure_mut']
+                    solvent_accessibility_wt = output_dict['solvent_accessibility_wt']
+                    secondary_structure_wt = output_dict['secondary_structure_wt']
+                    is_in_core = output_dict['is_in_core']
+                    uniprotKB = output_dict['uniprotKB']
+                    mutation = output_dict['mutation']
+                    self.get_uniprot_sequence.add(output_dict['new_sequences'])
+                    scores = output_dict['scores']
+                    matrix_score = output_dict['matrix_score']
+                    physChem_wt_ownChain = output_dict['physChem_wt_ownChain']
+                    physChem_wt = output_dict['physChem_wt']
+                    physChem_mut_ownChain = output_dict['physChem_mut_ownChain']
+                    physChem_mut = output_dict['physChem_mut']
+                    interface_size = output_dict['interface_size']
+                    Stability_energy_wt = output_dict['Stability_energy_wt']
+                    AnalyseComplex_energy_wt = output_dict['AnalyseComplex_energy_wt']
+                    Stability_energy_mut = output_dict['Stability_energy_mut']
+                    AnalyseComplex_energy_mut = output_dict['AnalyseComplex_energy_mut']
+                    normDOPE_mut = output_dict['normDOPE_mut']
+                    normDOPE_wt = output_dict['normDOPE_wt']
+                    pfamID1 = output_dict['pfamID1']
+                    pfamID2 = output_dict['pfamID2']
+            
+                    resForWrite_wt = uniprotKB + '_' + mutation + '-wt' + '\t' + \
+                                     pfamID1 + '\t' + \
+                                     pfamID2 + '\t' + \
+                                     str(normDOPE_wt)[:6] + '\t' +\
+                                     '\t'.join(AnalyseComplex_energy_wt) + '\t' +\
+                                     '\t'.join(Stability_energy_wt) + \
+                                     '\n'
+                            
+                    resForWrite_mut = uniprotKB + '_' + mutation + '-mut' + '\t' + \
+                                      pfamID1 + '\t' + \
+                                      pfamID2 + '\t' + \
+                                      str(normDOPE_mut)[:6] + '\t' +\
+                                      '\t'.join(AnalyseComplex_energy_mut) + '\t' +\
+                                      '\t'.join(Stability_energy_mut) + \
+                                      '\n'
+                                            
+                    res_if.write(uniprotKB + '_' + mutation + '\t' + \
+                                pfamID1 + '\t' + \
+                                pfamID2 + '\t' + \
+                                is_in_core + '\t' + '\t'.join(scores) + '\t' +\
+                                 str(matrix_score) + '\t' + \
+                                 '\t'.join(interface_size) + '\t' + \
+                                 ','.join(physChem_wt_ownChain) + '\t' + ','.join(physChem_wt) + '\t' + \
+                                 ','.join(physChem_mut_ownChain) + '\t' + ','.join(physChem_mut) + '\t' + \
+                                 str(secondary_structure_wt)  + '\t' + str(solvent_accessibility_wt) + '\t' + \
+                                 str(secondary_structure_mut)  + '\t' + str(solvent_accessibility_mut) + \
+                                 '\n')
                                         
-                res_if.write(uniprotKB + '_' + mutation + '\t' + is_in_core + '\t' + '\t'.join(scores) + '\t' +\
-                             str(matrix_score) + '\t' + \
-                             '\t'.join(interface_size) + '\t' + \
-                             ','.join(physChem_wt_ownChain) + '\t' + ','.join(physChem_wt) + '\t' + \
-                             ','.join(physChem_mut_ownChain) + '\t' + ','.join(physChem_mut) + '\t' + \
-                             str(secondary_structure_wt)  + '\t' + str(solvent_accessibility_wt) + '\t' + \
-                             str(secondary_structure_mut)  + '\t' + str(solvent_accessibility_mut) + \
-                             '\n')
-                                    
-            res_wt.write(str(resForWrite_wt))
-            res_mut.write(str(resForWrite_mut))
+                res_wt.write(str(resForWrite_wt))
+                res_mut.write(str(resForWrite_mut))
         
         # save the database (needed if new sequences were added)
         self.get_uniprot_sequence.close()

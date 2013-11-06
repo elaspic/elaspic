@@ -195,7 +195,8 @@ class Task(object):
                  threeDID_database,
                  get_uniprot_sequence,
                  pdb_resolution_database,
-                 core_template_database
+                 core_template_database,
+                 include_all_pfam_interactions
                  ):
         
         self.templateFinding = templateFinding
@@ -203,6 +204,7 @@ class Task(object):
         self.mutation_uniprot = mutation
         self.mutation_pdb = mutation
         
+        self.include_all_pfam_interactions = include_all_pfam_interactions
         
         self.matrix = matrix # which matrix is used for the interface similarity
                              # calculation
@@ -535,7 +537,8 @@ class Task(object):
                                                            self.get_uniprot_sequence, 
                                                            self.interaction_database, 
                                                            self.threeDID_database, 
-                                                           self.pdb_resolution_database
+                                                           self.pdb_resolution_database,
+                                                           self.include_all_pfam_interactions
                                                            )
                                                            
         self.getTemplateCore = get_template_core(self.tmpPath, 
@@ -549,14 +552,50 @@ class Task(object):
                                                  self.core_template_database
                                                  )
         
-        # if not, check if it is in the interface and find a template    
-        is_in_core = True
-        template, new_sequences = self.getTemplateInterface(self.uniprotKB, self.mutation_uniprot)
-        if template == []:
-            pass
+        # Get templates for interface mutations
+        templates, new_sequences = self.getTemplateInterface(self.uniprotKB, self.mutation_uniprot)
+        
+        output_data = []
+        
+        if not templates == [[]]:
+            # Interface mutations were found
+            is_in_core = False
+            for template in templates:
+                output_dict = self.findTemplatesHelper(template, is_in_core, alignments_path)
+                output_dict['new_sequences'] = new_sequences
+                output_data.append(output_dict)
+            return output_data
+            
         else:
+            # No interface mutations were found
+            is_in_core = True
+            
+            # check if the mutations falls into the core
+            template, new_sequences = self.getTemplateCore(self.uniprotKB, self.mutation_uniprot)
+
+            if template == 'not in core' or template == 'no template':
+                is_in_core = False
+                return 'no template found', self.uniprotKB + '_' + self.mutation_uniprot
+            elif template == 'in gap':
+                # add the logger here to report that the mutation did fall into a gap
+                # in the alignment!
+                return 'no template found', self.uniprotKB + '_' + self.mutation_uniprot
+            else:
+                output_dict = self.findTemplatesHelper(template, is_in_core, alignments_path)
+                output_dict['new_sequences'] = new_sequences
+                output_data.append(output_dict)
+                return output_data
+
+
+    def findTemplatesHelper(self, template, is_in_core, alignments_path):
+        
+        # Parse template data
+        if not is_in_core: 
+            # Interface mutation
             is_in_core = False
             pdbCode     = template[0]
+            pfamID1     = template[6]
+            pfamID2     = template[7]
             chains      = [template[1], template[2]]
             scores      = [template[3], template[4], template[5]]
             sequences   = [template[9], template[10]] # is a list containing the uniprot sequences cut to the domain
@@ -568,30 +607,21 @@ class Task(object):
             domains_pdb = [ [int(template[14].split('-')[0]), int(template[14].split('-')[1])], 
                             [int(template[15].split('-')[0]), int(template[15].split('-')[1])]
                           ]
-
-        # check if the mutations falls into the core
-        if is_in_core == True:
-            template, new_sequences = self.getTemplateCore(self.uniprotKB, self.mutation_uniprot)
-
-            if template == 'not in core' or template == 'no template':
-                is_in_core = False
-                return 'no template found', self.uniprotKB + '_' + self.mutation_uniprot
-            elif template == 'in gap':
-                # add the logger here to report that the mutation did fall into a gap
-                # in the alignment!
-                return 'no template found', self.uniprotKB + '_' + self.mutation_uniprot
-            else:
-                pdbCode     = template[0]
-                chains      = [template[1], ]
-                domains_pdb = [template[2], ]
-                scores      = [template[3], template[3], 0]
-                alignments  = [template[4], ]
-                mutation    = self.mutation_uniprot[0] + str(template[7]) + self.mutation_uniprot[-1]
-                mutations   = [ chains[0] + '_' + mutation, ]
-                sequences   = [template[6], ]
-                mutation_position_domain_uniprot = template[7]
-                mutations_uniprot = [chains[0] + '_' + self.mutation_uniprot[0] + str(mutation_position_domain_uniprot) + self.mutation_uniprot[-1], ]
-
+        else:
+            # Core mutation
+            pdbCode     = template[0]
+            pfamID1     = template[8]
+            pfamID2     = ''
+            chains      = [template[1], ]
+            domains_pdb = [template[2], ]
+            scores      = [template[3], template[3], 0]
+            alignments  = [template[4], ]
+            mutation    = self.mutation_uniprot[0] + str(template[7]) + self.mutation_uniprot[-1]
+            mutations   = [ chains[0] + '_' + mutation, ]
+            sequences   = [template[6], ]
+            mutation_position_domain_uniprot = template[7]
+            mutations_uniprot = [chains[0] + '_' + self.mutation_uniprot[0] + str(mutation_position_domain_uniprot) + self.mutation_uniprot[-1], ]
+        
         # check if all the templates have 100% sequence identity. If not,
         # set a flag so that the structure is created with modeller
         # this bit has to be implemented properly!!
@@ -606,9 +636,6 @@ class Task(object):
             alnIDs = [aln.id for aln in alignment]
             shutil.copyfile(alignments_path + alnIDs[0],
                             self.saveAlignments + self.uniprotKB + '_' + self.mutation_uniprot + '-' + alnIDs[0] + '_' + alnIDs[1])
-
-        
-        
         
         sequences, alignments, chains, SWITCH_CHAIN, HETflag, HETATMsInChain_SEQnumbering = self.prepareInput(pdbCode, chains, domains_pdb, sequences, alignments)
         
@@ -649,7 +676,21 @@ class Task(object):
         shutil.copyfile(modeller_path + pdbFile_wt_renamed, 
                         self.savePDB + self.uniprotKB + '_' + self.mutation_uniprot + '-' + pdbCode + ''.join(chains_template) + '.pdb')
 
-        return normDOPE_wt, pdbFile_wt_renamed, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores
+        output_dict = {}
+        output_dict['normDOPE_wt'] = normDOPE_wt
+        output_dict['pdbFile_wt'] = pdbFile_wt_renamed
+        output_dict['chains'] = chains
+        output_dict['mutations'] = mutations
+        output_dict['modeller_path'] = modeller_path
+        output_dict['mutations_foldX'] = mutations_foldX
+        output_dict['is_in_core'] = is_in_core
+        output_dict['pfamID1'] = pfamID1
+        output_dict['pfamID2'] = pfamID2
+        output_dict['scores'] = scores
+        
+#        return normDOPE_wt, pdbFile_wt_renamed, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores
+
+        return output_dict
     
     
     def get_pdb_sequence(self, pdbCode, chain):
@@ -683,11 +724,14 @@ class Task(object):
         ## either by modelling or by selecting the pdb crystal structure
         if self.templateFinding: # find a template
             result_findTemplate = self.findTemplate()
-            if result_findTemplate[0] == 'no template found':
+            if isinstance(result_findTemplate, list) and result_findTemplate[0] == 'no template found':
                 return result_findTemplate
             else:
-                normDOPE_wt, pdbFile_wt, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores = result_findTemplate
-                mutation = mutations[0]
+#                normDOPE_wt, pdbFile_wt, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores = result_findTemplate               
+                output_data = result_findTemplate
+                for output_dict in output_data:
+                    output_dict['mutation'] = output_dict['mutations'][0]
+#                mutation = mutations[0]
                 
         else: # get the crystal structure
             modeller_path = self.tmpPath + self.unique + '/'
@@ -707,332 +751,383 @@ class Task(object):
             mutation_pos = chainNumbering.index(int(mutation[2:-1]) + 1)  # +1 to have it start with one
             mutation_foldX = mutation[1] + '_' + mutation[0] + str(mutation_pos) + mutation[-1]
             mutations_foldX = self.prepareMutationFoldX(sequence, [mutation_foldX, ])
-
+            
             
             normDOPE_wt, pdbFile_wt, SWITCH_CHAIN, chains_get_pdb = self.__getCrystalStructure(pdbCode, chains_get_pdb, self.tmpPath + self.unique + '/')        
-        
-        
-        ########################################
-        ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
-        foldX_path = self.tmpPath + self.unique + '/FoldX/'
-        try:
-            chdir(foldX_path) # from os
-            fX = foldX(self.tmpPath + self.unique, 
-                               modeller_path + pdbFile_wt, 
-                               chains[0], 
-                               self.unique, 
-                               self.buildModel_runs,
-                               self.foldX_WATER
-                               )
-            repairedPDB_wt = fX.run('RepairPDB')
-            repairedPDB_wt_list = [ repairedPDB_wt ]
-        except:
-            raise
-        finally:
-            chdir(self.PWD)
-        
-        
-        ########################################
-        ## 3rd: introduce the mutation using FoldX
-        fX_wt = foldX(self.tmpPath + self.unique, 
-                      repairedPDB_wt, 
-                      chains[0], 
-                      self.unique, 
-                      self.buildModel_runs,
-                      self.foldX_WATER
-                      )
-        
-        fX_wt_list = [ fX_wt ]
-        fX_mut_list = list()
-        repairedPDB_mut_list = list()
-        
 
-        # do the mutation with foldX
-        normDOPE_mut = '-'
-        mutCodes = list()
-        fX_wt_list = [] # flush it
-        repairedPDB_wt_list = [] # flush it
-    
-        for mut in mutations_foldX:
-            mutCodes.append(mut[1])
+            output_dict = {}
+            output_dict['normDOPE_wt'] = normDOPE_wt
+            output_dict['pdbFile_wt'] = pdbFile_wt
+            output_dict['chains'] = chains
+            output_dict['mutations'] = mutations
+            output_dict['modeller_path'] = modeller_path
+            output_dict['mutations_foldX'] = mutations_foldX
+            output_dict['is_in_core'] = is_in_core
+            output_dict['new_sequences'] = new_sequences
+            output_dict['scores'] = scores
+            output_dict['pfamID1'] = ''
+            output_dict['pfamID2'] = ''
+            
+            output_data = [output_dict, ]
+        
+        
+        for output_dict in output_data:
+            normDOPE_wt = output_dict['normDOPE_wt']
+            pdbFile_wt = output_dict['pdbFile_wt']
+            chains = output_dict['chains']
+            mutations = output_dict['mutations']
+            modeller_path = output_dict['modeller_path']
+            mutations_foldX = output_dict['mutations_foldX']
+            is_in_core = output_dict['is_in_core']
+            new_sequences = output_dict['new_sequences']
+            scores = output_dict['scores']
+            pfamID1 = output_dict['pfamID1']
+            pfamID2 = output_dict['pfamID2']
 
-        referenceWT, mutatedPDB = fX_wt.run('BuildModel', mutCodes)
-
-        ########################################
-        ## 4th: set up the classes for the wildtype and the mutant structures
-        for mPDB in mutatedPDB:
-            fX_mut_list.append(foldX(self.tmpPath + self.unique, 
-                                     mPDB, 
-                                     chains[0], 
-                                     self.unique, 
-                                     self.buildModel_runs,
-                                     self.foldX_WATER
-                                     )
-                               )
-        for wPDB in referenceWT:
-            fX_wt_list.append(foldX(self.tmpPath + self.unique, 
-                                    wPDB, 
-                                    chains[0], 
-                                    self.unique, 
-                                    self.buildModel_runs,
-                                    self.foldX_WATER
-                                    )
-                               )
-                               
-        repairedPDB_mut_list = mutatedPDB
-        repairedPDB_wt_list = referenceWT
-            
-        
-        ########################################
-        ## 5th: calculate the energy for the wildtype
-        FoldX_StabilityEnergy_wt = list()
-        FoldX_AnalyseComplex_wt  = list()
-        for fX_wt in fX_wt_list:
-            # stability of the interaction
-            if len([ item for item in chains if item != '' ]) == 1:
-                AnalyseComplex = [ '0' for i in range(25) ]
-            else:
-                AnalyseComplex = fX_wt.run('AnalyseComplex')
-                AnalyseComplex = [ item for item in AnalyseComplex ] # convert to list
-            
-            # stability
-            StabilityEnergy = fX_wt.run('Stability')
-            StabilityEnergy = [ item for item in StabilityEnergy ] # convert to list
-            
-            # append the results            
-            FoldX_StabilityEnergy_wt.append(StabilityEnergy)
-            FoldX_AnalyseComplex_wt.append(AnalyseComplex)
-        
-        
-        ######################################
-        ## 6th: calculate the energy for the mutant
-        FoldX_StabilityEnergy_mut = list()
-        FoldX_AnalyseComplex_mut = list()
-        for fX_mut in fX_mut_list:
-            # stability of the interaction
-            if len([ item for item in chains if item != '' ]) == 1:
-                AnalyseComplex = [ '0' for i in range(25) ]
-            else:
-                AnalyseComplex = fX_mut.run('AnalyseComplex')
-                AnalyseComplex = [ item for item in AnalyseComplex ] # convert to list
-            
-            # stability
-            StabilityEnergy = fX_mut.run('Stability')
-            StabilityEnergy = [ item for item in StabilityEnergy ] # convert to list
-            
-            # append the results            
-            FoldX_StabilityEnergy_mut.append(StabilityEnergy)
-            FoldX_AnalyseComplex_mut.append(AnalyseComplex)
-         
-        
-        
-        #############################
-        ## 7th: combine the energy results
-        # AnalyseComplex
-        if len(FoldX_AnalyseComplex_wt) == 1:
-            AnalyseComplex_energy_wt = FoldX_AnalyseComplex_wt[0]
-            AnalyseComplex_energy_mut = FoldX_AnalyseComplex_mut[0]
-        else:
-            # zip the output for the wildtype
-            AnalyseComplex_energy_wt = [ [] for i in range(len(FoldX_AnalyseComplex_wt[0])) ]
-            for item in FoldX_AnalyseComplex_wt:
-                i = 0
-                for element in item:
-                    AnalyseComplex_energy_wt[i].append(element)
-                    i += 1
-            AnalyseComplex_energy_wt = [ ','.join(item) for item in AnalyseComplex_energy_wt ]
-            
-            # zip the output for the mutant
-            AnalyseComplex_energy_mut = [ [] for i in range(len(FoldX_AnalyseComplex_mut[0])) ]
-            for item in FoldX_AnalyseComplex_mut:
-                i = 0
-                for element in item:
-                    AnalyseComplex_energy_mut[i].append(element)
-                    i += 1
-            AnalyseComplex_energy_mut = [ ','.join(item) for item in AnalyseComplex_energy_mut ]
-        
-        # Stability
-        if len(FoldX_StabilityEnergy_wt) == 1:
-            Stability_energy_wt = FoldX_StabilityEnergy_wt[0]
-            Stability_energy_mut = FoldX_StabilityEnergy_mut[0]
-        else:
-            # zip the output for the wildtype
-            Stability_energy_wt = [ [] for i in range(len(FoldX_StabilityEnergy_wt[0])) ]
-            for item in FoldX_StabilityEnergy_wt:
-                i = 0
-                for element in item:
-                    Stability_energy_wt[i].append(element)
-                    i += 1
-            Stability_energy_wt = [ ','.join(item) for item in Stability_energy_wt ]
-            
-            # zip the output for the mutant
-            Stability_energy_mut = [ [] for i in range(len(FoldX_StabilityEnergy_mut[0])) ]
-            for item in FoldX_StabilityEnergy_mut:
-                i = 0
-                for element in item:
-                    Stability_energy_mut[i].append(element)
-                    i += 1
-            Stability_energy_mut = [ ','.join(item) for item in Stability_energy_mut ]
-        
-        
-        #############################
-        ## 8th: calculate the interface size
-        ## don't do it if no complex is modelled
-        if len([ item for item in chains if item != '' ]) == 1:
-            interface_size = ['0', '0', '0']
-        else:
+            ########################################
+            ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
+            foldX_path = self.tmpPath + self.unique + '/FoldX/'
             try:
-                pops = interfaceSize('', self.tmpPath + self.unique + '/pops/')
-                # here the interface between chain 0 and all the other chains is
-                # calculated. If more than two chains are present, you can change
-                # this behaviour here by adding the addintional chain IDs to the list
-                if self.templateFinding:
-                    interface_size = pops(repairedPDB_wt_list[0], ['A', ])
-                else:
-                    chains_complex = [ chain for chain in chains[0] ]
-                    interface_size = pops(repairedPDB_wt_list[0], chains_complex)
+                chdir(foldX_path) # from os
+                fX = foldX(self.tmpPath + self.unique, 
+                                   modeller_path + pdbFile_wt, 
+                                   chains[0], 
+                                   self.unique, 
+                                   self.buildModel_runs,
+                                   self.foldX_WATER
+                                   )
+                repairedPDB_wt = fX.run('RepairPDB')
+                repairedPDB_wt_list = [ repairedPDB_wt ]
             except:
-                if self.DEBUG:
-                    raise
-                interface_size = ['0', '0', '0']
-        
-        #############################
-        ## 9th: calculate the pysico-chemical properties
-        ## copy the pdb files to the result folder
-        get_atomicContactVector = pysiChem(5.0, 4.0, self.tmpPath + self.unique + '/')
-        # mutations is of the form I_V70A
-        # pysiChem need is like I70 (chain that is mutated and the position)
-        # self.mutations is a list which can contain more than one mutations
-        mut_physChem = [ mut[0] + mut[3:-1] for mut in mutations ]
-        physChem_mut = list()
-        physChem_wt = list()
-        physChem_mut_ownChain = list()
-        physChem_wt_ownChain = list()
-        chdir(self.PWD) # from os
-        for item in repairedPDB_mut_list:
-            # calculate the contact vector
-            res_mut = [0, 0, 0, 0]
-            res_mut_ownChain = [0, 0, 0, 0]
-            i = -1
-            for mut in mut_physChem:
-                i += 1
-                mut_snippet     = mutations_foldX[i][1].split('\n')[1]
-                mut_snippet_pos = mutations_foldX[i][0]
-                
-                chains_complex = [ chain for chain in chains[0] ]
-                atomicContactVector, atomicContactVector_ownChain, mutpos_tmp = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
-                # what ever happens here:
-                # atomicContactVector seems not to be a normal list..
-                # thus I convert it to one in this ugly way...
-                for index in range(0,4):
-                    res_mut[index] += atomicContactVector[index]
-                for index in range(0,4):
-                    res_mut_ownChain[index] += atomicContactVector_ownChain[index]
-            physChem_mut.append(res_mut)
-            physChem_mut_ownChain.append(res_mut_ownChain)
+                raise
+            finally:
+                chdir(self.PWD)
             
-            # copy the pdb file
-#           shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/Mut_R_' + item.split('/')[-1])
-            shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/Mut_' + item.split('/')[-1] + str(mutation))
-        
-        for item in repairedPDB_wt_list:
-            # calculate the contact vector
-            res_wt = [0, 0, 0, 0]
-            res_wt_ownChain = [0, 0, 0, 0]
-            i = -1
-            for mut in mut_physChem:
-                i += 1
-                mut_snippet     = mutations_foldX[i][1].split('\n')[0]
-                mut_snippet_pos = mutations_foldX[i][0]
-                
-                chains_complex = [ chain for chain in chains[0] ]
-                atomicContactVector, atomicContactVector_ownChain, mutpos_tmp = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
-                for index in range(0,4):
-                    res_wt[index] += atomicContactVector[index]
-                for index in range(0,4):
-                    res_wt_ownChain[index] += atomicContactVector_ownChain[index]
-            physChem_wt.append(res_wt)
-            physChem_wt_ownChain.append(res_wt_ownChain)
-
-            # copy the pdb file
-#           shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/WT_R_' + item.split('/')[-1])
-            shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/' + item.split('/')[-1] + str(mutation))
-        
-
-        DSSP = getDSSP()
-        if self.templateFinding:
-            mutpos_DSSP = mutpos_tmp
-        else:
-            mutpos_DSSP = mutations[0][3:-1]
-        try:
-            solvent_accessibility_wt, secondary_structure_wt = DSSP(repairedPDB_wt_list[0], mutations[0][0], mutations[0][2], mutpos_DSSP)
-            solvent_accessibility_mut, secondary_structure_mut = DSSP(repairedPDB_mut_list[0], mutations[0][0], mutations[0][-1], mutpos_DSSP)
-        except:
-            solvent_accessibility_wt, secondary_structure_wt   = '-1', '-1'
-            solvent_accessibility_mut, secondary_structure_mut = '-1', '-1'
-#            if self.DEBUG:
-#                raise
-
-        
-        
-        #############################
-        ## 10th: cobine the results
-        # convert the elements to string and join them
-        # they are lists in a list of the form: physChem_mut = [[0, 0, 0, 0], [0, 0, 0, 0]]
-        # a little bit confusing but in the following are two list comprehensions
-        # it is [item, item] with each item = [element, element, element, element]
-        # first convert every element to str
-        physChem_mut          = [ [ str(element) for element in item ] for item in physChem_mut ]
-        physChem_mut_ownChain = [ [ str(element) for element in item ] for item in physChem_mut_ownChain ]
-        physChem_wt           = [ [ str(element) for element in item ] for item in physChem_wt ]
-        physChem_wt_ownChain  = [ [ str(element) for element in item ] for item in physChem_wt_ownChain ]
-        # then join every 'element' via ':'
-        physChem_mut          = [ ':'.join(item) for item in physChem_mut ]
-        physChem_mut_ownChain = [ ':'.join(item) for item in physChem_mut_ownChain ]
-        physChem_wt           = [ ':'.join(item) for item in physChem_wt ]
-        physChem_wt_ownChain  = [ ':'.join(item) for item in physChem_wt_ownChain ]
-        
-        
-        #############################
-        ## 11th: get the BLOSUM (or what ever matrix is given) score
-        # self.mutations is a list containing the mutations of the form A_H56T
-        matrix_score = 0
-        for mutation in mutations:
-            fromAA = mutation.split('_')[1][0]
-            toAA   = mutation.split('_')[1][-1]
-            matrix_score += self.score_pairwise(fromAA, toAA, self.matrix, self.gap_s, self.gap_e)
             
-        if is_in_core:
-            is_in_core = 'core'
-        else:
-            is_in_core = 'interface'
-        
-        scores = [ str(s) for s in scores ]
-        
-
-        return [normDOPE_wt,
-                normDOPE_mut,
-                AnalyseComplex_energy_mut,
-                Stability_energy_mut, 
-                AnalyseComplex_energy_wt,
-                Stability_energy_wt, 
-                interface_size,
-                physChem_mut,
-                physChem_mut_ownChain,
-                physChem_wt,
-                physChem_wt_ownChain,
-                matrix_score,
-                scores,
-                new_sequences,
-                self.mutation_uniprot,
-                self.uniprotKB,
-                is_in_core,
-                secondary_structure_wt,
-                solvent_accessibility_wt,
-                secondary_structure_mut,
-                solvent_accessibility_mut
-                ]
+            ########################################
+            ## 3rd: introduce the mutation using FoldX
+            fX_wt = foldX(self.tmpPath + self.unique, 
+                          repairedPDB_wt, 
+                          chains[0], 
+                          self.unique, 
+                          self.buildModel_runs,
+                          self.foldX_WATER
+                          )
+            
+            fX_wt_list = [ fX_wt ]
+            fX_mut_list = list()
+            repairedPDB_mut_list = list()
+            
     
-
+            # do the mutation with foldX
+            normDOPE_mut = '-'
+            mutCodes = list()
+            fX_wt_list = [] # flush it
+            repairedPDB_wt_list = [] # flush it
+        
+            for mut in mutations_foldX:
+                mutCodes.append(mut[1])
+    
+            referenceWT, mutatedPDB = fX_wt.run('BuildModel', mutCodes)
+    
+            ########################################
+            ## 4th: set up the classes for the wildtype and the mutant structures
+            for mPDB in mutatedPDB:
+                fX_mut_list.append(foldX(self.tmpPath + self.unique, 
+                                         mPDB, 
+                                         chains[0], 
+                                         self.unique, 
+                                         self.buildModel_runs,
+                                         self.foldX_WATER
+                                         )
+                                   )
+            for wPDB in referenceWT:
+                fX_wt_list.append(foldX(self.tmpPath + self.unique, 
+                                        wPDB, 
+                                        chains[0], 
+                                        self.unique, 
+                                        self.buildModel_runs,
+                                        self.foldX_WATER
+                                        )
+                                   )
+                                   
+            repairedPDB_mut_list = mutatedPDB
+            repairedPDB_wt_list = referenceWT
+                
+            
+            ########################################
+            ## 5th: calculate the energy for the wildtype
+            FoldX_StabilityEnergy_wt = list()
+            FoldX_AnalyseComplex_wt  = list()
+            for fX_wt in fX_wt_list:
+                # stability of the interaction
+                if len([ item for item in chains if item != '' ]) == 1:
+                    AnalyseComplex = [ '0' for i in range(25) ]
+                else:
+                    AnalyseComplex = fX_wt.run('AnalyseComplex')
+                    AnalyseComplex = [ item for item in AnalyseComplex ] # convert to list
+                
+                # stability
+                StabilityEnergy = fX_wt.run('Stability')
+                StabilityEnergy = [ item for item in StabilityEnergy ] # convert to list
+                
+                # append the results            
+                FoldX_StabilityEnergy_wt.append(StabilityEnergy)
+                FoldX_AnalyseComplex_wt.append(AnalyseComplex)
+            
+            
+            ######################################
+            ## 6th: calculate the energy for the mutant
+            FoldX_StabilityEnergy_mut = list()
+            FoldX_AnalyseComplex_mut = list()
+            for fX_mut in fX_mut_list:
+                # stability of the interaction
+                if len([ item for item in chains if item != '' ]) == 1:
+                    AnalyseComplex = [ '0' for i in range(25) ]
+                else:
+                    AnalyseComplex = fX_mut.run('AnalyseComplex')
+                    AnalyseComplex = [ item for item in AnalyseComplex ] # convert to list
+                
+                # stability
+                StabilityEnergy = fX_mut.run('Stability')
+                StabilityEnergy = [ item for item in StabilityEnergy ] # convert to list
+                
+                # append the results            
+                FoldX_StabilityEnergy_mut.append(StabilityEnergy)
+                FoldX_AnalyseComplex_mut.append(AnalyseComplex)
+             
+            
+            
+            #############################
+            ## 7th: combine the energy results
+            # AnalyseComplex
+            if len(FoldX_AnalyseComplex_wt) == 1:
+                AnalyseComplex_energy_wt = FoldX_AnalyseComplex_wt[0]
+                AnalyseComplex_energy_mut = FoldX_AnalyseComplex_mut[0]
+            else:
+                # zip the output for the wildtype
+                AnalyseComplex_energy_wt = [ [] for i in range(len(FoldX_AnalyseComplex_wt[0])) ]
+                for item in FoldX_AnalyseComplex_wt:
+                    i = 0
+                    for element in item:
+                        AnalyseComplex_energy_wt[i].append(element)
+                        i += 1
+                AnalyseComplex_energy_wt = [ ','.join(item) for item in AnalyseComplex_energy_wt ]
+                
+                # zip the output for the mutant
+                AnalyseComplex_energy_mut = [ [] for i in range(len(FoldX_AnalyseComplex_mut[0])) ]
+                for item in FoldX_AnalyseComplex_mut:
+                    i = 0
+                    for element in item:
+                        AnalyseComplex_energy_mut[i].append(element)
+                        i += 1
+                AnalyseComplex_energy_mut = [ ','.join(item) for item in AnalyseComplex_energy_mut ]
+            
+            # Stability
+            if len(FoldX_StabilityEnergy_wt) == 1:
+                Stability_energy_wt = FoldX_StabilityEnergy_wt[0]
+                Stability_energy_mut = FoldX_StabilityEnergy_mut[0]
+            else:
+                # zip the output for the wildtype
+                Stability_energy_wt = [ [] for i in range(len(FoldX_StabilityEnergy_wt[0])) ]
+                for item in FoldX_StabilityEnergy_wt:
+                    i = 0
+                    for element in item:
+                        Stability_energy_wt[i].append(element)
+                        i += 1
+                Stability_energy_wt = [ ','.join(item) for item in Stability_energy_wt ]
+                
+                # zip the output for the mutant
+                Stability_energy_mut = [ [] for i in range(len(FoldX_StabilityEnergy_mut[0])) ]
+                for item in FoldX_StabilityEnergy_mut:
+                    i = 0
+                    for element in item:
+                        Stability_energy_mut[i].append(element)
+                        i += 1
+                Stability_energy_mut = [ ','.join(item) for item in Stability_energy_mut ]
+            
+            
+            #############################
+            ## 8th: calculate the interface size
+            ## don't do it if no complex is modelled
+            if len([ item for item in chains if item != '' ]) == 1:
+                interface_size = ['0', '0', '0']
+            else:
+                try:
+                    pops = interfaceSize('', self.tmpPath + self.unique + '/pops/')
+                    # here the interface between chain 0 and all the other chains is
+                    # calculated. If more than two chains are present, you can change
+                    # this behaviour here by adding the addintional chain IDs to the list
+                    if self.templateFinding:
+                        interface_size = pops(repairedPDB_wt_list[0], ['A', ])
+                    else:
+                        chains_complex = [ chain for chain in chains[0] ]
+                        interface_size = pops(repairedPDB_wt_list[0], chains_complex)
+                except:
+                    if self.DEBUG:
+                        raise
+                    interface_size = ['0', '0', '0']
+            
+            #############################
+            ## 9th: calculate the pysico-chemical properties
+            ## copy the pdb files to the result folder
+            get_atomicContactVector = pysiChem(5.0, 4.0, self.tmpPath + self.unique + '/')
+            # mutations is of the form I_V70A
+            # pysiChem need is like I70 (chain that is mutated and the position)
+            # self.mutations is a list which can contain more than one mutations
+            mut_physChem = [ mut[0] + mut[3:-1] for mut in mutations ]
+            physChem_mut = list()
+            physChem_wt = list()
+            physChem_mut_ownChain = list()
+            physChem_wt_ownChain = list()
+            chdir(self.PWD) # from os
+            for item in repairedPDB_mut_list:
+                # calculate the contact vector
+                res_mut = [0, 0, 0, 0]
+                res_mut_ownChain = [0, 0, 0, 0]
+                i = -1
+                for mut in mut_physChem:
+                    i += 1
+                    mut_snippet     = mutations_foldX[i][1].split('\n')[1]
+                    mut_snippet_pos = mutations_foldX[i][0]
+                    
+                    chains_complex = [ chain for chain in chains[0] ]
+                    atomicContactVector, atomicContactVector_ownChain, mutpos_tmp = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
+                    # what ever happens here:
+                    # atomicContactVector seems not to be a normal list..
+                    # thus I convert it to one in this ugly way...
+                    for index in range(0,4):
+                        res_mut[index] += atomicContactVector[index]
+                    for index in range(0,4):
+                        res_mut_ownChain[index] += atomicContactVector_ownChain[index]
+                physChem_mut.append(res_mut)
+                physChem_mut_ownChain.append(res_mut_ownChain)
+                
+                # copy the pdb file
+    #           shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/Mut_R_' + item.split('/')[-1])
+                shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/' + 
+                                    pfamID1 + '_' + pfamID2 + '_' + 'Mut_' + item.split('/')[-1] + str(mutation))
+            
+            for item in repairedPDB_wt_list:
+                # calculate the contact vector
+                res_wt = [0, 0, 0, 0]
+                res_wt_ownChain = [0, 0, 0, 0]
+                i = -1
+                for mut in mut_physChem:
+                    i += 1
+                    mut_snippet     = mutations_foldX[i][1].split('\n')[0]
+                    mut_snippet_pos = mutations_foldX[i][0]
+                    
+                    chains_complex = [ chain for chain in chains[0] ]
+                    atomicContactVector, atomicContactVector_ownChain, mutpos_tmp = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
+                    for index in range(0,4):
+                        res_wt[index] += atomicContactVector[index]
+                    for index in range(0,4):
+                        res_wt_ownChain[index] += atomicContactVector_ownChain[index]
+                physChem_wt.append(res_wt)
+                physChem_wt_ownChain.append(res_wt_ownChain)
+    
+                # copy the pdb file
+    #           shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/WT_R_' + item.split('/')[-1])
+                shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/' + 
+                                    pfamID1 + '_' + pfamID2 + '_' + item.split('/')[-1] + str(mutation))
+            
+    
+            DSSP = getDSSP()
+            if self.templateFinding:
+                mutpos_DSSP = mutpos_tmp
+            else:
+                mutpos_DSSP = mutations[0][3:-1]
+            try:
+                solvent_accessibility_wt, secondary_structure_wt = DSSP(repairedPDB_wt_list[0], mutations[0][0], mutations[0][2], mutpos_DSSP)
+                solvent_accessibility_mut, secondary_structure_mut = DSSP(repairedPDB_mut_list[0], mutations[0][0], mutations[0][-1], mutpos_DSSP)
+            except:
+                solvent_accessibility_wt, secondary_structure_wt   = '-1', '-1'
+                solvent_accessibility_mut, secondary_structure_mut = '-1', '-1'
+    #            if self.DEBUG:
+    #                raise
+    
+            
+            
+            #############################
+            ## 10th: cobine the results
+            # convert the elements to string and join them
+            # they are lists in a list of the form: physChem_mut = [[0, 0, 0, 0], [0, 0, 0, 0]]
+            # a little bit confusing but in the following are two list comprehensions
+            # it is [item, item] with each item = [element, element, element, element]
+            # first convert every element to str
+            physChem_mut          = [ [ str(element) for element in item ] for item in physChem_mut ]
+            physChem_mut_ownChain = [ [ str(element) for element in item ] for item in physChem_mut_ownChain ]
+            physChem_wt           = [ [ str(element) for element in item ] for item in physChem_wt ]
+            physChem_wt_ownChain  = [ [ str(element) for element in item ] for item in physChem_wt_ownChain ]
+            # then join every 'element' via ':'
+            physChem_mut          = [ ':'.join(item) for item in physChem_mut ]
+            physChem_mut_ownChain = [ ':'.join(item) for item in physChem_mut_ownChain ]
+            physChem_wt           = [ ':'.join(item) for item in physChem_wt ]
+            physChem_wt_ownChain  = [ ':'.join(item) for item in physChem_wt_ownChain ]
+            
+            
+            #############################
+            ## 11th: get the BLOSUM (or what ever matrix is given) score
+            # self.mutations is a list containing the mutations of the form A_H56T
+            matrix_score = 0
+            for mutation in mutations:
+                fromAA = mutation.split('_')[1][0]
+                toAA   = mutation.split('_')[1][-1]
+                matrix_score += self.score_pairwise(fromAA, toAA, self.matrix, self.gap_s, self.gap_e)
+                
+            if is_in_core:
+                is_in_core = 'core'
+            else:
+                is_in_core = 'interface'
+            
+            scores = [ str(s) for s in scores ]
+            
+            output_dict['normDOPE_wt'] = normDOPE_wt
+            output_dict['normDOPE_mut'] = normDOPE_mut
+            output_dict['AnalyseComplex_energy_mut'] = AnalyseComplex_energy_mut
+            output_dict['Stability_energy_mut'] = Stability_energy_mut
+            output_dict['AnalyseComplex_energy_wt'] = AnalyseComplex_energy_wt
+            output_dict['Stability_energy_wt'] = Stability_energy_wt
+            output_dict['interface_size'] = interface_size
+            output_dict['physChem_mut'] = physChem_mut
+            output_dict['physChem_mut_ownChain'] = physChem_mut_ownChain
+            output_dict['physChem_wt'] = physChem_wt
+            output_dict['physChem_wt_ownChain'] = physChem_wt_ownChain
+            output_dict['matrix_score'] = matrix_score
+            output_dict['scores'] = scores
+            output_dict['new_sequences'] = new_sequences
+            output_dict['mutation'] = self.mutation_uniprot
+            output_dict['uniprotKB'] = self.uniprotKB
+            output_dict['is_in_core'] = is_in_core
+            output_dict['secondary_structure_wt'] = secondary_structure_wt
+            output_dict['solvent_accessibility_wt'] = solvent_accessibility_wt
+            output_dict['secondary_structure_mut'] = secondary_structure_mut
+            output_dict['solvent_accessibility_mut'] = solvent_accessibility_mut
+            
+#            return [normDOPE_wt,
+#                    normDOPE_mut,
+#                    AnalyseComplex_energy_mut,
+#                    Stability_energy_mut, 
+#                    AnalyseComplex_energy_wt,
+#                    Stability_energy_wt, 
+#                    interface_size,
+#                    physChem_mut,
+#                    physChem_mut_ownChain,
+#                    physChem_wt,
+#                    physChem_wt_ownChain,
+#                    matrix_score,
+#                    scores,
+#                    new_sequences,
+#                    self.mutation_uniprot,
+#                    self.uniprotKB,
+#                    is_in_core,
+#                    secondary_structure_wt,
+#                    solvent_accessibility_wt,
+#                    secondary_structure_mut,
+#                    solvent_accessibility_mut
+#                    ]
+    
+        return output_data
     
     
