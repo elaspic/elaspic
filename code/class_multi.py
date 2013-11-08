@@ -462,7 +462,6 @@ class Task(object):
                     except ValueError:
                         HETATMsInChain_SEQnumbering[i][chains[i]].append(10001) # add one add the end that will be outside of the sequence
 
-
         return sequences, alignments, chains, SWITCH_CHAIN, HETflag, HETATMsInChain_SEQnumbering
     
     
@@ -552,75 +551,95 @@ class Task(object):
                                                  self.core_template_database
                                                  )
         
+        output_data = list()
+        
         # Get templates for interface mutations
         templates, new_sequences = self.getTemplateInterface(self.uniprotKB, self.mutation_uniprot)
+        print "Templates:"
+        print templates
         
-        output_data = []
-        
-        if not templates == [[]]:
+        if not ((templates == []) or (templates == [[]])):
             # Interface mutations were found
             is_in_core = False
+            
+            # Collect structure information for best uniprot pairs modelling all unique pfam interactions
             for template in templates:
-                output_dict = self.findTemplatesHelper(template, is_in_core, alignments_path)
-                output_dict['new_sequences'] = new_sequences
+                output_dict = self.findTemplateHelper(template, is_in_core, alignments_path)
                 output_data.append(output_dict)
-            return output_data
             
         else:
             # No interface mutations were found
             is_in_core = True
             
             # check if the mutations falls into the core
-            template, new_sequences = self.getTemplateCore(self.uniprotKB, self.mutation_uniprot)
+            templates, new_sequences = self.getTemplateCore(self.uniprotKB, self.mutation_uniprot)
 
-            if template == 'not in core' or template == 'no template':
-                is_in_core = False
-                return 'no template found', self.uniprotKB + '_' + self.mutation_uniprot
-            elif template == 'in gap':
+            if templates == 'not in core' or templates == 'no template':
+                output_dict = {'errors': 'no template found: ' + str(self.uniprotKB) + '_' + str(self.mutation_uniprot)}
+                output_data.append(output_dict)
+            elif templates == 'in gap':
                 # add the logger here to report that the mutation did fall into a gap
                 # in the alignment!
-                return 'no template found', self.uniprotKB + '_' + self.mutation_uniprot
-            else:
-                output_dict = self.findTemplatesHelper(template, is_in_core, alignments_path)
-                output_dict['new_sequences'] = new_sequences
+                output_dict = {'errors': 'no template found: ' + str(self.uniprotKB) + '_' + str(self.mutation_uniprot)}
                 output_data.append(output_dict)
-                return output_data
+            else:
+                output_dict = self.findTemplateHelper(templates, is_in_core, alignments_path)
+                output_data.append(output_dict)
+        
+
+        print "Output_data:"
+        print output_data
+        output_data[0]['new_sequences'] = new_sequences
+        return output_data
 
 
-    def findTemplatesHelper(self, template, is_in_core, alignments_path):
+    def findTemplateHelper(self, template, is_in_core, alignments_path):
         
         # Parse template data
         if not is_in_core: 
             # Interface mutation
-            is_in_core = False
             pdbCode     = template[0]
-            pfamID1     = template[6]
-            pfamID2     = template[7]
             chains      = [template[1], template[2]]
             scores      = [template[3], template[4], template[5]]
+            uniprotID2  = template[8]
             sequences   = [template[9], template[10]] # is a list containing the uniprot sequences cut to the domain
             mutation_position_domain_uniprot = template[13]
             alignments  = [template[11], template[12]]
-            mutation    = self.mutation_uniprot[0] + str(template[13]) + self.mutation_uniprot[-1]
+            mutation    = self.mutation_uniprot[0] + str(template[13]) + self.mutation_uniprot[-1] # mutation relative to the domain
             mutations   = [ chains[0] + '_' + mutation, ]
             mutations_uniprot = [chains[0] + '_' + self.mutation_uniprot[0] + str(mutation_position_domain_uniprot) + self.mutation_uniprot[-1], ]
-            domains_pdb = [ [int(template[14].split('-')[0]), int(template[14].split('-')[1])], 
+            
+            pfamID1     = template[6]
+            pfamID2     = template[7]
+            
+            # uniprot domain definition of the query and partner
+            domain_def1 = template[16]
+            domain_def2 = template[17]
+            
+            # pdb domain definitons of query and partner
+            domains_pdb = [ [int(template[14].split('-')[0]), int(template[14].split('-')[1])],
                             [int(template[15].split('-')[0]), int(template[15].split('-')[1])]
                           ]
+        
         else:
             # Core mutation
             pdbCode     = template[0]
-            pfamID1     = template[8]
-            pfamID2     = ''
             chains      = [template[1], ]
             domains_pdb = [template[2], ]
             scores      = [template[3], template[3], 0]
             alignments  = [template[4], ]
-            mutation    = self.mutation_uniprot[0] + str(template[7]) + self.mutation_uniprot[-1]
+            mutation    = self.mutation_uniprot[0] + str(template[7]) + self.mutation_uniprot[-1] # mutation relative to the domain
             mutations   = [ chains[0] + '_' + mutation, ]
             sequences   = [template[6], ]
             mutation_position_domain_uniprot = template[7]
             mutations_uniprot = [chains[0] + '_' + self.mutation_uniprot[0] + str(mutation_position_domain_uniprot) + self.mutation_uniprot[-1], ]
+            
+            uniprotID2  = ''
+            pfamID1     = template[8]
+            pfamID2     = ''            
+            domain_def1 = template[9]
+            domain_def2 = ['', '']
+
         
         # check if all the templates have 100% sequence identity. If not,
         # set a flag so that the structure is created with modeller
@@ -633,9 +652,11 @@ class Task(object):
         # save final alignments to the output alignmetns folder
         chains_template = chains # chain for the first guy, chain for the second guy, irrespective of the PDB order
         for alignment in alignments:
-            alnIDs = [aln.id for aln in alignment]
-            shutil.copyfile(alignments_path + alnIDs[0],
-                            self.saveAlignments + self.uniprotKB + '_' + self.mutation_uniprot + '-' + alnIDs[0] + '_' + alnIDs[1])
+            shutil.copyfile(alignments_path + alignment[0].id,
+                            self.saveAlignments + 
+                            self.uniprotKB + '_' + str(domain_def1[0]) + '-' + str(domain_def1[1]) + '_' + pfamID1 + '_' + self.mutation_uniprot + '_' + 
+                            uniprotID2 + '_' + str(domain_def2[0]) + '-' + str(domain_def2[1]) + '_' + pfamID2 + ':' +
+                            alignment[0].id + '_' + alignment[1].id)
         
         sequences, alignments, chains, SWITCH_CHAIN, HETflag, HETATMsInChain_SEQnumbering = self.prepareInput(pdbCode, chains, domains_pdb, sequences, alignments)
         
@@ -644,8 +665,8 @@ class Task(object):
         else:
             mutations_foldX = self.prepareMutationFoldX(sequences[0], mutations_uniprot)
 
+        # Rename chains in mutation by modeller output
         mutations = self.setChainID(chains, mutations, HETflag, SWITCH_CHAIN, do_modelling)
-        
        
         # copy the chain IDs
         # they are used afterwards for renaming and copy is needed so that
@@ -656,8 +677,16 @@ class Task(object):
         for i in range(0,len(alignments)):
             targetIDs.append(alignments[i][0].id)
             templateIDs.append(alignments[i][1].id)
-        
 
+        print "alignments:", alignments
+        for index, alignment in enumerate(alignments):
+            print "Alignment", index
+            print alignment
+        print "targetIDs:", targetIDs
+        print "templateIDs:", templateIDs
+        print "HETATMsInCahin:", HETATMsInChain_SEQnumbering
+        print "chains:", chains
+        
         if do_modelling:
             normDOPE_wt, pdbFile_wt = self.__getModel(alignments, targetIDs, templateIDs, HETATMsInChain_SEQnumbering, chains)
             modeller_path = self.tmpPath + self.unique + '/modeller/'
@@ -666,7 +695,7 @@ class Task(object):
             # method for a possibility. 
             pass
         
-        # rename the wildtype pdb file
+        # Rename the wildtype pdb file
         pdbFile_wt_renamed = self.uniprotKB + '_' + self.mutation_uniprot + '.pdb'
         system_command = 'mv ' + modeller_path + pdbFile_wt + ' ' + modeller_path + pdbFile_wt_renamed
         subprocess.check_call(system_command, shell=True)
@@ -674,24 +703,77 @@ class Task(object):
         
         # save modeller PDB file to the outputs pdbFiles folder
         shutil.copyfile(modeller_path + pdbFile_wt_renamed, 
-                        self.savePDB + self.uniprotKB + '_' + self.mutation_uniprot + '-' + pdbCode + ''.join(chains_template) + '.pdb')
+                        self.savePDB + 
+                        self.uniprotKB + '_' + str(domain_def1[0]) + '-' + str(domain_def1[1]) + '_' + pfamID1 + '_' + self.mutation_uniprot + '_' + 
+                        uniprotID2 + '_' + str(domain_def2[0]) + '-' + str(domain_def2[1]) + '_' + pfamID2 + ':' +
+                        pdbCode + ''.join(chains_template) + '.pdb')
 
-        output_dict = {}
-        output_dict['normDOPE_wt'] = normDOPE_wt
+        # Output all calculated values as a dictionary
+        output_dict = dict()
+        
+        output_dict['is_in_core'] = is_in_core
+        
+        output_dict['uniprotID1'] = self.uniprotKB
+        output_dict['uniprotID2'] = uniprotID2
+        output_dict['domain_def1'] = domain_def1
+        output_dict['domain_def2'] = domain_def2
+        output_dict['pfamID1'] = pfamID1
+        output_dict['pfamID2'] = pfamID2 
+        
         output_dict['pdbFile_wt'] = pdbFile_wt_renamed
         output_dict['chains'] = chains
         output_dict['mutations'] = mutations
+        output_dict['scores'] = scores
+        output_dict['normDOPE_wt'] = normDOPE_wt
         output_dict['modeller_path'] = modeller_path
         output_dict['mutations_foldX'] = mutations_foldX
-        output_dict['is_in_core'] = is_in_core
-        output_dict['pfamID1'] = pfamID1
-        output_dict['pfamID2'] = pfamID2
-        output_dict['scores'] = scores
-        
-#        return normDOPE_wt, pdbFile_wt_renamed, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores
 
+#        return normDOPE_wt, pdbFile_wt_renamed, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores
         return output_dict
-    
+
+
+    def findStructure(self):
+        modeller_path = self.tmpPath + self.unique + '/'
+        is_in_core = True
+        scores = ['100', '100', '100']
+        
+        # mutations is of the form I_V70A
+        pdbCode, chains_complex1, chains_complex2, mutation = self.mutation_pdb.split('_')
+        chains = [chains_complex1, chains_complex2]
+        chains_get_pdb = [ item for item in chains_complex1 ]
+        chains_get_pdb.extend( [ item for item in chains_complex2 ] )
+        
+        mutations = [mutation[1] + '_' + mutation[0] + mutation[2:], ]
+        
+        sequence, chainNumbering = self.get_pdb_sequence(pdbCode, mutation[1])
+        mutation_pos = chainNumbering.index(int(mutation[2:-1]) + 1)  # +1 to have it start with one
+        mutation_foldX = mutation[1] + '_' + mutation[0] + str(mutation_pos) + mutation[-1]
+        mutations_foldX = self.prepareMutationFoldX(sequence, [mutation_foldX, ])
+        
+        normDOPE_wt, pdbFile_wt, SWITCH_CHAIN, chains_get_pdb = self.__getCrystalStructure(pdbCode, chains_get_pdb, self.tmpPath + self.unique + '/') 
+
+        # Output all calculated values as a dictionary
+        output_dict = dict()
+        
+        output_dict['is_in_core'] = is_in_core
+        
+        output_dict['uniprotID1'] = self.uniprotKB
+        output_dict['uniprotID2'] = ''
+        output_dict['domain_def1'] = ''
+        output_dict['domain_def2'] = ''
+        output_dict['pfamID1'] = ''
+        output_dict['pfamID2'] = '' 
+        
+        output_dict['pdbFile_wt'] = pdbFile_wt
+        output_dict['chains'] = chains
+        output_dict['mutations'] = mutations
+        output_dict['scores'] = scores
+        output_dict['normDOPE_wt'] = normDOPE_wt
+        output_dict['modeller_path'] = modeller_path
+        output_dict['mutations_foldX'] = mutations_foldX
+        
+        return [output_dict, ]
+
     
     def get_pdb_sequence(self, pdbCode, chain):
         """
@@ -710,7 +792,6 @@ class Task(object):
         return next(SeqIO.parse(self.tmpPath + self.unique + '/' + pdbCode + chain + '.seq.txt', 'fasta')), chainNumberingDomain
 
 
-
     def __run(self):
         """
         run the pipeline
@@ -722,57 +803,21 @@ class Task(object):
         ########################################
         ## 1st: get the pdb structure file
         ## either by modelling or by selecting the pdb crystal structure
+        
         if self.templateFinding: # find a template
-            result_findTemplate = self.findTemplate()
-            if isinstance(result_findTemplate, list) and result_findTemplate[0] == 'no template found':
-                return result_findTemplate
-            else:
-#                normDOPE_wt, pdbFile_wt, chains, mutations, modeller_path, mutations_foldX, is_in_core, new_sequences, scores = result_findTemplate               
-                output_data = result_findTemplate
-                for output_dict in output_data:
-                    output_dict['mutation'] = output_dict['mutations'][0]
-#                mutation = mutations[0]
-                
-        else: # get the crystal structure
-            modeller_path = self.tmpPath + self.unique + '/'
-            is_in_core = True
-            new_sequences = []
-            scores = ['100', '100', '100']
-            # mutations is of the form I_V70A
-            pdbCode, chains_complex1, chains_complex2, mutation = self.mutation_pdb.split('_')
-            chains = [chains_complex1, chains_complex2]
-            chains_get_pdb = [ item for item in chains_complex1 ]
-            chains_get_pdb.extend( [ item for item in chains_complex2 ] )
+            output_data = self.findTemplate()
+        else: # get the structure
+            output_data = self.findStructure()
             
-            mutations = [mutation[1] + '_' + mutation[0] + mutation[2:], ]
-            
-            
-            sequence, chainNumbering = self.get_pdb_sequence(pdbCode, mutation[1])
-            mutation_pos = chainNumbering.index(int(mutation[2:-1]) + 1)  # +1 to have it start with one
-            mutation_foldX = mutation[1] + '_' + mutation[0] + str(mutation_pos) + mutation[-1]
-            mutations_foldX = self.prepareMutationFoldX(sequence, [mutation_foldX, ])
-            
-            
-            normDOPE_wt, pdbFile_wt, SWITCH_CHAIN, chains_get_pdb = self.__getCrystalStructure(pdbCode, chains_get_pdb, self.tmpPath + self.unique + '/')        
+        # if errors occured, return the errors and don't do further analysis
+        if output_data == [[]]:
+            output_data = [{'errors', 'no templates found'}]
+            return output_data
+        elif output_data[0].has_key('errors'):
+            return output_data
 
-            output_dict = {}
-            output_dict['normDOPE_wt'] = normDOPE_wt
-            output_dict['pdbFile_wt'] = pdbFile_wt
-            output_dict['chains'] = chains
-            output_dict['mutations'] = mutations
-            output_dict['modeller_path'] = modeller_path
-            output_dict['mutations_foldX'] = mutations_foldX
-            output_dict['is_in_core'] = is_in_core
-            output_dict['new_sequences'] = new_sequences
-            output_dict['scores'] = scores
-            output_dict['pfamID1'] = ''
-            output_dict['pfamID2'] = ''
-            
-            output_data = [output_dict, ]
-        
-        
+        # run analysis for each template
         for output_dict in output_data:
-            normDOPE_wt = output_dict['normDOPE_wt']
             pdbFile_wt = output_dict['pdbFile_wt']
             chains = output_dict['chains']
             mutations = output_dict['mutations']
@@ -780,10 +825,10 @@ class Task(object):
             mutations_foldX = output_dict['mutations_foldX']
             is_in_core = output_dict['is_in_core']
             new_sequences = output_dict['new_sequences']
-            scores = output_dict['scores']
             pfamID1 = output_dict['pfamID1']
             pfamID2 = output_dict['pfamID2']
-
+            mutation = output_dict['mutations'][0]
+            
             ########################################
             ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
             foldX_path = self.tmpPath + self.unique + '/FoldX/'
@@ -820,7 +865,6 @@ class Task(object):
             
     
             # do the mutation with foldX
-            normDOPE_mut = '-'
             mutCodes = list()
             fX_wt_list = [] # flush it
             repairedPDB_wt_list = [] # flush it
@@ -895,7 +939,6 @@ class Task(object):
                 # append the results            
                 FoldX_StabilityEnergy_mut.append(StabilityEnergy)
                 FoldX_AnalyseComplex_mut.append(AnalyseComplex)
-             
             
             
             #############################
@@ -967,6 +1010,7 @@ class Task(object):
                     if self.DEBUG:
                         raise
                     interface_size = ['0', '0', '0']
+
             
             #############################
             ## 9th: calculate the pysico-chemical properties
@@ -1004,10 +1048,13 @@ class Task(object):
                 physChem_mut_ownChain.append(res_mut_ownChain)
                 
                 # copy the pdb file
-    #           shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/Mut_R_' + item.split('/')[-1])
-                shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/' + 
-                                    pfamID1 + '_' + pfamID2 + '_' + 'Mut_' + item.split('/')[-1] + str(mutation))
-            
+                shutil.copyfile(item,
+                                self.HOME + self.outputPath + 'bestModels/' + 
+                                self.uniprotKB + '_' + str(output_dict['domain_def1'][0]) + '-' + str(output_dict['domain_def1'][1]) + '_' + pfamID1 + '_' + self.mutation_uniprot + '_' + 
+                                output_dict['uniprotID2'] + '_' + str(output_dict['domain_def2'][0]) + '-' + str(output_dict['domain_def2'][1]) + '_' + pfamID2 + ':' +
+                                str(mutation) + '_MUT_' +  item.split('/')[-1])
+                            
+                            
             for item in repairedPDB_wt_list:
                 # calculate the contact vector
                 res_wt = [0, 0, 0, 0]
@@ -1028,10 +1075,12 @@ class Task(object):
                 physChem_wt_ownChain.append(res_wt_ownChain)
     
                 # copy the pdb file
-    #           shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/WT_R_' + item.split('/')[-1])
-                shutil.copyfile(item, self.HOME + self.outputPath + 'bestModels/' + 
-                                    pfamID1 + '_' + pfamID2 + '_' + item.split('/')[-1] + str(mutation))
-            
+                shutil.copyfile(item,
+                                self.HOME + self.outputPath + 'bestModels/' + 
+                                self.uniprotKB + '_' + str(output_dict['domain_def1'][0]) + '-' + str(output_dict['domain_def1'][1]) + '_' + pfamID1 + '_' + self.mutation_uniprot + '_' + 
+                                output_dict['uniprotID2'] + '_' + str(output_dict['domain_def2'][0]) + '-' + str(output_dict['domain_def2'][1]) + '_' + pfamID2 + ':' +
+                                str(mutation) + '_' + item.split('/')[-1])
+                            
     
             DSSP = getDSSP()
             if self.templateFinding:
@@ -1046,7 +1095,6 @@ class Task(object):
                 solvent_accessibility_mut, secondary_structure_mut = '-1', '-1'
     #            if self.DEBUG:
     #                raise
-    
             
             
             #############################
@@ -1081,10 +1129,7 @@ class Task(object):
             else:
                 is_in_core = 'interface'
             
-            scores = [ str(s) for s in scores ]
-            
-            output_dict['normDOPE_wt'] = normDOPE_wt
-            output_dict['normDOPE_mut'] = normDOPE_mut
+            output_dict['normDOPE_mut'] = '-'
             output_dict['AnalyseComplex_energy_mut'] = AnalyseComplex_energy_mut
             output_dict['Stability_energy_mut'] = Stability_energy_mut
             output_dict['AnalyseComplex_energy_wt'] = AnalyseComplex_energy_wt
@@ -1095,7 +1140,7 @@ class Task(object):
             output_dict['physChem_wt'] = physChem_wt
             output_dict['physChem_wt_ownChain'] = physChem_wt_ownChain
             output_dict['matrix_score'] = matrix_score
-            output_dict['scores'] = scores
+            output_dict['scores'] = [ str(s) for s in output_dict['scores'] ]
             output_dict['new_sequences'] = new_sequences
             output_dict['mutation'] = self.mutation_uniprot
             output_dict['uniprotKB'] = self.uniprotKB

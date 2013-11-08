@@ -992,7 +992,6 @@ class pipeline():
         # to set the desired logging with the information where needed
         log = MultiProcessingLog(self.outputPath + self.name + '.log', mode='a', maxsize=0, rotate=5)
         
-        
         # create the pool to control the number of t_coffee instances
         # that are allowed to run in parallel
         pool = ActivePool()
@@ -1062,133 +1061,57 @@ class pipeline():
         for i in range(1, self.num_consumers+1):
             tasks.put( None )
        
-       # Wait for all of the tasks to finish
+        # Wait for all of the tasks to finish
         tasks.join()
 
-        ## process the result
+        # process the result
         res_wt = open(self.outputPath + 'result_wt.log', 'w')
         res_mut = open(self.outputPath + 'result_mut.log', 'w')
         res_if = open(self.outputPath + 'result_additional_information.log', 'w')
         skiplog = open(self.outputPath + 'not_processed.log', 'w')
         
-        # write header        
-        res_wt.write('ID\t' + \
-                    'pfamID1\t' + \
-                    'pfamID2\t' + \
-                    'normDOPE\t' + \
-                    'intraclashesEnergy1_wt' + \
-                    '\tintraclashesEnergy2_wt' + \
-                    '\tinteractionEnergy_wt' + \
-                    '\tBackbone_Hbond_wt' + \
-                    '\tSidechain_Hbond_wt' + \
-                    '\tVan_der_Waals_wt' + \
-                    '\tElectrostatics_wt' + \
-                    '\tSolvation_Polar_wt' + \
-                    '\tSolvation_Hydrophobic_wt' + \
-                    '\tVan_der_Waals_clashes_wt' + \
-                    '\tentropy_sidechain_wt' + \
-                    '\tentropy_mainchain_wt' + \
-                    '\tsloop_entropy_wt' + \
-                    '\tmloop_entropy_wt' + \
-                    '\tcis_bond_wt' + \
-                    '\ttorsional_clash_wt' + \
-                    '\tbackbone_clash_wt' + \
-                    '\thelix_dipole_wt' + \
-                    '\twater_bridge_wt' + \
-                    '\tdisulfide_wt' + \
-                    '\telectrostatic_kon_wt' + \
-                    '\tpartial_covalent_bonds_wt' + \
-                    '\tenergy_Ionisation_wt' + \
-                    '\tEntropy_Complex_wt' + \
-                    '\tNumber_of_Residues_wt' + \
-                    '\tstabilityEnergy_wt' + \
-                    '\tstability_Backbone_Hbond' + \
-                    '\tstability_Sidechain_Hbond' + \
-                    '\tstability_Van_der_Waals' + \
-                    '\tstability_Electrostatics' + \
-                    '\tstability_Solvation_Polar' + \
-                    '\tstability_Solvation_Hydrophobic' + \
-                    '\tstability_Van_der_Waals_clashes' + \
-                    '\tstability_entropy_sidechain' + \
-                    '\tstability_entropy_mainchain' + \
-                    '\tstability_sloop_entropy' + \
-                    '\tstability_mloop_entropy' + \
-                    '\tstability_cis_bond' + \
-                    '\tstability_torsional_clash' + \
-                    '\tstability_backbone_clash' + \
-                    '\tstability_helix_dipole' + \
-                    '\tstability_water_bridge' + \
-                    '\tstability_disulfide' + \
-                    '\tstability_electrostatic_kon' + \
-                    '\tstability_partial_covalent_bonds' + \
-                    '\tstability_energy_Ionisation' + \
-                    '\tstability_Entropy_Complex' + \
-                    '\tstability_Number_of_Residues' + \
-                    '\n')
-        res_mut.write('ID\t' + \
-                    'pfamID1\t' + \
-                    'pfamID2\t' + \
-                    'normDOPE\t' + \
-                    'intraclashesEnergy1_mut' + \
-                    '\tintraclashesEnergy2_mut' + \
-                    '\tinteractionEnergy_mut' + \
-                    '\tBackbone_Hbond_mut' + \
-                    '\tSidechain_Hbond_mut' + \
-                    '\tVan_der_Waals_mut' + \
-                    '\tElectrostatics_mut' + \
-                    '\tSolvation_Polar_mut' + \
-                    '\tSolvation_Hydrophobic_mut' + \
-                    '\tVan_der_Waals_clashes_mut' + \
-                    '\tentropy_sidechain_mut' + \
-                    '\tentropy_mainchain_mut' + \
-                    '\tsloop_entropy_mut' + \
-                    '\tmloop_entropy_mut' + \
-                    '\tcis_bond_mut' + \
-                    '\ttorsional_clash_mut' + \
-                    '\tbackbone_clash_mut' + \
-                    '\thelix_dipole_mut' + \
-                    '\twater_bridge_mut' + \
-                    '\tdisulfide_mut' + \
-                    '\telectrostatic_kon_mut' + \
-                    '\tpartial_covalent_bonds_mut' + \
-                    '\tenergy_Ionisation_mut' + \
-                    '\tEntropy_Complex_mut' + \
-                    '\tNumber_of_Residues_mut' + \
-                    '\tstabilityEnergy_mut' + \
-                    '\tstability_Backbone_Hbond' + \
-                    '\tstability_Sidechain_Hbond' + \
-                    '\tstability_Van_der_Waals' + \
-                    '\tstability_Electrostatics' + \
-                    '\tstability_Solvation_Polar' + \
-                    '\tstability_Solvation_Hydrophobic' + \
-                    '\tstability_Van_der_Waals_clashes' + \
-                    '\tstability_entropy_sidechain' + \
-                    '\tstability_entropy_mainchain' + \
-                    '\tstability_sloop_entropy' + \
-                    '\tstability_mloop_entropy' + \
-                    '\tstability_cis_bond' + \
-                    '\tstability_torsional_clash' + \
-                    '\tstability_backbone_clash' + \
-                    '\tstability_helix_dipole' + \
-                    '\tstability_water_bridge' + \
-                    '\tstability_disulfide' + \
-                    '\tstability_electrostatic_kon' + \
-                    '\tstability_partial_covalent_bonds' + \
-                    '\tstability_energy_Ionisation' + \
-                    '\tstability_Entropy_Complex' + \
-                    '\tstability_Number_of_Residues' + \
-                    '\n')
-        res_if.write('ID\t' + \
-                    'pfamID1\t' + \
-                    'pfamID2\t' + \
-                    'core_or_interface\tseq_id_avg\tseq_id_chain1\tseq_id_chain2\t' + \
-                     'matrix_score\tif_hydrophobic\tif_hydrophilic\tif_total\t' + \
-                     'contactVector_wt_ownChain\tcontactVector_wt\t' + \
-                     'contactVector_mut_ownChain\tcontactVector_mut\t' + \
-                     'secondary_structure_wt\tsolvent_accessibility_wt\t' +\
-                     'secondary_structure_mut\tsolvent_accessibility_mut' +\
-                     '\n'
-                     )
+        # Write header
+        id_labels = 'wt_or_mut\t' + \
+                    'uniprotID1\t' + 'pfamID1\t' + 'def1\t' + \
+                    'uniprotID2\t' + 'pfamID2\t' + 'def2\t' + 'mutation\t'
+                    
+        value_labels = 'normDOPE\t' + \
+                    'intraclashes_energy1\t' + 'intraclashes_energy2\t' + \
+                    'interaction_energy\t' + 'backbone_hbond\t' + \
+                    'sidechain_hbond\t' + 'van_der_waals\t' + \
+                    'electrostatics\t' + 'solvation_polar\t' + \
+                    'solvation_hydrophobic\t' + 'Van_der_Waals_clashes\t' + \
+                    'entropy_sidechain\t' + 'entropy_mainchain\t' + \
+                    'sloop_entropy\t' + 'mloop_entropy\t' + 'cis_bond\t' + \
+                    'torsional_clash\t' + 'backbone_clash\t' + 'helix_dipole\t' + \
+                    'water_bridge\t' + 'disulfide\t' + 'electrostatic_kon\t' + \
+                    'partial_covalent_bonds\t' + 'energy_ionisation\t' + \
+                    'entropy_complex\t' + 'number_of_residues\t' + \
+                    'stability_energy\t' + 'stability_backbone_hbond\t' + \
+                    'stability_sidechain_hbond\t' + 'stability_Van_der_Waals\t' + \
+                    'stability_electrostatics\t' + 'stability_solvation_polar\t' + \
+                    'stability_solvation_hydrophobic\t' + 'stability_Van_der_Waals_clashes\t' + \
+                    'stability_entropy_sidechain\t' + 'stability_entropy_mainchain\t' + \
+                    'stability_sloop_entropy\t' + 'stability_mloop_entropy\t' + \
+                    'stability_cis_bond\t' + 'stability_torsional_clash\t' + \
+                    'stability_backbone_clash\t' + 'stability_helix_dipole\t' + \
+                    'stability_water_bridge\t' + 'stability_disulfide\t' + \
+                    'stability_electrostatic_kon\t' + 'stability_partial_covalent_bonds\t' + \
+                    'stability_energy_ionisation\t' + 'stability_entropy_complex\t' + \
+                    'stability_number_of_residues\n'
+                    
+        value_labels_extra =  'core_or_interface\t' + 'seq_id_avg\t' + \
+                    'seq_id_chain1\t' + 'seq_id_chain2\t' + \
+                    'matrix_score\t' + 'if_hydrophobic\t' + \
+                    'if_hydrophilic\t' + 'if_total\t' + \
+                    'contactVector_wt_ownChain\t' + 'contactVector_wt\t' + \
+                    'contactVector_mut_ownChain\t' + 'contactVector_mut\t' + \
+                    'secondary_structure_wt\t' + 'solvent_accessibility_wt\t' +\
+                    'secondary_structure_mut\t' + 'solvent_accessibility_mut\n'
+        
+        res_wt.write(id_labels + value_labels)
+        res_mut.write(id_labels + value_labels)
+        res_if.write(id_labels + value_labels_extra)
 
         # Start printing results
         while num_jobs:
@@ -1210,64 +1133,58 @@ class pipeline():
                     skiplog.write(output_dict[1] + '\t' + 'no template found' + '\n')
                     continue
                 else:
-                    try:
-                        solvent_accessibility_mut = output_dict['solvent_accessibility_mut']
-                    except:
-                        print 'modellerResult', output_dict
-                        raise
-                    secondary_structure_mut = output_dict['secondary_structure_mut']
-                    solvent_accessibility_wt = output_dict['solvent_accessibility_wt']
-                    secondary_structure_wt = output_dict['secondary_structure_wt']
-                    is_in_core = output_dict['is_in_core']
-                    uniprotKB = output_dict['uniprotKB']
-                    mutation = output_dict['mutation']
-                    self.get_uniprot_sequence.add(output_dict['new_sequences'])
-                    scores = output_dict['scores']
-                    matrix_score = output_dict['matrix_score']
-                    physChem_wt_ownChain = output_dict['physChem_wt_ownChain']
-                    physChem_wt = output_dict['physChem_wt']
-                    physChem_mut_ownChain = output_dict['physChem_mut_ownChain']
-                    physChem_mut = output_dict['physChem_mut']
-                    interface_size = output_dict['interface_size']
-                    Stability_energy_wt = output_dict['Stability_energy_wt']
-                    AnalyseComplex_energy_wt = output_dict['AnalyseComplex_energy_wt']
-                    Stability_energy_mut = output_dict['Stability_energy_mut']
-                    AnalyseComplex_energy_mut = output_dict['AnalyseComplex_energy_mut']
-                    normDOPE_mut = output_dict['normDOPE_mut']
-                    normDOPE_wt = output_dict['normDOPE_wt']
-                    pfamID1 = output_dict['pfamID1']
-                    pfamID2 = output_dict['pfamID2']
-            
-                    resForWrite_wt = uniprotKB + '_' + mutation + '-wt' + '\t' + \
-                                     pfamID1 + '\t' + \
-                                     pfamID2 + '\t' + \
-                                     str(normDOPE_wt)[:6] + '\t' +\
-                                     '\t'.join(AnalyseComplex_energy_wt) + '\t' +\
-                                     '\t'.join(Stability_energy_wt) + \
-                                     '\n'
-                            
-                    resForWrite_mut = uniprotKB + '_' + mutation + '-mut' + '\t' + \
-                                      pfamID1 + '\t' + \
-                                      pfamID2 + '\t' + \
-                                      str(normDOPE_mut)[:6] + '\t' +\
-                                      '\t'.join(AnalyseComplex_energy_mut) + '\t' +\
-                                      '\t'.join(Stability_energy_mut) + \
-                                      '\n'
-                                            
-                    res_if.write(uniprotKB + '_' + mutation + '\t' + \
-                                pfamID1 + '\t' + \
-                                pfamID2 + '\t' + \
-                                is_in_core + '\t' + '\t'.join(scores) + '\t' +\
-                                 str(matrix_score) + '\t' + \
-                                 '\t'.join(interface_size) + '\t' + \
-                                 ','.join(physChem_wt_ownChain) + '\t' + ','.join(physChem_wt) + '\t' + \
-                                 ','.join(physChem_mut_ownChain) + '\t' + ','.join(physChem_mut) + '\t' + \
-                                 str(secondary_structure_wt)  + '\t' + str(solvent_accessibility_wt) + '\t' + \
-                                 str(secondary_structure_mut)  + '\t' + str(solvent_accessibility_mut) + \
-                                 '\n')
-                                        
-                res_wt.write(str(resForWrite_wt))
-                res_mut.write(str(resForWrite_mut))
+                    # Add sequences that were not present already in the database
+                    if output_dict.has_key('new_sequences'):
+                        self.get_uniprot_sequence.add(output_dict['new_sequences'])
+                        
+                    # Unique identifier for each line
+                    id_data = output_dict['uniprotID1'] + '\t' + \
+                                str(output_dict['domain_def1'][0]) + '-' + str(output_dict['domain_def1'][1]) + '\t' + \
+                                output_dict['pfamID1'] + '\t' + \
+                                output_dict['mutation'] + '\t' + \
+                                output_dict['uniprotID2'] + '\t' + \
+                                str(output_dict['domain_def2'][0]) + '-' + str(output_dict['domain_def2'][1]) + '\t' + \
+                                output_dict['pfamID2'] + '\t'
+                    
+                    # Make line for wildtype file
+                    resForWrite_wt =  id_data + 'wt\t' + \
+                                        str(output_dict['normDOPE_wt'])[:6] + '\t' +\
+                                        '\t'.join(output_dict['AnalyseComplex_energy_wt']) + '\t' +\
+                                        '\t'.join(output_dict['Stability_energy_wt']) + \
+                                        '\n'
+                    
+                    # Make like for mutant file
+                    resForWrite_mut = id_data + 'mut\t' + \
+                                        str(output_dict['normDOPE_mut'])[:6] + '\t' + \
+                                        '\t'.join(output_dict['AnalyseComplex_energy_mut']) + '\t' + \
+                                        '\t'.join(output_dict['Stability_energy_mut']) + \
+                                        '\n'
+                    
+                    # Make line for additional information file
+                    resForWrite_if = id_data + \
+                                output_dict['is_in_core'] + '\t' + \
+                                '\t'.join(output_dict['scores']) + '\t' +\
+                                 str(output_dict['matrix_score']) + '\t' + \
+                                 '\t'.join(output_dict['interface_size']) + '\t' + \
+                                 ','.join(output_dict['physChem_wt_ownChain']) + '\t' + \
+                                 ','.join(output_dict['physChem_wt']) + '\t' + \
+                                 ','.join(output_dict['physChem_mut_ownChain']) + '\t' + \
+                                 ','.join(output_dict['physChem_mut']) + '\t' + \
+                                 str(output_dict['secondary_structure_wt'])  + '\t' + \
+                                 str(output_dict['solvent_accessibility_wt']) + '\t' + \
+                                 str(output_dict['secondary_structure_mut'])  + '\t' + \
+                                 str(output_dict['solvent_accessibility_mut']) + \
+                                 '\n'
+                                 
+                    # Make another file to keep precalculated values?
+                    # resForWrite_precalc = []
+                    # output_dict['interactingAA']
+                    # output_dict['surfaceAA']
+                                 
+                    # Write output lines             
+                    res_wt.write(str(resForWrite_wt))
+                    res_mut.write(str(resForWrite_mut))
+                    res_if.write(str(resForWrite_if))                 
         
         # save the database (needed if new sequences were added)
         self.get_uniprot_sequence.close()

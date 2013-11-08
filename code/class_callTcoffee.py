@@ -24,7 +24,6 @@ class tcoffee_alignment:
                                             (in pipeline for modelling with modeller)
     
     return: Biopython alignment object
-    
 
     """
     def __init__(self, tmpPath, unique, alnPath, seqFiles, seqIDs):
@@ -47,7 +46,6 @@ class tcoffee_alignment:
         for seq in self.seqFiles:
             alignments.append(self.__call_tcoffee(seq))
             self.__writeAlignment(alignments[-1], self.seqIDs[ self.seqFiles.index(seq) ])
-        
         return alignments
 
 
