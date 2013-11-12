@@ -1066,7 +1066,7 @@ class get_template_interface(get_template):
                                    str(pdb_domain2[0]) + '-' + str(pdb_domain2[1]), #15 domain boundariers for the partner PDB
                                    tuple(uniprot_domain1), #16 domain boundaries for the query uniprot (list)
                                    tuple(uniprot_domain2), #17 domain boundaries for the partner uniprot (list)
-                                   ))
+                                   )) # may as well add resolution to the templates here too
 
         new_sequences = list()
         if new1:
@@ -1122,10 +1122,14 @@ class get_template_interface(get_template):
             tmp = list()
             for template in templates_highest_identity:
                 add = template
-                add.extend( self.get_resolution(template[0]) )
+#                add.extend( self.get_resolution(template[0]) )
+                # 
+                add = add + tuple( self.get_resolution(template[0]) )
                 tmp.append(add)
         
-            tmp_sorted = sorted(tmp, key=itemgetter(16,17), reverse=False)
+#            tmp_sorted = sorted(tmp, key=itemgetter(16,17), reverse=False)
+            # changed because added uniprot identifiers to template, change to attrgetter in future namedtuple
+            tmp_sorted = sorted(tmp, key=itemgetter(18,19), reverse=False)
             
             # return the firt template in the list, i.e. the best template
             best_templates.append(tmp_sorted[0])
