@@ -525,8 +525,7 @@ class get_template():
 #            raise error.pdbError('ValueError when mapping domain boundaries to sequence numbering: ' + pdbCode + '_' + chain)
 #
 #        pdb_sequence = next(SeqIO.parse(self.tmpPath + self.unique + pdbCode + chain + '.seq.txt', 'fasta'))
-#        return pdb_sequence, domain_pdb, chainNumberingDomain
-    
+#        return pdb_sequence, domain_pdb, chainNumberingDomain    
     
     
     def get_identity(self, alignment):
@@ -806,9 +805,9 @@ class get_template_core(get_template):
             # if the sequence was not found in the database but could be retreived
             # from the website it is added to the database
             if new_sequence:
-                return [pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID1, domain_uniprot], [[uniprotKB, uniprot_sequence], ]
+                return (pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID1, domain_uniprot), [[uniprotKB, uniprot_sequence], ]
             else:
-                return [pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID1, domain_uniprot], []
+                return (pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID1, domain_uniprot), []
         
         # if no template was found
         return 'not in core', []
@@ -899,7 +898,6 @@ class get_template_interface(get_template):
                         'str'       pdb_domain2, looks like '74-390'
                         'int'       exp. measurement method; 0 means X-ray, 2 NMR, 3 other
                         'float'     resolution of the structure
-
         """
         # get all possible templates
         templates, new_sequences = self.run(uniprotID1, mutation)
@@ -1054,7 +1052,7 @@ class get_template_interface(get_template):
                 contacts_chain1 = self.check_structure(pdbCode, chain1, chain1 + '_' + mutation[0] + str(mutation_pdb1) + mutation[-1])
 
                 if contacts_chain1[chain2]:
-                    templates.add((pdbCode, # pdbID of the PDB used for modelling
+                    templates.add(tuple([pdbCode, # pdbID of the PDB used for modelling
                                    chain1, chain2, # chain of the query and partner in the PDB
                                    score, float(score1), float(score2), # scores of the alignmnet
                                    interaction[2], interaction[7], # pfamID for interacting pfams in query and partner
@@ -1066,7 +1064,7 @@ class get_template_interface(get_template):
                                    str(pdb_domain2[0]) + '-' + str(pdb_domain2[1]), #15 domain boundariers for the partner PDB
                                    tuple(uniprot_domain1), #16 domain boundaries for the query uniprot (list)
                                    tuple(uniprot_domain2), #17 domain boundaries for the partner uniprot (list)
-                                   )) # may as well add resolution to the templates here too
+                                   ])) # may as well add resolution to the templates here too
 
         new_sequences = list()
         if new1:
@@ -1121,13 +1119,14 @@ class get_template_interface(get_template):
             # add the resolution if available
             tmp = list()
             for template in templates_highest_identity:
-                add = template
+                add = tuple(template)
 #                add.extend( self.get_resolution(template[0]) )
                 # 
-                add = add + tuple( self.get_resolution(template[0]) )
+                add = add + self.get_resolution(template[0])
+                print "Extended fine!"
                 tmp.append(add)
         
-#            tmp_sorted = sorted(tmp, key=itemgetter(16,17), reverse=False)
+#           tmp_sorted = sorted(tmp, key=itemgetter(16,17), reverse=False)
             # changed because added uniprot identifiers to template, change to attrgetter in future namedtuple
             tmp_sorted = sorted(tmp, key=itemgetter(18,19), reverse=False)
             
@@ -1340,10 +1339,3 @@ if __name__ == '__main__':
     alignment, score = a.align_shorten(alignment, score, pdb_sequence_id, saveAlignments)
     
 #    print alignment
-
-
-
-
-
-
-
