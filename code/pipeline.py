@@ -25,7 +25,10 @@ import cPickle as pickle
 import urllib2
 
 import collections
+from collections import namedtuple
 from string import uppercase
+
+import logging
 
 # credit goes to here:
 # http://pymotw.com/2/multiprocessing/communication.html#controlling-access-to-resources
@@ -100,7 +103,7 @@ class getInteractions:
         
         !! Make sure to delete the old *.pickle files if the input data changes !!
 
-        """
+        """            
         database_name = 'pipeline_interaction_database.pickle'
         if isfile(database_name):
             print 'Loading interaction database'
@@ -113,40 +116,41 @@ class getInteractions:
             
             with open(database, 'r') as f:
                 for l in f:
-                    # firstGuy: uniprotKB
-                    # interaction_type_firstGuy: 3Did or ELM
-                    # PfamID_firstGuy: family name, not the numbers but the more human readible names
-                    # domain: domain boundaries of the uniprot sequence
-                    # interface: amino acids formin the interface (of the first guy,
-                    #            there should be a second entry for the reverse interaction!)
-                    # secondGuy: uniprotKB (of the interaction partner)
-                    # interaction_type_secondGuy: 3Did or ELM
-                    # PfamID_secondGuy: Pfam family name
-                    # domain2: domain boundaries of the uniprot sequence
+                    # Skip the first line
+                    if l.strip().split('\t')[0] == 'UniprotID1':
+                        continue
+                    
+                    # Parse the file line by line
                     firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain, \
                     interface, NA, secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2 = l.strip().split('\t')
-                                        
+                    
+                    # Convert domain range into tuples
+                    domain = tuple(int(i) for i in domain.split('-'))
+                    domain2 = tuple(int(i) for i in domain2.split('-')) 
+                    
+                    # Skip if no domain definition is given
                     if domain == 'NULL' or interface == 'NULL':
                         continue
 
-                    interface = tuple() # AS, the interfaces are wrong anyway. Needs to be implemented for both partners
+                    # AS, the interfaces are wrong anyway. Needs to be implemented for both partners
+                    interface = tuple() 
                     
-                    self.database.setdefault(firstGuy, []).append([firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain, interface, \
-                                                              secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2])
-                    
-                    # AS Always query for the first guy, so need to add values in reverse order as well
-                    self.database.setdefault(secondGuy, []).append([secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2, interface, \
-                                                              firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain])
-
-            # AS remove duplicates                                          
+                    self.database.setdefault(firstGuy,[]).append(((firstGuy, secondGuy,),
+                                                                (PfamID_firstGuy, PfamID_secondGuy,),
+                                                                (domain, domain2,),
+                                                                interaction_type_firstGuy,
+                                                                interface))
+                                                                
+                    self.database.setdefault(secondGuy,[]).append(((secondGuy, firstGuy,),
+                                                                (PfamID_secondGuy, PfamID_firstGuy,),
+                                                                (domain2, domain,),
+                                                                interaction_type_secondGuy,
+                                                                interface))
+            # Remove duplicates                                          
             for key in self.database.keys():
-                list_of_tuples = [tuple(value_list) for value_list in self.database[key]]
-                list_of_unique_tuples = list(set(list_of_tuples))
-                list_of_unique_lists = [list(value_tuple) for value_tuple in list_of_unique_tuples]
-                self.database[key] = list_of_unique_lists
-                print len(list_of_tuples), len(list_of_unique_lists)
+                self.database[key] = list(set(self.database[key]))
 
-            # save the newly generated database
+            # Save the newly generated database
             f = open(database_name, 'wb')
             pickle.dump(self.database, f)
             f.close()
@@ -154,16 +158,15 @@ class getInteractions:
     
     def __call__(self, uniprotKB):
         """
-        Returns all interactions in a list of lists
+        Returns all interactions in a list of namedtuples
         """
+        Interaction_instance = namedtuple('Interaction', 
+         'uniprotIDs pfamIDs domain_defs interaction_type interface')
+             
         if self.database.has_key(uniprotKB):
-            return self.database[uniprotKB]
+            return [Interaction_instance(*i) for i in self.database[uniprotKB]]
         else:
-            return []
-    
-#    def close(self):
-#        pass
-            
+            return []           
 
 
 
@@ -183,14 +186,18 @@ class get3DID(myDatabases):
             f = open(database_name, 'rb')
             self.database = pickle.load(f)
             f.close()
+            
         else:            
             print 'Generating the correceted 3DID table'
             # read the 3Did file and store the information in a dict()
             self.database_3did = self.__make_3did_table(threeDidFile)
+            
             # read the corrected domain boundaries and store them in a dict()
             self.domainTable = self.__make_domain_boundary_table(domainTableFile)
+            
             # create the database
             self.database = self.__correct_3did_domain_boundaries()
+            
             # save the database
             f = open(database_name, 'wb')
             pickle.dump(self.database, f)
@@ -228,7 +235,7 @@ class get3DID(myDatabases):
                         chain1, domain_pdb1 = chain1.split(':')
                         chain2, domain_pdb2 = chain2.split(':')
                         add = [pdb.upper(), chain1, chain2, domain_pdb1, domain_pdb2]
-                        database.setdefault( (Pfam1, Pfam2), []).append(add)
+                        database.setdefault((Pfam1, Pfam2), []).append(add)
 
         return database
 
@@ -917,44 +924,53 @@ class pipeline():
             # tcoffee
             if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/tcoffee'):
                 # create tmp for tcoffee
-                mkdir_tcoffee = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee && ' + \
+                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee && ' + \
                                 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee/tmp && ' + \
                                 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee/lck && ' + \
                                 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee/cache'
-                subprocess.check_call(mkdir_tcoffee, shell=True)
+                subprocess.check_call(mkdir_command, shell=True)
         
             # FoldX
             if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/FoldX'):
                 # make the directories
-                mkdir_foldX = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX'
+                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX'
                 # copy the executables
-                cp_foldX = 'cp ' + self.executables + 'FoldX.linux64 ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/ && ' + \
+                cp_command = 'cp ' + self.executables + 'FoldX.linux64 ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/ && ' + \
                            'cp ' + self.executables + 'rotabase.txt ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/'
                 # call the command
-                subprocess.check_call(mkdir_foldX + ' && ' + cp_foldX, shell=True)
+                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
             
             # modeller
             if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/modeller'):
                 # create workingfolder for modeller
-                mkdir_modeller = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
-                subprocess.check_call(mkdir_modeller, shell=True)
+                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
+                subprocess.check_call(mkdir_command, shell=True)
             
             # create tmp for KNOT
             if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/KNOT'):
                 # make the directories
-                mkdir_KNOT = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/KNOT'
+                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/KNOT'
                 # copy the executables
-                cp_KNOT = 'cp ' + self.executables + 'topol ' + self.tmpPath + 'Consumer-' + str(i) + '/KNOT'
-                subprocess.check_call(mkdir_KNOT + ' && ' + cp_KNOT, shell=True)
+                cp_command = 'cp ' + self.executables + 'topol ' + self.tmpPath + 'Consumer-' + str(i) + '/KNOT'
+                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
             
             # create tmp for pops
             if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/pops'):
                 # make the directories
-                mkdir_KNOT = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/pops'
+                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/pops'
                 # copy the executables
-                cp_KNOT = 'cp ' + self.executables + 'pops ' + self.tmpPath + 'Consumer-' + str(i) + '/pops'
-                subprocess.check_call(mkdir_KNOT + ' && ' + cp_KNOT, shell=True)
-
+                cp_command = 'cp ' + self.executables + 'pops ' + self.tmpPath + 'Consumer-' + str(i) + '/pops'
+                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
+            
+            # create tmp for output
+            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/output'):
+                # make the directories
+                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output && ' + \
+                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/alignments && ' + \
+                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/bestModels && ' + \
+                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/pdbFiles && ' + \
+                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/pickled'
+                subprocess.check_call(mkdir_command, shell=True)
 
     def __prepareOutputPaths(self):
         if not os.path.isdir(self.outputPath):
@@ -990,7 +1006,9 @@ class pipeline():
         # I started to play with the logger a little bit but didn't have the time
         # to fully implement it to be really usefull. It works, one just has
         # to set the desired logging with the information where needed
-        log = MultiProcessingLog(self.outputPath + self.name + '.log', mode='a', maxsize=0, rotate=5)
+        log = MultiProcessingLog(self.outputPath + self.name + '.log', mode='w', maxsize=0, rotate=5)
+        formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        log.setFormatter(formatter)
         
         # create the pool to control the number of t_coffee instances
         # that are allowed to run in parallel
@@ -1072,8 +1090,7 @@ class pipeline():
         
         # Write header
         id_labels = 'wt_or_mut\t' + \
-                    'uniprotID1\t' + 'pfamID1\t' + 'def1\t' + \
-                    'uniprotID2\t' + 'pfamID2\t' + 'def2\t' + 'mutation\t'
+                    'uniprotIDs\t' + 'pfamIDs\t' + 'domain_defs\t' + 'mutation\t'
                     
         value_labels = 'normDOPE\t' + \
                     'intraclashes_energy1\t' + 'intraclashes_energy2\t' + \
@@ -1138,14 +1155,20 @@ class pipeline():
                         self.get_uniprot_sequence.add(output_dict['new_sequences'])
                         
                     # Unique identifier for each line
-                    id_data = output_dict['uniprotID1'] + '\t' + \
-                                str(output_dict['domain_def1'][0]) + '-' + str(output_dict['domain_def1'][1]) + '\t' + \
-                                output_dict['pfamID1'] + '\t' + \
-                                output_dict['mutation'] + '\t' + \
-                                output_dict['uniprotID2'] + '\t' + \
-                                str(output_dict['domain_def2'][0]) + '-' + str(output_dict['domain_def2'][1]) + '\t' + \
-                                output_dict['pfamID2'] + '\t'
-                    
+                    id_data = (':'.join(output_dict['uniprotIDs']) + '\t' + 
+                             ':'.join(output_dict['pfamIDs']) + '\t' + 
+                             ':'.join(['-'.join([str(i) for i in x]) for x in output_dict['domain_defs']]) + '\t' + 
+                             output_dict['mutation'])
+#
+#                    # Unique identifier for each line
+#                    id_data =   output_dict['uniprotIDs'][0] + '\t' + \
+#                                output_dict['uniprotIDs'][1] + '\t' + \
+#                                output_dict['pfamIDs'][0] + '\t' + \
+#                                output_dict['pfamIDs'][1] + '\t' + \
+#                                str(output_dict['domain_defs'][0][0]) + '-' + str(output_dict['domain_defs'][0][1]) + '\t' + \
+#                                str(output_dict['domain_def2'][1][0]) + '-' + str(output_dict['domain_def2'][1][1]) + '\t' + \
+#                                output_dict['mutation'] + '\t'
+                                          
                     # Make line for wildtype file
                     resForWrite_wt =  id_data + 'wt\t' + \
                                         str(output_dict['normDOPE_wt'])[:6] + '\t' +\
@@ -1162,8 +1185,8 @@ class pipeline():
                     
                     # Make line for additional information file
                     resForWrite_if = id_data + \
-                                output_dict['is_in_core'] + '\t' + \
-                                '\t'.join(output_dict['scores']) + '\t' +\
+                                str(output_dict['is_in_core']) + '\t' + \
+                                '\t'.join([str(i) for i in output_dict['alignment_scores']]) + '\t' +\
                                  str(output_dict['matrix_score']) + '\t' + \
                                  '\t'.join(output_dict['interface_size']) + '\t' + \
                                  ','.join(output_dict['physChem_wt_ownChain']) + '\t' + \
@@ -1175,7 +1198,7 @@ class pipeline():
                                  str(output_dict['secondary_structure_mut'])  + '\t' + \
                                  str(output_dict['solvent_accessibility_mut']) + \
                                  '\n'
-                                 
+
                     # Make another file to keep precalculated values?
                     # resForWrite_precalc = []
                     # output_dict['interactingAA']
@@ -1203,7 +1226,8 @@ class pipeline():
 
 
 if __name__ == '__main__':
-    # read which configFile to use
+    # read which configFile to use    
+                     
     optParser = optparse.OptionParser()
     optParser.add_option('-c', '--config', action="store", dest='configFile')
     options, args = optParser.parse_args()

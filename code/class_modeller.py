@@ -56,8 +56,6 @@ class modeller:
         self.tmpPath = tmpPath
         self.pdbPath = tmpPath + 'modeller/'
         
-        
-        
 
     def run(self):
         """

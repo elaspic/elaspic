@@ -39,7 +39,6 @@ class pdbTemplate():
         self.chains = chains
         self.domainBoundaries = domainBoundaries
 
-
         childProcess = subprocess.Popen('echo $TMPDIR', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         result, error = childProcess.communicate()
         self.tmpPath = result.strip() + '/tmp/'
@@ -97,7 +96,6 @@ class pdbTemplate():
                 f.write('>' + str(self.pdbCode) + str(chainID) + '\n')
                 f.write(str(seq) + '\n')
                 f.write('\n')
-                
         
         return HETATMpositions, HETFlag, chains_pdb_order
         
