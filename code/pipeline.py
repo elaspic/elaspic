@@ -1227,7 +1227,6 @@ class pipeline():
 
 if __name__ == '__main__':
     # read which configFile to use    
-                     
     optParser = optparse.OptionParser()
     optParser.add_option('-c', '--config', action="store", dest='configFile')
     options, args = optParser.parse_args()

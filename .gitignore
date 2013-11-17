@@ -3,7 +3,6 @@
 *.o
 
 # Binary and configuration files
-*.pickle
 *.dat
 *.ini
 
