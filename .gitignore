@@ -9,3 +9,9 @@
 # Logs and databases
 *.log
 *.sql
+
+# Folders
+bin/
+backup/
+input/
+results/
