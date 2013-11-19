@@ -9,6 +9,8 @@ from collections import defaultdict, Counter
 
 import cPickle as pickle
 import pandas as pd
+import re
+import logging
 
 
 class parse_header_uniprot():
@@ -37,14 +39,18 @@ class parse_header_splicing():
 
 class make_uniprot_pfam_database():
     
-    def __init__(self):
+    def __init__(self, min_overlap=0.10):
         self.sequence_dict = defaultdict(list)
         self.sequence_df = pd.DataFrame()
+        # How munch of the canonical sequence must the Pfam domain cover to be included?
+        self.min_overlap = min_overlap
         
         
     def read_uniprot(self, filename, id_type):
         """ Convert sequences from fasta files into a dictionary of SeqRecord objects
         """
+        logging.info('read_pfam(self, ' + filename + ', ' + id_type + ')')
+        
         # The header file is formatted differently depending on whether the file
         # comes from uniprot or from our colaborators
         if id_type == 'uniprot':
@@ -70,6 +76,8 @@ class make_uniprot_pfam_database():
     def read_pfam(self, filename, id_type):
         """ Convert sequences from pfam_scan.pl output into a dictionary of SeqRecord objects
         """
+        logging.info('read_pfam(self, ' + filename + ', ' + id_type + ')')
+        
         # The header file is formatted differently depending on whether the file
         # comes from uniprot or from our colaborators
         if id_type == 'uniprot':
@@ -88,7 +96,7 @@ class make_uniprot_pfam_database():
         pfamscan_results_filehandle = open(filename, 'r')
         
         keep_sequence = False
-        for line in pfamscan_results_filehandle:
+        for line_number, line in enumerate(pfamscan_results_filehandle):
             
             # Remove carriage return from the end of the line (while keeping spaces)
             line = line.rstrip('\r\n')
@@ -118,10 +126,15 @@ class make_uniprot_pfam_database():
                 letter_annotations = {}
                 
                 # Decide whether the sequence meets preliminary inclusion cutoffs
-                uniprot_length = float(len(self.sequence_dict[dict_key][0].seq))
-                domain_length = float(annotations['alignment_end']) - int(annotations['alignment_start'])
-                overlap = domain_length / uniprot_length
-                if overlap > 0.10 and int(annotations['significance']) == 1:
+                # This does not seem to be right... removes to many domains
+#                uniprot_length = float(len(self.sequence_dict[dict_key][0].seq))
+#                domain_length = float(annotations['alignment_end']) - int(annotations['alignment_start'])
+#                overlap = domain_length / uniprot_length                
+#                if overlap > self.min_overlap and int(annotations['significance']) == 1:
+#                    keep_sequence = True
+#                else:
+#                    keep_sequence = False
+                if int(annotations['significance']) == 1:
                     keep_sequence = True
                 else:
                     keep_sequence = False
@@ -131,6 +144,14 @@ class make_uniprot_pfam_database():
                 letter_annotations['hmm'] = line[11:]
             if line[0:11] == '#MATCH     ':
                 letter_annotations['match'] = line[11:]
+                # Do not keep the domain if the fraction of identically-overlapping AA is too small
+                num_of_matches = len(re.findall('[a-zA-Z]', letter_annotations['match']))
+                length_of_sequence = len(letter_annotations['match'])
+                if float(num_of_matches)/float(length_of_sequence) < self.min_overlap:
+                    keep_sequence = False
+                    logging.debug('Domain with low overlap identity was not included!')
+                    logging.debug(dict_key)
+                    logging.debug('\t'.join(values) + '\n')
             if line[0:11] == '#PP        ':
                 letter_annotations['pp'] = line[11:]
             if line[0:11] == '#SEQ       ':
@@ -144,6 +165,8 @@ class make_uniprot_pfam_database():
     def remove_overlapping_domains(self):
         """ If two or more domains overlap by more than 5 AA, keep only the longest domain
         """
+        logging.info('remove_overlapping_domains(self)')
+        
         for key in self.sequence_dict.keys():
             
             if len(self.sequence_dict[key]) == 1:
@@ -154,6 +177,11 @@ class make_uniprot_pfam_database():
             delete_overlaps_index = set()
             
             for i in range(1, len(self.sequence_dict[key])): # -1 includes the last one
+                
+                if i in delete_overlaps_index:
+                    # Don't analyse a domain if it's going to be deleted anyway
+                    continue
+                
                 domainA_counter = Counter(range(int(self.sequence_dict[key][i].annotations['alignment_start'])-1, 
                                                 int(self.sequence_dict[key][i].annotations['alignment_end'])))
                 
@@ -165,7 +193,7 @@ class make_uniprot_pfam_database():
                     domainA_remainder   = list((domainA_counter - domainB_counter).elements())
                     domainB_remainder   = list((domainB_counter - domainA_counter).elements())
                     
-                    if overlap >= 5:
+                    if len(overlap) > 5:
                         # Pfam domains overlap, delete the second domain
                         delete_overlaps_index.add(j)
                         
@@ -178,6 +206,15 @@ class make_uniprot_pfam_database():
                             if self.sequence_dict[key][j].annotations['E_value'] < self.sequence_dict[key][i].annotations['E_value']:
                                 # DomainB has a lower (better) E_value, replace domainA with domainB
                                 self.sequence_dict[key][i] = self.sequence_dict[key][j]
+                        
+                        # Debugging message to track which domains are removed
+                        if len(domainA_remainder) > 10 and len(domainB_remainder) > 10:
+                            logging.debug('Domains with large overhangs were removed!')
+                            logging.debug(key)
+                            logging.debug('i = ' + str(i) + '   j = ' + str(j) + ';')
+                            logging.debug('overlap = ' + str(len(overlap)))
+                            logging.debug('domainA overhang = ' + str(len(domainA_remainder)))
+                            logging.debug('domainB overhang = ' + str(len(domainB_remainder)) + '\n')
                 
             # Delete the seqrecords that were marked for deletion (overlapping sequences that are shorter)
             # you have to delete from highest index to lowest, so that the indices of subsequent items don't change
@@ -234,13 +271,13 @@ class make_uniprot_pfam_database():
     
     def save_dict(self, filename):
         fh = open(filename, 'wb')
-        pickle.dump(self.sequence_dict)
+        pickle.dump(self.sequence_dict, fh)
         fh.close()
 
         
     def save_df(self, filename):
         fh = open(filename, 'wb')
-        pickle.dump(self.sequence_df)
+        pickle.dump(self.sequence_df, fh)
         fh.close()
 
         
@@ -251,11 +288,21 @@ class make_uniprot_pfam_database():
 
 
 
-db_path = '/home/alexey/working/databases/'
-db_filename = 'yanqi_all_seqrecords1.pickle'
-db_filename2 = 'yanqi_all_seqrecords2_delete_overlaps.pickle'
-db_filename3 = 'yanqi_all_seqrecords3_link_repeats.pickle'
-db_filename4 = 'yanqi_all_seqrecords3_df.pickle'
+
+# Set up logging file for debugging
+db_path = '/home/alexey/working/databases/uniprot-yanqi/'
+
+db_filename     = 'yanqi_all_seqrecords1.pickle'
+db_filename2    = 'yanqi_all_seqrecords2:delete_overlaps.pickle'
+db_filename3    = 'yanqi_all_seqrecords3:link_repeats.pickle'
+db_filename4    = 'yanqi_all_seqrecords3:link_repeats_df.pickle'
+
+log_filename    = 'parse_pfamscan.log'
+
+logging.basicConfig(filename = db_path + log_filename, 
+                    filemode = 'w',
+                    delay = True,
+                    level = logging.DEBUG)
 
 db = make_uniprot_pfam_database()
 

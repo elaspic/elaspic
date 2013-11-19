@@ -1007,7 +1007,7 @@ class pipeline():
         # to fully implement it to be really usefull. It works, one just has
         # to set the desired logging with the information where needed
         log = MultiProcessingLog(self.outputPath + self.name + '.log', mode='w', maxsize=0, rotate=5)
-        formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(asctime)s -%(name)s - %(levelname)s - %(message)s')
         log.setFormatter(formatter)
         
         # create the pool to control the number of t_coffee instances
