@@ -1007,7 +1007,7 @@ class pipeline():
         # to fully implement it to be really usefull. It works, one just has
         # to set the desired logging with the information where needed
         log = MultiProcessingLog(self.outputPath + self.name + '.log', mode='w', maxsize=0, rotate=5)
-        formatter = logging.Formatter('%(asctime)s -%(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         log.setFormatter(formatter)
         
         # create the pool to control the number of t_coffee instances
@@ -1089,8 +1089,7 @@ class pipeline():
         skiplog = open(self.outputPath + 'not_processed.log', 'w')
         
         # Write header
-        id_labels = 'wt_or_mut\t' + \
-                    'uniprotIDs\t' + 'pfamIDs\t' + 'domain_defs\t' + 'mutation\t'
+        id_labels = 'uniprotIDs\t' + 'pfamIDs\t' + 'domain_defs\t' + 'mutation\t' + 'wt_or_mut\t'
                     
         value_labels = 'normDOPE\t' + \
                     'intraclashes_energy1\t' + 'intraclashes_energy2\t' + \
@@ -1155,9 +1154,9 @@ class pipeline():
                         self.get_uniprot_sequence.add(output_dict['new_sequences'])
                         
                     # Unique identifier for each line
-                    id_data = (':'.join(output_dict['uniprotIDs']) + '\t' + 
-                             ':'.join(output_dict['pfamIDs']) + '\t' + 
-                             ':'.join(['-'.join([str(i) for i in x]) for x in output_dict['domain_defs']]) + '\t' + 
+                    id_data = ('_'.join(output_dict['uniprotIDs']) + '\t' + 
+                             '_'.join(output_dict['pfamIDs']) + '\t' + 
+                             '_'.join(['-'.join([str(i) for i in x]) for x in output_dict['domain_defs']]) + '\t' + 
                              output_dict['mutation'])
 #
 #                    # Unique identifier for each line
@@ -1184,9 +1183,9 @@ class pipeline():
                                         '\n'
                     
                     # Make line for additional information file
-                    resForWrite_if = id_data + \
+                    resForWrite_if = id_data + '-\t' + \
                                 str(output_dict['is_in_core']) + '\t' + \
-                                '\t'.join([str(i) for i in output_dict['alignment_scores']]) + '\t' +\
+                                '\t'.join([str(i) for i in output_dict['alignment_scores']]) + '\t' + \
                                  str(output_dict['matrix_score']) + '\t' + \
                                  '\t'.join(output_dict['interface_size']) + '\t' + \
                                  ','.join(output_dict['physChem_wt_ownChain']) + '\t' + \

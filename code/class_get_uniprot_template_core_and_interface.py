@@ -919,17 +919,18 @@ class get_template_interface(get_template):
         """
         # get all possible templates
         templates, new_sequences = self.run(uniprotID1, mutation)
-
+        
+        self.log.info("Done getting interface templates...")
+#        self.log.debug("Templates:")
+#        self.log.debug(templates)
+        
         if (templates == []) or (templates == [[]]) or (templates == [[[]]]):
             return [[]], new_sequences
         else:
             # select the best template
-            self.log.debug("Templates:")
-            self.log.debug(templates)
-            
             best_templates = self.chose_best_template(templates)
-            self.log.debug("Best templates:")
-            self.log.debug(best_templates)
+#            self.log.debug("Best templates:")
+#            self.log.debug(best_templates)
             
             best_templates_refined = []
             for template in best_templates:
@@ -937,8 +938,10 @@ class get_template_interface(get_template):
                 # and realign
                 template_refined, no_longer_new_sequences = self.run(uniprotID1, mutation, template)
                 best_templates_refined.append(template_refined[0][0])
-            self.log.debug("Best templates refined:")
-            self.log.debug(best_templates_refined)
+            
+            self.log.info('Done refining interface templates...')
+#            self.log.debug("Best templates refined:")
+#            self.log.debug(best_templates_refined)
             
             return best_templates_refined, new_sequences
         
@@ -1016,7 +1019,7 @@ class get_template_interface(get_template):
             pdbs = self.get_3did_entries(*interaction.pfamIDs)
             
             self.log.info("Going over every interaction reported in the database for a given uniprot...")
-            self.log.debug("uniprotID1: " + interaction.uniprotIDs[0] + ':' + interaction.uniprotIDs[0])
+            self.log.debug("uniprotID1: " + interaction.uniprotIDs[0] + ':' + interaction.uniprotIDs[1])
             self.log.debug("Interactions: " + interaction.pfamIDs[0] + ':' + interaction.pfamIDs[1])
             
             if pdbs == 'no entry':

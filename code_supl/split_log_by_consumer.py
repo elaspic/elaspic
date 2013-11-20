@@ -8,13 +8,13 @@ arguments = parser.parse_args()
 
 
 ih = open(arguments.log_filename, 'r')
-ohs = [open(arguments.log_filename.split('.')[0] + '-' + str(i) + '.log', 'w') for i in range(arguments.number_of_consumers)]
+ohs = [open(arguments.log_filename.split('.')[0] + '-' + str(i) + '.log', 'w') for i in range(1, arguments.number_of_consumers + 1)]
 
 last_index = 0
 for line in ih:
-    consumer = line.split(' - ')[0]
-    if consumer.split('-')[0] == 'Consumer':
-        last_index = int(consumer.split('-')[-1]) - 1
+    log_values = line.split(' -')
+    if len(log_values) > 1 and log_values[1].split('-')[0] == 'Consumer':
+        last_index = int(log_values[1].split('-')[-1]) - 1 # index starts from 0, consumers start from 1
         ohs[last_index].writelines(line)
     else:
         ohs[last_index].writelines(line)

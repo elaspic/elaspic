@@ -559,9 +559,9 @@ class Task(object):
         
         # Get templates for interface mutations
         templates, new_sequences = self.getTemplateInterface(self.uniprotKB, self.mutation)
-        self.log.info("Finished getting interface templates...")
-        self.log.debug("Interface templates:")
-        self.log.debug(templates)
+        self.log.info("Finished getting interface templates...\n\n")
+#        self.log.debug("Interface templates:")
+#        self.log.debug(templates)
         
         if not ((templates == ()) or (templates == [()]) or 
                 (templates == []) or (templates == [[]])):
@@ -579,9 +579,9 @@ class Task(object):
             
             # Check if the mutations falls into the core
             templates, new_sequences = self.getTemplateCore(self.uniprotKB, self.mutation)
-            self.log.info("Finished getting core templates...")
-            self.log.debug("Core templates:")
-            self.log.debug(templates)
+            self.log.info("Finished getting core templates...\n\n")
+#            self.log.debug("Core templates:")
+#            self.log.debug(templates)
             
             if templates == 'not in core' or templates == 'no template':
                 output_dict = {'errors': 'no template found: ' + str(self.uniprotKB) + '_' + str(self.mutation)}
@@ -598,22 +598,22 @@ class Task(object):
 
         output_data[0]['new_sequences'] = new_sequences
         
-        self.log.info("Finished preparing template structures...")
-        self.log.debug("Output data:")
-        self.log.debug(output_data)
+        self.log.info("Finished preparing template structures...\n\n")
+#        self.log.debug("Output data:")
+#        self.log.debug(output_data)
         
         return output_data
 
 
     def findTemplateHelper(self, template, is_in_core):
         # Unique template identifier for the template
-        templateID = (':'.join(template['uniprotIDs']) + '_' +
-             ':'.join(template['pfamIDs']) + '_' + 
-             ':'.join(['-'.join([str(i) for i in x]) for x in template['domain_defs']]) + '_' + 
+        template_folder_name = ('_'.join(template['uniprotIDs']) + '_' +
+             '_'.join(template['pfamIDs']) + '_' + 
+             '_'.join(['-'.join([str(i) for i in x]) for x in template['domain_defs']]) + '_' + 
              self.mutation)
         
         # Folder for storing files for export to output
-        savePath =  self.tmpPath + self.unique + '/' + templateID + '/'
+        savePath =  self.tmpPath + self.unique + '/' + template_folder_name + '/'
         subprocess.check_call('mkdir -p ' + savePath, shell=True)
                     
         # Template data 
@@ -627,6 +627,7 @@ class Task(object):
         # PDB domain definitons of query and partner
         domains_pdb = template['pdb_domain_defs']
         
+        self.log.debug(savePath)
         self.log.debug("pdb_code:")
         self.log.debug(pdbCode)
         self.log.debug('chains_pdb:')
@@ -651,6 +652,7 @@ class Task(object):
 #        if float(scores[0]) >= 99.0:
 #            do_modelling = False
         
+        # savePath is where the pdb sequences and the pdb with the required chains are saved
         sequences, alignments, chains_modeller, SWITCH_CHAIN, HETflag, HETATMsInChain_SEQnumbering = \
             self.prepareInput(pdbCode, chains_pdb, domains_pdb, sequences, alignments, savePath)
         
@@ -710,28 +712,28 @@ class Task(object):
         self.log.debug("normDOPE_wt:")
         self.log.debug(normDOPE_wt)
         self.log.debug("pdbFile_wt:")
-        self.log.debug(pdbFile_wt)
+        self.log.debug(pdbFile_wt + '\n\n')
         
+        
+        # Copy Modeller pdb file
+        shutil.copyfile(modeller_path + pdbFile_wt, savePath + pdbFile_wt)
         
         # Rename the wildtype pdb file
-        pdbFile_wt_renamed = self.uniprotKB + '_' + self.mutation + '.pdb'
-        system_command = 'mv ' + modeller_path + pdbFile_wt + ' ' + modeller_path + pdbFile_wt_renamed
-        subprocess.check_call(system_command, shell=True)
+#        pdbFile_wt_renamed = self.uniprotKB + '_' + self.mutation + '.pdb'
+#        system_command = 'mv ' + modeller_path + pdbFile_wt + ' ' + modeller_path + pdbFile_wt_renamed
+#        subprocess.check_call(system_command, shell=True)
         
         # Copy alignments
         for alignment in template['alignments']:
-            shutil.copyfile(self.alignments_path + alignment[0].id,
-                savePath + '/' + templateID + '::' + alignment[0].id + '_' + alignment[1].id + '.aln')
-             
-        # Copy Modeller pdb file
-        shutil.copyfile(modeller_path + pdbFile_wt_renamed,
-                savePath + '/' + templateID + '::' + template['pdbID'] + ''.join(template['chains_pdb']) + '.pdb')
+            shutil.copyfile(self.alignments_path + alignment[0].id + '_' + alignment[1].id + '.aln',
+                savePath + '/' + template_folder_name + '_' + alignment[0].id + '_' + alignment[1].id + '.aln')
+        
         
         # Add all calculated values to the template dictionary
         template['is_in_core'] = is_in_core
-        template['templateID'] = templateID
+        template['template_folder_name'] = template_folder_name
         template['savePath'] = savePath
-        template['pdbFile_wt'] = pdbFile_wt_renamed
+        template['pdbFile_wt'] = pdbFile_wt
         template['chains_modeller'] = chains_modeller
         template['mutations_pdb'] = mutations_pdb
         template['mutations_modeller'] = mutations_modeller
@@ -744,7 +746,7 @@ class Task(object):
 
     def findStructure(self):
         # mutations is of the form I_V70A
-        pdbCode, chains_pdb1, chains_pdb2, mutation = self.mutation.split('_') 
+        pdbCode, chains_pdb1, chains_pdb2, mutation = self.mutation.split('_')
         pdb_type, pdb_resolution = self.pdb_resolution_database(pdbCode)
         
         # Equivalent to class_get_uniprot_template_core_and_interface.py output        
@@ -764,15 +766,13 @@ class Task(object):
                     'alignment_scores' : (100, 100, 100)}
         
         # Unique template identifier for the template
-        templateID = (':'.join(template['uniprotIDs']) + '_' +
-             ':'.join(template['pfamIDs']) + '_' + 
-             ':'.join(['-'.join([str(i) for i in x]) for x in template['domain_defs']]) + '_' + 
+        template_folder_name = ('_'.join(template['uniprotIDs']) + '_' +
+             '_'.join(template['pfamIDs']) + '_' + 
+             '_'.join(['-'.join([str(i) for i in x]) for x in template['domain_defs']]) + '_' + 
              self.mutation)
              
-        savePath =  self.tmpPath + self.unique + '/' + templateID + '/'
-        
-        # Make a folder in tmpdir to store output
-        subprocess.check_call('mkdir -p ' + self.tmpPath + self.unique + '/' + templateID, shell=True)
+        savePath =  self.tmpPath + self.unique + '/' + template_folder_name + '/'
+        subprocess.check_call('mkdir -p ' + savePath, shell=True)
         
         modeller_path = self.tmpPath + self.unique + '/'
 
@@ -788,9 +788,12 @@ class Task(object):
         
         normDOPE_wt, pdbFile_wt, SWITCH_CHAIN, chains_get_pdb = self.__getCrystalStructure(pdbCode, chains_get_pdb, modeller_path)
 
+        # Copy Modeller pdb file (could've just replaced the modeller path with savepath above)
+        shutil.copyfile(modeller_path + pdbFile_wt, savePath + pdbFile_wt)
+        
         # Equivalent to class_multi.py additions        
         template['is_in_core'] = True
-        template['templateID'] = templateID
+        template['template_folder_name'] = template_folder_name
         template['chains_modeller'] = chains_get_pdb
         template['savePath'] = savePath
         template['pdbFile_wt'] = pdbFile_wt
@@ -846,17 +849,14 @@ class Task(object):
         # run analysis for each template
         for template in templates:
             # Unique template identifier for the template
-            templateID = (':'.join(template['uniprotIDs']) + '_' +
-                 ':'.join(template['pfamIDs']) + '_' + 
-                 ':'.join(['-'.join([str(i) for i in x]) for x in template['domain_defs']]) + '_' + 
-                 self.mutation)
-                 
+            savePath = template['savePath']     
             pdbFile_wt = template['pdbFile_wt']
             chains = template['chains_modeller']
             mutations_modeller = template['mutations_modeller'] # changed from mutations pdb
-            modeller_path = template['modeller_path']
             mutations_foldX = template['mutations_foldX']
             
+            self.log.debug("savePath:")
+            self.log.debug(template['savePath'])            
             self.log.debug("pdbFile_wt:")
             self.log.debug(template['pdbFile_wt'])
             self.log.debug("chains:")
@@ -876,7 +876,7 @@ class Task(object):
             try:
                 chdir(foldX_path) # from os
                 fX = foldX(self.tmpPath + self.unique, 
-                                   modeller_path + pdbFile_wt, 
+                                   savePath + pdbFile_wt, 
                                    chains[0], 
                                    self.unique, 
                                    self.buildModel_runs,
@@ -913,12 +913,12 @@ class Task(object):
             for mut in mutations_foldX:
                 mutCodes.append(mut[1])
     
-            referenceWT, mutatedPDB = fX_wt.run('BuildModel', mutCodes)
+            repairedPDB_wt_list, repairedPDB_mut_list = fX_wt.run('BuildModel', mutCodes)
 
     
             ########################################
             ## 4th: set up the classes for the wildtype and the mutant structures
-            for mPDB in mutatedPDB:
+            for mPDB in repairedPDB_mut_list:
                 fX_mut_list.append(foldX(self.tmpPath + self.unique, 
                                          mPDB, 
                                          chains[0], 
@@ -927,7 +927,12 @@ class Task(object):
                                          self.foldX_WATER
                                          )
                                    )
-            for wPDB in referenceWT:
+                # Copy the foldX mutant pdb file
+                shutil.copyfile(mPDB,
+                     savePath + str(mutations_modeller[0]) + '-MUT_' +  mPDB.split('/')[-1])
+                     
+                     
+            for wPDB in repairedPDB_wt_list:
                 fX_wt_list.append(foldX(self.tmpPath + self.unique, 
                                         wPDB, 
                                         chains[0], 
@@ -936,9 +941,9 @@ class Task(object):
                                         self.foldX_WATER
                                         )
                                    )
-                                   
-            repairedPDB_mut_list = mutatedPDB
-            repairedPDB_wt_list = referenceWT
+                # Copy the foldX wildtype pdb file                          
+                shutil.copyfile(wPDB,
+                     savePath + str(mutations_modeller[0]) + '-' +  wPDB.split('/')[-1])                
                 
             
             ########################################
@@ -1089,11 +1094,6 @@ class Task(object):
                         res_mut_ownChain[index] += atomicContactVector_ownChain[index]
                 physChem_mut.append(res_mut)
                 physChem_mut_ownChain.append(res_mut_ownChain)
-                
-                # Copy the foldX mutant pdb file
-                shutil.copyfile(item,
-                     self.tmpPath + self.unique + '/' + templateID + '/' + templateID + '::' + 
-                     str(mutations_modeller[0]) + '_MUT_' +  item.split('/')[-1])
                                 
                                 
             for item in repairedPDB_wt_list:
@@ -1114,11 +1114,6 @@ class Task(object):
                         res_wt_ownChain[index] += atomicContactVector_ownChain[index]
                 physChem_wt.append(res_wt)
                 physChem_wt_ownChain.append(res_wt_ownChain)
-    
-                # Copy the foldX wildtype pdb file                          
-                shutil.copyfile(item,
-                     self.tmpPath + self.unique + '/' + templateID + '/' + templateID + '::' + 
-                     str(mutations_modeller[0]) + '_' +  item.split('/')[-1])
 
             DSSP = getDSSP()
             if self.templateFinding:
@@ -1176,18 +1171,22 @@ class Task(object):
             template['solvent_accessibility_wt'] = solvent_accessibility_wt
             template['secondary_structure_mut'] = secondary_structure_mut
             template['solvent_accessibility_mut'] = solvent_accessibility_mut
+
+            self.log.info('Finished processing template:')
+            self.log.info(savePath.split('/')[-2])
+            self.log.info('\n\n')
             
             # Save template dictionary as a pickled object
-            filename = (self.tmpPath + self.unique + '/' + templateID + '/' + templateID + '::template.pickle')
+            filename = (savePath + savePath.split('/')[-2] + '.pickle')
             f = open(filename, 'wb')
             pickle.dump(template, f)
             f.close()
             
             # Move template files to the output folder as a tar archive
-            self.make_tarfile(self.HOME + self.outputPath + templateID + '.tar.gz', 
-                              self.tmpPath + self.unique + '/' + templateID)
+            self.make_tarfile(self.HOME + self.outputPath + savePath.split('/')[-2] + '.tar.gz', 
+                              savePath[:-1])
             
-        self.log.debug(templates)
+        self.log.info('Finished processing all templates for ' + self.uniprotKB + ' ' + self.mutation + '\n\n\n')
         return templates
     
     def make_tarfile(self, output_filename, source_dir):
