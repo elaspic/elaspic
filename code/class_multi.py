@@ -51,12 +51,13 @@ class TimeoutException(Exception):
 
 class Consumer(multiprocessing.Process):
    
-    def __init__(self, proc_name, task_queue, result_queue, runTime, pool, semaphore, DEBUG, outputPath, logger):
+    def __init__(self, proc_name, task_queue, result_queue, runTime, pool, semaphore, DEBUG, outputPath, logger, webServer=False):
         multiprocessing.Process.__init__(self)
         self.proc_name = proc_name
         self.task_queue = task_queue
         self.result_queue = result_queue
         self.DEBUG = DEBUG
+        self.webServer = webServer
         
         self.pool = pool
         self.semaphore = semaphore
@@ -257,58 +258,58 @@ class Task(object):
         self.PWD = getcwd() + '/'
         try:
             return self.__run()
-        except errors.KNOTerror:
-            if self.DEBUG:
-                raise
+        except errors.KNOTerror as e:
+            if self.DEBUG or self.webServer:
+                raise e
             else:
                 return 'knotted'
-        except errors.TcoffeeError, e:
+        except errors.TcoffeeError as e:
             self.log.error('t_coffee: problem occured while getting the wildtype PDB\n')
             self.log.error('t_coffee: alignment error in file: ' + e.alignInFile + '\n')
             self.log.error('t_coffee: message raised:\n')
             self.log.error('t_coffee:' + e.errors + '\n\n\n')
-            if self.DEBUG:
-                raise
+            if self.DEBUG or self.webServer:
+                raise e
             else:
                 return 'tcoffee_error'
         except ModellerError as e:
             self.log.error('ModellerError while trying to modellel in __getPDB for ' + self.uniprotKB + ':' + self.mutation)
             self.log.error('ModellerError args:' + '\n'.join(e.args))
             self.log.error('ModellerError message:' + e.message)
-            if self.DEBUG:
-                raise
+            if self.DEBUG or self.webServer:
+                raise e
             else:
                 return 'modeller_error'
         except errors.FoldXError as e:
             self.log.error('FoldXError while repairing the wildtype for ' + self.uniprotKB + ':' + self.mutation)
             self.log.error('FoldXError error:' + e.error)
-            if self.DEBUG:
-                raise
+            if self.DEBUG or self.webServer:
+                raise e
             else:
                 return 'foldx_error'
         except errors.TemplateCoreError as e:
             self.log.error('Error while getting the core template for ' + self.uniprotKB + ':' + self.mutation)
             self.log.error('TemplateCoreError error:' + e.error)
-            if self.DEBUG:
-                raise
+            if self.DEBUG or self.webServer:
+                raise e
             else:
                 return 'templateCoreError'
         except errors.TemplateInterfaceError as e:
             self.log.error('Error while getting the interface template for ' + self.uniprotKB + ':' + self.mutation)
             self.log.error('TemplateInterfaceError error:' + e.error)
-            if self.DEBUG:
-                raise
+            if self.DEBUG or self.webServer:
+                raise e
             else:
                 return 'templateInterfaceError'
         except errors.pdbError as e:
             self.log.error(e.error)
-            if self.DEBUG:
-                raise
+            if self.DEBUG or self.webServer:
+                raise e
             else:
                 return 'pdbError'
-        except:
-            if self.DEBUG:
-                raise
+        except Exception as e:
+            if self.DEBUG or self.webServer:
+                raise e
             else:
                 return 'unknown'
         finally:
