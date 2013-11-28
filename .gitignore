@@ -5,6 +5,7 @@
 # Binary and configuration files
 *.dat
 *.ini
+*.txt
 
 # Logs and databases
 *.log
