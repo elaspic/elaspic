@@ -636,7 +636,8 @@ class pipeline():
                                           'outputPath':'results/',
                                           'DEBUG':False,
                                           'saveTo':'$SCRATCH/niklas-pipeline/',
-                                          'saveScinet':False
+                                          'saveScinet':False,
+                                          'webServer': False
                                           }
                                 )
 
@@ -679,6 +680,12 @@ class pipeline():
             self.include_all_pfam_interactions = configParser.getboolean('DEFAULT', 'include_all_pfam_interactions')
         else:
             self.include_all_pfam_interactions = False
+        
+        # web-server
+        if configParser.has_option('DEFAULT', 'webServer'):
+            self.webServer = configParser.get('DEFAULT', 'webServer')
+        else:
+            self.webServer = defaults['webServer']
             
         ## from [SETTINGS]
         # name
@@ -1018,7 +1025,7 @@ class pipeline():
         # Start consumers
         print 'Creating %d consumers' % self.num_consumers
         proc_name = [ 'Consumer-' + str(i) for i in range(1, self.num_consumers + 1) ]
-        consumers = [ Consumer(proc_name[i-1], tasks, results, self.runTime, pool, s, self.DEBUG, self.outputPath, log)
+        consumers = [ Consumer(proc_name[i-1], tasks, results, self.runTime, pool, s, self.DEBUG, self.outputPath, log, webServer=self.webServer)
                       for i in range(1, self.num_consumers + 1) ]
 
         for w in consumers:
