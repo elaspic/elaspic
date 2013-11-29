@@ -16,3 +16,6 @@ bin/
 backup/
 input/
 results/
+
+# Git Windows configuration file
+.gitattributes
