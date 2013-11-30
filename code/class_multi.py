@@ -259,7 +259,7 @@ class Task(object):
         try:
             return self.__run()
         except errors.KNOTerror as e:
-            if self.DEBUG or self.webServer:
+            if self.DEBUG:
                 raise e
             else:
                 return 'knotted'
@@ -268,7 +268,7 @@ class Task(object):
             self.log.error('t_coffee: alignment error in file: ' + e.alignInFile + '\n')
             self.log.error('t_coffee: message raised:\n')
             self.log.error('t_coffee:' + e.errors + '\n\n\n')
-            if self.DEBUG or self.webServer:
+            if self.DEBUG:
                 raise e
             else:
                 return 'tcoffee_error'
@@ -276,39 +276,39 @@ class Task(object):
             self.log.error('ModellerError while trying to modellel in __getPDB for ' + self.uniprotKB + ':' + self.mutation)
             self.log.error('ModellerError args:' + '\n'.join(e.args))
             self.log.error('ModellerError message:' + e.message)
-            if self.DEBUG or self.webServer:
+            if self.DEBUG:
                 raise e
             else:
                 return 'modeller_error'
         except errors.FoldXError as e:
             self.log.error('FoldXError while repairing the wildtype for ' + self.uniprotKB + ':' + self.mutation)
             self.log.error('FoldXError error:' + e.error)
-            if self.DEBUG or self.webServer:
+            if self.DEBUG:
                 raise e
             else:
                 return 'foldx_error'
         except errors.TemplateCoreError as e:
             self.log.error('Error while getting the core template for ' + self.uniprotKB + ':' + self.mutation)
             self.log.error('TemplateCoreError error:' + e.error)
-            if self.DEBUG or self.webServer:
+            if self.DEBUG:
                 raise e
             else:
                 return 'templateCoreError'
         except errors.TemplateInterfaceError as e:
             self.log.error('Error while getting the interface template for ' + self.uniprotKB + ':' + self.mutation)
             self.log.error('TemplateInterfaceError error:' + e.error)
-            if self.DEBUG or self.webServer:
+            if self.DEBUG:
                 raise e
             else:
                 return 'templateInterfaceError'
         except errors.pdbError as e:
             self.log.error(e.error)
-            if self.DEBUG or self.webServer:
+            if self.DEBUG:
                 raise e
             else:
                 return 'pdbError'
         except Exception as e:
-            if self.DEBUG or self.webServer:
+            if self.DEBUG:
                 raise e
             else:
                 return 'unknown'
