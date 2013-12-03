@@ -17,5 +17,9 @@ backup/
 input/
 results/
 
+# Documentation
+*.docx
+*.doc
+
 # Git Windows configuration file
 .gitattributes
