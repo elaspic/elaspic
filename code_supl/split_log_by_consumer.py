@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -12,7 +13,7 @@ ohs = [open(arguments.log_filename.split('.')[0] + '-' + str(i) + '.log', 'w') f
 
 last_index = 0
 for line in ih:
-    log_values = line.split(' -')
+    log_values = line.split(' - ')
     if len(log_values) > 1 and log_values[1].split('-')[0] == 'Consumer':
         last_index = int(log_values[1].split('-')[-1]) - 1 # index starts from 0, consumers start from 1
         ohs[last_index].writelines(line)

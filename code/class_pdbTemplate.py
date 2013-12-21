@@ -164,7 +164,6 @@ class pdbTemplate():
                 chains          type: list  containing strings with chain names
                 domainBoundarys type: list  containing a tuple of beginning and ending for
                                             each chain in chains
-                
         """
         io = PDBIO()
         chains_pdb_order = list()
@@ -197,8 +196,6 @@ class pdbTemplate():
                 residues.append(residue.id)
 #                if residue.id[0] == ' ':
 #                    residues_numbering.append(residue.id[1])
-            
-
             
             HETATMpositions[chainID] = []
             BEGIN = False

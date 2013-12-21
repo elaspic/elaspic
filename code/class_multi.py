@@ -608,8 +608,8 @@ class Task(object):
 
     def findTemplateHelper(self, template, is_in_core):
         # Unique template identifier for the template
-        template_folder_name = ('_'.join(template['uniprotIDs']) + '_' +
-             '_'.join(template['pfamIDs']) + '_' + 
+        template_folder_name = ('-'.join(template['uniprotIDs']) + '_' +
+             '-'.join(template['pfamIDs']) + '_' + 
              '_'.join(['-'.join([str(i) for i in x]) for x in template['domain_defs']]) + '_' + 
              self.mutation)
         
@@ -767,8 +767,8 @@ class Task(object):
                     'alignment_scores' : (100, 100, 100)}
         
         # Unique template identifier for the template
-        template_folder_name = ('_'.join(template['uniprotIDs']) + '_' +
-             '_'.join(template['pfamIDs']) + '_' + 
+        template_folder_name = ('-'.join(template['uniprotIDs']) + '_' +
+             '-'.join(template['pfamIDs']) + '_' + 
              '_'.join(['-'.join([str(i) for i in x]) for x in template['domain_defs']]) + '_' + 
              self.mutation)
              

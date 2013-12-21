@@ -982,12 +982,13 @@ class pipeline():
     def __prepareOutputPaths(self):
         if not os.path.isdir(self.outputPath):
             subprocess.check_call('mkdir ' + self.outputPath, shell=True)
-        if not os.path.isdir(self.outputPath + 'alignments/'):
-            subprocess.check_call('mkdir ' + self.outputPath + 'alignments/', shell=True)
-        if not os.path.isdir(self.outputPath + 'bestModels/'):
-            subprocess.check_call('mkdir ' + self.outputPath + 'bestModels/', shell=True)
-        if not os.path.isdir(self.outputPath + 'pdbFiles/'):
-            subprocess.check_call('mkdir ' +  self.outputPath + 'pdbFiles/', shell=True)
+        # Files are compressed into individual tar archives, do not need these paths anymore
+#        if not os.path.isdir(self.outputPath + 'alignments/'):
+#            subprocess.check_call('mkdir ' + self.outputPath + 'alignments/', shell=True)
+#        if not os.path.isdir(self.outputPath + 'bestModels/'):
+#            subprocess.check_call('mkdir ' + self.outputPath + 'bestModels/', shell=True)
+#        if not os.path.isdir(self.outputPath + 'pdbFiles/'):
+#            subprocess.check_call('mkdir ' +  self.outputPath + 'pdbFiles/', shell=True)
 
     
         
@@ -1161,10 +1162,10 @@ class pipeline():
                         self.get_uniprot_sequence.add(output_dict['new_sequences'])
                         
                     # Unique identifier for each line
-                    id_data = ('_'.join(output_dict['uniprotIDs']) + '\t' + 
-                             '_'.join(output_dict['pfamIDs']) + '\t' + 
+                    id_data = ('-'.join(output_dict['uniprotIDs']) + '\t' + 
+                             '-'.join(output_dict['pfamIDs']) + '\t' + 
                              '_'.join(['-'.join([str(i) for i in x]) for x in output_dict['domain_defs']]) + '\t' + 
-                             output_dict['mutation'])
+                             output_dict['mutation'] + '\t')
 #
 #                    # Unique identifier for each line
 #                    id_data =   output_dict['uniprotIDs'][0] + '\t' + \
