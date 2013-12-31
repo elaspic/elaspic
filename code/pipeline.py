@@ -909,7 +909,6 @@ class pipeline():
                                 self.tmpPath + 'blast/'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, error = childProcess.communicate()
-
     
     
     def __prepareTMP(self):
@@ -979,6 +978,7 @@ class pipeline():
                                 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/pickled'
                 subprocess.check_call(mkdir_command, shell=True)
 
+
     def __prepareOutputPaths(self):
         if not os.path.isdir(self.outputPath):
             subprocess.check_call('mkdir ' + self.outputPath, shell=True)
@@ -990,7 +990,6 @@ class pipeline():
 #        if not os.path.isdir(self.outputPath + 'pdbFiles/'):
 #            subprocess.check_call('mkdir ' +  self.outputPath + 'pdbFiles/', shell=True)
 
-    
         
     def __selectMatrix(self, matrix):
         if matrix == 'blosum80':
@@ -1130,7 +1129,7 @@ class pipeline():
                     'if_hydrophilic\t' + 'if_total\t' + \
                     'contactVector_wt_ownChain\t' + 'contactVector_wt\t' + \
                     'contactVector_mut_ownChain\t' + 'contactVector_mut\t' + \
-                    'secondary_structure_wt\t' + 'solvent_accessibility_wt\t' +\
+                    'secondary_structure_wt\t' + 'solvent_accessibility_wt\t' + \
                     'secondary_structure_mut\t' + 'solvent_accessibility_mut\n'
         
         res_wt.write(id_labels + value_labels)

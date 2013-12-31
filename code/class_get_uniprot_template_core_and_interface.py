@@ -113,11 +113,26 @@ class get_template():
         # get the sequence from the pdb
         pdb_sequence, domain_pdb, chainNumberingDomain = self.get_pdb_sequence(pdbCode, chain, domain_pdb)
         
+        
+        
         # get the uniprot sequence
         uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_uniprot, uniprotKB)
         
         # get the alignment
         alignment, score, pdb_sequence_id = self.map_to_uniprot_helper(uniprot_sequence_domain, pdb_sequence, saveAlignments)
+
+
+        
+        # AS Start ############################################################
+        # It was assumed that the uniprot domain boundaries are expanded and are correct.
+        # However when using pfamscan output, this assumption is not correct.
+        
+        domain_uniprot_expanded = self.expand_boundaries(alignment, domain_uniprot, )
+        
+        
+        # AS End ##############################################################
+
+
         
         # if it is the last round optimise the alignment
         if refine:
@@ -151,7 +166,27 @@ class get_template():
         alignment, score = self.do_align(seqIDs, saveAlignments)
 
         return alignment, score, pdb_sequence.id
-    
+        
+        
+        
+    def expand_boundaries(self, alignment, domain_uniprot, ):
+        """
+        AS:
+        
+        input:
+        
+        output:
+        
+        """
+        start = domain_uniprot[0]
+        end = domain_uniprot[1]
+        
+        
+        # subtract number of dashes from start, add number of dashes to end
+        
+        
+        return 
+        
     
     
     def do_align(self, seqIDs, saveAlignments):
