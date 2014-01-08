@@ -226,21 +226,31 @@ splicing_db = splicingSequenceDatabaseBySplicingID()
 
 
 # Load Niklas' databases
-handle = open('/home/alexey/working/pipeline-splicing/code/pipeline_3DID_database.pickle', 'rb')
-pipeline_3DID_database = pickle.load(handle)
-handle.close()
+with open('/home/kimlab1/strokach/working/pipeline/code/pipeline_3DID_database.pickle', 'rb') as fh:
+    pipeline_3DID_database = pickle.load(fh)
 
-handle = open('/home/alexey/working/pipeline-splicing/code/pipeline_core_templates.pickle', 'rb')
-pipeline_core_templates = pickle.load(handle)
-handle.close()
+with open('/home/kimlab1/strokach/working/pipeline/code/pipeline_core_templates.pickle', 'rb') as fh:
+    pipeline_core_templates = pickle.load(fh)
 
-handle = open('/home/alexey/working/pipeline-splicing/code/pipeline_interaction_database.pickle', 'rb')
-pipeline_interaction_database = pickle.load(handle)
-handle.close()
+with open('/home/kimlab1/strokach/working/pipeline/code/pipeline_uniprot_sequences.pickle', 'rb') as fh:
+    pipeline_uniprot_sequences = pickle.load(fh)
 
-handle = open('/home/alexey/working/pipeline-splicing/code/pipeline_uniprot_sequences.pickle', 'rb')
-pipeline_uniprot_sequences = pickle.load(handle)
-handle.close()
+
+
+with open('/home/kimlab1/strokach/working/databases/uniprot-yanqi/yanqi_all_seqrecords3.link_repeats_df.pickle', 'rb') as fh:
+    protein_definition_database = pickle.load(fh)
+
+with open('/home/kimlab1/strokach/working/pipeline/code/pipeline_interaction_database.pickle', 'rb') as fh:
+    protein_interaction_database = pickle.load(fh)
+    
+with open('/home/kimlab1/strokach/working/pipeline/code/domain_definition_database.pickle', 'rb') as fh:
+    domain_definition_database = pickle.load(fh)
+
+with open('/home/kimlab1/strokach/working/pipeline/code/domain_interaction_database.pickle', 'rb') as fh: 
+    domain_interaction_database = pickle.load(fh)
+
+
+
 
 
 # Parse splice sequence file
