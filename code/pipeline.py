@@ -4,12 +4,21 @@ Created on Tue Jan 15 11:09:11 2013
 
 @author: niklas
 """
+import numpy as np
+import pandas as pd
+
+from sets import ImmutableSet
 
 from ConfigParser import SafeConfigParser
 import subprocess
 import os
+import sys
+
 import multiprocessing
 import optparse
+from string import uppercase
+
+import logging
 
 from Bio.SubsMat import MatrixInfo
 from Bio import SeqIO
@@ -24,11 +33,14 @@ from os.path import isfile
 import cPickle as pickle
 import urllib2
 
-import collections
-from collections import namedtuple
-from string import uppercase
+import parse_pfamscan
 
-import logging
+from collections import OrderedDict
+
+
+class NullDevice():
+    def write(self, s):
+        pass
 
 # credit goes to here:
 # http://pymotw.com/2/multiprocessing/communication.html#controlling-access-to-resources
@@ -58,7 +70,8 @@ class ActivePool(object):
             return str(self.active)
 
 
-class myDatabases:
+
+class myDatabases(object):
     
     def __init__(self):
         pass
@@ -91,307 +104,34 @@ class myDatabases:
             domain[1] = domain[1][:-1]
         domain = [int(domain[0]), int(domain[1])]
         return domain
-    
-
-
-class getInteractions:
-    
-    def __init__(self, database):
-        """
-        Checks if the interaction database is already available as pickled object.
-        Generates it from file 'database' otherwise.
         
-        !! Make sure to delete the old *.pickle files if the input data changes !!
+        
+    def split_domain_semicolon(self, domains):
+        """ Unlike split_domain(), this function returns a tuple of tuples of strings,
+        preserving letter numbering (e.g. 10B)
+        """
+        x = domains
+        return tuple([ tuple([r.strip() for r in ro.split(':')]) for ro in x.split(',') ])
 
-        """            
-        database_name = 'pipeline_interaction_database.pickle'
-        if isfile(database_name):
-            print 'Loading interaction database'
-            f = open(database_name, 'rb')    
-            self.database = pickle.load(f)
-            f.close()
+        
+    def split_interface_aa(self, interface_aa):
+        """
+        """
+        if (interface_aa is not np.nan) and (interface_aa != '') and (interface_aa != 'NULL'):
+            if interface_aa[-1] == ',':
+                interface_aa = interface_aa[:-1]
+        
+            x  = interface_aa
+            return_tuple = tuple([int(r.strip()) for r in x.split(',')])
+            
         else:
-            print 'Generating interaction database...'
-            self.database = dict()
+            return_tuple = np.nan
             
-            with open(database, 'r') as f:
-                for l in f:
-                    # Skip the first line
-                    if l.strip().split('\t')[0] == 'UniprotID1':
-                        continue
-                    
-                    # Parse the file line by line
-                    firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain, \
-                    interface, NA, secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2 = l.strip().split('\t')
-                    
-                    # Convert domain range into tuples
-                    domain = tuple(int(i) for i in domain.split('-'))
-                    domain2 = tuple(int(i) for i in domain2.split('-')) 
-                    
-                    # Skip if no domain definition is given
-                    if domain == 'NULL' or interface == 'NULL':
-                        continue
-
-                    # AS, the interfaces are wrong anyway. Needs to be implemented for both partners
-                    interface = tuple() 
-                    
-                    self.database.setdefault(firstGuy,[]).append(((firstGuy, secondGuy,),
-                                                                (PfamID_firstGuy, PfamID_secondGuy,),
-                                                                (domain, domain2,),
-                                                                interaction_type_firstGuy,
-                                                                interface))
-                                                                
-                    self.database.setdefault(secondGuy,[]).append(((secondGuy, firstGuy,),
-                                                                (PfamID_secondGuy, PfamID_firstGuy,),
-                                                                (domain2, domain,),
-                                                                interaction_type_secondGuy,
-                                                                interface))
-            # Remove duplicates                                          
-            for key in self.database.keys():
-                self.database[key] = list(set(self.database[key]))
-
-            # Save the newly generated database
-            f = open(database_name, 'wb')
-            pickle.dump(self.database, f)
-            f.close()
-
-    
-    def __call__(self, uniprotKB):
-        """
-        Returns all interactions in a list of namedtuples
-        """
-        Interaction_instance = namedtuple('Interaction', 
-         'uniprotIDs pfamIDs domain_defs interaction_type interface')
-             
-        if self.database.has_key(uniprotKB):
-            return [Interaction_instance(*i) for i in self.database[uniprotKB]]
-        else:
-            return []           
+        return return_tuple
 
 
 
-class get3DID(myDatabases):
-    """
-    To improve the 3DID file the domain boundaries are corrected by
-    the improved boundaries generated by Sebastian
-    """
-    def __init__(self, threeDidFile, domainTableFile):
-        # I hardcoded the filenames
-        database_name = 'pipeline_3DID_database.pickle'
-        
-        # check if the database was already created
-        if isfile(database_name):
-            # load the database
-            print 'Loading the corrected 3DID table'
-            f = open(database_name, 'rb')
-            self.database = pickle.load(f)
-            f.close()
-            
-        else:            
-            print 'Generating the correceted 3DID table'
-            # read the 3Did file and store the information in a dict()
-            self.database_3did = self.__make_3did_table(threeDidFile)
-            
-            # read the corrected domain boundaries and store them in a dict()
-            self.domainTable = self.__make_domain_boundary_table(domainTableFile)
-            
-            # create the database
-            self.database = self.__correct_3did_domain_boundaries()
-            
-            # save the database
-            f = open(database_name, 'wb')
-            pickle.dump(self.database, f)
-            f.close()
-          
-    
-    def __call__(self, PfamID_firstGuy, PfamID_secondGuy):
-        if self.database.has_key((PfamID_firstGuy, PfamID_secondGuy)):
-            return self.database[PfamID_firstGuy, PfamID_secondGuy]
-        else:
-            return 'no entry'
-
-    
-    def __make_3did_table(self, threeDidFile):
-        """
-        read the 3DID file and store the information in a dictionary
-        """
-        database = dict()
-        with open(threeDidFile, 'r') as f:
-            for line in f:
-                # go to the line corresponding to one family pair
-                if line[:4] == '#=ID':
-                    # get the two family ids
-                    Pfam1, Pfam2 = line.split('\t')[1], line.split('\t')[2]
-                
-                # read the entries for the above set pfam family
-                if line[:4] == '#=3D':                    
-                    pdb = line.split('\t')[1]
-                    chain1 = line.split('\t')[2]
-                    chain2 = line.split('\t')[3]
-                    
-                    # there often are interactions with one chain
-                    # we are only interested in interactions between different chains
-                    if chain1.split(':')[0] !=  chain2.split(':')[0]:
-                        chain1, domain_pdb1 = chain1.split(':')
-                        chain2, domain_pdb2 = chain2.split(':')
-                        add = [pdb.upper(), chain1, chain2, domain_pdb1, domain_pdb2]
-                        database.setdefault((Pfam1, Pfam2), []).append(add)
-
-        return database
-
-    
-    def __make_domain_boundary_table(self, domainTableFile):
-        """
-        creates the domain boundary table Sebastian provided to correct the
-        domain boundaries of the 3did_flat file
-        """
-        domainTable = dict()
-        with open(domainTableFile, 'r') as f:
-            f.readline()
-            for line in f:
-                pdb, AutoPfamA, pfam_id, chain, domain_boundary = line.split('\t')
-                # it happend that Sebastian was "glueing" two Pfam domain together
-                # forming kind of a super domain (to get a "real", i.e. meaningful,
-                # domain). In that case he added them with '+'. I split them and
-                # add them in a list. Later it is checked wether the pfam ID is in
-                # this list, i.e. if it is either one or the other
-                pfam_id = pfam_id.strip('+').split('+')
-                domain_boundary = domain_boundary.strip().split(',')
-                for item in domain_boundary:
-                    # it can happen that the pdb numbering is negativ
-                    # see split_domain() function explanation
-                    domain = self.split_domain(item)
-
-                domainTable.setdefault(pdb + chain, []).append([pfam_id, domain])
-        
-        return domainTable
-
-    
-    def __correct_3did_domain_boundaries(self):
-        """
-        The 3DID file contains all pdb files that have one specific interaction
-        given a family pair. Sebastian improved the domain boundaries for the
-        whole pdb and his corrected boundaries are implemented here.
-        """
-        database = dict()
-        
-        for key in self.database_3did:
-            Pfam1_ID, Pfam2_ID = key
-            for interaction in self.database_3did[key]:
-                pdb, chain1, chain2, domain1_pdb, domain2_pdb = interaction
-                
-                domain1_pdb = self.split_domain(domain1_pdb)
-                domain2_pdb = self.split_domain(domain2_pdb)
-                
-                domain1 = self.__correct_domain_boundary(Pfam1_ID, pdb, chain1, domain1_pdb)
-                domain2 = self.__correct_domain_boundary(Pfam2_ID, pdb, chain2, domain2_pdb)
-                
-                add = [pdb, chain1, chain2, domain1, domain2]
-                database.setdefault(key, []).append(add)
-                
-        return database
-                
-    
-    def __correct_domain_boundary(self, Pfam_ID, pdb, chain, domain_pdb):
-        """
-        correct the domain boundary for chain if there is information
-        for it in the database with the corrected domain information
-        
-        You can have more than one domain of the same family type in
-        one chain so one has to
-        make sure that the domain boundaries one wants to correct belong
-        to the domain that is checked. This is done by calculating the
-        overlap between the two domains.
-        see http://stackoverflow.com/a/5095171
-        to see how the overlap is calculated
-        """
-        is_weird, domain_pdb_multiset = self.__check_weird_domain_numbering(pdb, chain)
-        if not is_weird:
-            domain_pdb_multiset = collections.Counter(range(domain_pdb[0],domain_pdb[1]))
-        else:
-            domain_pdb_multiset = collections.Counter(domain_pdb_multiset)
-                    
-        set_new = False
-        if self.domainTable.has_key(pdb + chain):
-            # there might be more than one domain (of the same family), thus use a loop
-            for item in self.domainTable[pdb + chain]:
-                pfam_id, domain_new = item
-                
-                # look for the correct family
-                if Pfam_ID not in pfam_id:
-                    # that means one is not looking at the correct domain
-                    # in the chain
-                    continue
-                else:
-                    # check if the domains overlap, i.e. if one is looking
-                    # at the correct domain
-                    is_weird, domain_multiset = self.__check_weird_domain_numbering(pdb, chain)
-
-                    # see __check_weird_domain_numbering() for explanation
-                    # the function is necessary to create correct multisets
-                    if not is_weird:
-                        domain_multiset = collections.Counter(range(int(domain_new[0]),int(domain_new[1])))
-                    else:
-                        domain_multiset = collections.Counter(domain_multiset)
-
-                    # get the overlap of the two domains
-                    overlap = list( (domain_pdb_multiset & domain_multiset).elements() )
-                    # if they are not overlapping, check the next domain
-                    # in the chain
-                    if len(overlap) <= 2:
-                        continue
-                    else:
-                        domain = domain_new
-                        set_new = True
-                        
-        # if the domain was not corrected, set it to the old value
-        if set_new == False:
-            domain = domain_pdb
-        
-        return domain
-    
-
-    
-    
-    def __check_weird_domain_numbering(self, pdb, chain):
-        """
-        I manually filtered some weird domain numberings. They are handled here.
-        Returns True/False as first value depending if the numbering is "weird"
-        """
-        if pdb == '6INS':
-            return True, range(1,30)
-        elif pdb + chain == '2GEDB':
-            return True, range(37, 245)
-        elif pdb + chain == '3ALXB':
-            r = range(32,127)
-            r.extend([600,601,602,603,604,605,606])
-            return True, r
-        elif pdb + chain == '3ALXA':
-            r = range(32,127)
-            r.extend([606])
-            return True, r
-        elif pdb + chain == '3ERRB':
-            r = range(3266,3427)
-            r.extend([94,95,96])
-            return True, r
-        elif pdb + chain == '1JR3B':
-            r = range(2041,2070)
-            r.extend(range(70,179))
-            return True, r
-        elif pdb + chain == '1BMV':
-            r = range(3001,3183)
-            r.extend(range(2001,2191))
-            return True, r
-        else:
-            return False, []
-            
-
-    
-    
-           
-        
-    
-class getUniprotSequence:
+class UniprotSequence(object):
     
     def __init__(self, database):
         self.database = database
@@ -424,8 +164,6 @@ class getUniprotSequence:
 #
 #        ###           end                                   ###
 #        #######################################################
-            
-
         
     def __call__(self, uniprotKB):
         """
@@ -462,6 +200,7 @@ class getUniprotSequence:
                 sequence.id = uniprotKB
                 self.uniprot_data[uniprotKB] = sequence
                 return sequence, True
+
     
     def add(self, items):
         """
@@ -473,6 +212,7 @@ class getUniprotSequence:
                 print 'I am overwriting it'
             print 'adding', key, 'to the uniprot database'
             self.uniprot_data[key] = value
+
     
     def close(self):
         """
@@ -483,10 +223,113 @@ class getUniprotSequence:
         f = open(self.database_name, 'wb')    
         pickle.dump(self.uniprot_data, f)
         f.close()
+        
+        
+
+class DomainDefinition(myDatabases):
+    """ Contains pdbfam-based definitions of all pfam domains in the pdb
+    """
+    
+    def __init__(self, textfile_name):
+        """
+        """
+        db_name = 'domain_definition_database.pickle'
+        
+        if isfile(db_name):
+            # A precompiled database exists
+            print 'Loading domain definition database...'
+            
+            self.db = pd.read_pickle(db_name)
+            self.grouped_db = self.db.groupby('pfam_name') 
+
+        else:        
+            # No precompiled database exists
+            print 'Generating domain definition database...'
+            
+            names = ['pdb_id', 'autoPFAMA', 'pfam_name', 'pdb_chain', 'pdb_definition', 'cath_id']
+            
+            db = pd.read_csv(textfile_name, sep='\t', header=False, names=names)
+            
+            db['pdb_definition'] = db['pdb_definition'].apply(self.split_domain_semicolon)
+            
+            self.db = db
+            self.db.to_pickle(db_name)
+            self.grouped_db = db.groupby('pfam_name')
+                    
+                    
+    def __call__(self, pfam_name):
+        if self.grouped_db.groups.has_key(pfam_name):
+            return self.grouped_db.get_group(pfam_name)
+        else:
+            print "No entries for the given pfam_name:", pfam_name
+            return None
 
 
 
-class pdb_resolution:
+class DomainInteraction(myDatabases):
+    """ Keeps the domain-domain interaction information from pdbfam
+    """
+    
+    def __init__(self, textfile_name):
+        """ Create the internal dictionary using a tsv file exported from mysql
+        """
+        db_name = 'domain_interaction_database.pickle'
+        
+        # Check if a pickled database exists
+        if isfile(db_name):
+            # A precompiled database exists
+            print 'Loading domain interaction database...'
+            
+            self.db = pd.read_pickle(db_name)
+            self.grouped_db = self.db.groupby(['pfam_name_1','pfam_name_2'])
+            
+        else:        
+            # No precompiled database exists
+            print 'Generating domain interaction database...'
+
+            names = [
+            'pdb_id', 'pfam_name_1', 'pdb_chain_1', 'pdb_definition_1', 'pdb_interface_aa_1', 'cath_id_1', 
+            'pfam_name_2', 'pdb_chain_2', 'pdb_definition_2', 'pdb_interface_aa_2', 'cath_id_2', 'domain_contact_id',]
+            
+            db = pd.read_csv(textfile_name, sep='\t', header=False, names=names)
+            
+            db['pdb_definition_1'] = db['pdb_definition_1'].apply(self.split_domain_semicolon)
+            db['pdb_definition_2'] = db['pdb_definition_2'].apply(self.split_domain_semicolon)
+            
+            db['pdb_interface_aa_1'] = db['pdb_interface_aa_1'].apply(self.split_interface_aa)
+            db['pdb_interface_aa_2'] = db['pdb_interface_aa_2'].apply(self.split_interface_aa)
+            
+            self.db = db
+            self.grouped_db = self.db.groupby(['pfam_name_1', 'pfam_name_2'])
+            
+            self.db.to_pickle(db_name)
+
+
+    def __call__(self, pfam_name_1, pfam_name_2):
+        """
+        Note that the produced dataframe may not have the same order as the keys
+        """
+        key1 = tuple([pfam_name_1, pfam_name_2])
+        key2 = tuple([pfam_name_2, pfam_name_1])
+            
+        if self.grouped_db.groups.has_key(key1):
+            return_df_1 = self.grouped_db.get_group(key1)
+        else:
+            return_df_1 = None
+            
+        if self.grouped_db.groups.has_key(key2):
+            return_df_2 = self.grouped_db.get_group(key2)
+        else:
+            return_df_2 = None
+            
+        if not return_df_1 and not return_df_2:
+            print "No entries for the given domain combination:", pfam_name_1, pfam_name_2
+            
+        return [return_df_1, return_df_2]
+
+
+
+class PDBResolution(object):
     """
     In the file pdbtosp.txt from the pdb website one finds the measurement type
     and resolution of each structure. This information is used for the selection
@@ -538,80 +381,497 @@ class pdb_resolution:
 
 
 
-class core_Templates(myDatabases):
+class ProteinDefinition(myDatabases):
+    """ Initiated using parsed pfam_scan.pl output for the human uniprot (or the entire uniprot)
+    The database is updated with information about calculated models
     """
-    Sebastian provided the templates for the core mutations. Here his file
-    is read and the information is stored in a dict()
-    """
-    def __init__(self, database):
-        database_filename = 'pipeline_core_templates.pickle'
-        if isfile(database_filename):
-            print 'Loading the core template database'
-            f = open(database_filename, 'rb')    
-            self.template_information = pickle.load(f)
-            f.close()
-        else:
-            print 'Reading core templates from', database
-            self.template_information = self.__read_templates(database)
-            
-            f = open(database_filename, 'wb')    
-            pickle.dump(self.template_information, f)
-            f.close()
     
-    def __call__(self, uniprotKB):
-        if self.template_information.has_key(uniprotKB):
-            return self.template_information[uniprotKB]
+    def __init__(self):
+        
+        # Check if a pickled database exists
+        db_name = 'protein_definition_database.pickle'
+        
+        if isfile(db_name):
+            # A precompiled database exists
+            print 'Loading protein definition database...'
+            self.db = pd.read_pickle(db_name)
+            self.grouped_db = self.db.groupby('uniprot_id')
+        
         else:
-            return []
+            # Create a database from a file containing fasta sequences, the pfam_scan.pl output from that file
+            # Also needs a list of clans, a list os repeating domains and a list of superdomains
+            # Filenames are hardcoded at this points
+            print 'Generating protein definition database...'
 
-        
-    def __read_templates(self, inFile):
-        """
-        create a dict containing the template information for fast lookup
-        make sure that:
-        domain_boundary_uniprot is a list
-        amino_acids_core is a list
-        """
-        template_information = dict()
-        
-        with open(inFile, 'r') as f:
-            f.readline() # skip the header
-            for line in f:
-                uniprotKB, family_name, domain_boundary_uniprot, amino_acids_core, \
-                pdb_template, pdb_chain, pdb_domain_boundary = line.split('\t')
-                
-                # if no core is given, skip
-                if amino_acids_core == 'NULL' or pdb_domain_boundary == 'NULL':
-                    continue
-                
-                # the uniprot numbering is not weird as can be the pdb numbering
-                # so for the uniprot domain boundaries one can easily split them
-                domain_boundary_uniprot = [int(domain_boundary_uniprot.split('-')[0]), int(domain_boundary_uniprot.split('-')[1])]
-                
-                # it can happen that a domain is not continues but consists of
-                # several parts. In that case the maximum is taken to be sure
-                # to cover everything. This is one point that could be improved
-                # for that one would have to split the domain into the relevant
-                # parts and make sure that only those parts are modelled!
-                # To improve this one would have to do quite a lot of work
-                # changing the whole pipeline
-                pdb_domain_boundary_list = list()
-                for item in pdb_domain_boundary.split(','):
-                    pdb_domain_boundary_list.extend(self.split_domain(item))
-                pdb_domain_boundary = [pdb_domain_boundary_list[0], pdb_domain_boundary_list[-1]]
-                
-                # convert the amino_acids_core to a list
-                amino_acids_core = [ int(i) for i in amino_acids_core.split(',') ]
-                
-                template_information.setdefault(uniprotKB, list()).append( [family_name, \
-                                                                            domain_boundary_uniprot, \
-                                                                            amino_acids_core, \
-                                                                            pdb_template, \
-                                                                            pdb_chain, \
-                                                                            pdb_domain_boundary
-                                                                            ] )
+            pfam_parser = parse_pfamscan.make_uniprot_pfam_database()
+            pfam_parser.run()
+            db = pfam_parser.get_dataframe()
+            
+            self.db = db
+            print self.db
+            self.db.to_pickle(db_name)
+            self.grouped_db = self.db.groupby('uniprot_id')
 
-        return template_information
+
+    def __call__(self, uniprot_id):
+        """ 
+        """
+        # using (uniprot_id, uniprot_id,) because in the future we might want to incorporate
+        # splicing and other variants, which will be identified by the second uniprot_id
+        if self.grouped_db.groups.has_key(uniprot_id):
+            return self.grouped_db.get_group(uniprot_id)
+        else:
+            # In the future, make it fetch the uniprot sequence, analyse it with pfam_scan.pl,
+            # and save the output to the database
+            print "No protein definition entries for the given uniprot_id:", uniprot_id
+            return None
+            
+            
+    def update(self, modified_df):
+        """ Updates the internal data frame with the modifications present in the
+        copied dataframe
+        """
+        self.db.update(modified_df)
+        
+
+
+class ProteinInteraction(object):
+    """ Contains known interactions between uniprot proteins
+    """
+    
+    def __init__(self, textfile_name, ProteinDefinition, DomainInteraction):
+        """ 
+        Checks if the interaction database is already available as a pickled object.
+        Generates it from file 'textfile_name' otherwise.
+        """
+        db_name = 'protein_interaction_database.pickle'
+        
+        if isfile(db_name):
+            # A precompiled database exists
+            print 'Loading protein interaction database...'
+            
+            self.db = pd.read_pickle(db_name)
+            self.grouped_db_1 = self.db.groupby(['uniprot_id_1'])
+            self.grouped_db_2 = self.db.groupby(['uniprot_id_2'])
+        
+        else:            
+            # No precompiled database exists
+            print 'Generating protein interaction database...'
+            
+            # Read in a list of unteracting uniprot pairs obtained using BioGrid
+            # (and biomart to convert enesmble gene accession to uniprot)
+            set_of_interactions = set()
+            with open(textfile_name, 'r') as fh:
+                next(fh)
+                for line in fh:
+                    row = [l.strip() for l in line.split('\t')]
+                    set_of_interactions.add(ImmutableSet([row[0], row[1]]))
+            
+            
+            # For every unique uniprot pair, try to find a template in the 
+            # DomainInteraction database (which is based on pfam...)
+            
+            # Turn off print statement output (otherwise too many domains not found)
+            original_stdout = sys.stdout
+            sys.stdout = NullDevice()
+            number_of_missing_pfams = 0 # for debugging
+            
+            # Lists to keep the obtained information
+            list_of_uniprot_ids_1 = []
+            list_of_uniprot_ids_2 = []
+            list_of_contact_ids_forward = []
+            list_of_contact_ids_reversed = []
+            
+            for idx, interaction in enumerate(set_of_interactions):
+                
+                interaction = list(interaction)
+                # Get a list of pfam domains for each protein in a pair
+                if len(interaction) == 1:
+                    uniprot_id_1 = interaction[0]
+                    uniprot_id_2 = uniprot_id_1
+                    
+                    pfam_names_1 = ProteinDefinition(uniprot_id_1)
+                    if pfam_names_1:
+                        pfam_names_1 = list(pfam_names_1['seq_id'])
+                        pfam_names_2 = pfam_names_1
+                    else:
+                        number_of_missing_pfams += 1
+                        continue
+                elif len(interaction) == 2:
+                    uniprot_id_1 = interaction[0]
+                    uniprot_id_2 = interaction[1]
+                    
+                    pfam_names_1 = ProteinDefinition(uniprot_id_1)
+                    if pfam_names_1:
+                        pfam_names_1 = list(pfam_names_1['seq_id'])
+                    else:
+                        number_of_missing_pfams += 1
+                        continue
+                    
+                    pfam_names_2 = ProteinDefinition(uniprot_id_2)
+                    if pfam_names_2:
+                        pfam_names_2 = list(pfam_names_2['seq_id'])
+                    else:
+                        number_of_missing_pfams += 1
+                        continue
+                else:
+                    raise Exception
+                
+                # Go over each possible pair of pfam domains and see if we can 
+                # find a pdb template
+                for pfam_name_1 in pfam_names_1:
+                    for pfam_name_2 in pfam_names_2:
+                        domain_interaction_forward, domain_interaction_reverse = DomainInteraction(pfam_name_1,pfam_name_2)
+                        
+                        contact_ids_forward = tuple()
+                        if domain_interaction_forward:
+                            contact_ids_forward = tuple(domain_interaction_forward['domain_contact_id'])
+                        
+                        contact_ids_reverse = tuple()
+                        if domain_interaction_reverse:
+                            contact_ids_reverse = tuple(domain_interaction_reverse['domain_contact_id'])
+                
+                        if len(contact_ids_forward) > 0 or len(contact_ids_reverse) > 0:
+                            list_of_uniprot_ids_1.append(uniprot_id_1)
+                            list_of_uniprot_ids_2.append(uniprot_id_2)
+                            list_of_contact_ids_forward.append(contact_ids_forward)
+                            list_of_contact_ids_reversed.append(contact_ids_reverse)
+            
+            # Turn print statement output back on
+            sys.stdout = original_stdout
+            print number_of_missing_pfams
+            
+            # Create a dataframe with the compiled results
+            db = pd.DataFrame(index=range(len(list_of_uniprot_ids_1)))
+            db['uniprot_id_1'] = list_of_uniprot_ids_1
+            db['uniprot_id_2'] = list_of_uniprot_ids_2
+            db['contact_ids_forward'] = list_of_contact_ids_forward
+            db['contact_ids_reversed'] = list_of_contact_ids_reversed
+            print db
+            db.drop_duplicates(inplace=True)
+            print db
+            
+            self.db = db
+            self.db.to_pickle(db_name)
+            self.grouped_db_1 = self.db.groupby(['uniprot_id_1'])
+            self.grouped_db_2 = self.db.groupby(['uniprot_id_2'])
+            
+    
+    def __call__(self, uniprot_id):
+        """
+        """
+        if self.grouped_db_1.groups.has_key(uniprot_id):
+            result_df_1 = self.grouped_db_1.get_group(uniprot_id)
+        else:
+            result_df_1 = None
+            
+        if self.grouped_db_2.groups.has_key(uniprot_id):
+            result_df_1 = self.grouped_db_2.get_group(uniprot_id)
+        else:
+            result_df_2 = None
+            
+        if not result_df_1 and not result_df_2:
+            print "No entries for the given uniprot_id:", uniprot_id
+           
+        return [result_df_1, result_df_2]
+    
+    
+    def upldate(self, modified_df):
+        """ Add new interaction models to the database
+        """
+        pass
+
+
+
+#class get3DID(myDatabases):
+#    """
+#    To improve the 3DID file the domain boundaries are corrected by
+#    the improved boundaries generated by Sebastian
+#    """
+#    def __init__(self, threeDidFile, domainTableFile):
+#        # I hardcoded the filenames
+#        database_name = 'pipeline_3DID_database.pickle'
+#        
+#        # check if the database was already created
+#        if isfile(database_name):
+#            # load the database
+#            print 'Loading the corrected 3DID table'
+#            f = open(database_name, 'rb')
+#            self.database = pickle.load(f)
+#            f.close()
+#            
+#        else:            
+#            print 'Generating the correceted 3DID table'
+#            # read the 3Did file and store the information in a dict()
+#            self.database_3did = self.__make_3did_table(threeDidFile)
+#            
+#            # read the corrected domain boundaries and store them in a dict()
+#            self.domainTable = self.__make_domain_boundary_table(domainTableFile)
+#            
+#            # create the database
+#            self.database = self.__correct_3did_domain_boundaries()
+#            
+#            # save the database
+#            f = open(database_name, 'wb')
+#            pickle.dump(self.database, f)
+#            f.close()
+#          
+#    
+#    def __call__(self, PfamID_firstGuy, PfamID_secondGuy):
+#        if self.database.has_key((PfamID_firstGuy, PfamID_secondGuy)):
+#            return self.database[PfamID_firstGuy, PfamID_secondGuy]
+#        else:
+#            return 'no entry'
+#
+#    
+#    def __make_3did_table(self, threeDidFile):
+#        """
+#        read the 3DID file and store the information in a dictionary
+#        """
+#        database = dict()
+#        with open(threeDidFile, 'r') as f:
+#            for line in f:
+#                # go to the line corresponding to one family pair
+#                if line[:4] == '#=ID':
+#                    # get the two family ids
+#                    Pfam1, Pfam2 = line.split('\t')[1], line.split('\t')[2]
+#                
+#                # read the entries for the above set pfam family
+#                if line[:4] == '#=3D':                    
+#                    pdb = line.split('\t')[1]
+#                    chain1 = line.split('\t')[2]
+#                    chain2 = line.split('\t')[3]
+#                    
+#                    # there often are interactions with one chain
+#                    # we are only interested in interactions between different chains
+#                    if chain1.split(':')[0] !=  chain2.split(':')[0]:
+#                        chain1, domain_pdb1 = chain1.split(':')
+#                        chain2, domain_pdb2 = chain2.split(':')
+#                        add = [pdb.upper(), chain1, chain2, domain_pdb1, domain_pdb2]
+#                        database.setdefault((Pfam1, Pfam2), []).append(add)
+#
+#        return database
+#
+#    
+#    def __make_domain_boundary_table(self, domainTableFile):
+#        """
+#        creates the domain boundary table Sebastian provided to correct the
+#        domain boundaries of the 3did_flat file
+#        """
+#        domainTable = dict()
+#        with open(domainTableFile, 'r') as f:
+#            f.readline()
+#            for line in f:
+#                pdb, AutoPfamA, pfam_id, chain, domain_boundary = line.split('\t')
+#                # it happend that Sebastian was "glueing" two Pfam domain together
+#                # forming kind of a super domain (to get a "real", i.e. meaningful,
+#                # domain). In that case he added them with '+'. I split them and
+#                # add them in a list. Later it is checked wether the pfam ID is in
+#                # this list, i.e. if it is either one or the other
+#                pfam_id = pfam_id.strip('+').split('+')
+#                domain_boundary = domain_boundary.strip().split(',')
+#                for item in domain_boundary:
+#                    # it can happen that the pdb numbering is negativ
+#                    # see split_domain() function explanation
+#                    domain = self.split_domain(item)
+#
+#                domainTable.setdefault(pdb + chain, []).append([pfam_id, domain])
+#        
+#        return domainTable
+#
+#    
+#    def __correct_3did_domain_boundaries(self):
+#        """
+#        The 3DID file contains all pdb files that have one specific interaction
+#        given a family pair. Sebastian improved the domain boundaries for the
+#        whole pdb and his corrected boundaries are implemented here.
+#        """
+#        database = dict()
+#        
+#        for key in self.database_3did:
+#            Pfam1_ID, Pfam2_ID = key
+#            for interaction in self.database_3did[key]:
+#                pdb, chain1, chain2, domain1_pdb, domain2_pdb = interaction
+#                
+#                domain1_pdb = self.split_domain(domain1_pdb)
+#                domain2_pdb = self.split_domain(domain2_pdb)
+#                
+#                domain1 = self.__correct_domain_boundary(Pfam1_ID, pdb, chain1, domain1_pdb)
+#                domain2 = self.__correct_domain_boundary(Pfam2_ID, pdb, chain2, domain2_pdb)
+#                
+#                add = [pdb, chain1, chain2, domain1, domain2]
+#                database.setdefault(key, []).append(add)
+#                
+#        return database
+#                
+#    
+#    def __correct_domain_boundary(self, Pfam_ID, pdb, chain, domain_pdb):
+#        """
+#        correct the domain boundary for chain if there is information
+#        for it in the database with the corrected domain information
+#        
+#        You can have more than one domain of the same family type in
+#        one chain so one has to
+#        make sure that the domain boundaries one wants to correct belong
+#        to the domain that is checked. This is done by calculating the
+#        overlap between the two domains.
+#        see http://stackoverflow.com/a/5095171
+#        to see how the overlap is calculated
+#        """
+#        is_weird, domain_pdb_multiset = self.__check_weird_domain_numbering(pdb, chain)
+#        if not is_weird:
+#            domain_pdb_multiset = collections.Counter(range(domain_pdb[0],domain_pdb[1]))
+#        else:
+#            domain_pdb_multiset = collections.Counter(domain_pdb_multiset)
+#                    
+#        set_new = False
+#        if self.domainTable.has_key(pdb + chain):
+#            # there might be more than one domain (of the same family), thus use a loop
+#            for item in self.domainTable[pdb + chain]:
+#                pfam_id, domain_new = item
+#                
+#                # look for the correct family
+#                if Pfam_ID not in pfam_id:
+#                    # that means one is not looking at the correct domain
+#                    # in the chain
+#                    continue
+#                else:
+#                    # check if the domains overlap, i.e. if one is looking
+#                    # at the correct domain
+#                    is_weird, domain_multiset = self.__check_weird_domain_numbering(pdb, chain)
+#
+#                    # see __check_weird_domain_numbering() for explanation
+#                    # the function is necessary to create correct multisets
+#                    if not is_weird:
+#                        domain_multiset = collections.Counter(range(int(domain_new[0]),int(domain_new[1])))
+#                    else:
+#                        domain_multiset = collections.Counter(domain_multiset)
+#
+#                    # get the overlap of the two domains
+#                    overlap = list( (domain_pdb_multiset & domain_multiset).elements() )
+#                    # if they are not overlapping, check the next domain
+#                    # in the chain
+#                    if len(overlap) <= 2:
+#                        continue
+#                    else:
+#                        domain = domain_new
+#                        set_new = True
+#                        
+#        # if the domain was not corrected, set it to the old value
+#        if set_new == False:
+#            domain = domain_pdb
+#        
+#        return domain
+#    
+#    
+#    def __check_weird_domain_numbering(self, pdb, chain):
+#        """
+#        I manually filtered some weird domain numberings. They are handled here.
+#        Returns True/False as first value depending if the numbering is "weird"
+#        """
+#        if pdb == '6INS':
+#            return True, range(1,30)
+#        elif pdb + chain == '2GEDB':
+#            return True, range(37, 245)
+#        elif pdb + chain == '3ALXB':
+#            r = range(32,127)
+#            r.extend([600,601,602,603,604,605,606])
+#            return True, r
+#        elif pdb + chain == '3ALXA':
+#            r = range(32,127)
+#            r.extend([606])
+#            return True, r
+#        elif pdb + chain == '3ERRB':
+#            r = range(3266,3427)
+#            r.extend([94,95,96])
+#            return True, r
+#        elif pdb + chain == '1JR3B':
+#            r = range(2041,2070)
+#            r.extend(range(70,179))
+#            return True, r
+#        elif pdb + chain == '1BMV':
+#            r = range(3001,3183)
+#            r.extend(range(2001,2191))
+#            return True, r
+#        else:
+#            return False, []
+  
+           
+        
+#class core_Templates(myDatabases):
+#    """
+#    Sebastian provided the templates for the core mutations. Here his file
+#    is read and the information is stored in a dict()
+#    """
+#    def __init__(self, database):
+#        database_filename = 'pipeline_core_templates.pickle'
+#        if isfile(database_filename):
+#            print 'Loading the core template database'
+#            f = open(database_filename, 'rb')    
+#            self.template_information = pickle.load(f)
+#            f.close()
+#        else:
+#            print 'Reading core templates from', database
+#            self.template_information = self.__read_templates(database)
+#            
+#            f = open(database_filename, 'wb')    
+#            pickle.dump(self.template_information, f)
+#            f.close()
+#    
+#    def __call__(self, uniprotKB):
+#        if self.template_information.has_key(uniprotKB):
+#            return self.template_information[uniprotKB]
+#        else:
+#            return []
+#
+#        
+#    def __read_templates(self, inFile):
+#        """
+#        create a dict containing the template information for fast lookup
+#        make sure that:
+#        domain_boundary_uniprot is a list
+#        amino_acids_core is a list
+#        """
+#        template_information = dict()
+#        
+#        with open(inFile, 'r') as f:
+#            f.readline() # skip the header
+#            for line in f:
+#                uniprotKB, family_name, domain_boundary_uniprot, amino_acids_core, \
+#                pdb_template, pdb_chain, pdb_domain_boundary = line.split('\t')
+#                
+#                # if no core is given, skip
+#                if amino_acids_core == 'NULL' or pdb_domain_boundary == 'NULL':
+#                    continue
+#                
+#                # the uniprot numbering is not weird as can be the pdb numbering
+#                # so for the uniprot domain boundaries one can easily split them
+#                domain_boundary_uniprot = [int(domain_boundary_uniprot.split('-')[0]), int(domain_boundary_uniprot.split('-')[1])]
+#                
+#                # it can happen that a domain is not continues but consists of
+#                # several parts. In that case the maximum is taken to be sure
+#                # to cover everything. This is one point that could be improved
+#                # for that one would have to split the domain into the relevant
+#                # parts and make sure that only those parts are modelled!
+#                # To improve this one would have to do quite a lot of work
+#                # changing the whole pipeline
+#                pdb_domain_boundary_list = list()
+#                for item in pdb_domain_boundary.split(','):
+#                    pdb_domain_boundary_list.extend(self.split_domain(item))
+#                pdb_domain_boundary = [pdb_domain_boundary_list[0], pdb_domain_boundary_list[-1]]
+#                
+#                # convert the amino_acids_core to a list
+#                amino_acids_core = [ int(i) for i in amino_acids_core.split(',') ]
+#                
+#                template_information.setdefault(uniprotKB, list()).append( [family_name, \
+#                                                                            domain_boundary_uniprot, \
+#                                                                            amino_acids_core, \
+#                                                                            pdb_template, \
+#                                                                            pdb_chain, \
+#                                                                            pdb_domain_boundary
+#                                                                            ] )
+#
+#        return template_information
     
 #    def close(self):
 #        pass
@@ -675,11 +935,6 @@ class pipeline():
             self.use_pdbfam_database = configParser.getboolean('DEFAULT', 'use_pdbfam_database')
         else:
             self.use_pdbfam_database = False
-        # output all pfam interacting pairs or select the best one
-        if configParser.has_option('DEFAULT', 'include_all_pfam_interactions'):
-            self.include_all_pfam_interactions = configParser.getboolean('DEFAULT', 'include_all_pfam_interactions')
-        else:
-            self.include_all_pfam_interactions = False
         
         # web-server
         if configParser.has_option('DEFAULT', 'webServer'):
@@ -801,11 +1056,11 @@ class pipeline():
 #            raise ConfigError('MUTATE')
         
         ## from [DATABASES]
-        # interactionDatbase
-        if configParser.has_option('DATABASES', 'interactionDatbase'):
-            self.interactionDatbase = configParser.get('DATABASES', 'interactionDatbase')
+        # protein_interaction_file
+        if configParser.has_option('DATABASES', 'protein_interaction_file'):
+            self.protein_interaction_file = configParser.get('DATABASES', 'protein_interaction_file')
         else:
-            raise ConfigError('interactionDatbase')
+            raise ConfigError('protein_interaction_file')
         # threeDidFile
         if configParser.has_option('DATABASES', 'threeDidFile'):
             self.threeDidFile = configParser.get('DATABASES', 'threeDidFile')
@@ -821,17 +1076,26 @@ class pipeline():
             self.uniprotSequenceDatabase = configParser.get('DATABASES', 'uniprotSequenceDatabase')
         else:
             raise ConfigError('uniprotSequenceDatabase')
-        # pdbResolutionFile
-        if configParser.has_option('DATABASES', 'pdbResolutionFile'):
-            self.pdbResolutionFile = configParser.get('DATABASES', 'pdbResolutionFile')
+        # pdb_resolution_file
+        if configParser.has_option('DATABASES', 'pdb_resolution_file'):
+            self.pdb_resolution_file = configParser.get('DATABASES', 'pdb_resolution_file')
         else:
-            raise ConfigError('pdbResolutionFile')
+            raise ConfigError('pdb_resolution_file')
         # coreTemplatesFile
         if configParser.has_option('DATABASES', 'coreTemplatesFile'):
             self.coreTemplatesFile = configParser.get('DATABASES', 'coreTemplatesFile')
         else:
             raise ConfigError('coreTemplatesFile')
-            
+        # domain_definition_file
+        if configParser.has_option('DATABASES', 'domain_definition_file'):
+            self.domain_definition_file = configParser.get('DATABASES', 'domain_definition_file')
+        else:
+            raise ConfigError('domain_definition_file')            
+        # domain_interaction_file
+        if configParser.has_option('DATABASES', 'domain_interaction_file'):
+            self.domain_interaction_file = configParser.get('DATABASES', 'domain_interaction_file')
+        else:
+            raise ConfigError('domain_interaction_file')
             
         # check the TMPDIR
         # if a TMPDIR is given as environment variable the tmp directory
@@ -864,12 +1128,19 @@ class pipeline():
         self.__prepareOutputPaths()
         
         # load the databases
-        self.interaction_database    = getInteractions(self.interactionDatbase)
-        self.threeDID_database       = get3DID(self.threeDidFile, self.PfamBoundaryCorrection)
-        self.get_uniprot_sequence    = getUniprotSequence(self.uniprotSequenceDatabase)
-        self.pdb_resolution_database = pdb_resolution(self.pdbResolutionFile)
-        self.core_template_database  = core_Templates(self.coreTemplatesFile)
+#        self.threeDID_database = get3DID(self.threeDidFile, self.PfamBoundaryCorrection)
+#        self.core_template_database = core_Templates(self.coreTemplatesFile)
         
+        self.UniprotSequence = UniprotSequence(self.uniprotSequenceDatabase)
+        self.DomainDefinition = DomainDefinition(self.domain_definition_file)
+        self.DomainInteraction = DomainInteraction(self.domain_interaction_file)
+        self.PDBResolution = PDBResolution(self.pdb_resolution_file)
+        
+        self.ProteinDefinition = ProteinDefinition()
+        self.ProteinInteraction = ProteinInteraction(self.protein_interaction_file,
+                                                     self.ProteinDefinition,
+                                                     self.DomainInteraction)
+
         # set the matrix for the substitution score
         self.matrix = self.__selectMatrix(self.matrix_option)
         
@@ -885,30 +1156,34 @@ class pipeline():
         # Scinet: joan
         childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         whoami, error = childProcess.communicate()
-        if whoami.strip() == 'nberliner':
+        if whoami.strip() == 'strokach':
+            # when running the pipeline on beagle or banting
             system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
-                                'cp -r /home/kimlab1/nberliner/bin/ncbi-blast-2.2.27+/pdbaa_db ' + \
+                                'cp -r /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db ' + \
                                 self.tmpPath + 'blast/'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, error = childProcess.communicate()
-
+            assert childProcess.returncode == 0
             if childProcess.returncode != 0:
                 print 'couldnt copy the blast database!!\n\n\n\n'
-        if whoami.strip() == 'niklas':
+        if whoami.strip() == 'alexey':
             # when running the pipeline locally there is no need to copy the database
             # a symlink is enough
             system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
                                 'cd ' + self.tmpPath + 'blast && ' + \
-                                'ln -s /home/niklas/bin/ncbi-blast-2.2.27+/db'
+                                'ln -s /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, error = childProcess.communicate()
-        # for scinet, blast is already installed, but the database needs to be copied
+            assert childProcess.returncode == 0
         if whoami.strip() == 'joan':
+            # for scinet, blast is already installed, but the database needs to be copied
             system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
                                 'cp -r $HOME/niklas-pipeline/blastdb/pdbaa_db ' + \
                                 self.tmpPath + 'blast/'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, error = childProcess.communicate()
+            assert childProcess.returncode == 0
+            
     
     
     def __prepareTMP(self):
@@ -1013,9 +1288,16 @@ class pipeline():
         # I started to play with the logger a little bit but didn't have the time
         # to fully implement it to be really usefull. It works, one just has
         # to set the desired logging with the information where needed
-        log = MultiProcessingLog(self.outputPath + self.name + '.log', mode='w', maxsize=0, rotate=5)
+        logger = MultiProcessingLog(self.outputPath + self.name + '.log', mode='w', maxsize=0, rotate=1)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        log.setFormatter(formatter)
+        logger.setFormatter(formatter)
+        
+        log = logging.getLogger(__name__)
+        log.addHandler(logger)
+        if self.DEBUG:
+            log.setLevel(logging.DEBUG)
+        else:
+            log.setLevel(logging.INFO)
         
         # create the pool to control the number of t_coffee instances
         # that are allowed to run in parallel
@@ -1025,7 +1307,7 @@ class pipeline():
         # Start consumers
         print 'Creating %d consumers' % self.num_consumers
         proc_name = [ 'Consumer-' + str(i) for i in range(1, self.num_consumers + 1) ]
-        consumers = [ Consumer(proc_name[i-1], tasks, results, self.runTime, pool, s, self.DEBUG, self.outputPath, log, webServer=self.webServer)
+        consumers = [ Consumer(proc_name[i-1], tasks, results, self.runTime, pool, s, self.DEBUG, self.outputPath, logger, webServer=self.webServer)
                       for i in range(1, self.num_consumers + 1) ]
 
         for w in consumers:
@@ -1048,40 +1330,52 @@ class pipeline():
         num_jobs = 0
         with open(self.inputFile, 'r') as f:
             for l in f:
-                line = l.split('\t')
-                uniprotKB, mutation = line[0], line[1].strip()
-
+                if l[0][0] == ' ' or l[0][0] == '\t':
+                    continue
+                
+                line = [ ll.strip() for ll in l.split('\t') ]
+                
+                # AS: Mutation does not necessarily have to be specified
+                if len(line) > 1:
+                    uniprotKB, mutation = line[0], line[1]
+                elif len(line) == 1:
+                    uniprotKB = line[0]
+                    mutation = ''
+                    
                 # check if some entries should be skipped
                 if SKIP:
                     if uniprotKB + mutation in skip:
                         print 'skipping ', uniprotKB, mutation
                         continue
-
+                
+                log.debug('Added to queue uniprot %s with mutation %s' % (uniprotKB, mutation) )
+                
                 # Enqueue jobs                
                 num_jobs += 1
                 tasks.put( Task(self.mutation_uniprot,
                                 uniprotKB, 
                                 mutation,
-                                self.savePDB, 
-                                self.tmpPath, 
+                                self.savePDB,
+                                self.tmpPath,
                                 self.outputPath,
                                 self.pdbPath,
-                                self.matrix, 
-                                self.gap_start, 
-                                self.gap_extend, 
+                                self.matrix,
+                                self.gap_start,
+                                self.gap_extend,
                                 self.modeller_runs,
                                 self.buildModel_runs,
                                 self.foldX_WATER,
-                                self.interaction_database,
-                                self.threeDID_database,
-                                self.get_uniprot_sequence,
-                                self.pdb_resolution_database,
-                                self.core_template_database,
-                                self.include_all_pfam_interactions
+                                self.DomainDefinition,
+                                self.DomainInteraction,
+                                self.UniprotSequence,
+                                self.PDBResolution,
+                                self.ProteinDefinition,
+                                self.ProteinInteraction,
                                 )
                           )
+                          
 
-    
+        
         # Add a poison pill for each consumer
         for i in range(1, self.num_consumers+1):
             tasks.put( None )
@@ -1123,7 +1417,7 @@ class pipeline():
                     'stability_energy_ionisation\t' + 'stability_entropy_complex\t' + \
                     'stability_number_of_residues\n'
                     
-        value_labels_extra =  'core_or_interface\t' + 'seq_id_avg\t' + \
+        value_labels_extra = 'core_or_interface\t' + 'seq_id_avg\t' + \
                     'seq_id_chain1\t' + 'seq_id_chain2\t' + \
                     'matrix_score\t' + 'if_hydrophobic\t' + \
                     'if_hydrophilic\t' + 'if_total\t' + \
@@ -1147,7 +1441,7 @@ class pipeline():
                 break
             
             output_data = results.get()
-            
+            log.debug('output_data: \n%s' % output_data)            
             for output_dict in output_data:
                 if isinstance(output_dict, list) and (output_dict[0] == None):
                     skiplog.write(output_dict[1] + '\t' + output_dict[2] + '\n')
@@ -1182,9 +1476,9 @@ class pipeline():
                                         '\t'.join(output_dict['Stability_energy_wt']) + \
                                         '\n'
                     
-                    # Make like for mutant file
+                    # Make line for mutant file
                     resForWrite_mut = id_data + 'mut\t' + \
-                                        str(output_dict['normDOPE_mut'])[:6] + '\t' + \
+                                        '-' + '\t' + \ # mutant structure has no normDOPE score (same as wildtype)
                                         '\t'.join(output_dict['AnalyseComplex_energy_mut']) + '\t' + \
                                         '\t'.join(output_dict['Stability_energy_mut']) + \
                                         '\n'
@@ -1223,7 +1517,7 @@ class pipeline():
         res_mut.close()
         res_if.close()
         skiplog.close()
-        log.close()
+        logger.close()
         
         # save the results from ramdisk
         if self.saveScinet:

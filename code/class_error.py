@@ -52,3 +52,8 @@ class pdbError(Exception):
     def __init__(self, error):
         Exception.__init__(self)
         self.error = error
+
+class NoStructuralTemplates(Exception):
+    def __init__(self, error):
+        Exception.__init__(self)
+        self.error = error

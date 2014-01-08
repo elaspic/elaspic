@@ -19,7 +19,6 @@ from Bio.PDB.PDBParser import PDBParser
 import gzip
 from math import sqrt
 from math import fabs
-import logging
 
 class get_template():
     """
@@ -141,6 +140,7 @@ class get_template():
 
 
         return alignment, score, pdb_sequence_id, domain_uniprot
+
 
 
     def map_to_uniprot_helper(self, uniprot_sequence, pdb_sequence, saveAlignments):
@@ -776,7 +776,7 @@ class get_template_core(get_template):
 
 
 
-    def __call__(self, uniprotID1, mutation):
+    def __call__(self, uniprot_id_1, mutation):
         """
         input:
         uniprotKB       type 'str'
@@ -793,7 +793,7 @@ class get_template_core(get_template):
         mutation_position_domain_uniprot    type 'int'
         """
         # get the templates from Sebastians file
-        core_templates = self.core_template_database(uniprotID1)
+        core_templates = self.core_template_database(uniprot_id_1)
 
         if core_templates == []:
             return 'no template', []
@@ -817,54 +817,45 @@ class get_template_core(get_template):
             chain_pdb        = core_template[4]
             domain_pdb     = core_template[5]
             
-            uniprot_sequence, new_sequence = self.get_uniprot_seq(uniprotID1)
+            uniprot_sequence, new_sequence = self.get_uniprot_seq(uniprot_id_1)
             if uniprot_sequence == 'no sequence':
                     continue
 
-            uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_uniprot, uniprotID1)
+            uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_uniprot, uniprot_id_1)
             
-            result_tmp = self.map_to_uniprot(uniprotID1, uniprot_sequence, domain_uniprot, pdbCode, chain_pdb, domain_pdb, self.saveAlignments, refine=True)
+            result_tmp = self.map_to_uniprot(uniprot_id_1, uniprot_sequence, domain_uniprot, pdbCode, chain_pdb, domain_pdb, self.saveAlignments, refine=True)
             if result_tmp == 'error':
                 continue
             else:
                 alignment, score, pdb_sequence_id, domain_uniprot = result_tmp
-    
-            mutation_position_domain_uniprot = int(mutation[1:-1]) - domain_uniprot[0] + 1 # +1 to have the numbering staring with 1
-            
-            # map mutation to the aligned pdb sequence. This is done to make
-            # sure that the mutation does not fall into a region which is not
-            # covered by the pdb file.
-            mutation_pdb = self.map_to_pdb_sequence(alignment, pdb_sequence_id, mutation_position_domain_uniprot)
-            if mutation_pdb == 'in gap':
-                continue
             
             # in case the domain boundaries of the uniprot sequence changed,
             # get the new sequence
-            uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_uniprot, uniprotID1)
+            uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_uniprot, uniprot_id_1)
     
             pdb_type, pdb_resolution = self.get_resolution(pdbCode)
                             
-            template = {'uniprotIDs': (uniprotID1, ''),
-                'pfamIDs'   : (pfamID1, ''),
-                'domain_defs':(domain_uniprot, []),
-                'mutation'  : mutation,
-                'pdbID'     : pdbCode,
-                'chains_pdb' : [chain_pdb[0], ],
-                'pdb_domain_defs' : [domain_pdb, []],
-                'mutation_position_domain' : mutation_position_domain_uniprot,
-                'mutation_pdb': mutation_pdb,
+            template = {'uniprot_ids': (uniprot_id_1,),
+                'pfam_names'   : (pfamID1,),
+                'domain_defs':(domain_uniprot,),
+
+                'pdb_id'     : pdbCode,
                 'pdb_type': pdb_type,
                 'pdb_resolution' : pdb_resolution,
-                'uniprot_domain_sequences' : [uniprot_sequence_domain, ''],
-                'alignments' : [alignment, ],
-                'alignment_scores' : [score, score, 0]}
+                'chains_pdb' : (chain_pdb[0],),
+                'pdb_domain_defs' : (domain_pdb,),
+
+                'uniprot_domain_sequences' : (uniprot_sequence_domain,),
+                'alignments' : (alignment,),
+                'alignment_ids': (pdb_sequence_id,),
+                'alignment_scores' : (score, score, 0,)}
             
             templates.append(template)
             
             if new_sequence:
-                new_sequences.add((uniprotID1, uniprot_sequence))               
+                new_sequences.add((uniprot_id_1, uniprot_sequence))               
 
-#       return (pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID1, domain_uniprot), [[uniprotID1, uniprot_sequence], ]
+#       return (pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID1, domain_uniprot), [[uniprot_id_1, uniprot_sequence], ]
         return templates, new_sequences
 
 
@@ -876,7 +867,7 @@ class get_template_interface(get_template):
     """
     def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, 
                  semaphore, get_uniprot_seq, get_interactions, get_3did_entries, 
-                 get_resolution, include_all_pfam_interactions, log):
+                 get_resolution, log):
         """
         input
         
@@ -896,15 +887,12 @@ class get_template_interface(get_template):
         get_template.__init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
                               pool, semaphore, get_uniprot_seq, get_resolution, log)
         
-        # AS to output all pfam pairs
-        self.include_all_pfam_interactions = include_all_pfam_interactions
-        
         # set the databases
         self.get_3did_entries = get_3did_entries
         self.get_interactions = get_interactions
     
     
-    def __call__(self, uniprotID1, mutation):
+    def __call__(self, uniprot_id_1, mutation):
         """
         if no template is found: returns a dictionary that has a has_key('errors')  'no template found'
         otherwise returns a dictionary with keys:
@@ -915,9 +903,9 @@ class get_template_interface(get_template):
             score2: seq, id. with chain 2
             pfam family of interaction partner 1 (i.e. the query uniprot), 
             pfam family of the interaction partner 2 (from Sebastians file)
-            uniprotID2: of the second interaction partner
-            uniprotID1_sequence1_domain: uniprot sequence for the domain only
-            uniprotID2_sequence2_domain:
+            uniprot_id_2: of the second interaction partner
+            uniprot_id_1_sequence1_domain: uniprot sequence for the domain only
+            uniprot_id_2_sequence2_domain:
             alignment1: biopython alignment obejct with the alignment of uniprot seq1 with chain1
             alignment2:
             mutation_position_domain: mutation position in the domain (shortened pdb sequence)
@@ -925,7 +913,7 @@ class get_template_interface(get_template):
             float: resolution of the structure
             
         input:
-        uniprotID1   type 'str'
+        uniprot_id_1   type 'str'
         mutation    type 'str'
         
         return
@@ -941,9 +929,9 @@ class get_template_interface(get_template):
                         'float'     score2: score of chain 2
                         'str'       pfam family of interaction partner 1 (i.e. the query uniprot), 
                         'str'       pfam family of the interaction partner 2 (from Sebastians file)
-                        'str'       uniprotID1_2: of the second interaction partner
-                        'Bio.SeqRecord.SeqRecord'           uniprotID1_sequence1_domain: uniprot sequence for the domain only
-                        'Bio.SeqRecord.SeqRecord'           uniprotID2_sequence2_domain:
+                        'str'       uniprot_id_1_2: of the second interaction partner
+                        'Bio.SeqRecord.SeqRecord'           uniprot_id_1_sequence1_domain: uniprot sequence for the domain only
+                        'Bio.SeqRecord.SeqRecord'           uniprot_id_2_sequence2_domain:
                         'Bio.Align.MultipleSeqAlignment'    alignment1: biopython alignment obejct with the alignment of uniprot seq1 with chain1
                         'Bio.Align.MultipleSeqAlignment'    alignment2:
                         'int'       mutation_position_domain: mutation position in the domain (shortened pdb sequence)
@@ -953,7 +941,7 @@ class get_template_interface(get_template):
                         'float'     resolution of the structure
         """
         # get all possible templates
-        templates, new_sequences = self.run(uniprotID1, mutation)
+        templates, new_sequences = self.run(uniprot_id_1, mutation)
         
         self.log.info("Done getting interface templates...")
 #        self.log.debug("Templates:")
@@ -971,7 +959,7 @@ class get_template_interface(get_template):
             for template in best_templates:
                 # Refine the best template, i.e. check for errors in the alignment
                 # and realign
-                template_refined, no_longer_new_sequences = self.run(uniprotID1, mutation, template)
+                template_refined, no_longer_new_sequences = self.run(uniprot_id_1, mutation, template)
                 best_templates_refined.append(template_refined[0][0])
             
             self.log.info('Done refining interface templates...')
@@ -981,13 +969,13 @@ class get_template_interface(get_template):
             return best_templates_refined, new_sequences
         
     
-    def run(self, uniprotID1, mutation, SELECT_ONLY=[]):
+    def run(self, uniprot_id_1, mutation, SELECT_ONLY=[]):
         """
-        Look up all interactions for a given uniprotID1, check if the mutation
+        Look up all interactions for a given uniprot_id_1, check if the mutation
         falls into the interface and select a template
         
         input:
-        uniprotID1       type 'str'
+        uniprot_id_1       type 'str'
         mutation        type 'str'       ; Q61L
         
         return:
@@ -1007,28 +995,27 @@ class get_template_interface(get_template):
             refine = False
         else:
             refine = True
-            select_pdbCode       = SELECT_ONLY['pdbID']
+            select_pdbCode       = SELECT_ONLY['pdb_id']
             select_chain1        = SELECT_ONLY['chains_pdb'][0]
             select_chain2        = SELECT_ONLY['chains_pdb'][1]
-            select_Pfam_1        = SELECT_ONLY['pfamIDs'][0]
-            select_Pfam_2        = SELECT_ONLY['pfamIDs'][1]
-            select_uniprotID2   = SELECT_ONLY['uniprotIDs'][1]
+            select_Pfam_1        = SELECT_ONLY['pfam_names'][0]
+            select_Pfam_2        = SELECT_ONLY['pfam_names'][1]
+            select_uniprot_2   = SELECT_ONLY['uniprot_ids'][1]
 
-        interactions = self.get_interactions(uniprotID1)
+        interactions = self.get_interactions(uniprot_id_1)
         # interaction is a list: [firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain, interface, \
         #                         secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2
         
         if interactions == []:
             return [], []
-        
 
         for interaction in interactions:
             # for the refinement of the alignment skip the wrong interactions
-            if refine and interaction.uniprotIDs[1] != select_uniprotID2:
+            if refine and interaction.uniprot_ids[1] != select_uniprot_2:
                 continue
-            if refine and interaction.pfamIDs[0] != select_Pfam_1:
+            if refine and interaction.pfam_names[0] != select_Pfam_1:
                 continue
-            if refine and interaction.pfamIDs[1] != select_Pfam_2:
+            if refine and interaction.pfam_names[1] != select_Pfam_2:
                 continue
             
             # if you are testing:
@@ -1051,11 +1038,11 @@ class get_template_interface(get_template):
             if interaction.interaction_type == 'ELM':
                 continue
             
-            pdbs = self.get_3did_entries(*interaction.pfamIDs)
+            pdbs = self.get_3did_entries(*interaction.pfam_names)
             
             self.log.info("Going over every interaction reported in the database for a given uniprot...")
-            self.log.debug("uniprotID1: " + interaction.uniprotIDs[0] + ':' + interaction.uniprotIDs[1])
-            self.log.debug("Interactions: " + interaction.pfamIDs[0] + ':' + interaction.pfamIDs[1])
+            self.log.debug("uniprot_id_1: " + interaction.uniprot_ids[0] + ':' + interaction.uniprot_ids[1])
+            self.log.debug("Interactions: " + interaction.pfam_names[0] + ':' + interaction.pfam_names[1])
             
             if pdbs == 'no entry':
                 continue
@@ -1078,81 +1065,73 @@ class get_template_interface(get_template):
                 if refine and chain_pdb2 != select_chain2:
                     continue
                 
-                uniprotID2 = interaction.uniprotIDs[1]
+                uniprot_id_2 = interaction.uniprot_ids[1]
                 
                 # first interaction partner
-                uniprot_domain1 = interaction.domain_defs[0]
+                uniprot_domain_1 = interaction.domain_defs[0]
                 # if the mutation does not fall into the domain, skip
-                if int(mutation[1:-1]) not in range(uniprot_domain1[0], uniprot_domain1[1]+1):
+                if int(mutation[1:-1]) not in range(uniprot_domain_1[0], uniprot_domain_1[1]+1):
                     continue
                 # probably check here if the mutation falls into the interface
                 # currently I am not sure if the interface information is accurate
-                uniprot_sequence1, new1 = self.get_uniprot_seq(uniprotID1)
-                if uniprot_sequence1 == 'no sequence':
+                uniprot_sequence_1, new1 = self.get_uniprot_seq(uniprot_id_1)
+                if uniprot_sequence_1 == 'no sequence':
                     continue
                 
                 # second interaction partner
-                uniprot_domain2 = interaction.domain_defs[1]
-                uniprot_sequence2, new2 = self.get_uniprot_seq(uniprotID2)
-                if uniprot_sequence2 == 'no sequence':
+                uniprot_domain_2 = interaction.domain_defs[1]
+                uniprot_sequence_2, new2 = self.get_uniprot_seq(uniprot_id_2)
+                if uniprot_sequence_2 == 'no sequence':
                     continue
 
-                alignment1, score1, alignmentID1, uniprot_domain1 = \
-                self.map_to_uniprot(uniprotID1, uniprot_sequence1, uniprot_domain1, pdbCode, chain_pdb1, pdb_domain1, self.saveAlignments, refine)
+                alignment1, score1, alignmentID1, uniprot_domain_1 = \
+                self.map_to_uniprot(uniprot_id_1, uniprot_sequence_1, uniprot_domain_1, pdbCode, chain_pdb1, pdb_domain1, self.saveAlignments, refine)
 
-                alignment2, score2, alignmentID2, uniprot_domain2 = \
-                self.map_to_uniprot(uniprotID2, uniprot_sequence2, uniprot_domain2, pdbCode, chain_pdb2, pdb_domain2, self.saveAlignments, refine)
+                alignment2, score2, alignmentID2, uniprot_domain_2 = \
+                self.map_to_uniprot(uniprot_id_2, uniprot_sequence_2, uniprot_domain_2, pdbCode, chain_pdb2, pdb_domain2, self.saveAlignments, refine)
                 
                 score = float(score1) + float(score2)
 
-                # mutation numbered from the beginning of uniprot domain, rather than the beginning of uniprot
-                mutation_position_domain = int(mutation[1:-1]) - uniprot_domain1[0] + 1 # +1 to have the numbering staring with 1
-
                 # cut sequence to boundaries and set sequence ID
-                uniprot_sequence1_domain = self.make_SeqRec_object(uniprot_sequence1, uniprot_domain1, uniprotID1)
-                uniprot_sequence2_domain = self.make_SeqRec_object(uniprot_sequence2, uniprot_domain2, uniprotID1)
+                uniprot_sequence_1_domain = self.make_SeqRec_object(uniprot_sequence_1, uniprot_domain_1, uniprot_id_1)
+                uniprot_sequence_2_domain = self.make_SeqRec_object(uniprot_sequence_2, uniprot_domain_2, uniprot_id_1)
                 
-                # map mutations to PDB
-                mutation_pdb1 = self.map_to_pdb_sequence(alignment1, alignmentID1, mutation_position_domain)
-
-                if mutation_pdb1 == 'in gap':
-                    continue
-                contacts_chain1 = self.check_structure(pdbCode, chain_pdb1, chain_pdb1 + '_' + mutation[0] + str(mutation_pdb1) + mutation[-1])
-
                 pdb_type, pdb_resolution = self.get_resolution(pdbCode)
                                           
-                if contacts_chain1[chain_pdb2]:      
-                    template = {'uniprotIDs': (uniprotID1, uniprotID2,),
-                                'pfamIDs'   : (interaction.pfamIDs[0], interaction.pfamIDs[1],),
-                                'domain_defs':(tuple(uniprot_domain1), tuple(uniprot_domain2),),
-                                'mutation'  : mutation,
-                                'pdbID'     : pdbCode,
-                                'chains_pdb' : [chain_pdb1, chain_pdb2,],
-                                'pdb_domain_defs' : (tuple(pdb_domain1), tuple(pdb_domain2),),
-                                'mutation_position_domain' : mutation_position_domain,
-                                'mutation_pdb': mutation_pdb1,
-                                'pdb_type': pdb_type,
-                                'pdb_resolution' : pdb_resolution,
-                                'uniprot_domain_sequences' : (uniprot_sequence1_domain, uniprot_sequence2_domain,), 
-                                'alignments' : (alignment1, alignment2,),
-                                'alignment_scores' : (score, float(score1), float(score2),)}
-                                            
-                    templates.append(template)
-                    template_clans.add((template['uniprotIDs'], template['pfamIDs'], template['domain_defs'],))
+                template = {'uniprot_ids': (uniprot_id_1, uniprot_id_2,),
+                            'pfam_names'   : (interaction.pfam_names[0], interaction.pfam_names[1],),
+                            'domain_defs':(tuple(uniprot_domain_1), tuple(uniprot_domain_2),),
+                            'mutation'  : mutation,
+                            
+                            'pdb_id'     : pdbCode,
+                            'pdb_type': pdb_type,
+                            'pdb_resolution' : pdb_resolution,
+                            'chains_pdb' : [chain_pdb1, chain_pdb2,],
+                            'pdb_domain_defs' : (tuple(pdb_domain1), tuple(pdb_domain2),),
+                            'cath_ids': ('', '',),
+                            'domain_contact_id': '',
+                            
+                            'uniprot_domain_sequences' : (uniprot_sequence_1_domain, uniprot_sequence_2_domain,), 
+                            'alignments': (alignment1, alignment2,),
+                            'alignment_ids': (alignmentID1, alignmentID1,),
+                            'alignment_scores' : (score, float(score1), float(score2),)}
+                
+                templates.append(template)
+                template_clans.add((template['uniprot_ids'], template['pfam_names'], template['domain_defs'],))
 
                                         
         new_sequences = list()
         if new1:
-            new_sequences.append([uniprotID1, uniprot_sequence1])
+            new_sequences.append([uniprot_id_1, uniprot_sequence_1])
         if new2:
-            new_sequences.append([uniprotID2, uniprot_sequence2])
+            new_sequences.append([uniprot_id_2, uniprot_sequence_2])
 
         # Select the best template for each unique interaction pattern    
         template_clan_templates = []
         for template_clan in template_clans:
             template_clan_template = []
             for template in templates:
-                if ((template['uniprotIDs'], template['pfamIDs'], template['domain_defs'],)) == template_clan:
+                if ((template['uniprot_ids'], template['pfam_names'], template['domain_defs'],)) == template_clan:
                     template_clan_template.append(template)
             template_clan_templates.append(template_clan_template)        
 
