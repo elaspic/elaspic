@@ -43,6 +43,7 @@ class TemplateCoreError(Exception):
         Exception.__init__(self)
         self.error = error
 
+
 class TemplateInterfaceError(Exception):
     def __init__(self, error):
         Exception.__init__(self)
@@ -57,3 +58,20 @@ class NoStructuralTemplates(Exception):
     def __init__(self, error):
         Exception.__init__(self)
         self.error = error
+
+class NoSequenceFound(Exception):
+    def __init__(self, error):
+        Exception.__init__(self)
+        self.error = error    
+        
+        
+        
+class ProteinDefinitionError(Exception):
+    def __init__(self, error):
+        Exception.__init__(self)
+        self.error = error
+        
+class NoTemplatesFound(Exception):
+    def __init__(self, error):
+        Exception.__init__(self)
+        self.error = error   

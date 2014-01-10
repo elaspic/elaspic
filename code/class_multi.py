@@ -11,11 +11,11 @@ from class_interfaceSize import getDSSP
 from class_pysicoChemicalProperties import pysiChem
 import class_modeller as mod
 from class_foldX import foldX
-import class_error as errors
+import class_error as error
 
-import class_get_uniprot_template_core_and_interface as UniprotTemplates
-from class_get_uniprot_template_core_and_interface import get_template_interface
-from class_get_uniprot_template_core_and_interface import get_template_core
+import class_get_uniprot_template_core_and_interface as template_classes
+from class_get_uniprot_template_core_and_interface import GetTemplateInterface
+from class_get_uniprot_template_core_and_interface import GetTemplateCore
 
 from HelperFunction_prepareModeller import prepareModeller
 
@@ -182,25 +182,26 @@ class Consumer(multiprocessing.Process):
 class Task(object):
 
     def __init__(self,
-                 templateFinding, # supplied as a pdb or a structure
-                 uniprot_id, # UNIQUE FOR EACH JOB
-                 mutation, # UNIQUE FOR EACH JOB
-                 savePDB, 
-                 tmpPath, 
-                 outputPath,
-                 pdbPath,
-                 matrix, 
-                 gap_start, 
-                 gap_extend, 
-                 modeller_runs,
-                 buildModel_runs,
-                 foldX_WATER,
-                 DomainDefinition,
-                 DomainInteraction,
-                 UniprotSequence,
-                 PDBResolution,
-                 ProteinDefinition,
-                 ProteinInteraction
+                template_finding, # supplied as a pdb or a structure
+                uniprot_id, # UNIQUE FOR EACH JOB
+                mutation, # UNIQUE FOR EACH JOB
+                savePDB, 
+                tmpPath, 
+                outputPath,
+                pdbPath,
+                matrix, 
+                gap_start, 
+                gap_extend, 
+                modeller_runs,
+                buildModel_runs,
+                foldX_WATER,
+                uniprot_sequence_database,
+                domain_definition_database,
+                domain_interaction_database,
+                pdb_resolution_database,
+                protein_definition_database,
+                protein_interaction_database,
+                path_to_archive
                  ):
         """ Initiate the variables that will be used throughout template finding
         and mutation modelling
@@ -208,7 +209,7 @@ class Task(object):
         
         self.uniprot_id = uniprot_id
         
-        self.templateFinding = templateFinding
+        self.template_finding = template_finding
         self.mutation = mutation
                 
         self.matrix = matrix # which matrix is used for the interface similarity
@@ -223,6 +224,7 @@ class Task(object):
         self.tmpPath = tmpPath
         self.outputPath = outputPath
         self.pdbPath = pdbPath
+        self.path_to_archive = path_to_archive
         
         # stuff like modeller_path can't be specified here since self.unique
         # is not yet set. This happens after initialising the Task for each
@@ -235,42 +237,77 @@ class Task(object):
         self.foldX_WATER = foldX_WATER # water atoms in foldX
         
         # the database lookup functions
-        self.UniprotSequence = UniprotSequence
-        self.DomainDefinition = DomainDefinition
-        self.DomainInteraction = DomainInteraction
-        self.PDBResolution = PDBResolution
-        self.ProteinDefinition = ProteinDefinition
-        self.ProteinInteraction = ProteinInteraction
+        self.uniprot_sequence_database = uniprot_sequence_database
+        self.domain_definition_database = domain_definition_database
+        self.domain_interaction_database = domain_interaction_database
+        self.pdb_resolution_database = pdb_resolution_database
+        self.protein_definition_database = protein_definition_database
+        self.protein_interaction_database = protein_interaction_database
         
         self.pool = None
         self.semaphore = None
         
         self.log = None
         
-        self.PWD = None
-        
         self.DEBUG = False
+        
+        self.alignments_path = None
+        self.PWD = None
 
         
 
     def __call__(self):
         """ Run the main function of the program and parse errors
         """
+        # Set variables that require the correct "self.unique" id
+        self.alignments_path = self.tmpPath + self.unique + '/tcoffee/'
+        self.PWD = self.tmpPath + self.unique + '/'
+        
+        self.get_template_core = GetTemplateCore(
+                                    self.tmpPath, 
+                                    self.unique, 
+                                    self.pdbPath,
+                                    self.savePDB,
+                                    self.alignments_path,
+                                    self.pool,
+                                    self.semaphore,
+                                    self.uniprot_sequence_database,
+                                    self.domain_definition_database,
+                                    self.pdb_resolution_database,
+                                    self.log,
+                                    self.path_to_archive)
+        
+        self.get_template_interface = GetTemplateInterface(
+                                    self.tmpPath, 
+                                    self.unique, 
+                                    self.pdbPath, 
+                                    self.savePDB, 
+                                    self.alignments_path,
+                                    self.pool, 
+                                    self.semaphore, 
+                                    self.uniprot_sequence_database,
+                                    self.domain_definition_database,
+                                    self.domain_interaction_database,
+                                    self.pdb_resolution_database,
+                                    self.log,
+                                    self.path_to_archive)
+        
+        #######################################################################        
         
         # go to a unique directory
-        chdir(self.tmpPath + self.unique)
-        self.PWD = getcwd() + '/'
+        chdir(self.PWD)
         
         try:
+            # Run the body of the program
             return self.__run()
         
-        # Take care of all possible errors
-        except errors.KNOTerror as e:
+        # Take care of all (known) possible exceptions
+        except error.KNOTerror as e:
             if self.DEBUG:
                 raise e
             else:
                 return 'knotted'
-        except errors.TcoffeeError as e:
+        except error.TcoffeeError as e:
             self.log.error('t_coffee: problem occured while getting the wildtype PDB\n')
             self.log.error('t_coffee: alignment error in file: ' + e.alignInFile + '\n')
             self.log.error('t_coffee: message raised:\n')
@@ -287,28 +324,28 @@ class Task(object):
                 raise e
             else:
                 return 'modeller_error'
-        except errors.FoldXError as e:
+        except error.FoldXError as e:
             self.log.error('FoldXError while repairing the wildtype for ' + self.uniprot_id + ':' + self.mutation)
             self.log.error('FoldXError error:' + e.error)
             if self.DEBUG:
                 raise e
             else:
                 return 'foldx_error'
-        except errors.TemplateCoreError as e:
+        except error.TemplateCoreError as e:
             self.log.error('Error while getting the core template for ' + self.uniprot_id + ':' + self.mutation)
             self.log.error('TemplateCoreError error:' + e.error)
             if self.DEBUG:
                 raise e
             else:
                 return 'templateCoreError'
-        except errors.TemplateInterfaceError as e:
+        except error.TemplateInterfaceError as e:
             self.log.error('Error while getting the interface template for ' + self.uniprot_id + ':' + self.mutation)
             self.log.error('TemplateInterfaceError error:' + e.error)
             if self.DEBUG:
                 raise e
             else:
                 return 'templateInterfaceError'
-        except errors.pdbError as e:
+        except error.pdbError as e:
             self.log.error(e.error)
             if self.DEBUG:
                 raise e
@@ -323,8 +360,8 @@ class Task(object):
         finally:
             # Switch back to the original directory
             chdir(self.PWD)
-    
-
+            
+            
 
     def __run(self):
         """ The workhorse of the class. Sequentially calls all functions required
@@ -332,381 +369,185 @@ class Task(object):
         """
         
         if self.template_finding:
-            # Find all templates for the given uniprot (and mutation)
+            ###################################################################
+            # Align uniprot domains to structural domains in pdbfam, find 
+            # the best template, and expand domain boundaries
+            print 'a'
+            protein_definitions = self.protein_definition_database.get_dicts(self.uniprot_id)
             
-            # Make a model for each domain in the query uniprot
-            # (or use precalculated data if available)
-                        
-            # Save calculated templates to the core database folder
+            if not protein_definitions:
+                raise error.ProteinDefinitionError('The protein has no pfam domains')
             
-            
-            
-            # Make models of all possible interactions based on the uniprot,
-            # uniprot domains, and pdbfam
-            # (or use precalculated data if available)
-                        
-            # Save calculated templates to the interface database folder
-                        
-            templates = self.findTemplate()
-    
-            # if errors occured, return the errors and don't do further analysis
-            if templates == [[]]:
-                print 'no templates found'
-                raise Exception
-            elif templates[0].has_key('errors'):
-                print 'no templates found'
-                raise Exception
-            
-            if self.mutation != '':
+            changes_made = False
+            for protein_domain in protein_definitions:
                 
-                for template in templates:
-                    
-                    template_mutations = self.get_template_mutations(self.mutation)
-                    if len(template_mutations['mutations']) == 0:
+                if protein_domain['cath_id'] is not None:
+                    # Boundaries for this domain have already been expanded
+                    continue
+                if protein_domain['template_errors'] is not None:
+                    # Have tired expanding boundaries for this domain previously, and got erros
+                    continue
+                print 'b'
+                # For domains that are not expanded and do not have the template cath_id:
+                try:
+                    domain_info = self.get_template_core(protein_domain)
+                except error.NoStructuralTemplates as e:
+                    protein_domain['template_errors'] = e.error
+                    continue
+                except error.NoSequenceFound as e:
+                    protein_domain['template_errors'] = e.error
+                    continue
+                finally:
+                    protein_domain.update(domain_info)
+                    changes_made = True
+            
+            self.log.info("Finished getting core templates...\n")
+            
+            
+            # Use modeller to make a homology model for each uniprot domain that
+            # has a template in pdbfam
+            for protein_domain in protein_definitions:
+                
+                if protein_domain['model_id'] is not None:
+                    # The model for this domain has been created previously
+                    continue
+                if protein_domain['modelling_errors'] is not None:
+                    # The model for this domain has been created previously
+                    continue                
+                
+                model_info = self.make_homology_model(protein_domain)
+                protein_domain.update(model_info)
+                changes_made = True
+            
+            
+            if changes_made:
+                self.protein_definition_database.update_with_dicts(protein_definitions)
+            del changes_made
+            
+            self.log.info("Finished making core homology models...\n")
+            
+            ###################################################################
+            # Align all interacting pairs of domains in proteins that are known
+            # to interact, to stuctural templates in pdbfam
+            protein_interactions = self.protein_interaction_database.get_dicts(self.uniprot_id)
+            
+            changes_made = False
+            if protein_interactions:
+                
+                for protein_pair in protein_interactions:
+                    if protein_pair['domain_contact_id'] is not None:
+                        # Boundaries for this domain pair have already been expanded
+                        continue
+                    if protein_pair['template_errors'] is not None:
+                        # Have tired expanding boundaries previously, and got erros
+                        continue
+
+                    try:
+                        domain_pair_info = self.get_template_interface(protein_pair)
+                    except error.NoStructuralTemplates as e:
+                        protein_pair['template_errors'] = e.error
+                        continue
+                    except error.NoSequenceFound as e:
+                        protein_pair['template_errors'] = e.error
                         continue
                     
-                    # Get the data for a particular mutation (or a set of mutations)
-                    template_mutations = self.analyse_mutations(template, template_mutations)
-    
-                    template.update(template_mutations)
+                    protein_pair.update(domain_pair_info)
+                    changes_made = True
+        
+            self.log.info("Finished getting interface templates...\n")
+
+
+            # Use modeller to make a homology model for each domain pair that
+            # has a template in pdbfam
+            for protein_pair in protein_interactions:
+                    
+                if protein_pair['model_id'] is not None:
+                    # The model for this pair of domains has been created previously
+                    continue
+                if protein_pair['modelling_errors'] is not None:
+                    # The model for this pair of domains has been created previously
+                    continue
                 
-                self.log.info('Finished processing all templates for ' + self.uniprot_id + ' ' + self.mutation + '\n\n\n')
+                model_info = self.make_homology_model(protein_pair)
+                protein_pair.update(model_info)
+                changes_made = True
+                
+            if changes_made:
+                self.protein_interaction_database.update_from_dicts(protein_interactions)
+            del changes_made
+            
+            self.log.info("Finished making interface homology models...\n")
+         
+         
+            
+        if self.mutation != '':
+            ###################################################################
+            # If we are given a mutation (or a list of tab-separated mutations)
+            # calculate the dG for each of those mutations
+            
+            # Check to see whether or not we have interface models
+            if protein_definitions and protein_interactions:
+                templates = protein_definitions + protein_interactions
+            elif protein_definitions and not protein_interactions:
+                templates = protein_definitions
+            else:
+                raise Exception
+                
+            for template in templates:
+                # For each template, find mutations that affect that template,
+                # and calculate the effect of those mutations on the protein
+                template_mutations = self.get_template_mutations(self.mutation)
+                if len(template_mutations['mutations']) == 0:
+                    continue
+                
+                # Get the data for a particular mutation (or a set of mutations)
+                template_mutations = self.analyse_mutations(template, template_mutations)
+
+                template.update(template_mutations)
+            
+            self.log.info('Finished processing all templates for ' + self.uniprot_id + ' ' + self.mutation + '\n\n\n')
+        
         
         
         if not self.template_finding and self.mutation != '':
+            ###################################################################
             # Modell mutations using the structure from the pdb
         
-            template, template_mutations = self.get_pdb_and_mutations(self.mutation)                                  
+            template, template_mutations = self.get_pdb_and_mutations(self.mutation)                     
                                 
             # Get the data for a particular mutation (or a set of mutations)
             template_mutations = self.analyse_mutations(template, template_mutations)
             
-            templates = [template.update(template_mutations),]
+            protein_definitions = [template.update(template_mutations),]
         
         
-        return templates      
+        return templates
                 
 
 
-    def score_pairwise(self, seq1, seq2, matrix, gap_s, gap_e):
-        """ Required to get the BLOSUM score
-        """
-        
-        def score_match(pair_match, matrix_match):
-            if pair_match not in matrix_match:
-                return matrix_match[(tuple(reversed(pair_match)))]
-            else:
-                return matrix_match[pair_match]
-        
-        score = 0
-        gap = False
-        for i in range(len(seq1)):
-            pair = (seq1[i], seq2[i])
-            if not gap:
-                if '-' in pair:
-                    gap = True
-                    score += gap_s
-                else:
-                    score += score_match(pair, matrix)
-            else:
-                if '-' not in pair:
-                    gap = False
-                    score += score_match(pair, matrix)
-                else:
-                    score += gap_e
-        return score
-        
-    
-    def __getModel(self, 
-                       alignments, 
-                       target_ids, 
-                       template_ids,
-                       HETATMsInChain_SEQnumbering,
-                       chains,
-                       savePDB
-                       ):
-        outFile = self.tmpPath + self.unique + '/outFile_wildtype'
-        
-        # generate the input for modeller from the above generated alignment
-        prepareModeller(outFile, 
-                        alignments, 
-                        target_ids, 
-                        template_ids, 
-                        HETATMsInChain_SEQnumbering,
-                        chains
-                        )
-        
-        inFile = outFile
-
-        modeller_target_id = '_'.join(target_ids)
-        
-        if len(template_ids) == 1:
-            modeller_template_id = template_ids[0]
-        else:
-            modeller_template_id = template_ids[0] + template_ids[1][-1] # if more than two chains are used this has to be adjusted
-
-        modeller_path = self.tmpPath + self.unique + '/modeller/'
-        chdir(modeller_path) # from os
-
-        modeller = mod.modeller([inFile], 
-                                modeller_target_id, 
-                                modeller_template_id, 
-                                savePDB, 
-                                self.tmpPath + self.unique + '/', 
-                                self.modeller_runs,
-                                loopRefinement=True)
-        normDOPE, pdbFile = modeller.run()
-
-        chdir(self.PWD) # go back to the working directory
-        
-        return normDOPE, pdbFile
-
-        
-        
-    def __getCrystalStructure(self, pdbCode, chains, savePDB, FULL_PATH=False):
-        domains = [['Null', 'Null'] for i in range(len(chains)) ]
-        pdb = pdbTemplate(self.pdbPath, pdbCode, chains, domains, savePDB)
-        HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
-        
-        SWITCH_CHAIN = False
-        if chains != chains_pdb_order:
-            SWITCH_CHAIN = True
-            chains = chains_pdb_order
-        
-        return '-', pdbCode.split('.')[0] + ''.join(chains) + '.pdb', SWITCH_CHAIN, chains
-
-       
-    def prepareMutationFoldX(self, sequence, mutations):
-        """
-        create the sequence snippets for the mutation with FoldX
-        also, record the position of the mutation in the snippet
-        """
-        mutations_foldX = list()
-        for mutation in mutations:
-            if int(mutation[3:-1]) < 7:
-                left = 0
-                m_pos = int(mutation[3:-1]) # the position of the muation in the snippet
-            else:
-                left = int(mutation[3:-1])-7
-                m_pos = 7
-            if int(mutation[3:-1]) >= len(sequence) - 8:
-                right = len(sequence)
-            else:
-                right = int(mutation[3:-1])+8
-
-            wt_seq = sequence.seq[left:right]
-            mut_seq = sequence.seq[left:int(mutation[3:-1])-1] + mutation[-1] + sequence.seq[int(mutation[3:-1]):right]
-
-            assert( sequence.seq[int(mutation[3:-1])-1] == mutation[2] )
-            
-            mutations_foldX.append((m_pos, str(wt_seq) + '\n' + str(mut_seq)))
-
-        return mutations_foldX
-
-
-    def prepareInput(self, pdbCode, chains, domains, sequences, alignments, savePDB):
-
-        pdb = pdbTemplate(self.pdbPath, pdbCode, chains, domains, savePDB)
-
-        HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract() # dict with chain ID as key and Nr. of HETATM as value
-
-        SWITCH_CHAIN = False
-        if chains != chains_pdb_order:
-            SWITCH_CHAIN = True
-            sequence_new_order = list()
-            alignments_new_order = list()
-            for item in chains_pdb_order:
-                i = chains.index(item)
-                sequence_new_order.append(sequences[i])
-                alignments_new_order.append(alignments[i])
-            sequences = sequence_new_order
-            alignments = alignments_new_order
-            
-            chains = chains_pdb_order
-        
-        # to get the range of the domain make sure to call extract before getChainNumberingNOHETATMS!!
-        chainNumberingDomain = dict()
-
-        for i in range(0,len(chains)):
-            chainNumberingDomain[chains[i]] = pdb.getChainNumbering(chains[i])
-
-        HETATMsInChain_SEQnumbering = [ dict() for x in range(0,len(chains)) ]
-        
-        for i in range(0,len(chains)):
-            HETATMsInChain_SEQnumbering[i][chains[i]] = list()
-            for item in HETATMsInChain_PDBnumbering[chains[i]]:
-                    try:
-                        HETATMsInChain_SEQnumbering[i][chains[i]].append(chainNumberingDomain[chains[i]].index(item))
-                    except ValueError:
-                        HETATMsInChain_SEQnumbering[i][chains[i]].append(10001) # add one add the end that will be outside of the sequence
-
-        return sequences, alignments, chains, SWITCH_CHAIN, HETflag, HETATMsInChain_SEQnumbering
-    
-    
-    def setChainID(self, chains, mutations, HETflag, SWITCH_CHAIN, do_modelling):
-        """
-        modeller renames the chains, in order to keep track of the chain IDs
-        they are renamed here to match the modeller output. Modeller labels the
-        chains subsequently, i.e. A, B, C etc., thus, depending on wether HETATMs
-        are present as seperate chain, the chain labels are A, B or A, C
-        """
-        mut = list()
-        for mutation in mutations:
-            mutChain = str(chains.index(mutation[0]))
-
-            # get the chain names correct
-            if do_modelling:
-                if len(chains) == 1:
-                    # if no HETATMs are present, the chain ID is empty
-                    # otherwise the chain IDs are A and B for the atoms 
-                    # and HETATMs respectively
-                    if HETflag[chains[0]] == False:
-                        chains_new = [' ']
-                        mutChain = ' '
-                    else:
-                        chains_new = ['A']
-                        mutChain = 'A'
-                else:
-                    a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-                    index = 0
-                    chains_new = list()
-                    for chainID in chains:
-                        if HETflag[chainID] == True:
-                            # if True, then there are HETATMs associated to this chain
-                            # in modeller they will be listed as two different chains.
-                            # thus the chain names have to jump by two
-                            chains_new.append(a[index])
-                            index += 2
-                        else:
-                            chains_new.append(a[index])
-                            index += 1
-                    
-                    if mutChain == '0':
-                        mutChain = 'A'
-                    elif mutChain == '1':
-                        if chains_new[1] == 'B':
-                            mutChain = 'B'
-                        elif chains_new[1] == 'C':
-                            mutChain = 'C'
-                        else:
-                            print 'could not assign the chain for mutation correctly!'
-                            mutChain = None
-                    
-            mut.append( mutChain + '_' + mutation[2:] )
-        return mut
-
-
-
-    def findTemplate(self):
-        # initialise the template selection classes
-        # the unique variable is set after the __init__ is called, therefore
-        # they need to be 'initialised' here.
-    
-        # Path where to put all the temporary alignments
-        self.alignments_path = self.tmpPath + self.unique + '/tcoffee/'
-        
-        self.GetTemplateInterface = get_template_interface(self.tmpPath, 
-                                                           self.unique, 
-                                                           self.pdbPath, 
-                                                           self.savePDB, 
-                                                           self.alignments_path,
-                                                           self.pool, 
-                                                           self.semaphore, 
-                                                           self.get_uniprot_sequence, 
-                                                           self.interaction_database, 
-                                                           self.threeDID_database, 
-                                                           self.pdb_resolution_database,
-                                                           self.log)
-                                                           
-        self.GetTemplateCore = get_template_core(self.tmpPath, 
-                                                 self.unique, 
-                                                 self.pdbPath, 
-                                                 self.savePDB,
-                                                 self.alignments_path,
-                                                 self.pool, 
-                                                 self.semaphore, 
-                                                 self.get_uniprot_sequence, 
-                                                 self.core_template_database,
-                                                 self.pdb_resolution_database,
-                                                 self.log)
-        output_data = list()
-        
-        # Get templates for interface mutations
-        templates, new_sequences = self.GetTemplateInterface(self.uniprot_id, self.mutation)
-        self.log.info("Finished getting interface templates...\n\n")
-#        self.log.debug("Interface templates:")
-#        self.log.debug(templates)
-        
-        if not ((templates == ()) or (templates == [()]) or 
-                (templates == []) or (templates == [[]])):
-            # Interface mutations were found
-            is_in_core = False
-            
-            # Collect structure information for best uniprot pairs modelling all unique pfam interactions
-            for template in templates:
-                output_dict = self.findTemplateHelper(template, is_in_core)
-                output_data.append(output_dict)
-            
-        else:
-            # No interface mutations were found
-            is_in_core = True
-            
-            # Check if the mutations falls into the core
-            templates, new_sequences = self.GetTemplateCore(self.uniprot_id, self.mutation)
-            self.log.info("Finished getting core templates...\n\n")
-#            self.log.debug("Core templates:")
-#            self.log.debug(templates)
-            
-            if templates == 'not in core' or templates == 'no template':
-                output_dict = {'errors': 'no template found: ' + str(self.uniprot_id) + '_' + str(self.mutation)}
-                output_data.append(output_dict)
-            elif templates == 'in gap':
-                # add the logger here to report that the mutation did fall into a gap
-                # in the alignment!
-                output_dict = {'errors': 'no template found: ' + str(self.uniprot_id) + '_' + str(self.mutation)}
-                output_data.append(output_dict)
-            else:
-                for template in templates:
-                    output_dict = self.findTemplateHelper(template, is_in_core)
-                    output_data.append(output_dict)
-
-        output_data[0]['new_sequences'] = new_sequences
-        
-        self.log.info("Finished preparing template structures...\n\n")
-#        self.log.debug("Output data:")
-#        self.log.debug(output_data)
-        
-        return output_data
-
-
-    def findTemplateHelper(self, template, is_in_core):
+    def make_homology_model(self, template):
         # Unique template identifier for the template
-        saveFolder = ('-'.join(template['uniprot_ids']) + '_' +
-             '-'.join(template['pfam_names']) + '_' + 
-             '_'.join(['-'.join([str(i) for i in x]) for x in template['domain_defs']]))
-        
+
         # Folder for storing files for export to output
-        savePath =  self.tmpPath + self.unique + '/' + saveFolder + '/'
-        subprocess.check_call('mkdir -p ' + savePath, shell=True)
+        save_path =  self.tmpPath + self.unique + '/' + template['path_to_data'] + '/'
                     
-        # Template data 
-        pdbCode = template['pdb_id']
-        chains_pdb = template['chains_pdb']
-        mutations_pdb = [template['chains_pdb'][0] + '_' + self.mutation[0] + \
-                            str(template['mutation_position_domain']) + self.mutation[-1], ]
-        sequences   = template['uniprot_domain_sequences'] # is a list containing the uniprot sequences cut to the domain
-        alignments  = template['alignments']
-        
+        # Template data
+        pdb_id = template['pdb_id']
+        if template.has_key('pdb_chain_2'):
+            chains_pdb = [template['pdb_chain_1'], template['pdb_chain_2']]
+            # is a list containing the uniprot sequences cut to the domain
+            sequences   = [template['uniprot_domain_sequence_1'], template['uniprot_domain_sequence_1']]
+            alignments  = [template['alignment_1'], template['alignment_2']]
+            
+
         # PDB domain definitons of query and partner
         domains_pdb = template['pdb_domain_defs']
         
-        self.log.debug(savePath)
+        self.log.debug(save_path)
         self.log.debug("pdb_code:")
         self.log.debug(pdbCode)
         self.log.debug('chains_pdb:')
         self.log.debug(chains_pdb)
-        self.log.debug('mutations_pdb:')
-        self.log.debug(mutations_pdb)
         self.log.debug('sequences[0]:')
         self.log.debug(sequences[0])
         self.log.debug('sequences[1]:')
@@ -724,9 +565,9 @@ class Task(object):
 #        if float(scores[0]) >= 99.0:
 #            do_modelling = False
         
-        # savePath is where the pdb sequences and the pdb with the required chains are saved
+        # save_path is where the pdb sequences and the pdb with the required chains are saved
         sequences, alignments, chains_modeller, switch_chain, HETflag, HETATMsInChain_SEQnumbering = \
-            self.prepareInput(pdbCode, chains_pdb, domains_pdb, sequences, alignments, savePath)
+            self.prepareInput(pdb_id, chains_pdb, domains_pdb, sequences, alignments, save_path)
         
         self.log.debug("sequences:")
         self.log.debug(sequences)
@@ -740,7 +581,6 @@ class Task(object):
         self.log.debug(HETflag)
         self.log.debug("HETATMsInChain_SEQnumbering:")
         self.log.debug(HETATMsInChain_SEQnumbering)
-        
         
         # copy the chain IDs
         # they are used afterwards for renaming and copy is needed so that
@@ -758,7 +598,7 @@ class Task(object):
         
         
         if do_modelling:
-            normDOPE_wt, pdbFile_wt = self.__getModel(alignments, target_ids, template_ids, HETATMsInChain_SEQnumbering, chains_modeller, savePath)
+            normDOPE_wt, pdbFile_wt = self.__getModel(alignments, target_ids, template_ids, HETATMsInChain_SEQnumbering, chains_modeller, save_path)
             modeller_path = self.tmpPath + self.unique + '/modeller/'
         else:
             # add a function to take the crytal structure. Compare the __run()
@@ -766,7 +606,7 @@ class Task(object):
             pass
 
         # Copy Modeller pdb file
-        shutil.copyfile(modeller_path + pdbFile_wt, savePath + pdbFile_wt)
+        shutil.copyfile(modeller_path + pdbFile_wt, save_path + pdbFile_wt)
 
         self.log.debug("normDOPE_wt:")
         self.log.debug(normDOPE_wt)
@@ -778,18 +618,12 @@ class Task(object):
 #        system_command = 'mv ' + modeller_path + pdbFile_wt + ' ' + modeller_path + pdbFile_wt_renamed
 #        subprocess.check_call(system_command, shell=True)
         
-        # Copy alignments
-        for alignment in template['alignments']:
-            shutil.copyfile(self.alignments_path + alignment[0].id + '_' + alignment[1].id + '.aln',
-                savePath + '/' + saveFolder + '_' + alignment[0].id + '_' + alignment[1].id + '.aln')
+
         
-        # Add all calculated values to the template dictionary
-        template['is_in_core'] = is_in_core
-        template['saveFolder'] = saveFolder
-        template['savePath'] = savePath
+
+        template['save_path'] = save_path
         template['pdbFile_wt'] = pdbFile_wt
         template['chains_modeller'] = chains_modeller
-        template['mutations_pdb'] = mutations_pdb
         template['HETflag'] = HETflag
         template['normDOPE_wt'] = normDOPE_wt
         template['switch_chain'] = switch_chain
@@ -804,27 +638,34 @@ class Task(object):
         pdb_type, pdb_resolution = self.pdb_resolution_database(pdbCode)
         
         # Equivalent to class_get_uniprot_template_core_and_interface.py output        
-        template = {'uniprot_ids': ('', '',),
-                    'pfam_names': ('', '',),
-                    'domain_defs': ('', '',),
+        template = {'uniprot_id_1': '',
+                    'uniprot_id_2': '',
+                    'pfam_name_1': '',
+                    'pfam_name_2': '',
+                    'domain_def_1': '',
+                    'domain_def_2': '',
                     'pdb_id': pdbCode,
-                    'chains_pdb': [chains_pdb1, chains_pdb2],
-                    'pdb_domain_defs': ((), (),),
                     'pdb_type': pdb_type,
                     'pdb_resolution': pdb_resolution,
-                    'uniprot_domain_sequences': ('', '',),
-                    'alignments': ('', '',),
+                    'pdb_chain_1': chains_pdb1,
+                    'pdb_chain_2': chains_pdb2,
+                    'pdb_domain_def_1': tuple(),
+                    'pdb_domain_def_2': tuple(),
+                    'uniprot_domain_sequence_1': '',
+                    'uniprot_domain_sequence_2': '',
+                    'alignment_1': None,
+                    'alignment_2': None,
                     'alignment_scores': (100, 100, 100,)}
         
         # Unique template identifier for the template
         saveFolder = (template['pdb_id'] + '_' + '-'.join(template['chains_pdb']))
-        savePath =  self.tmpPath + self.unique + '/' + saveFolder + '/'
-        subprocess.check_call('mkdir -p ' + savePath, shell=True)
+        save_path =  self.tmpPath + self.unique + '/' + saveFolder + '/'
+        subprocess.check_call('mkdir -p ' + save_path, shell=True)
         
         chains_get_pdb = [ item for item in chains_pdb1 ]
         chains_get_pdb.extend( [ item for item in chains_pdb2 ] )
         
-        normDOPE_wt, pdbFile_wt, SWITCH_CHAIN, chains_get_pdb = self.__getCrystalStructure(pdbCode, chains_get_pdb, savePath)
+        normDOPE_wt, pdbFile_wt, SWITCH_CHAIN, chains_get_pdb = self.__getCrystalStructure(pdbCode, chains_get_pdb, save_path)
         
         template_mutations = {'mutation_positions': [], 'mutations': [], 'mutations_pdb': [], 'mutations_modeller': []}
         for mutation in mutations.split(','):
@@ -843,7 +684,7 @@ class Task(object):
         template['is_in_core'] = True
         template['normDOPE_wt'] = normDOPE_wt
         template['saveFolder'] = saveFolder
-        template['savePath'] = savePath
+        template['save_path'] = save_path
         template['pdbFile_wt'] = pdbFile_wt
         template['sequences'] = (sequence,)
         template['chains_modeller'] = chains_get_pdb
@@ -879,7 +720,7 @@ class Task(object):
             # mutation numbered from the beginning of uniprot domain, rather than the beginning of uniprot
             mutation_position_domain = int(mutation[1:-1]) - template['domain_defs'][0][0] + 1 # +1 to have the numbering staring with 1
             
-            mutation_pdb_no_chain = UniprotTemplates.map_to_pdb_sequence(template['alignments'][0],
+            mutation_pdb_no_chain = template_classes.map_to_pdb_sequence(template['alignments'][0],
                                                                 template['alignment_ids'][0],
                                                                 mutation_position_domain)
             if mutation_pdb_no_chain == 'in gap':
@@ -887,7 +728,7 @@ class Task(object):
             
             mutation_pdb = template['chains_pdb'][0] + '_' + mutation[0] + str(mutation_pdb_no_chain) + mutation[-1]
             
-            contacts_chain1 = UniprotTemplates.check_structure(template['pdb_id'],
+            contacts_chain1 = template_classes.check_structure(template['pdb_id'],
                                                                template['chains_pdb'][0],
                                                                mutation_pdb)
             if not contacts_chain1[template['chains_pdb'][1]]:
@@ -914,7 +755,7 @@ class Task(object):
         """
         AS: renamed the __run() function with some restructuring.
         
-        input:  savePath        path to PDB files for modeller
+        input:  save_path        path to PDB files for modeller
                 self.tmpPath    path to store some tmp data (not tcoffee)
                 self.unique     set environment for tcoffee (for parallelization)
                 pdbFile_wt      name of the wildtype structure file (either raw or from modeller)
@@ -926,8 +767,8 @@ class Task(object):
                 switch_chain    whether or not the order of the sequences was reversed during modelling
         """
         
-        savePath, pdbFile_wt, chains, sequences, switch_chain = (
-            template['savePath'], template['pdbFile_wt'], template['chains'],
+        save_path, pdbFile_wt, chains, sequences, switch_chain = (
+            template['save_path'], template['pdbFile_wt'], template['chains'],
             template['sequences'], template['switch_chain'], )
             
         mutations_pdb, mutations_modeller = (
@@ -937,8 +778,8 @@ class Task(object):
             
         #######################################################################
         # Logging
-        self.log.debug("savePath:")
-        self.log.debug(template['savePath'])          
+        self.log.debug("save_path:")
+        self.log.debug(template['save_path'])          
         self.log.debug("pdbFile_wt:")
         self.log.debug(template['pdbFile_wt'])
         self.log.debug("chains:")
@@ -963,7 +804,7 @@ class Task(object):
         try:
             chdir(foldX_path) # from os
             fX = foldX(self.tmpPath + self.unique, 
-                               savePath + pdbFile_wt, 
+                               save_path + pdbFile_wt, 
                                chains[0], 
                                self.unique, 
                                self.buildModel_runs,
@@ -1010,7 +851,7 @@ class Task(object):
                                )
             # Copy the foldX wildtype pdb file                          
             shutil.copyfile(wPDB,
-                 savePath + str(mutations_modeller[0]) + '-' +  wPDB.split('/')[-1])            
+                 save_path + str(mutations_modeller[0]) + '-' +  wPDB.split('/')[-1])            
         
         
         fX_mut_list = list()
@@ -1025,7 +866,7 @@ class Task(object):
                                )
             # Copy the foldX mutant pdb file
             shutil.copyfile(mPDB,
-                 savePath + str(mutations_modeller[0]) + '-MUT_' +  mPDB.split('/')[-1])
+                 save_path + str(mutations_modeller[0]) + '-MUT_' +  mPDB.split('/')[-1])
         
         
         #######################################################################
@@ -1266,18 +1107,18 @@ class Task(object):
         #######################################################################
         # Save that data as a json file
         export_data_name = template['saveFolder'] + '_' + ','.join(template_mutations['mutations'])
-        with open(template['savePath'] + export_data_name + '.json', 'wb') as fh:
+        with open(template['save_path'] + export_data_name + '.json', 'wb') as fh:
             json.dump(template_mutations, fh)
             
         # Save alignments and modeller models to output database for storage
         # Move template files to the output folder as a tar archive
         self.make_tarfile(self.HOME + self.outputPath + export_data_name + '.tar.bz2', 
-                          savePath[:-1])
+                          save_path[:-1])
         
         
         #######################################################################
         self.log.info('Finished processing template:')
-        self.log.info(savePath.split('/')[-2])
+        self.log.info(save_path.split('/')[-2])
         self.log.info('\n\n')
                 
         return template_mutations
@@ -1286,3 +1127,213 @@ class Task(object):
     def make_tarfile(self, output_filename, source_dir):
         with tarfile.open(output_filename, "w:bz2") as tar:
             tar.add(source_dir, arcname=os.path.basename(source_dir))
+
+
+    def score_pairwise(self, seq1, seq2, matrix, gap_s, gap_e):
+        """ Required to get the BLOSUM score
+        """
+        
+        def score_match(pair_match, matrix_match):
+            if pair_match not in matrix_match:
+                return matrix_match[(tuple(reversed(pair_match)))]
+            else:
+                return matrix_match[pair_match]
+        
+        score = 0
+        gap = False
+        for i in range(len(seq1)):
+            pair = (seq1[i], seq2[i])
+            if not gap:
+                if '-' in pair:
+                    gap = True
+                    score += gap_s
+                else:
+                    score += score_match(pair, matrix)
+            else:
+                if '-' not in pair:
+                    gap = False
+                    score += score_match(pair, matrix)
+                else:
+                    score += gap_e
+        return score
+        
+    
+    def __getModel(self, 
+                       alignments, 
+                       target_ids, 
+                       template_ids,
+                       HETATMsInChain_SEQnumbering,
+                       chains,
+                       savePDB
+                       ):
+        outFile = self.tmpPath + self.unique + '/outFile_wildtype'
+        
+        # generate the input for modeller from the above generated alignment
+        prepareModeller(outFile, 
+                        alignments, 
+                        target_ids, 
+                        template_ids, 
+                        HETATMsInChain_SEQnumbering,
+                        chains
+                        )
+        
+        inFile = outFile
+
+        modeller_target_id = '_'.join(target_ids)
+        
+        if len(template_ids) == 1:
+            modeller_template_id = template_ids[0]
+        else:
+            modeller_template_id = template_ids[0] + template_ids[1][-1] # if more than two chains are used this has to be adjusted
+
+        modeller_path = self.tmpPath + self.unique + '/modeller/'
+        chdir(modeller_path) # from os
+
+        modeller = mod.modeller([inFile], 
+                                modeller_target_id, 
+                                modeller_template_id, 
+                                savePDB, 
+                                self.tmpPath + self.unique + '/', 
+                                self.modeller_runs,
+                                loopRefinement=True)
+        normDOPE, pdbFile = modeller.run()
+
+        chdir(self.PWD) # go back to the working directory
+        
+        return normDOPE, pdbFile
+
+        
+        
+    def __getCrystalStructure(self, pdbCode, chains, savePDB, FULL_PATH=False):
+        domains = [['Null', 'Null'] for i in range(len(chains)) ]
+        pdb = pdbTemplate(self.pdbPath, pdbCode, chains, domains, savePDB)
+        HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
+        
+        SWITCH_CHAIN = False
+        if chains != chains_pdb_order:
+            SWITCH_CHAIN = True
+            chains = chains_pdb_order
+        
+        return '-', pdbCode.split('.')[0] + ''.join(chains) + '.pdb', SWITCH_CHAIN, chains
+
+       
+    def prepareMutationFoldX(self, sequence, mutations):
+        """
+        create the sequence snippets for the mutation with FoldX
+        also, record the position of the mutation in the snippet
+        """
+        mutations_foldX = list()
+        for mutation in mutations:
+            if int(mutation[3:-1]) < 7:
+                left = 0
+                m_pos = int(mutation[3:-1]) # the position of the muation in the snippet
+            else:
+                left = int(mutation[3:-1])-7
+                m_pos = 7
+            if int(mutation[3:-1]) >= len(sequence) - 8:
+                right = len(sequence)
+            else:
+                right = int(mutation[3:-1])+8
+
+            wt_seq = sequence.seq[left:right]
+            mut_seq = sequence.seq[left:int(mutation[3:-1])-1] + mutation[-1] + sequence.seq[int(mutation[3:-1]):right]
+
+            assert( sequence.seq[int(mutation[3:-1])-1] == mutation[2] )
+            
+            mutations_foldX.append((m_pos, str(wt_seq) + '\n' + str(mut_seq)))
+
+        return mutations_foldX
+
+
+    def prepareInput(self, pdbCode, chains, domains, sequences, alignments, savePDB):
+
+        pdb = pdbTemplate(self.pdbPath, pdbCode, chains, domains, savePDB)
+
+        HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract() # dict with chain ID as key and Nr. of HETATM as value
+
+        SWITCH_CHAIN = False
+        if chains != chains_pdb_order:
+            SWITCH_CHAIN = True
+            sequence_new_order = list()
+            alignments_new_order = list()
+            for item in chains_pdb_order:
+                i = chains.index(item)
+                sequence_new_order.append(sequences[i])
+                alignments_new_order.append(alignments[i])
+            sequences = sequence_new_order
+            alignments = alignments_new_order
+            
+            chains = chains_pdb_order
+        
+        # to get the range of the domain make sure to call extract before getChainNumberingNOHETATMS!!
+        chainNumberingDomain = dict()
+
+        for i in range(0,len(chains)):
+            chainNumberingDomain[chains[i]] = pdb.getChainNumbering(chains[i])
+
+        HETATMsInChain_SEQnumbering = [ dict() for x in range(0,len(chains)) ]
+        
+        for i in range(0,len(chains)):
+            HETATMsInChain_SEQnumbering[i][chains[i]] = list()
+            for item in HETATMsInChain_PDBnumbering[chains[i]]:
+                    try:
+                        HETATMsInChain_SEQnumbering[i][chains[i]].append(chainNumberingDomain[chains[i]].index(item))
+                    except ValueError:
+                        HETATMsInChain_SEQnumbering[i][chains[i]].append(10001) # add one add the end that will be outside of the sequence
+
+        return sequences, alignments, chains, SWITCH_CHAIN, HETflag, HETATMsInChain_SEQnumbering
+    
+    
+    def setChainID(self, chains, mutations, HETflag, SWITCH_CHAIN, do_modelling):
+        """
+        modeller renames the chains, in order to keep track of the chain IDs
+        they are renamed here to match the modeller output. Modeller labels the
+        chains subsequently, i.e. A, B, C etc., thus, depending on wether HETATMs
+        are present as seperate chain, the chain labels are A, B or A, C
+        """
+        mut = list()
+        for mutation in mutations:
+            mutChain = str(chains.index(mutation[0]))
+
+            # get the chain names correct
+            if do_modelling:
+                if len(chains) == 1:
+                    # if no HETATMs are present, the chain ID is empty
+                    # otherwise the chain IDs are A and B for the atoms 
+                    # and HETATMs respectively
+                    if HETflag[chains[0]] == False:
+                        chains_new = [' ']
+                        mutChain = ' '
+                    else:
+                        chains_new = ['A']
+                        mutChain = 'A'
+                else:
+                    a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                    index = 0
+                    chains_new = list()
+                    for chainID in chains:
+                        if HETflag[chainID] == True:
+                            # if True, then there are HETATMs associated to this chain
+                            # in modeller they will be listed as two different chains.
+                            # thus the chain names have to jump by two
+                            chains_new.append(a[index])
+                            index += 2
+                        else:
+                            chains_new.append(a[index])
+                            index += 1
+                    
+                    if mutChain == '0':
+                        mutChain = 'A'
+                    elif mutChain == '1':
+                        if chains_new[1] == 'B':
+                            mutChain = 'B'
+                        elif chains_new[1] == 'C':
+                            mutChain = 'C'
+                        else:
+                            print 'could not assign the chain for mutation correctly!'
+                            mutChain = None
+                    
+            mut.append( mutChain + '_' + mutation[2:] )
+        return mut
+
+
