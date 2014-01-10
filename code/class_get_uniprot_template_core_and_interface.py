@@ -20,12 +20,18 @@ import gzip
 from math import sqrt
 from math import fabs
 
-class get_template():
+import datetime
+import subprocess
+
+
+class GetTemplate():
     """
     Parent class holding functions for finding the correct template given a
     uniprot sequence
     """
-    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, semaphore, get_uniprot_seq, get_resolution, log):
+    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
+                  pool, semaphore, uniprot_sequence_database, pdb_resolution_database, 
+                  domain_definition_database, log, path_to_archive):
         """
         input:
         tmpPath             type 'str'
@@ -45,12 +51,16 @@ class get_template():
         self.pool = pool
         self.semaphore = semaphore
         
-        self.get_uniprot_seq = get_uniprot_seq
+        self.uniprot_sequence_database = uniprot_sequence_database
         
-        self.get_resolution = get_resolution
+        self.pdb_resolution_database = pdb_resolution_database
+        self.domain_definition_database = domain_definition_database
         
         # get the logger from the parent and add a handler
         self.log = log
+        self.path_to_archive = path_to_archive
+        self.bad_pdbs = ['3C4D', '3LB7', '3NSV', '2NP8', '2WN0']
+        
     
     def make_SeqRec_object(self, sequence, domain, ID):
         """
@@ -126,7 +136,7 @@ class get_template():
         # It was assumed that the uniprot domain boundaries are expanded and are correct.
         # However when using pfamscan output, this assumption is not correct.
         
-        domain_uniprot_expanded = self.expand_boundaries(alignment, domain_uniprot, )
+#        domain_uniprot_expanded = self.expand_boundaries(alignment, domain_uniprot, )
         
         
         # AS End ##############################################################
@@ -185,7 +195,7 @@ class get_template():
         # subtract number of dashes from start, add number of dashes to end
         
         
-        return 
+        return
         
     
     
@@ -204,31 +214,40 @@ class get_template():
         """
         # use the try statement to ensure that the sempaphore is released
         # in the end
-        try:
-            with self.semaphore:
-                # register to keep track of the running t_coffee instances
-                # the maximal number is set in the configfile.
-                self.pool.makeActive(self.unique)
-                self.log.debug("Aligning: " + seqIDs[0] + ':' + seqIDs[1])
-                tcoffee = tc.tcoffee_alignment(self.tmpPath, 
-                                               self.unique,
-                                               saveAlignments, 
-                                               [self.tmpPath + self.unique + 'seqfiles.fasta', ], 
-                                               seqIDs, 
-                                               )
-                alignments = tcoffee.align()
-        except:
-            raise
-        finally:
-                self.pool.makeInactive(self.unique)
+        self.log.debug("Aligning: " + seqIDs[0] + ':' + seqIDs[1])
+        
+        if self.semaphore:
+            try:
+                with self.semaphore:
+                    # register to keep track of the running t_coffee instances
+                    # the maximal number is set in the configfile.
+                    self.pool.makeActive(self.unique)
+                    tcoffee = tc.tcoffee_alignment(self.tmpPath, self.unique,
+                                                   saveAlignments, 
+                                                   [self.tmpPath + self.unique + 'seqfiles.fasta', ], 
+                                                   seqIDs)
+                    alignments = tcoffee.align()
+            except:
+                raise
+            finally:
+                    self.pool.makeInactive(self.unique)
+        else:
+            tcoffee = tc.tcoffee_alignment(self.tmpPath, self.unique,
+                               saveAlignments, 
+                               [self.tmpPath + self.unique + 'seqfiles.fasta', ], 
+                               seqIDs)
+            alignments = tcoffee.align()
+        
         
         self.log.debug("Done aligning: " + seqIDs[0] + ':' + seqIDs[1])
+        
         # see http://www.nature.com/nmeth/journal/v10/n1/full/nmeth.2289.html#methods
         # getting the score like Aloy did, based on sequence identity and coverage
         score_id = self.get_identity(alignments[0])
         score_cov = self.get_coverage(alignments[0])
         a = 0.95
         score = a*score_id/100.0 * score_cov/100 + (1.0-a)*score_cov/100
+        
         return alignments[0], score
         
         
@@ -744,17 +763,46 @@ class get_template():
             return False, []
 
 
+
+    def chose_best_template(self, domain_template):
+        """
+        Selects the best template based on sequence identity and resolution
+        of the pdb structure
         
+        input:
+        templates       type list
+        
+        return:
+        compare __call__() method
+        """
+
+        # First sort by identity score:
+        domain_template = sorted(domain_template, 
+                                 key=lambda k: k['alignment_scores'][0],
+                                 reverse=True)
+        max_score = domain_template[0]['alignment_scores']
+        
+        # Next, sort by pdb resolution
+        best_domain_interactions = list()
+        for interaction in domain_template:
+            if interaction['alignment_scores'][0] == max_score:
+                best_domain_interactions.append(interaction)
+        best_domain_interactions = sorted(best_domain_interactions, 
+                                          key=lambda k: (k['pdb_type'], k['pdb_resolution'],),
+                                          reverse=False)
+        
+        return best_domain_interactions[0]
+
     
     
-class get_template_core(get_template):
+class GetTemplateCore(GetTemplate):
     """ retrieve the info from Sebastians file and do the alignment
 
     """
     
-    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments, 
-                 pool, semaphore, get_uniprot_seq, core_template_database, 
-                 get_resolution, log):
+    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, 
+             semaphore, uniprot_sequence_database, pdb_resolution_database, 
+             domain_definition_database, log, path_to_archive):
         """
         input
         tmpPath                     type 'str'
@@ -768,15 +816,13 @@ class get_template_core(get_template):
         core_template_database      <__main__.core_Templates instance>
         """
         # call the __init__ from the parent class
-        get_template.__init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
-                              pool, semaphore, get_uniprot_seq, get_resolution, log)
-        
-        # set the core database
-        self.core_template_database = core_template_database
+        GetTemplate.__init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
+                  pool, semaphore, uniprot_sequence_database, pdb_resolution_database, 
+                  domain_definition_database, log, path_to_archive)
 
 
 
-    def __call__(self, uniprot_id_1, mutation):
+    def __call__(self, protein_domain):
         """
         input:
         uniprotKB       type 'str'
@@ -792,82 +838,106 @@ class get_template_core(get_template):
         uniprot_sequence_domain             type class 'Bio.SeqRecord.SeqRecord'
         mutation_position_domain_uniprot    type 'int'
         """
-        # get the templates from Sebastians file
-        core_templates = self.core_template_database(uniprot_id_1)
-
-        if core_templates == []:
-            return 'no template', []
+        # get all possible templates
+        protein_domain_templates = self.run(protein_domain)
         
-        templates = []
-        new_sequences = set()
-        for core_template in core_templates:
-            # mutation should be like A100T, template[2] is a list with amino acids
-            # that are in the core
-            # for now take mutations when they fall into the domain
-            
-            # if mutation not in core
-            #if not int(mutation[1:-1]) in template[2]:
-            # if mutation not in domain
-            if not int(mutation[1:-1]) in range(core_template[1][0], core_template[1][1]):
-                continue
-            
-            pfamID1         = core_template[0]
-            domain_uniprot  = core_template[1]
-            pdbCode        = core_template[3]
-            chain_pdb        = core_template[4]
-            domain_pdb     = core_template[5]
-            
-            uniprot_sequence, new_sequence = self.get_uniprot_seq(uniprot_id_1)
-            if uniprot_sequence == 'no sequence':
-                    continue
+        self.log.info("Done getting domain templates...")
+#        self.log.debug("Templates:")
+#        self.log.debug(protein_interaction_templates)
+        
+        # select the best template
+        best_template = self.chose_best_template(protein_domain_templates)
+#        self.log.debug("Best templates:")
+#        self.log.debug(best_template)
+        
+        best_template = self.run(protein_domain, best_template)
+        self.log.info('Done refining interface templates...')
 
-            uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_uniprot, uniprot_id_1)
-            
-            result_tmp = self.map_to_uniprot(uniprot_id_1, uniprot_sequence, domain_uniprot, pdbCode, chain_pdb, domain_pdb, self.saveAlignments, refine=True)
-            if result_tmp == 'error':
+        # Export the alignment to the output folder
+        path_to_data = (
+            'domain' + '/' + 
+            best_template['uniprot_id'] + '/' + 
+            best_template['pfam_name'] + '*' + 
+            '_'.join(['-'.join([str(i) for i in x]) for x in best_template['domain_def']]))
+        
+        # Folder for storing files for export to output
+        tmp_save_path = self.tmpPath + self.unique + '/' + path_to_data + '/'
+        subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
+        subprocess.check_call('cp ' + self.alignments_path + best_template['alignment_name'] +
+                                ' ' + tmp_save_path + best_template['alignment_name'], shell=True)
+        if self.path_to_archive:
+            archive_save_path = self.path_to_archive + path_to_data
+            subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
+            subprocess.check_call('cp ' + self.alignments_path + best_template['alignment_name'] +
+                                    ' ' + archive_save_path + best_template['alignment_name'], shell=True)
+        
+        return best_template        
+        
+        
+
+    def run(self, protein_domain, refine):
+        """
+        """
+        
+        # get the templates from Sebastians file
+        domain_definitions = self.domain_definition_database.get_dicts(protein_domain['pfam_name'])
+        
+        if not domain_definitions:
+            raise error.NoStructuralTemplates(str(datetime.datetime.now().date()) + ': no templates found')
+        
+        protein_definitions = []
+        for definition in domain_definitions:
+            if refine and definition['idx'] != refine['idx']:
                 continue
-            else:
-                alignment, score, pdb_sequence_id, domain_uniprot = result_tmp
             
-            # in case the domain boundaries of the uniprot sequence changed,
-            # get the new sequence
-            uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_uniprot, uniprot_id_1)
+             # there are some obsolete pdbs, ignore them... or 2NP8 has only one chain
+            if definition['pdb_id'] in self.bad_pdbs:
+                continue    
+            
+            definition['protein_definition_idx'] = protein_domain['idx']
+            definition['domain_definition_idx'] = definition['idx']
+            
+            uniprot_sequence = self.uniprot_sequence_database(definition['uniprot_id'])
+            if not uniprot_sequence:
+                raise error.NoSequenceFound
+           
+            alignment, score, alignment_id, domain_def = \
+                self.map_to_uniprot(definition['uniprot_id'], uniprot_sequence, 
+                                    definition['alignment_def'], definition['pdb_id'],
+                                    definition['pdb_chain'], definition['pdb_domain_def'],
+                                    self.saveAlignments, refine)
+            
+            uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_def, definition['uniprot_id'])
     
-            pdb_type, pdb_resolution = self.get_resolution(pdbCode)
+            pdb_type, pdb_resolution = self.pdb_resolution_database(definition['pdb_id'])
                             
-            template = {'uniprot_ids': (uniprot_id_1,),
-                'pfam_names'   : (pfamID1,),
-                'domain_defs':(domain_uniprot,),
-
-                'pdb_id'     : pdbCode,
+            new_data = {
                 'pdb_type': pdb_type,
-                'pdb_resolution' : pdb_resolution,
-                'chains_pdb' : (chain_pdb[0],),
-                'pdb_domain_defs' : (domain_pdb,),
-
-                'uniprot_domain_sequences' : (uniprot_sequence_domain,),
-                'alignments' : (alignment,),
-                'alignment_ids': (pdb_sequence_id,),
+                'pdb_resolution': pdb_resolution,
+                'uniprot_domain_sequence': uniprot_sequence_domain,
+                'alignment' : alignment,
+                'alignment_id': pdb_sequence_id,
+                'alignment_name': alignment[0].id + '_' + alignment[1].id + '.aln',
                 'alignment_scores' : (score, score, 0,)}
             
-            templates.append(template)
-            
-            if new_sequence:
-                new_sequences.add((uniprot_id_1, uniprot_sequence))               
+            definition.update(new_data)
+            protein_definitions.append(definition)
 
 #       return (pdbCode, chain, domain_pdb, score, alignment, str(mutation_pdb), uniprot_sequence_domain, mutation_position_domain_uniprot, pfamID1, domain_uniprot), [[uniprot_id_1, uniprot_sequence], ]
-        return templates, new_sequences
+        return protein_definitions
 
 
-class get_template_interface(get_template):
+
+class GetTemplateInterface(GetTemplate):
     """
     Check if a mutation falls into an interface and tries to find the best
     structural template
     
     """
     def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, 
-                 semaphore, get_uniprot_seq, get_interactions, get_3did_entries, 
-                 get_resolution, log):
+                 semaphore, uniprot_sequence_database, pdb_resolution_database, 
+                 domain_definition_database, domain_interaction_database, log,
+                 path_to_archive):
         """
         input
         
@@ -884,290 +954,177 @@ class get_template_interface(get_template):
         get_resolution      <__main__.pdb_resolution instance>
         """
         # call the __init__ from the parent class
-        get_template.__init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
-                              pool, semaphore, get_uniprot_seq, get_resolution, log)
+        GetTemplate.__init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
+                  pool, semaphore, uniprot_sequence_database, pdb_resolution_database, 
+                  domain_definition_database, log, path_to_archive)
         
         # set the databases
-        self.get_3did_entries = get_3did_entries
-        self.get_interactions = get_interactions
+        self.domain_interaction_database = domain_interaction_database
     
     
-    def __call__(self, uniprot_id_1, mutation):
+    def __call__(self, protein_pair):
         """
-        if no template is found: returns a dictionary that has a has_key('errors')  'no template found'
-        otherwise returns a dictionary with keys:
-            pdbCode: of the template found
-            chain1: chains to be used as template 
-            chain2: 
-            score1: sequence identity with chain 1
-            score2: seq, id. with chain 2
-            pfam family of interaction partner 1 (i.e. the query uniprot), 
-            pfam family of the interaction partner 2 (from Sebastians file)
-            uniprot_id_2: of the second interaction partner
-            uniprot_id_1_sequence1_domain: uniprot sequence for the domain only
-            uniprot_id_2_sequence2_domain:
-            alignment1: biopython alignment obejct with the alignment of uniprot seq1 with chain1
-            alignment2:
-            mutation_position_domain: mutation position in the domain (shortened pdb sequence)
-            int: 0 means X-ray, 2 NMR, 3 other
-            float: resolution of the structure
-            
         input:
         uniprot_id_1   type 'str'
         mutation    type 'str'
         
         return
-                    type 'dict'
-                    
-                    entries of one element of the list (same for the run() method):
-                        type        description
-                        'str'       pdbCode: of the template found
-                        'str'       chain1: chains to be used as template 
-                        'str'       chain2: 
-                        'float'     score: based on sequence identity and coverage
-                        'float'     score1: score of chain 1
-                        'float'     score2: score of chain 2
-                        'str'       pfam family of interaction partner 1 (i.e. the query uniprot), 
-                        'str'       pfam family of the interaction partner 2 (from Sebastians file)
-                        'str'       uniprot_id_1_2: of the second interaction partner
-                        'Bio.SeqRecord.SeqRecord'           uniprot_id_1_sequence1_domain: uniprot sequence for the domain only
-                        'Bio.SeqRecord.SeqRecord'           uniprot_id_2_sequence2_domain:
-                        'Bio.Align.MultipleSeqAlignment'    alignment1: biopython alignment obejct with the alignment of uniprot seq1 with chain1
-                        'Bio.Align.MultipleSeqAlignment'    alignment2:
-                        'int'       mutation_position_domain: mutation position in the domain (shortened pdb sequence)
-                        'str'       pdb_domain1, looks like '74-390'
-                        'str'       pdb_domain2, looks like '74-390'
-                        'int'       exp. measurement method; 0 means X-ray, 2 NMR, 3 other
-                        'float'     resolution of the structure
-        """
-        # get all possible templates
-        templates, new_sequences = self.run(uniprot_id_1, mutation)
+        type 'dict'
         
+        entries of one element of the list (same for the run() method):
+        type        description
+        'str'       pdbCode: of the template found
+        'str'       chain1: chains to be used as template 
+        'str'       chain2: 
+        'float'     score: based on sequence identity and coverage
+        'float'     score1: score of chain 1
+        'float'     score2: score of chain 2
+        'str'       pfam family of interaction partner 1 (i.e. the query uniprot), 
+        'str'       pfam family of the interaction partner 2 (from Sebastians file)
+        'str'       uniprot_id_1_2: of the second interaction partner
+        'Bio.SeqRecord.SeqRecord'           uniprot_id_1_sequence1_domain: uniprot sequence for the domain only
+        'Bio.SeqRecord.SeqRecord'           uniprot_id_2_sequence2_domain:
+        'Bio.Align.MultipleSeqAlignment'    alignment1: biopython alignment obejct with the alignment of uniprot seq1 with chain1
+        'Bio.Align.MultipleSeqAlignment'    alignment2:
+        'int'       mutation_position_domain: mutation position in the domain (shortened pdb sequence)
+        'str'       pdb_domain1, looks like '74-390'
+        'str'       pdb_domain2, looks like '74-390'
+        'int'       exp. measurement method; 0 means X-ray, 2 NMR, 3 other
+        'float'     resolution of the structure
+        """
+        
+        # get all possible templates
+        protein_interaction_templates = self.run(protein_pair)
         self.log.info("Done getting interface templates...")
 #        self.log.debug("Templates:")
-#        self.log.debug(templates)
+#        self.log.debug(protein_interaction_templates)
         
-        if (templates == []) or (templates == [[]]) or (templates == [[[]]]):
-            return [[]], new_sequences
-        else:
-            # select the best template
-            best_templates = self.chose_best_template(templates)
-#            self.log.debug("Best templates:")
-#            self.log.debug(best_templates)
-            
-            best_templates_refined = []
-            for template in best_templates:
-                # Refine the best template, i.e. check for errors in the alignment
-                # and realign
-                template_refined, no_longer_new_sequences = self.run(uniprot_id_1, mutation, template)
-                best_templates_refined.append(template_refined[0][0])
-            
-            self.log.info('Done refining interface templates...')
-#            self.log.debug("Best templates refined:")
-#            self.log.debug(best_templates_refined)
-            
-            return best_templates_refined, new_sequences
+        # select the best template
+        best_template = self.chose_best_template(protein_interaction_templates)
+#        self.log.debug("Best templates:")
+#        self.log.debug(best_template)
+        
+        best_template = self.run(protein_pair, best_template)
+        self.log.info('Done refining interface templates...')
+
+        # Export the alignment to the output folder
+        path_to_data = (
+            'domain-complex' + '/' + 
+            best_template['uniprot_id_1'] + '_' + best_template['uniprot_id_2'] + '/' + 
+            best_template['pfam_name_1'] + '*' + 
+            '_'.join(['-'.join([str(i) for i in x]) for x in best_template['domain_def_1']]) + '*' + 
+            best_template['pfam_name_2'] + '*' + 
+            '_'.join(['-'.join([str(i) for i in x]) for x in best_template['domain_def_2']]))
+        
+        # Folder for storing files for export to output
+        tmp_save_path = self.tmpPath + self.unique + '/' + path_to_data + '/'
+        subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
+        subprocess.check_call('cp ' + self.alignments_path + best_template['alignment_name_1'] +
+                                ' ' + tmp_save_path + best_template['alignment_name_1'], shell=True)
+        subprocess.check_call('cp ' + self.alignments_path + best_template['alignment_name_2'] +
+                                ' ' + tmp_save_path + best_template['alignment_name_2'], shell=True)
+        if self.path_to_archive:
+            archive_save_path = self.path_to_archive + path_to_data
+            subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
+            subprocess.check_call('cp ' + self.alignments_path + best_template['alignment_name_1'] +
+                                    ' ' + archive_save_path + best_template['alignment_name_1'], shell=True)
+            subprocess.check_call('cp ' + self.alignments_path + best_template['alignment_name_2'] +
+                                    ' ' + archive_save_path + best_template['alignment_name_2'], shell=True)
+        
+        # Remember where you stored the data
+        best_template['path_to_data'] = path_to_data
+        
+        return best_template
         
     
-    def run(self, uniprot_id_1, mutation, SELECT_ONLY=[]):
+    def run(self, protein_pair, refine=None):
         """
-        Look up all interactions for a given uniprot_id_1, check if the mutation
-        falls into the interface and select a template
-        
-        input:
-        uniprot_id_1       type 'str'
-        mutation        type 'str'       ; Q61L
-        
-        return:
-            see __call__ method
         """
-    
-        templates = []
-        template_clans = set()
+            
+        domain_interactions = self.domain_interaction_database.get_dicts([protein_pair['pfam_name_1'], protein_pair['pfam_name_2']])
         
-        new1 = False
-        new2 = False
-        
-        # SELECT_ONLY is used in the refinement step to select only the interaction
-        # and the pdb file which was identified as best template in the first
-        # iteration
-        if SELECT_ONLY == []:
-            refine = False
-        else:
-            refine = True
-            select_pdbCode       = SELECT_ONLY['pdb_id']
-            select_chain1        = SELECT_ONLY['chains_pdb'][0]
-            select_chain2        = SELECT_ONLY['chains_pdb'][1]
-            select_Pfam_1        = SELECT_ONLY['pfam_names'][0]
-            select_Pfam_2        = SELECT_ONLY['pfam_names'][1]
-            select_uniprot_2   = SELECT_ONLY['uniprot_ids'][1]
+        if not domain_interactions:
+            raise error.NoStructuralTemplates(str(datetime.datetime.now().date()) + ': no templates found')
 
-        interactions = self.get_interactions(uniprot_id_1)
-        # interaction is a list: [firstGuy, interaction_type_firstGuy, PfamID_firstGuy, domain, interface, \
-        #                         secondGuy, interaction_type_secondGuy, PfamID_secondGuy, domain2
-        
-        if interactions == []:
-            return [], []
-
-        for interaction in interactions:
-            # for the refinement of the alignment skip the wrong interactions
-            if refine and interaction.uniprot_ids[1] != select_uniprot_2:
-                continue
-            if refine and interaction.pfam_names[0] != select_Pfam_1:
-                continue
-            if refine and interaction.pfam_names[1] != select_Pfam_2:
+        protein_interactions = []
+        for interaction in domain_interactions:
+            
+            if refine and interaction['idx'] != refine['idx']:
                 continue
             
-            # if you are testing:
-            # uncomment the following. There are many! Pkinase interactions and
-            # it takes ages to go through all of them. Better find another example
-#            if interaction[7] == 'Pkinase_Tyr' or interaction[2] == 'Pkinase_Tyr':
-            
-            # check if the mutation falls into the interface
-#            if interaction.interface == 'NULL' or interaction.interface == '':
-#                continue
-#            AS commented out the following two lines because errors in Sabastian's interface file 
-#                may be preventing interfaces from being detected
-#            elif int(mutation[1:-1]) not in [ int(x) for x in interaction[4].split(',') ]:
-#                continue
-            if False:
+            # there are some obsolete pdbs, ignore them... or 2NP8 has only one chain
+            if interaction['pdb_id'] in self.bad_pdbs:
                 continue
             
-            # skip ELM interactions. This should probably be included in future
-            # versions            
-            if interaction.interaction_type == 'ELM':
-                continue
+            interaction['protein_interaction_idx'] = protein_pair['idx']
+            interaction['domain_interaction_idx'] = interaction['idx']
             
-            pdbs = self.get_3did_entries(*interaction.pfam_names)
+            if interaction['reversed'] is True:
+                # The pair of uniprots appears in reverse order in the domain interaction database
+                # In order to merge these two tables we have to flip protein-pair data
+                interaction['uniprot_id_1'], interaction['uniprot_id_2'] = protein_pair['uniprot_id_2'], protein_pair['uniprot_id_1']
+                interaction['pfam_name_1'], interaction['pram_name_2'] = protein_pair['pram_name_2'], protein_pair['pfam_name_1']
+                interaction['aligment_def_1'], interaction['aligment_def_2'] = protein_pair['aligment_def_2'], protein_pair['aligment_def_1']
+            else:
+                # The pair of uniprots appears in reverse order in the domain interaction database
+                # In order to merge these two tables we have to flip protein-pair data
+                interaction['uniprot_id_1'], interaction['uniprot_id_2'] = protein_pair['uniprot_id_2'], protein_pair['uniprot_id_1']
+                interaction['pfam_name_1'], interaction['pram_name_2'] = protein_pair['pram_name_2'], protein_pair['pfam_name_1']
+                interaction['aligment_def_1'], interaction['aligment_def_2'] = protein_pair['aligment_def_2'], protein_pair['aligment_def_1']
+
             
-            self.log.info("Going over every interaction reported in the database for a given uniprot...")
-            self.log.debug("uniprot_id_1: " + interaction.uniprot_ids[0] + ':' + interaction.uniprot_ids[1])
-            self.log.debug("Interactions: " + interaction.pfam_names[0] + ':' + interaction.pfam_names[1])
+            # Get sequences of the first and second protein          
+            uniprot_sequence_1 = self.uniprot_sequence_database(interaction['uniprot_id_1'])
+            if uniprot_sequence_1 == 'no sequence':
+                raise error.NoSequenceFound('No sequence found for ' + interaction['uniprot_id_1'])
             
-            if pdbs == 'no entry':
-                continue
+            uniprot_sequence_2 = self.uniprot_sequence_database(interaction['uniprot_id_2'])
+            if uniprot_sequence_2 == 'no sequence':
+                raise error.NoSequenceFound('No sequence found for ' + interaction['uniprot_id_2'])
 
-            for pdb in pdbs:
-                # get_3did_entries returns all the pdbs that are listed as
-                # having the two domains, 'pdb' is a list [pdbCode, chain1, chain2]
-                pdbCode, chain_pdb1, chain_pdb2, pdb_domain1, pdb_domain2 = pdb
-                
-                # there are some obsolete pdbs, ignore them
-                # or 2NP8 has only one chain
-                if pdbCode in ['3C4D', '3LB7', '3NSV', '2NP8', '2WN0']:
-                    continue
-                    
-                # for the refinement of the alignment skip if it is not the correct pdb:
-                if refine and pdbCode != select_pdbCode:
-                    continue
-                if refine and chain_pdb1 != select_chain1:
-                    continue
-                if refine and chain_pdb2 != select_chain2:
-                    continue
-                
-                uniprot_id_2 = interaction.uniprot_ids[1]
-                
-                # first interaction partner
-                uniprot_domain_1 = interaction.domain_defs[0]
-                # if the mutation does not fall into the domain, skip
-                if int(mutation[1:-1]) not in range(uniprot_domain_1[0], uniprot_domain_1[1]+1):
-                    continue
-                # probably check here if the mutation falls into the interface
-                # currently I am not sure if the interface information is accurate
-                uniprot_sequence_1, new1 = self.get_uniprot_seq(uniprot_id_1)
-                if uniprot_sequence_1 == 'no sequence':
-                    continue
-                
-                # second interaction partner
-                uniprot_domain_2 = interaction.domain_defs[1]
-                uniprot_sequence_2, new2 = self.get_uniprot_seq(uniprot_id_2)
-                if uniprot_sequence_2 == 'no sequence':
-                    continue
 
-                alignment1, score1, alignmentID1, uniprot_domain_1 = \
-                self.map_to_uniprot(uniprot_id_1, uniprot_sequence_1, uniprot_domain_1, pdbCode, chain_pdb1, pdb_domain1, self.saveAlignments, refine)
+            # Align the first and second uniprots to the corresponding pdb domains
+            alignment_1, score_1, alignment_id_1, domain_def_1 = \
+                self.map_to_uniprot(interaction['uniprot_id_1'], uniprot_sequence_1, 
+                                    interaction['alignment_def_1'], interaction['pdb_id'], 
+                                    interaction['pdb_chain_1'], interaction['pdb_domain_def_1'],
+                                    self.saveAlignments, refine)
 
-                alignment2, score2, alignmentID2, uniprot_domain_2 = \
-                self.map_to_uniprot(uniprot_id_2, uniprot_sequence_2, uniprot_domain_2, pdbCode, chain_pdb2, pdb_domain2, self.saveAlignments, refine)
-                
-                score = float(score1) + float(score2)
-
-                # cut sequence to boundaries and set sequence ID
-                uniprot_sequence_1_domain = self.make_SeqRec_object(uniprot_sequence_1, uniprot_domain_1, uniprot_id_1)
-                uniprot_sequence_2_domain = self.make_SeqRec_object(uniprot_sequence_2, uniprot_domain_2, uniprot_id_1)
-                
-                pdb_type, pdb_resolution = self.get_resolution(pdbCode)
-                                          
-                template = {'uniprot_ids': (uniprot_id_1, uniprot_id_2,),
-                            'pfam_names'   : (interaction.pfam_names[0], interaction.pfam_names[1],),
-                            'domain_defs':(tuple(uniprot_domain_1), tuple(uniprot_domain_2),),
-                            'mutation'  : mutation,
-                            
-                            'pdb_id'     : pdbCode,
-                            'pdb_type': pdb_type,
-                            'pdb_resolution' : pdb_resolution,
-                            'chains_pdb' : [chain_pdb1, chain_pdb2,],
-                            'pdb_domain_defs' : (tuple(pdb_domain1), tuple(pdb_domain2),),
-                            'cath_ids': ('', '',),
-                            'domain_contact_id': '',
-                            
-                            'uniprot_domain_sequences' : (uniprot_sequence_1_domain, uniprot_sequence_2_domain,), 
-                            'alignments': (alignment1, alignment2,),
-                            'alignment_ids': (alignmentID1, alignmentID1,),
-                            'alignment_scores' : (score, float(score1), float(score2),)}
-                
-                templates.append(template)
-                template_clans.add((template['uniprot_ids'], template['pfam_names'], template['domain_defs'],))
-
-                                        
-        new_sequences = list()
-        if new1:
-            new_sequences.append([uniprot_id_1, uniprot_sequence_1])
-        if new2:
-            new_sequences.append([uniprot_id_2, uniprot_sequence_2])
-
-        # Select the best template for each unique interaction pattern    
-        template_clan_templates = []
-        for template_clan in template_clans:
-            template_clan_template = []
-            for template in templates:
-                if ((template['uniprot_ids'], template['pfam_names'], template['domain_defs'],)) == template_clan:
-                    template_clan_template.append(template)
-            template_clan_templates.append(template_clan_template)        
-
-        return template_clan_templates, new_sequences
-
-     
-
-    def chose_best_template(self, template_clan_templates):
-        """
-        Selects the best template based on sequence identity and resolution
-        of the pdb structure
-        
-        input:
-        templates       type list
-        
-        return:
-        compare __call__() method
-        """
-
-        best_templates = list()
-        for template_clans in template_clan_templates:
-            # first sort by identity score:
-            templates_sorted = sorted(template_clans, key=lambda k: k['alignment_scores'][0], reverse=True)
-            max_score = templates_sorted[0]['alignment_scores']
-            templates_highest_identity = list()
-            for template in templates_sorted:
-                if template['alignment_scores'] == max_score:
-                    templates_highest_identity.append(template)
+            alignment_2, score_2, alignment_id_2, domain_def_2 = \
+                self.map_to_uniprot(interaction['uniprot_id_2'], uniprot_sequence_2, 
+                                    interaction['alignment_def_2'], interaction['pdb_id'], 
+                                    interaction['pdb_chain_2'], interaction['pdb_domain_def_1'], 
+                                    self.saveAlignments, refine)
             
-            # next, sort by pdb resolution
-            templates_highest_identity = sorted(templates_highest_identity, key=lambda k: (k['pdb_type'], k['pdb_resolution'],), reverse=False)
             
-            # return the firt template in the list, i.e. the best template
-            best_templates.append(templates_highest_identity[0])
+            # Cut sequence to boundaries and set sequence ID
+            uniprot_domain_sequence_1 = self.make_SeqRec_object(uniprot_sequence_1, domain_def_1, interaction['uniprot_id_1'])
+            uniprot_domain_sequence_2 = self.make_SeqRec_object(uniprot_sequence_2, domain_def_2, interaction['uniprot_id_1'])
             
-        return best_templates
+            pdb_type, pdb_resolution = self.pdb_resolution_database(interaction['pdb_id'])
+            
+            # Save calculation results
+            new_data = {'pdb_type': pdb_type,
+                        'pdb_resolution': pdb_resolution,
+                        'alignment_1': alignment_1,
+                        'alignment_id_1': alignment_id_1,
+                        'alignment_name_1': alignment_1[0].id + '_' + alignment_1[1].id + '.aln',
+                        'domain_def_1': domain_def_1,
+                        'uniprot_domain_sequence_1': uniprot_domain_sequence_1,
+                        'alignment_2': alignment_2,
+                        'alignment_id_2': alignment_id_2,
+                        'alignment_name_2': alignment_2[0].id + '_' + alignment_2[1].id + '.aln',
+                        'domain_def_2': domain_def_2,
+                        'uniprot_domain_sequence_2': uniprot_domain_sequence_2,
+                        'alignment_scores': (float(score_1) + float(score_2), float(score_1), float(score_2),)
+                        }
+            interaction.update(new_data)
+            
+            protein_interactions.append(interaction)
+            
+        # protein_interactions contains information about interactions between
+        # two specific domains in two specific uniprots
+        return protein_interactions
 
 
     ###########
@@ -1352,15 +1309,13 @@ if __name__ == '__main__':
     pool = ActivePool()
     semaphore = multiprocessing.Semaphore(2)
     
-    
     tmpPath = '/tmp/test/'
     unique = 'unique'
     pdbPath = '/home/niklas/pdb_database/structures/divided/pdb/'
     savePDB = '/tmp/test/trash/'
     saveAlignments = '/tmp/test/alignments/'
     
-    
-    a = get_template(tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, semaphore, get_uniprot_seq)
+    a = GetTemplate(tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, semaphore, get_uniprot_seq)
 
     alignment = AlignIO.read('/home/niklas/tmp/alignment_cluttered.fasta', 'fasta')
 #    print alignment

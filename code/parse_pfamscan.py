@@ -455,8 +455,7 @@ class make_uniprot_pfam_database():
         temp_dict['uniprot_id'] = []
 #        temp_dict['splicing_id'] = []
         temp_dict['seq_id'] = []
-        temp_dict['alignment_start'] = []
-        temp_dict['alignment_end'] = []
+        temp_dict['alignment_def'] = []
         temp_dict['alignment_defs'] = []
         temp_dict['hmm_acc'] = []
         temp_dict['hmm_name'] = []
@@ -475,14 +474,13 @@ class make_uniprot_pfam_database():
                 temp_dict['uniprot_id'].append(key[0])
 #                temp_dict['splicing_id'].append(key[1])
                 temp_dict['seq_id'].append('')
-                temp_dict['alignment_start'].append([])
-                temp_dict['alignment_end'].append([])
-                temp_dict['alignment_defs'].append([])
-                temp_dict['hmm_acc'].append([])
-                temp_dict['hmm_name'].append([])
-                temp_dict['hmm_type'].append([])
-                temp_dict['hmm_clan_acc'].append([])
-                temp_dict['hmm_clan_name'].append([])
+                temp_dict['alignment_def'].append('')
+                temp_dict['alignment_defs'].append('')
+                temp_dict['hmm_acc'].append('')
+                temp_dict['hmm_name'].append('')
+                temp_dict['hmm_type'].append('')
+                temp_dict['hmm_clan_acc'].append('')
+                temp_dict['hmm_clan_name'].append('')
                 continue
             
             for counter, seqrecord in enumerate(self.sequence_dict[key]):
@@ -494,8 +492,7 @@ class make_uniprot_pfam_database():
                 temp_dict['uniprot_id'].append(key[0])
 #                temp_dict['splicing_id'].append(key[1])
                 temp_dict['seq_id'].append(seqrecord.id)
-                temp_dict['alignment_start'].append(seqrecord.annotations['alignment_defs'][0][0])
-                temp_dict['alignment_end'].append(seqrecord.annotations['alignment_defs'][-1][1])
+                temp_dict['alignment_def'].append((seqrecord.annotations['alignment_defs'][0][0],seqrecord.annotations['alignment_defs'][-1][1],))
                 temp_dict['alignment_defs'].append(seqrecord.annotations['alignment_defs'])
                 temp_dict['hmm_acc'].append(seqrecord.annotations['hmm_acc'])
                 temp_dict['hmm_name'].append(seqrecord.annotations['hmm_name'])

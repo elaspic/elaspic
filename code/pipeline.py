@@ -35,8 +35,6 @@ import urllib2
 
 import parse_pfamscan
 
-from collections import OrderedDict
-
 
 class NullDevice():
     def write(self, s):
@@ -71,7 +69,155 @@ class ActivePool(object):
 
 
 
-class myDatabases(object):
+class UniprotSequence(object):
+    
+    def __init__(self, database):
+        self.database = database
+        
+        self.database_name = 'pipeline_uniprot_sequences.pickle'
+        
+        if isfile(self.database_name):
+            print 'Loading uniprot sequence database'
+            f = open(self.database_name, 'rb')    
+            self.uniprot_data = pickle.load(f)
+            print 'it contains', len(self.uniprot_data), 'sequences'
+            f.close()
+        else:
+            self.uniprot_data = dict()
+
+
+            
+#        #######################################################
+#        ### one time: add sequences from a files            ###
+#        ### do that if you need to expand the database      ###
+#        ### fetching new sequences does not work on scient! ###
+#
+#        fileNames = ['/home/niklas/playground/mutations_clasified_recep/uniprot_list_interactions.fasta', \
+#                     '/home/niklas/playground/mutations_clasified_recep/uniprot_list.fasta' ]
+#        fileNames = ['/home/niklas/playground/mutations_clasified_recep/hapmap_uniprot_sequences.fasta', ]
+#        for fileName in fileNames:
+#            for seq_record in SeqIO.parse(fileName, "fasta"):
+#                seq_record.id = seq_record.id.split('|')[1]
+#                self.uniprot_data[seq_record.id] = seq_record
+#        # save the newly added sequences
+#        self.close()
+#
+#        ###           end                                   ###
+#        #######################################################
+
+        
+    def __call__(self, uniprot_id):
+        """
+        returns the uniprot sequence. If the sequence is not in the database it
+        tries to retrieve it from the uniprot website.
+        
+        Note: retrieval from the website does not work on Scinet!
+        
+        """
+        if uniprot_id in ['A6NF79', 'C9JUS1', 'Q6N045', 'A6NMD1']:
+            # these uniprotKBs made problems
+            return 'no sequences'
+        elif uniprot_id == 'P02735':
+            # this sequence got replaced. I don't know right now if I can take
+            # replaced sequence so I rather dismiss it.
+            return 'no sequences'
+        
+        # the True/False value is used to add new sequences to the database in
+        # end. Only usefull if you run one instance at a time otherwise you will
+        # get diverging sequence databases.
+        try:
+            return self.uniprot_data[uniprot_id]
+        except KeyError:
+            childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            whoami, error = childProcess.communicate()
+            if whoami.strip() == 'joan':
+                print 'uniprot sequence not found'
+                return None
+            else:
+                print 'Fetching uniprot sequence', uniprot_id, 'from server'
+                address = 'http://www.uniprot.org/uniprot/' + uniprot_id + '.fasta'
+                handle = urllib2.urlopen(address)
+                sequence = next(SeqIO.parse(handle, "fasta"))
+                sequence.id = uniprot_id
+                self.uniprot_data[uniprot_id] = sequence
+                return sequence
+
+    
+    def add(self, items):
+        """
+        add the new items (which is a list of tuples) to the database
+        """
+        for key, value in items:
+            if self.uniprot_data.has_key(key):
+                print 'Strange..., the uniprot database seems to already have the entry', key, value
+                print 'I am overwriting it'
+            print 'adding', key, 'to the uniprot database'
+            self.uniprot_data[key] = value
+
+    
+    def close(self):
+        """
+        save the database back to disk. Do it at the end if
+        new sequences where added.
+        """
+        print 'saving the uniprot database'
+        f = open(self.database_name, 'wb')    
+        pickle.dump(self.uniprot_data, f)
+        f.close()
+        
+
+class PDBResolution(object):
+    """
+    In the file pdbtosp.txt from the pdb website one finds the measurement type
+    and resolution of each structure. This information is used for the selection
+    of the best interface template.
+    """
+    def __init__(self, pdbtosp):
+        self.pdbResolution_xray = dict()
+        self.pdbResolution_nmr = dict()
+        self.pdbResolution_rest = dict()
+        
+        with open(pdbtosp, 'r') as f:
+            for x in range(25):
+                f.readline()
+            for l in f:
+                if l.strip() == '':
+                    break
+                if l[0] == ' ':
+                    continue
+                line = [ item.strip() for item in l.split(' ') if item != '']
+                try:
+                    if line[1] == 'X-ray' or line[1] == 'Neutron':
+                        self.pdbResolution_xray[line[0]] = float(line[2])
+                    elif line[1] == 'NMR':
+                        self.pdbResolution_nmr[line[0]] = float(line[2])
+                    elif line[1] in ['Model', 'Other', 'IR']:
+                        continue
+                    elif line[1] in ['EM', 'Fiber']:
+                        self.pdbResolution_rest[line[0]] = float(line[2])
+                    else:
+                        print 'Could not associate the method for', line[1]
+                except:
+                    continue
+    
+    def __call__(self, pdbID):
+        """
+        the first return value is used to indicate the measurement type,
+        the second return value is the resolution.
+        
+        0 means X-ray, 2 NMR, 3 other
+        """
+        if self.pdbResolution_xray.has_key(pdbID):
+            return 0, self.pdbResolution_xray[pdbID]
+        elif self.pdbResolution_nmr.has_key(pdbID):
+            return 1, self.pdbResolution_nmr[pdbID]
+        elif self.pdbResolution_rest.has_key(pdbID):
+            return 2, self.pdbResolution_rest[pdbID]
+        else:
+            return 'None', '-'
+
+
+class MyDatabase(object):
     
     def __init__(self):
         pass
@@ -130,121 +276,97 @@ class myDatabases(object):
         return return_tuple
 
 
+    ###########################################################################
 
-class UniprotSequence(object):
-    
-    def __init__(self, database):
-        self.database = database
+    def get_dicts(self, key):
+        """
+        """
+        query_df = self.__call__(key)
         
-        self.database_name = 'pipeline_uniprot_sequences.pickle'
+        if not query_df or query_df == [None, None]:
+            return None
         
-        if isfile(self.database_name):
-            print 'Loading uniprot sequence database'
-            f = open(self.database_name, 'rb')    
-            self.uniprot_data = pickle.load(f)
-            print 'it contains', len(self.uniprot_data), 'sequences'
-            f.close()
-        else:
-            self.uniprot_data = dict()
+        if type(query_df) is pd.DataFrame:
+            list_of_dicts = []
+            for idx, df in query_df.iterrows():
+                row_dict = df.to_dict()
+                row_dict.update({'idx': idx})
+                list_of_dicts.append(row_dict)
+            return list_of_dicts
+        
+        
+        elif type(query_df) is list and len(query_df) == 2:
+            list_of_dicts = []
+            query_df_forward, query_df_reversed = query_df
+            if query_df_forward:
+                for idx, df in query_df_forward.iterrows():
+                    row_dict = df.to_dict()
+                    row_dict.update({'idx': idx, 'reversed': False})
+                    list_of_dicts.append(row_dict)
+            if query_df_reversed:
+                for idx, df in query_df_reversed.iterrows():
+                    row_dict = df.to_dict()
+                    row_dict.update({'idx': idx, 'reversed': True})
+                    list_of_dicts.append(row_dict)
+            return list_of_dicts
             
-#        #######################################################
-#        ### one time: add sequences from a files            ###
-#        ### do that if you need to expand the database      ###
-#        ### fetching new sequences does not work on scient! ###
-#
-#        fileNames = ['/home/niklas/playground/mutations_clasified_recep/uniprot_list_interactions.fasta', \
-#                     '/home/niklas/playground/mutations_clasified_recep/uniprot_list.fasta' ]
-#        fileNames = ['/home/niklas/playground/mutations_clasified_recep/hapmap_uniprot_sequences.fasta', ]
-#        for fileName in fileNames:
-#            for seq_record in SeqIO.parse(fileName, "fasta"):
-#                seq_record.id = seq_record.id.split('|')[1]
-#                self.uniprot_data[seq_record.id] = seq_record
-#        # save the newly added sequences
-#        self.close()
-#
-#        ###           end                                   ###
-#        #######################################################
-        
-    def __call__(self, uniprotKB):
-        """
-        returns the uniprot sequence. If the sequence is not in the database it
-        tries to retrieve it from the uniprot website.
-        
-        Note: retrieval from the website does not work on Scinet!
-        
-        """
-        if uniprotKB in ['A6NF79', 'C9JUS1', 'Q6N045', 'A6NMD1']:
-            # these uniprotKBs made problems
-            return 'no sequences'
-        elif uniprotKB == 'P02735':
-            # this sequence got replaced. I don't know right now if I can take
-            # replaced sequence so I rather dismiss it.
-            return 'no sequences'
-        
-        # the True/False value is used to add new sequences to the database in
-        # end. Only usefull if you run one instance at a time otherwise you will
-        # get diverging sequence databases.
-        try:
-            return self.uniprot_data[uniprotKB], False
-        except KeyError:
-            childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            whoami, error = childProcess.communicate()
-            if whoami.strip() == 'joan':
-                print 'uniprot sequence not found'
-                return 'no sequences'
-            else:
-                print 'Fetching uniprot sequence', uniprotKB, 'from server'
-                address = 'http://www.uniprot.org/uniprot/' + uniprotKB + '.fasta'
-                handle = urllib2.urlopen(address)
-                sequence = next(SeqIO.parse(handle, "fasta"))
-                sequence.id = uniprotKB
-                self.uniprot_data[uniprotKB] = sequence
-                return sequence, True
-
+        else:
+            raise Exception()
+            
     
-    def add(self, items):
-        """
-        add the new items (which is a list of tuples) to the database
-        """
-        for key, value in items:
-            if self.uniprot_data.has_key(key):
-                print 'Strange..., the uniprot database seems to already have the entry', key, value
-                print 'I am overwriting it'
-            print 'adding', key, 'to the uniprot database'
-            self.uniprot_data[key] = value
-
     
-    def close(self):
+    def update_from_df(self, modified_df):
+        """ Updates the internal data frame with the modifications present in the
+        copied dataframe
         """
-        save the database back to disk. Do it at the end if
-        new sequences where added.
-        """
-        print 'saving the uniprot database'
-        f = open(self.database_name, 'wb')    
-        pickle.dump(self.uniprot_data, f)
-        f.close()
+        self.db.update(modified_df)
         
         
 
-class DomainDefinition(myDatabases):
+    def update_from_dicts(self, list_of_dicts):
+        """
+        """
+        index = []
+        for row_dict in list_of_dicts:
+            index = row_dict.pop('idx')
+            if row_dict.has_key('reversed'):
+                del row_dict['reversed']
+        
+        modified_df = pd.DataFrame(list_of_dicts, index=index)
+        
+        self.update_from_df(modified_df)      
+
+
+    ###########################################################################
+
+    def load_db(self):
+        if isfile(self.db_name + '.pickle') and isfile(self.db_name + '_updates.pickle'):
+            print 'Loading %s...' % ' '.join(self.db_name.split('_'))
+            self.db = pd.read_pickle(self.db_name + '.pickle')
+            self.db_updates = pd.read_pickle(self.db_name + '_updates.pickle')
+            return True
+        else:
+            return False
+    
+    
+    def save_db(self):
+        self.db.to_pickle(self.db_name + '.pickle')
+        self.db_updates.to_pickle(self.db_name + '_updates.pickle')
+
+
+
+class DomainDefinition(MyDatabase):
     """ Contains pdbfam-based definitions of all pfam domains in the pdb
     """
     
     def __init__(self, textfile_name):
         """
         """
-        db_name = 'domain_definition_database.pickle'
+        self.db_name = 'domain_definition'
         
-        if isfile(db_name):
-            # A precompiled database exists
-            print 'Loading domain definition database...'
-            
-            self.db = pd.read_pickle(db_name)
-            self.grouped_db = self.db.groupby('pfam_name') 
-
-        else:        
+        if not self.load_db():
             # No precompiled database exists
-            print 'Generating domain definition database...'
+            print 'Generating %s database...' % ' '.join(self.db_name.split('_'))
             
             names = ['pdb_id', 'autoPFAMA', 'pfam_name', 'pdb_chain', 'pdb_definition', 'cath_id']
             
@@ -253,39 +375,35 @@ class DomainDefinition(myDatabases):
             db['pdb_definition'] = db['pdb_definition'].apply(self.split_domain_semicolon)
             
             self.db = db
-            self.db.to_pickle(db_name)
-            self.grouped_db = db.groupby('pfam_name')
+            self.db_updates = pd.DataFrame()
+            self.save_db()
+            
+#        self.grouped_db = self.db.groupby('pfam_name')
                     
                     
     def __call__(self, pfam_name):
-        if self.grouped_db.groups.has_key(pfam_name):
-            return self.grouped_db.get_group(pfam_name)
-        else:
-            print "No entries for the given pfam_name:", pfam_name
-            return None
+        return self.db[self.db['pfam_name'] == pfam_name]
+#        if self.grouped_db.groups.has_key(pfam_name):
+#            return self.grouped_db.get_group(pfam_name)
+#        else:
+#            print "No entries for the given pfam_name:", pfam_name
+#            return None
 
 
 
-class DomainInteraction(myDatabases):
+class DomainInteraction(MyDatabase):
     """ Keeps the domain-domain interaction information from pdbfam
     """
     
     def __init__(self, textfile_name):
         """ Create the internal dictionary using a tsv file exported from mysql
         """
-        db_name = 'domain_interaction_database.pickle'
+        self.db_name = 'domain_interaction'
         
         # Check if a pickled database exists
-        if isfile(db_name):
-            # A precompiled database exists
-            print 'Loading domain interaction database...'
-            
-            self.db = pd.read_pickle(db_name)
-            self.grouped_db = self.db.groupby(['pfam_name_1','pfam_name_2'])
-            
-        else:        
+        if not self.load_db():    
             # No precompiled database exists
-            print 'Generating domain interaction database...'
+            print 'Generating %s database...' % ' '.join(self.db_name.split('_'))
 
             names = [
             'pdb_id', 'pfam_name_1', 'pdb_chain_1', 'pdb_definition_1', 'pdb_interface_aa_1', 'cath_id_1', 
@@ -300,17 +418,18 @@ class DomainInteraction(myDatabases):
             db['pdb_interface_aa_2'] = db['pdb_interface_aa_2'].apply(self.split_interface_aa)
             
             self.db = db
-            self.grouped_db = self.db.groupby(['pfam_name_1', 'pfam_name_2'])
+            self.db_updates = pd.DataFrame()
+            self.save_db()
             
-            self.db.to_pickle(db_name)
+#        self.grouped_db = self.db.groupby(['pfam_name_1', 'pfam_name_2'])
+        
 
-
-    def __call__(self, pfam_name_1, pfam_name_2):
+    def __call__(self, pfam_names):
         """
         Note that the produced dataframe may not have the same order as the keys
         """
-        key1 = tuple([pfam_name_1, pfam_name_2])
-        key2 = tuple([pfam_name_2, pfam_name_1])
+        key1 = tuple([pfam_names[0], pfam_names[1]])
+        key2 = tuple([pfam_names[1], pfam_names[0]])
             
         if self.grouped_db.groups.has_key(key1):
             return_df_1 = self.grouped_db.get_group(key1)
@@ -323,65 +442,13 @@ class DomainInteraction(myDatabases):
             return_df_2 = None
             
         if not return_df_1 and not return_df_2:
-            print "No entries for the given domain combination:", pfam_name_1, pfam_name_2
+            print "No entries for the given domain combination:", pfam_names[0], pfam_names[1]
             
         return [return_df_1, return_df_2]
 
 
 
-class PDBResolution(object):
-    """
-    In the file pdbtosp.txt from the pdb website one finds the measurement type
-    and resolution of each structure. This information is used for the selection
-    of the best interface template.
-    """
-    def __init__(self, pdbtosp):
-        self.pdbResolution_xray = dict()
-        self.pdbResolution_nmr = dict()
-        self.pdbResolution_rest = dict()
-        
-        with open(pdbtosp, 'r') as f:
-            for x in range(25):
-                f.readline()
-            for l in f:
-                if l.strip() == '':
-                    break
-                if l[0] == ' ':
-                    continue
-                line = [ item.strip() for item in l.split(' ') if item != '']
-                try:
-                    if line[1] == 'X-ray' or line[1] == 'Neutron':
-                        self.pdbResolution_xray[line[0]] = float(line[2])
-                    elif line[1] == 'NMR':
-                        self.pdbResolution_nmr[line[0]] = float(line[2])
-                    elif line[1] in ['Model', 'Other', 'IR']:
-                        continue
-                    elif line[1] in ['EM', 'Fiber']:
-                        self.pdbResolution_rest[line[0]] = float(line[2])
-                    else:
-                        print 'Could not associate the method for', line[1]
-                except:
-                    continue
-    
-    def __call__(self, pdbID):
-        """
-        the first return value is used to indicate the measurement type,
-        the second return value is the resolution.
-        
-        0 means X-ray, 2 NMR, 3 other
-        """
-        if self.pdbResolution_xray.has_key(pdbID):
-            return 0, self.pdbResolution_xray[pdbID]
-        elif self.pdbResolution_nmr.has_key(pdbID):
-            return 1, self.pdbResolution_nmr[pdbID]
-        elif self.pdbResolution_rest.has_key(pdbID):
-            return 2, self.pdbResolution_rest[pdbID]
-        else:
-            return 'None', '-'
-
-
-
-class ProteinDefinition(myDatabases):
+class ProteinDefinition(MyDatabase):
     """ Initiated using parsed pfam_scan.pl output for the human uniprot (or the entire uniprot)
     The database is updated with information about calculated models
     """
@@ -389,28 +456,29 @@ class ProteinDefinition(myDatabases):
     def __init__(self):
         
         # Check if a pickled database exists
-        db_name = 'protein_definition_database.pickle'
+        self.db_name = 'protein_definition'
         
-        if isfile(db_name):
-            # A precompiled database exists
-            print 'Loading protein definition database...'
-            self.db = pd.read_pickle(db_name)
-            self.grouped_db = self.db.groupby('uniprot_id')
-        
-        else:
+        if not self.load_db():
             # Create a database from a file containing fasta sequences, the pfam_scan.pl output from that file
             # Also needs a list of clans, a list os repeating domains and a list of superdomains
             # Filenames are hardcoded at this points
-            print 'Generating protein definition database...'
+            print 'Generating %s database...' % ' '.join(self.db_name.split('_'))
 
             pfam_parser = parse_pfamscan.make_uniprot_pfam_database()
             pfam_parser.run()
             db = pfam_parser.get_dataframe()
             
+            db['cath_id'] = None
+            db['template_errors'] = None
+            db['model_id'] = None
+            db['modelling_errors'] = None
+            
             self.db = db
             print self.db
-            self.db.to_pickle(db_name)
-            self.grouped_db = self.db.groupby('uniprot_id')
+            self.db_updates = pd.DataFrame()
+            self.save_db()
+            
+#        self.grouped_db = self.db.groupby('uniprot_id')
 
 
     def __call__(self, uniprot_id):
@@ -418,45 +486,33 @@ class ProteinDefinition(myDatabases):
         """
         # using (uniprot_id, uniprot_id,) because in the future we might want to incorporate
         # splicing and other variants, which will be identified by the second uniprot_id
-        if self.grouped_db.groups.has_key(uniprot_id):
-            return self.grouped_db.get_group(uniprot_id)
-        else:
-            # In the future, make it fetch the uniprot sequence, analyse it with pfam_scan.pl,
-            # and save the output to the database
-            print "No protein definition entries for the given uniprot_id:", uniprot_id
-            return None
-            
-            
-    def update(self, modified_df):
-        """ Updates the internal data frame with the modifications present in the
-        copied dataframe
-        """
-        self.db.update(modified_df)
         
+        return self.db[self.db['uniprot_id'] == uniprot_id]
+        
+#        if self.grouped_db.groups.has_key(uniprot_id):
+#            return self.grouped_db.get_group(uniprot_id)
+#        else:
+#            # In the future, make it fetch the uniprot sequence, analyse it with pfam_scan.pl,
+#            # and save the output to the database
+#            print "No protein definition entries for the given uniprot_id:", uniprot_id
+#            return None
 
 
-class ProteinInteraction(object):
+
+class ProteinInteraction(MyDatabase):
     """ Contains known interactions between uniprot proteins
     """
     
-    def __init__(self, textfile_name, ProteinDefinition, DomainInteraction):
+    def __init__(self, textfile_name, ProteinDefinition):
         """ 
         Checks if the interaction database is already available as a pickled object.
         Generates it from file 'textfile_name' otherwise.
         """
-        db_name = 'protein_interaction_database.pickle'
+        self.db_name = 'protein_interaction'
         
-        if isfile(db_name):
-            # A precompiled database exists
-            print 'Loading protein interaction database...'
-            
-            self.db = pd.read_pickle(db_name)
-            self.grouped_db_1 = self.db.groupby(['uniprot_id_1'])
-            self.grouped_db_2 = self.db.groupby(['uniprot_id_2'])
-        
-        else:            
+        if not self.load_db():
             # No precompiled database exists
-            print 'Generating protein interaction database...'
+            print 'Generating %s database...' % ' '.join(self.db_name.split('_'))
             
             # Read in a list of unteracting uniprot pairs obtained using BioGrid
             # (and biomart to convert enesmble gene accession to uniprot)
@@ -476,86 +532,97 @@ class ProteinInteraction(object):
             sys.stdout = NullDevice()
             number_of_missing_pfams = 0 # for debugging
             
-            # Lists to keep the obtained information
-            list_of_uniprot_ids_1 = []
-            list_of_uniprot_ids_2 = []
-            list_of_contact_ids_forward = []
-            list_of_contact_ids_reversed = []
             
-            for idx, interaction in enumerate(set_of_interactions):
+            column_uniprot_id_1 = []
+            column_uniprot_id_2 = []
+            column_pfam_name_1 = []
+            column_pfam_name_2 = []
+            column_alignment_def_1 = []
+            column_alignment_def_2 = []
+            
+            # Go over each unique protein-protein interaction
+            for interaction in set_of_interactions:
                 
                 interaction = list(interaction)
                 # Get a list of pfam domains for each protein in a pair
+                
                 if len(interaction) == 1:
+                    # Homodimer
                     uniprot_id_1 = interaction[0]
                     uniprot_id_2 = uniprot_id_1
                     
-                    pfam_names_1 = ProteinDefinition(uniprot_id_1)
-                    if pfam_names_1:
-                        pfam_names_1 = list(pfam_names_1['seq_id'])
+                    protein_domains = ProteinDefinition(uniprot_id_1)
+                    if protein_domains:
+                        pfam_names_1 = list(protein_domains['seq_id'])
+                        alignment_defs_1 = list(protein_domains['alignment_def'])
                         pfam_names_2 = pfam_names_1
+                        alignment_defs_2 = alignment_defs_1
                     else:
                         number_of_missing_pfams += 1
                         continue
+                    
                 elif len(interaction) == 2:
+                    # Heterodimer
                     uniprot_id_1 = interaction[0]
                     uniprot_id_2 = interaction[1]
                     
-                    pfam_names_1 = ProteinDefinition(uniprot_id_1)
-                    if pfam_names_1:
-                        pfam_names_1 = list(pfam_names_1['seq_id'])
+                    protein_domains_1 = ProteinDefinition(uniprot_id_1)
+                    if protein_domains_1:
+                        pfam_names_1 = list(protein_domains_1['seq_id'])
+                        alignment_defs_1 = list(protein_domains_1['alignment_def'])
                     else:
                         number_of_missing_pfams += 1
                         continue
                     
-                    pfam_names_2 = ProteinDefinition(uniprot_id_2)
-                    if pfam_names_2:
-                        pfam_names_2 = list(pfam_names_2['seq_id'])
+                    protein_domains_2 = ProteinDefinition(uniprot_id_2)
+                    if protein_domains_2:
+                        pfam_names_2 = list(protein_domains_2['seq_id'])
+                        alignment_defs_2 = list(protein_domains_2['alignment_def'])
                     else:
                         number_of_missing_pfams += 1
                         continue
                 else:
                     raise Exception
-                
-                # Go over each possible pair of pfam domains and see if we can 
-                # find a pdb template
-                for pfam_name_1 in pfam_names_1:
-                    for pfam_name_2 in pfam_names_2:
-                        domain_interaction_forward, domain_interaction_reverse = DomainInteraction(pfam_name_1,pfam_name_2)
                         
-                        contact_ids_forward = tuple()
-                        if domain_interaction_forward:
-                            contact_ids_forward = tuple(domain_interaction_forward['domain_contact_id'])
-                        
-                        contact_ids_reverse = tuple()
-                        if domain_interaction_reverse:
-                            contact_ids_reverse = tuple(domain_interaction_reverse['domain_contact_id'])
-                
-                        if len(contact_ids_forward) > 0 or len(contact_ids_reverse) > 0:
-                            list_of_uniprot_ids_1.append(uniprot_id_1)
-                            list_of_uniprot_ids_2.append(uniprot_id_2)
-                            list_of_contact_ids_forward.append(contact_ids_forward)
-                            list_of_contact_ids_reversed.append(contact_ids_reverse)
+                for pfam_name_1, alignment_def_1 in zip(pfam_names_1, alignment_defs_1):
+                    for pfam_name_2, alignment_def_2 in zip(pfam_names_2, alignment_defs_2):
+                        column_uniprot_id_1.append(uniprot_id_1)
+                        column_uniprot_id_2.append(uniprot_id_2)
+                        column_pfam_name_1.append(pfam_name_1)
+                        column_pfam_name_2.append(pfam_name_2)
+                        column_alignment_def_1.append(alignment_def_1)
+                        column_alignment_def_2.append(alignment_def_2)
             
             # Turn print statement output back on
             sys.stdout = original_stdout
             print number_of_missing_pfams
             
             # Create a dataframe with the compiled results
-            db = pd.DataFrame(index=range(len(list_of_uniprot_ids_1)))
-            db['uniprot_id_1'] = list_of_uniprot_ids_1
-            db['uniprot_id_2'] = list_of_uniprot_ids_2
-            db['contact_ids_forward'] = list_of_contact_ids_forward
-            db['contact_ids_reversed'] = list_of_contact_ids_reversed
+            db = pd.DataFrame(index=range(len(column_uniprot_id_1)))
+            db['uniprot_id_1'] = column_uniprot_id_1
+            db['uniprot_id_2'] = column_uniprot_id_2
+            db['domain_name_1'] = column_pfam_name_1
+            db['domain_name_2'] = column_pfam_name_2
+            db['alignment_def_1'] = column_alignment_def_1
+            db['alignment_def_2'] = column_alignment_def_2
+            db['cath_id_1'] = None
+            db['cath_id_2'] = None
+            db['domain_contact_id'] = None
+            db['template_errors'] = None
+            db['model_path'] = None
+            db['modelling_errors'] = None
+            
             print db
             db.drop_duplicates(inplace=True)
             print db
-            
+
             self.db = db
-            self.db.to_pickle(db_name)
-            self.grouped_db_1 = self.db.groupby(['uniprot_id_1'])
-            self.grouped_db_2 = self.db.groupby(['uniprot_id_2'])
-            
+            self.db_updates = pd.DataFrame()
+            self.save_db()
+        
+#        self.grouped_db_1 = self.db.groupby(['uniprot_id_1'])
+#        self.grouped_db_2 = self.db.groupby(['uniprot_id_2'])
+    
     
     def __call__(self, uniprot_id):
         """
@@ -574,311 +641,24 @@ class ProteinInteraction(object):
             print "No entries for the given uniprot_id:", uniprot_id
            
         return [result_df_1, result_df_2]
-    
-    
-    def upldate(self, modified_df):
-        """ Add new interaction models to the database
-        """
-        pass
 
 
 
-#class get3DID(myDatabases):
-#    """
-#    To improve the 3DID file the domain boundaries are corrected by
-#    the improved boundaries generated by Sebastian
-#    """
-#    def __init__(self, threeDidFile, domainTableFile):
-#        # I hardcoded the filenames
-#        database_name = 'pipeline_3DID_database.pickle'
-#        
-#        # check if the database was already created
-#        if isfile(database_name):
-#            # load the database
-#            print 'Loading the corrected 3DID table'
-#            f = open(database_name, 'rb')
-#            self.database = pickle.load(f)
-#            f.close()
-#            
-#        else:            
-#            print 'Generating the correceted 3DID table'
-#            # read the 3Did file and store the information in a dict()
-#            self.database_3did = self.__make_3did_table(threeDidFile)
-#            
-#            # read the corrected domain boundaries and store them in a dict()
-#            self.domainTable = self.__make_domain_boundary_table(domainTableFile)
-#            
-#            # create the database
-#            self.database = self.__correct_3did_domain_boundaries()
-#            
-#            # save the database
-#            f = open(database_name, 'wb')
-#            pickle.dump(self.database, f)
-#            f.close()
-#          
-#    
-#    def __call__(self, PfamID_firstGuy, PfamID_secondGuy):
-#        if self.database.has_key((PfamID_firstGuy, PfamID_secondGuy)):
-#            return self.database[PfamID_firstGuy, PfamID_secondGuy]
-#        else:
-#            return 'no entry'
-#
-#    
-#    def __make_3did_table(self, threeDidFile):
-#        """
-#        read the 3DID file and store the information in a dictionary
-#        """
-#        database = dict()
-#        with open(threeDidFile, 'r') as f:
-#            for line in f:
-#                # go to the line corresponding to one family pair
-#                if line[:4] == '#=ID':
-#                    # get the two family ids
-#                    Pfam1, Pfam2 = line.split('\t')[1], line.split('\t')[2]
-#                
-#                # read the entries for the above set pfam family
-#                if line[:4] == '#=3D':                    
-#                    pdb = line.split('\t')[1]
-#                    chain1 = line.split('\t')[2]
-#                    chain2 = line.split('\t')[3]
-#                    
-#                    # there often are interactions with one chain
-#                    # we are only interested in interactions between different chains
-#                    if chain1.split(':')[0] !=  chain2.split(':')[0]:
-#                        chain1, domain_pdb1 = chain1.split(':')
-#                        chain2, domain_pdb2 = chain2.split(':')
-#                        add = [pdb.upper(), chain1, chain2, domain_pdb1, domain_pdb2]
-#                        database.setdefault((Pfam1, Pfam2), []).append(add)
-#
-#        return database
-#
-#    
-#    def __make_domain_boundary_table(self, domainTableFile):
-#        """
-#        creates the domain boundary table Sebastian provided to correct the
-#        domain boundaries of the 3did_flat file
-#        """
-#        domainTable = dict()
-#        with open(domainTableFile, 'r') as f:
-#            f.readline()
-#            for line in f:
-#                pdb, AutoPfamA, pfam_id, chain, domain_boundary = line.split('\t')
-#                # it happend that Sebastian was "glueing" two Pfam domain together
-#                # forming kind of a super domain (to get a "real", i.e. meaningful,
-#                # domain). In that case he added them with '+'. I split them and
-#                # add them in a list. Later it is checked wether the pfam ID is in
-#                # this list, i.e. if it is either one or the other
-#                pfam_id = pfam_id.strip('+').split('+')
-#                domain_boundary = domain_boundary.strip().split(',')
-#                for item in domain_boundary:
-#                    # it can happen that the pdb numbering is negativ
-#                    # see split_domain() function explanation
-#                    domain = self.split_domain(item)
-#
-#                domainTable.setdefault(pdb + chain, []).append([pfam_id, domain])
-#        
-#        return domainTable
-#
-#    
-#    def __correct_3did_domain_boundaries(self):
-#        """
-#        The 3DID file contains all pdb files that have one specific interaction
-#        given a family pair. Sebastian improved the domain boundaries for the
-#        whole pdb and his corrected boundaries are implemented here.
-#        """
-#        database = dict()
-#        
-#        for key in self.database_3did:
-#            Pfam1_ID, Pfam2_ID = key
-#            for interaction in self.database_3did[key]:
-#                pdb, chain1, chain2, domain1_pdb, domain2_pdb = interaction
-#                
-#                domain1_pdb = self.split_domain(domain1_pdb)
-#                domain2_pdb = self.split_domain(domain2_pdb)
-#                
-#                domain1 = self.__correct_domain_boundary(Pfam1_ID, pdb, chain1, domain1_pdb)
-#                domain2 = self.__correct_domain_boundary(Pfam2_ID, pdb, chain2, domain2_pdb)
-#                
-#                add = [pdb, chain1, chain2, domain1, domain2]
-#                database.setdefault(key, []).append(add)
-#                
-#        return database
-#                
-#    
-#    def __correct_domain_boundary(self, Pfam_ID, pdb, chain, domain_pdb):
-#        """
-#        correct the domain boundary for chain if there is information
-#        for it in the database with the corrected domain information
-#        
-#        You can have more than one domain of the same family type in
-#        one chain so one has to
-#        make sure that the domain boundaries one wants to correct belong
-#        to the domain that is checked. This is done by calculating the
-#        overlap between the two domains.
-#        see http://stackoverflow.com/a/5095171
-#        to see how the overlap is calculated
-#        """
-#        is_weird, domain_pdb_multiset = self.__check_weird_domain_numbering(pdb, chain)
-#        if not is_weird:
-#            domain_pdb_multiset = collections.Counter(range(domain_pdb[0],domain_pdb[1]))
-#        else:
-#            domain_pdb_multiset = collections.Counter(domain_pdb_multiset)
-#                    
-#        set_new = False
-#        if self.domainTable.has_key(pdb + chain):
-#            # there might be more than one domain (of the same family), thus use a loop
-#            for item in self.domainTable[pdb + chain]:
-#                pfam_id, domain_new = item
-#                
-#                # look for the correct family
-#                if Pfam_ID not in pfam_id:
-#                    # that means one is not looking at the correct domain
-#                    # in the chain
-#                    continue
-#                else:
-#                    # check if the domains overlap, i.e. if one is looking
-#                    # at the correct domain
-#                    is_weird, domain_multiset = self.__check_weird_domain_numbering(pdb, chain)
-#
-#                    # see __check_weird_domain_numbering() for explanation
-#                    # the function is necessary to create correct multisets
-#                    if not is_weird:
-#                        domain_multiset = collections.Counter(range(int(domain_new[0]),int(domain_new[1])))
-#                    else:
-#                        domain_multiset = collections.Counter(domain_multiset)
-#
-#                    # get the overlap of the two domains
-#                    overlap = list( (domain_pdb_multiset & domain_multiset).elements() )
-#                    # if they are not overlapping, check the next domain
-#                    # in the chain
-#                    if len(overlap) <= 2:
-#                        continue
-#                    else:
-#                        domain = domain_new
-#                        set_new = True
-#                        
-#        # if the domain was not corrected, set it to the old value
-#        if set_new == False:
-#            domain = domain_pdb
-#        
-#        return domain
-#    
-#    
-#    def __check_weird_domain_numbering(self, pdb, chain):
-#        """
-#        I manually filtered some weird domain numberings. They are handled here.
-#        Returns True/False as first value depending if the numbering is "weird"
-#        """
-#        if pdb == '6INS':
-#            return True, range(1,30)
-#        elif pdb + chain == '2GEDB':
-#            return True, range(37, 245)
-#        elif pdb + chain == '3ALXB':
-#            r = range(32,127)
-#            r.extend([600,601,602,603,604,605,606])
-#            return True, r
-#        elif pdb + chain == '3ALXA':
-#            r = range(32,127)
-#            r.extend([606])
-#            return True, r
-#        elif pdb + chain == '3ERRB':
-#            r = range(3266,3427)
-#            r.extend([94,95,96])
-#            return True, r
-#        elif pdb + chain == '1JR3B':
-#            r = range(2041,2070)
-#            r.extend(range(70,179))
-#            return True, r
-#        elif pdb + chain == '1BMV':
-#            r = range(3001,3183)
-#            r.extend(range(2001,2191))
-#            return True, r
-#        else:
-#            return False, []
-  
-           
-        
-#class core_Templates(myDatabases):
-#    """
-#    Sebastian provided the templates for the core mutations. Here his file
-#    is read and the information is stored in a dict()
-#    """
-#    def __init__(self, database):
-#        database_filename = 'pipeline_core_templates.pickle'
-#        if isfile(database_filename):
-#            print 'Loading the core template database'
-#            f = open(database_filename, 'rb')    
-#            self.template_information = pickle.load(f)
-#            f.close()
-#        else:
-#            print 'Reading core templates from', database
-#            self.template_information = self.__read_templates(database)
-#            
-#            f = open(database_filename, 'wb')    
-#            pickle.dump(self.template_information, f)
-#            f.close()
-#    
-#    def __call__(self, uniprotKB):
-#        if self.template_information.has_key(uniprotKB):
-#            return self.template_information[uniprotKB]
-#        else:
-#            return []
-#
-#        
-#    def __read_templates(self, inFile):
-#        """
-#        create a dict containing the template information for fast lookup
-#        make sure that:
-#        domain_boundary_uniprot is a list
-#        amino_acids_core is a list
-#        """
-#        template_information = dict()
-#        
-#        with open(inFile, 'r') as f:
-#            f.readline() # skip the header
-#            for line in f:
-#                uniprotKB, family_name, domain_boundary_uniprot, amino_acids_core, \
-#                pdb_template, pdb_chain, pdb_domain_boundary = line.split('\t')
-#                
-#                # if no core is given, skip
-#                if amino_acids_core == 'NULL' or pdb_domain_boundary == 'NULL':
-#                    continue
-#                
-#                # the uniprot numbering is not weird as can be the pdb numbering
-#                # so for the uniprot domain boundaries one can easily split them
-#                domain_boundary_uniprot = [int(domain_boundary_uniprot.split('-')[0]), int(domain_boundary_uniprot.split('-')[1])]
-#                
-#                # it can happen that a domain is not continues but consists of
-#                # several parts. In that case the maximum is taken to be sure
-#                # to cover everything. This is one point that could be improved
-#                # for that one would have to split the domain into the relevant
-#                # parts and make sure that only those parts are modelled!
-#                # To improve this one would have to do quite a lot of work
-#                # changing the whole pipeline
-#                pdb_domain_boundary_list = list()
-#                for item in pdb_domain_boundary.split(','):
-#                    pdb_domain_boundary_list.extend(self.split_domain(item))
-#                pdb_domain_boundary = [pdb_domain_boundary_list[0], pdb_domain_boundary_list[-1]]
-#                
-#                # convert the amino_acids_core to a list
-#                amino_acids_core = [ int(i) for i in amino_acids_core.split(',') ]
-#                
-#                template_information.setdefault(uniprotKB, list()).append( [family_name, \
-#                                                                            domain_boundary_uniprot, \
-#                                                                            amino_acids_core, \
-#                                                                            pdb_template, \
-#                                                                            pdb_chain, \
-#                                                                            pdb_domain_boundary
-#                                                                            ] )
-#
-#        return template_information
-    
-#    def close(self):
-#        pass
-##        print 'Saving the core database'
-##        f = open(self.database, 'wb')    
-##        pickle.dump(self.uniprot_data, f)
-##        f.close()
+class ProteinCoreMutation(MyDatabase):
+    """ Stores information about mutations in the protein core
+    Unimplemented functionality
+    """
+    def __init__(self):
+        self.db_name = 'protein_core_mutation'
+
+
+
+class ProteinInterfaceMutation(MyDatabase):
+    """ Stores information about mutations in the protein interface
+    Unimplemented functionality
+    """
+    def __init__(self):
+        self.db_name = 'protein_interface_mutation'
 
 
 
@@ -887,7 +667,7 @@ class pipeline():
     
     def __init__(self, configFile):
         
-        ###################################################        
+        #######################################################################  
         # read the configuration file and set the variables
         
         configParser = SafeConfigParser(
@@ -897,7 +677,8 @@ class pipeline():
                                           'DEBUG':False,
                                           'saveTo':'$SCRATCH/niklas-pipeline/',
                                           'saveScinet':False,
-                                          'webServer': False
+                                          'path_to_archive': '/home/kimlab1/database_data/elaspic/',
+                                          'webServer': False,
                                           }
                                 )
 
@@ -930,12 +711,11 @@ class pipeline():
             self.saveScinet = configParser.getboolean('DEFAULT', 'saveScinet')
         else:
             self.saveScinet = defaults['saveScinet']
-        # 3DID or PDBFam interaction file
-        if configParser.has_option('DEFAULT', 'use_pdbfam_database'):
-            self.use_pdbfam_database = configParser.getboolean('DEFAULT', 'use_pdbfam_database')
+        # path_to_archive
+        if configParser.has_option('DEFAULT', 'path_to_archive'):
+            self.path_to_archive = configParser.get('DEFAULT', 'path_to_archive')
         else:
-            self.use_pdbfam_database = False
-        
+            self.path_to_archive = defaults['path_to_archive']        
         # web-server
         if configParser.has_option('DEFAULT', 'webServer'):
             self.webServer = configParser.get('DEFAULT', 'webServer')
@@ -1020,7 +800,7 @@ class pipeline():
                 raise DataError(self.inputFile)
         else:
             raise ConfigError('file')
-        # mutation_uniprot
+        # mutation_uniprot ### should be renamed template_finding
         if configParser.has_option('INPUT', 'mutation_uniprot'):
             self.mutation_uniprot = configParser.getboolean('INPUT', 'mutation_uniprot')
         else:
@@ -1131,15 +911,14 @@ class pipeline():
 #        self.threeDID_database = get3DID(self.threeDidFile, self.PfamBoundaryCorrection)
 #        self.core_template_database = core_Templates(self.coreTemplatesFile)
         
-        self.UniprotSequence = UniprotSequence(self.uniprotSequenceDatabase)
-        self.DomainDefinition = DomainDefinition(self.domain_definition_file)
-        self.DomainInteraction = DomainInteraction(self.domain_interaction_file)
-        self.PDBResolution = PDBResolution(self.pdb_resolution_file)
+        self.uniprot_sequence_database = UniprotSequence(self.uniprotSequenceDatabase)
+        self.domain_definition_database = DomainDefinition(self.domain_definition_file)
+        self.domain_interaction_database = DomainInteraction(self.domain_interaction_file)
+        self.pdb_resolution_database = PDBResolution(self.pdb_resolution_file)
         
-        self.ProteinDefinition = ProteinDefinition()
-        self.ProteinInteraction = ProteinInteraction(self.protein_interaction_file,
-                                                     self.ProteinDefinition,
-                                                     self.DomainInteraction)
+        self.protein_definition_database = ProteinDefinition()
+        self.protein_interaction_database = ProteinInteraction(self.protein_interaction_file,
+                                                     self.protein_definition_database)
 
         # set the matrix for the substitution score
         self.matrix = self.__selectMatrix(self.matrix_option)
@@ -1365,15 +1144,15 @@ class pipeline():
                                 self.modeller_runs,
                                 self.buildModel_runs,
                                 self.foldX_WATER,
-                                self.DomainDefinition,
-                                self.DomainInteraction,
-                                self.UniprotSequence,
-                                self.PDBResolution,
-                                self.ProteinDefinition,
-                                self.ProteinInteraction,
+                                self.uniprot_sequence_database,
+                                self.domain_definition_database,
+                                self.domain_interaction_database,
+                                self.pdb_resolution_database,
+                                self.protein_definition_database,
+                                self.protein_interaction_database,
+                                self.path_to_archive
                                 )
                           )
-                          
 
         
         # Add a poison pill for each consumer
@@ -1470,34 +1249,34 @@ class pipeline():
 #                                output_dict['mutation'] + '\t'
                                           
                     # Make line for wildtype file
-                    resForWrite_wt =  id_data + 'wt\t' + \
-                                        str(output_dict['normDOPE_wt'])[:6] + '\t' +\
-                                        '\t'.join(output_dict['AnalyseComplex_energy_wt']) + '\t' +\
-                                        '\t'.join(output_dict['Stability_energy_wt']) + \
-                                        '\n'
+                    resForWrite_wt = (id_data + 'wt\t' +
+                                        str(output_dict['normDOPE_wt'])[:6] + '\t' +
+                                        '\t'.join(output_dict['AnalyseComplex_energy_wt']) + '\t' +
+                                        '\t'.join(output_dict['Stability_energy_wt']) + 
+                                        '\n')
                     
                     # Make line for mutant file
-                    resForWrite_mut = id_data + 'mut\t' + \
-                                        '-' + '\t' + \ # mutant structure has no normDOPE score (same as wildtype)
-                                        '\t'.join(output_dict['AnalyseComplex_energy_mut']) + '\t' + \
-                                        '\t'.join(output_dict['Stability_energy_mut']) + \
-                                        '\n'
+                    resForWrite_mut = (id_data + 'mut\t' + 
+                                        '-' + '\t' + # mutant structure has no normDOPE score (same as wildtype)
+                                        '\t'.join(output_dict['AnalyseComplex_energy_mut']) + '\t' +
+                                        '\t'.join(output_dict['Stability_energy_mut']) +
+                                        '\n')
                     
                     # Make line for additional information file
-                    resForWrite_if = id_data + '-\t' + \
-                                str(output_dict['is_in_core']) + '\t' + \
-                                '\t'.join([str(i) for i in output_dict['alignment_scores']]) + '\t' + \
-                                 str(output_dict['matrix_score']) + '\t' + \
-                                 '\t'.join(output_dict['interface_size']) + '\t' + \
-                                 ','.join(output_dict['physChem_wt_ownChain']) + '\t' + \
-                                 ','.join(output_dict['physChem_wt']) + '\t' + \
-                                 ','.join(output_dict['physChem_mut_ownChain']) + '\t' + \
-                                 ','.join(output_dict['physChem_mut']) + '\t' + \
-                                 str(output_dict['secondary_structure_wt'])  + '\t' + \
-                                 str(output_dict['solvent_accessibility_wt']) + '\t' + \
-                                 str(output_dict['secondary_structure_mut'])  + '\t' + \
-                                 str(output_dict['solvent_accessibility_mut']) + \
-                                 '\n'
+                    resForWrite_if = (id_data + '-\t' +
+                                str(output_dict['is_in_core']) + '\t' +
+                                '\t'.join([str(i) for i in output_dict['alignment_scores']]) + '\t' +
+                                 str(output_dict['matrix_score']) + '\t' +
+                                 '\t'.join(output_dict['interface_size']) + '\t' +
+                                 ','.join(output_dict['physChem_wt_ownChain']) + '\t' +
+                                 ','.join(output_dict['physChem_wt']) + '\t' +
+                                 ','.join(output_dict['physChem_mut_ownChain']) + '\t' +
+                                 ','.join(output_dict['physChem_mut']) + '\t' +
+                                 str(output_dict['secondary_structure_wt'])  + '\t' +
+                                 str(output_dict['solvent_accessibility_wt']) + '\t' +
+                                 str(output_dict['secondary_structure_mut'])  + '\t' +
+                                 str(output_dict['solvent_accessibility_mut']) +
+                                 '\n')
 
                     # Make another file to keep precalculated values?
                     # resForWrite_precalc = []
