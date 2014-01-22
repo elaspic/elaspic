@@ -4,41 +4,20 @@ Created on Tue Jan 15 11:09:11 2013
 
 @author: niklas
 """
-import numpy as np
-import pandas as pd
-
-from sets import ImmutableSet
-
-from ConfigParser import SafeConfigParser
-import subprocess
 import os
-import sys
-
-import multiprocessing
-import optparse
-from string import uppercase
-
+import subprocess
 import logging
+import optparse
+import multiprocessing
 
 from Bio.SubsMat import MatrixInfo
-from Bio import SeqIO
+from ConfigParser import SafeConfigParser
 
-from class_multi import Consumer
-from class_multi import Task
-from class_error import DataError, ConfigError
+import class_error as error
+
+from class_multi import Consumer, Task
 from class_logging import MultiProcessingLog
-
 from scinetCleanup import scinetCleanup
-from os.path import isfile
-import cPickle as pickle
-import urllib2
-
-import parse_pfamscan
-
-
-class NullDevice():
-    def write(self, s):
-        pass
 
 # credit goes to here:
 # http://pymotw.com/2/multiprocessing/communication.html#controlling-access-to-resources
@@ -68,681 +47,94 @@ class ActivePool(object):
             return str(self.active)
 
 
-
-class UniprotSequence(object):
-    
-    def __init__(self, database):
-        self.database = database
-        
-        self.database_name = 'pipeline_uniprot_sequences.pickle'
-        
-        if isfile(self.database_name):
-            print 'Loading uniprot sequence database'
-            f = open(self.database_name, 'rb')    
-            self.uniprot_data = pickle.load(f)
-            print 'it contains', len(self.uniprot_data), 'sequences'
-            f.close()
-        else:
-            self.uniprot_data = dict()
-
-
-            
-#        #######################################################
-#        ### one time: add sequences from a files            ###
-#        ### do that if you need to expand the database      ###
-#        ### fetching new sequences does not work on scient! ###
-#
-#        fileNames = ['/home/niklas/playground/mutations_clasified_recep/uniprot_list_interactions.fasta', \
-#                     '/home/niklas/playground/mutations_clasified_recep/uniprot_list.fasta' ]
-#        fileNames = ['/home/niklas/playground/mutations_clasified_recep/hapmap_uniprot_sequences.fasta', ]
-#        for fileName in fileNames:
-#            for seq_record in SeqIO.parse(fileName, "fasta"):
-#                seq_record.id = seq_record.id.split('|')[1]
-#                self.uniprot_data[seq_record.id] = seq_record
-#        # save the newly added sequences
-#        self.close()
-#
-#        ###           end                                   ###
-#        #######################################################
-
-        
-    def __call__(self, uniprot_id):
-        """
-        returns the uniprot sequence. If the sequence is not in the database it
-        tries to retrieve it from the uniprot website.
-        
-        Note: retrieval from the website does not work on Scinet!
-        
-        """
-        if uniprot_id in ['A6NF79', 'C9JUS1', 'Q6N045', 'A6NMD1']:
-            # these uniprotKBs made problems
-            return 'no sequences'
-        elif uniprot_id == 'P02735':
-            # this sequence got replaced. I don't know right now if I can take
-            # replaced sequence so I rather dismiss it.
-            return 'no sequences'
-        
-        # the True/False value is used to add new sequences to the database in
-        # end. Only usefull if you run one instance at a time otherwise you will
-        # get diverging sequence databases.
-        try:
-            return self.uniprot_data[uniprot_id]
-        except KeyError:
-            childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            whoami, error = childProcess.communicate()
-            if whoami.strip() == 'joan':
-                print 'uniprot sequence not found'
-                return None
-            else:
-                print 'Fetching uniprot sequence', uniprot_id, 'from server'
-                address = 'http://www.uniprot.org/uniprot/' + uniprot_id + '.fasta'
-                handle = urllib2.urlopen(address)
-                sequence = next(SeqIO.parse(handle, "fasta"))
-                sequence.id = uniprot_id
-                self.uniprot_data[uniprot_id] = sequence
-                return sequence
-
-    
-    def add(self, items):
-        """
-        add the new items (which is a list of tuples) to the database
-        """
-        for key, value in items:
-            if self.uniprot_data.has_key(key):
-                print 'Strange..., the uniprot database seems to already have the entry', key, value
-                print 'I am overwriting it'
-            print 'adding', key, 'to the uniprot database'
-            self.uniprot_data[key] = value
-
-    
-    def close(self):
-        """
-        save the database back to disk. Do it at the end if
-        new sequences where added.
-        """
-        print 'saving the uniprot database'
-        f = open(self.database_name, 'wb')    
-        pickle.dump(self.uniprot_data, f)
-        f.close()
-        
-
-class PDBResolution(object):
-    """
-    In the file pdbtosp.txt from the pdb website one finds the measurement type
-    and resolution of each structure. This information is used for the selection
-    of the best interface template.
-    """
-    def __init__(self, pdbtosp):
-        self.pdbResolution_xray = dict()
-        self.pdbResolution_nmr = dict()
-        self.pdbResolution_rest = dict()
-        
-        with open(pdbtosp, 'r') as f:
-            for x in range(25):
-                f.readline()
-            for l in f:
-                if l.strip() == '':
-                    break
-                if l[0] == ' ':
-                    continue
-                line = [ item.strip() for item in l.split(' ') if item != '']
-                try:
-                    if line[1] == 'X-ray' or line[1] == 'Neutron':
-                        self.pdbResolution_xray[line[0]] = float(line[2])
-                    elif line[1] == 'NMR':
-                        self.pdbResolution_nmr[line[0]] = float(line[2])
-                    elif line[1] in ['Model', 'Other', 'IR']:
-                        continue
-                    elif line[1] in ['EM', 'Fiber']:
-                        self.pdbResolution_rest[line[0]] = float(line[2])
-                    else:
-                        print 'Could not associate the method for', line[1]
-                except:
-                    continue
-    
-    def __call__(self, pdbID):
-        """
-        the first return value is used to indicate the measurement type,
-        the second return value is the resolution.
-        
-        0 means X-ray, 2 NMR, 3 other
-        """
-        if self.pdbResolution_xray.has_key(pdbID):
-            return 0, self.pdbResolution_xray[pdbID]
-        elif self.pdbResolution_nmr.has_key(pdbID):
-            return 1, self.pdbResolution_nmr[pdbID]
-        elif self.pdbResolution_rest.has_key(pdbID):
-            return 2, self.pdbResolution_rest[pdbID]
-        else:
-            return 'None', '-'
-
-
-class MyDatabase(object):
-    
-    def __init__(self):
-        pass
-    
-    def split_domain(self, domain):
-        """ 
-        Takes a string of two domain boundaries and returns a list with int
-        The separator is '-' and it can happen that both or one boundary is
-        negative, i.e.
-        
-            -150-200,   meaning from -150 to 200
-            -150--100,  meaning from -150 to -100
-            etc.
-        
-        NOTE! Currently the icode (see Biopython) is disregarded. That means
-        that if the numbering is 3B, all '3's are taken. That is the letters
-        are stripped! One might want to improve that behaviour.
-        """
-        # split the domain boundaries, keep eventual minus signs
-        if domain[0] == '-' and len(domain[1:].split('-')) == 2:
-            domain = ['-' + domain[1:].split('-')[0], domain[1:].split('-')[1]]
-        elif domain[0] == '-' and len(domain[1:].split('-')) > 2:
-            domain = ['-' + domain[1:].split('-')[0], '-' + domain[1:].split('-')[-1]]
-        else:
-            domain = [domain.split('-')[0], domain.split('-')[1]]
-        # strip the letters
-        if domain[0][-1] in uppercase:
-            domain[0] = domain[0][:-1]
-        if domain[1][-1] in uppercase:
-            domain[1] = domain[1][:-1]
-        domain = [int(domain[0]), int(domain[1])]
-        return domain
-        
-        
-    def split_domain_semicolon(self, domains):
-        """ Unlike split_domain(), this function returns a tuple of tuples of strings,
-        preserving letter numbering (e.g. 10B)
-        """
-        x = domains
-        return tuple([ tuple([r.strip() for r in ro.split(':')]) for ro in x.split(',') ])
-
-        
-    def split_interface_aa(self, interface_aa):
-        """
-        """
-        if (interface_aa is not np.nan) and (interface_aa != '') and (interface_aa != 'NULL'):
-            if interface_aa[-1] == ',':
-                interface_aa = interface_aa[:-1]
-        
-            x  = interface_aa
-            return_tuple = tuple([int(r.strip()) for r in x.split(',')])
-            
-        else:
-            return_tuple = np.nan
-            
-        return return_tuple
-
-
-    ###########################################################################
-
-    def get_dicts(self, key):
-        """
-        """
-        query_df = self.__call__(key)
-        
-        if not query_df or query_df == [None, None]:
-            return None
-        
-        if type(query_df) is pd.DataFrame:
-            list_of_dicts = []
-            for idx, df in query_df.iterrows():
-                row_dict = df.to_dict()
-                row_dict.update({'idx': idx})
-                list_of_dicts.append(row_dict)
-            return list_of_dicts
-        
-        
-        elif type(query_df) is list and len(query_df) == 2:
-            list_of_dicts = []
-            query_df_forward, query_df_reversed = query_df
-            if query_df_forward:
-                for idx, df in query_df_forward.iterrows():
-                    row_dict = df.to_dict()
-                    row_dict.update({'idx': idx, 'reversed': False})
-                    list_of_dicts.append(row_dict)
-            if query_df_reversed:
-                for idx, df in query_df_reversed.iterrows():
-                    row_dict = df.to_dict()
-                    row_dict.update({'idx': idx, 'reversed': True})
-                    list_of_dicts.append(row_dict)
-            return list_of_dicts
-            
-        else:
-            raise Exception()
-            
-    
-    
-    def update_from_df(self, modified_df):
-        """ Updates the internal data frame with the modifications present in the
-        copied dataframe
-        """
-        self.db.update(modified_df)
-        
-        
-
-    def update_from_dicts(self, list_of_dicts):
-        """
-        """
-        index = []
-        for row_dict in list_of_dicts:
-            index = row_dict.pop('idx')
-            if row_dict.has_key('reversed'):
-                del row_dict['reversed']
-        
-        modified_df = pd.DataFrame(list_of_dicts, index=index)
-        
-        self.update_from_df(modified_df)      
-
-
-    ###########################################################################
-
-    def load_db(self):
-        if isfile(self.db_name + '.pickle') and isfile(self.db_name + '_updates.pickle'):
-            print 'Loading %s...' % ' '.join(self.db_name.split('_'))
-            self.db = pd.read_pickle(self.db_name + '.pickle')
-            self.db_updates = pd.read_pickle(self.db_name + '_updates.pickle')
-            return True
-        else:
-            return False
-    
-    
-    def save_db(self):
-        self.db.to_pickle(self.db_name + '.pickle')
-        self.db_updates.to_pickle(self.db_name + '_updates.pickle')
-
-
-
-class DomainDefinition(MyDatabase):
-    """ Contains pdbfam-based definitions of all pfam domains in the pdb
-    """
-    
-    def __init__(self, textfile_name):
-        """
-        """
-        self.db_name = 'domain_definition'
-        
-        if not self.load_db():
-            # No precompiled database exists
-            print 'Generating %s database...' % ' '.join(self.db_name.split('_'))
-            
-            names = ['pdb_id', 'autoPFAMA', 'pfam_name', 'pdb_chain', 'pdb_definition', 'cath_id']
-            
-            db = pd.read_csv(textfile_name, sep='\t', header=False, names=names)
-            
-            db['pdb_definition'] = db['pdb_definition'].apply(self.split_domain_semicolon)
-            
-            self.db = db
-            self.db_updates = pd.DataFrame()
-            self.save_db()
-            
-#        self.grouped_db = self.db.groupby('pfam_name')
-                    
-                    
-    def __call__(self, pfam_name):
-        return self.db[self.db['pfam_name'] == pfam_name]
-#        if self.grouped_db.groups.has_key(pfam_name):
-#            return self.grouped_db.get_group(pfam_name)
-#        else:
-#            print "No entries for the given pfam_name:", pfam_name
-#            return None
-
-
-
-class DomainInteraction(MyDatabase):
-    """ Keeps the domain-domain interaction information from pdbfam
-    """
-    
-    def __init__(self, textfile_name):
-        """ Create the internal dictionary using a tsv file exported from mysql
-        """
-        self.db_name = 'domain_interaction'
-        
-        # Check if a pickled database exists
-        if not self.load_db():    
-            # No precompiled database exists
-            print 'Generating %s database...' % ' '.join(self.db_name.split('_'))
-
-            names = [
-            'pdb_id', 'pfam_name_1', 'pdb_chain_1', 'pdb_definition_1', 'pdb_interface_aa_1', 'cath_id_1', 
-            'pfam_name_2', 'pdb_chain_2', 'pdb_definition_2', 'pdb_interface_aa_2', 'cath_id_2', 'domain_contact_id',]
-            
-            db = pd.read_csv(textfile_name, sep='\t', header=False, names=names)
-            
-            db['pdb_definition_1'] = db['pdb_definition_1'].apply(self.split_domain_semicolon)
-            db['pdb_definition_2'] = db['pdb_definition_2'].apply(self.split_domain_semicolon)
-            
-            db['pdb_interface_aa_1'] = db['pdb_interface_aa_1'].apply(self.split_interface_aa)
-            db['pdb_interface_aa_2'] = db['pdb_interface_aa_2'].apply(self.split_interface_aa)
-            
-            self.db = db
-            self.db_updates = pd.DataFrame()
-            self.save_db()
-            
-#        self.grouped_db = self.db.groupby(['pfam_name_1', 'pfam_name_2'])
-        
-
-    def __call__(self, pfam_names):
-        """
-        Note that the produced dataframe may not have the same order as the keys
-        """
-        key1 = tuple([pfam_names[0], pfam_names[1]])
-        key2 = tuple([pfam_names[1], pfam_names[0]])
-            
-        if self.grouped_db.groups.has_key(key1):
-            return_df_1 = self.grouped_db.get_group(key1)
-        else:
-            return_df_1 = None
-            
-        if self.grouped_db.groups.has_key(key2):
-            return_df_2 = self.grouped_db.get_group(key2)
-        else:
-            return_df_2 = None
-            
-        if not return_df_1 and not return_df_2:
-            print "No entries for the given domain combination:", pfam_names[0], pfam_names[1]
-            
-        return [return_df_1, return_df_2]
-
-
-
-class ProteinDefinition(MyDatabase):
-    """ Initiated using parsed pfam_scan.pl output for the human uniprot (or the entire uniprot)
-    The database is updated with information about calculated models
-    """
-    
-    def __init__(self):
-        
-        # Check if a pickled database exists
-        self.db_name = 'protein_definition'
-        
-        if not self.load_db():
-            # Create a database from a file containing fasta sequences, the pfam_scan.pl output from that file
-            # Also needs a list of clans, a list os repeating domains and a list of superdomains
-            # Filenames are hardcoded at this points
-            print 'Generating %s database...' % ' '.join(self.db_name.split('_'))
-
-            pfam_parser = parse_pfamscan.make_uniprot_pfam_database()
-            pfam_parser.run()
-            db = pfam_parser.get_dataframe()
-            
-            db['cath_id'] = None
-            db['template_errors'] = None
-            db['model_id'] = None
-            db['modelling_errors'] = None
-            
-            self.db = db
-            print self.db
-            self.db_updates = pd.DataFrame()
-            self.save_db()
-            
-#        self.grouped_db = self.db.groupby('uniprot_id')
-
-
-    def __call__(self, uniprot_id):
-        """ 
-        """
-        # using (uniprot_id, uniprot_id,) because in the future we might want to incorporate
-        # splicing and other variants, which will be identified by the second uniprot_id
-        
-        return self.db[self.db['uniprot_id'] == uniprot_id]
-        
-#        if self.grouped_db.groups.has_key(uniprot_id):
-#            return self.grouped_db.get_group(uniprot_id)
-#        else:
-#            # In the future, make it fetch the uniprot sequence, analyse it with pfam_scan.pl,
-#            # and save the output to the database
-#            print "No protein definition entries for the given uniprot_id:", uniprot_id
-#            return None
-
-
-
-class ProteinInteraction(MyDatabase):
-    """ Contains known interactions between uniprot proteins
-    """
-    
-    def __init__(self, textfile_name, ProteinDefinition):
-        """ 
-        Checks if the interaction database is already available as a pickled object.
-        Generates it from file 'textfile_name' otherwise.
-        """
-        self.db_name = 'protein_interaction'
-        
-        if not self.load_db():
-            # No precompiled database exists
-            print 'Generating %s database...' % ' '.join(self.db_name.split('_'))
-            
-            # Read in a list of unteracting uniprot pairs obtained using BioGrid
-            # (and biomart to convert enesmble gene accession to uniprot)
-            set_of_interactions = set()
-            with open(textfile_name, 'r') as fh:
-                next(fh)
-                for line in fh:
-                    row = [l.strip() for l in line.split('\t')]
-                    set_of_interactions.add(ImmutableSet([row[0], row[1]]))
-            
-            
-            # For every unique uniprot pair, try to find a template in the 
-            # DomainInteraction database (which is based on pfam...)
-            
-            # Turn off print statement output (otherwise too many domains not found)
-            original_stdout = sys.stdout
-            sys.stdout = NullDevice()
-            number_of_missing_pfams = 0 # for debugging
-            
-            
-            column_uniprot_id_1 = []
-            column_uniprot_id_2 = []
-            column_pfam_name_1 = []
-            column_pfam_name_2 = []
-            column_alignment_def_1 = []
-            column_alignment_def_2 = []
-            
-            # Go over each unique protein-protein interaction
-            for interaction in set_of_interactions:
-                
-                interaction = list(interaction)
-                # Get a list of pfam domains for each protein in a pair
-                
-                if len(interaction) == 1:
-                    # Homodimer
-                    uniprot_id_1 = interaction[0]
-                    uniprot_id_2 = uniprot_id_1
-                    
-                    protein_domains = ProteinDefinition(uniprot_id_1)
-                    if protein_domains:
-                        pfam_names_1 = list(protein_domains['seq_id'])
-                        alignment_defs_1 = list(protein_domains['alignment_def'])
-                        pfam_names_2 = pfam_names_1
-                        alignment_defs_2 = alignment_defs_1
-                    else:
-                        number_of_missing_pfams += 1
-                        continue
-                    
-                elif len(interaction) == 2:
-                    # Heterodimer
-                    uniprot_id_1 = interaction[0]
-                    uniprot_id_2 = interaction[1]
-                    
-                    protein_domains_1 = ProteinDefinition(uniprot_id_1)
-                    if protein_domains_1:
-                        pfam_names_1 = list(protein_domains_1['seq_id'])
-                        alignment_defs_1 = list(protein_domains_1['alignment_def'])
-                    else:
-                        number_of_missing_pfams += 1
-                        continue
-                    
-                    protein_domains_2 = ProteinDefinition(uniprot_id_2)
-                    if protein_domains_2:
-                        pfam_names_2 = list(protein_domains_2['seq_id'])
-                        alignment_defs_2 = list(protein_domains_2['alignment_def'])
-                    else:
-                        number_of_missing_pfams += 1
-                        continue
-                else:
-                    raise Exception
-                        
-                for pfam_name_1, alignment_def_1 in zip(pfam_names_1, alignment_defs_1):
-                    for pfam_name_2, alignment_def_2 in zip(pfam_names_2, alignment_defs_2):
-                        column_uniprot_id_1.append(uniprot_id_1)
-                        column_uniprot_id_2.append(uniprot_id_2)
-                        column_pfam_name_1.append(pfam_name_1)
-                        column_pfam_name_2.append(pfam_name_2)
-                        column_alignment_def_1.append(alignment_def_1)
-                        column_alignment_def_2.append(alignment_def_2)
-            
-            # Turn print statement output back on
-            sys.stdout = original_stdout
-            print number_of_missing_pfams
-            
-            # Create a dataframe with the compiled results
-            db = pd.DataFrame(index=range(len(column_uniprot_id_1)))
-            db['uniprot_id_1'] = column_uniprot_id_1
-            db['uniprot_id_2'] = column_uniprot_id_2
-            db['domain_name_1'] = column_pfam_name_1
-            db['domain_name_2'] = column_pfam_name_2
-            db['alignment_def_1'] = column_alignment_def_1
-            db['alignment_def_2'] = column_alignment_def_2
-            db['cath_id_1'] = None
-            db['cath_id_2'] = None
-            db['domain_contact_id'] = None
-            db['template_errors'] = None
-            db['model_path'] = None
-            db['modelling_errors'] = None
-            
-            print db
-            db.drop_duplicates(inplace=True)
-            print db
-
-            self.db = db
-            self.db_updates = pd.DataFrame()
-            self.save_db()
-        
-#        self.grouped_db_1 = self.db.groupby(['uniprot_id_1'])
-#        self.grouped_db_2 = self.db.groupby(['uniprot_id_2'])
-    
-    
-    def __call__(self, uniprot_id):
-        """
-        """
-        if self.grouped_db_1.groups.has_key(uniprot_id):
-            result_df_1 = self.grouped_db_1.get_group(uniprot_id)
-        else:
-            result_df_1 = None
-            
-        if self.grouped_db_2.groups.has_key(uniprot_id):
-            result_df_1 = self.grouped_db_2.get_group(uniprot_id)
-        else:
-            result_df_2 = None
-            
-        if not result_df_1 and not result_df_2:
-            print "No entries for the given uniprot_id:", uniprot_id
-           
-        return [result_df_1, result_df_2]
-
-
-
-class ProteinCoreMutation(MyDatabase):
-    """ Stores information about mutations in the protein core
-    Unimplemented functionality
-    """
-    def __init__(self):
-        self.db_name = 'protein_core_mutation'
-
-
-
-class ProteinInterfaceMutation(MyDatabase):
-    """ Stores information about mutations in the protein interface
-    Unimplemented functionality
-    """
-    def __init__(self):
-        self.db_name = 'protein_interface_mutation'
-
-
-
-
 class pipeline():
     
     def __init__(self, configFile):
-        
         #######################################################################  
         # read the configuration file and set the variables
-        
         configParser = SafeConfigParser(
-                                defaults={'tmpPath':'/tmp/pipeline/',
-                                          'HETATM':True,
-                                          'outputPath':'results/',
-                                          'DEBUG':False,
-                                          'saveTo':'$SCRATCH/niklas-pipeline/',
-                                          'saveScinet':False,
-                                          'path_to_archive': '/home/kimlab1/database_data/elaspic/',
-                                          'webServer': False,
-                                          }
-                                )
+            defaults={'tmpPath':'/tmp/pipeline/',
+                      'HETATM':True,
+                      'DEBUG':False,
+                      'saveTo':'$SCRATCH/niklas-pipeline/',
+                      'saveScinet':False,
+                      'path_to_archive': '/home/kimlab1/database_data/elaspic/human/',
+                      'db_type': 'sqlite_file',
+                      'db_path': error.path_to_pipeline_code() + '/../db/pipeline.db',
+                      'webServer': False,
+                      'name': 'pipeline',
+                      'numConsumers': multiprocessing.cpu_count(),
+                      'tcoffee_parallel_runs': multiprocessing.cpu_count(),
+                      'outputPath':'results/',
+                      'savePDB': 'results/pdb_files/',
+                      'runTime': 'INFINITE'})
 
         configParser.read(configFile)
-        defaults = configParser.defaults()
-        ### read all the values
+
         ## from [DEFAULT]
-        # tmpPath
-        if configParser.has_option('DEFAULT', 'tmpPath'):
-            tmpPath = configParser.get('DEFAULT', 'tmpPath')
-        else:
-            tmpPath = defaults['tmpPath']
-        # DEBUG
-        if configParser.has_option('DEFAULT', 'DEBUG'):
-            self.DEBUG = configParser.getboolean('DEFAULT', 'DEBUG')
-        else:
-            self.DEBUG = defaults['DEBUG']
-        # HETATM
-        if configParser.has_option('DEFAULT', 'HETATM'):
-            self.HETATM = configParser.getboolean('DEFAULT', 'HETATM')
-        else:
-            self.HETATM = defaults['HETATM']
-        # saveTo
-        if configParser.has_option('DEFAULT', 'saveTo'):
-            self.saveTo = configParser.get('DEFAULT', 'saveTo')
-        else:
-            self.saveTo = defaults['saveTo']
-        # saveScinet
-        if configParser.has_option('DEFAULT', 'saveScinet'):
-            self.saveScinet = configParser.getboolean('DEFAULT', 'saveScinet')
-        else:
-            self.saveScinet = defaults['saveScinet']
-        # path_to_archive
-        if configParser.has_option('DEFAULT', 'path_to_archive'):
-            self.path_to_archive = configParser.get('DEFAULT', 'path_to_archive')
-        else:
-            self.path_to_archive = defaults['path_to_archive']        
-        # web-server
-        if configParser.has_option('DEFAULT', 'webServer'):
-            self.webServer = configParser.get('DEFAULT', 'webServer')
-        else:
-            self.webServer = defaults['webServer']
+        tmpPath = configParser.get('DEFAULT', 'tmpPath')
+        self.DEBUG = configParser.getboolean('DEFAULT', 'DEBUG')
+        self.HETATM = configParser.getboolean('DEFAULT', 'HETATM')
+        self.saveTo = configParser.get('DEFAULT', 'saveTo')
+        self.saveScinet = configParser.getboolean('DEFAULT', 'saveScinet')
+        self.path_to_archive = configParser.get('DEFAULT', 'path_to_archive')
+        self.db_type = configParser.get('DEFAULT', 'db_type')
+        self.db_path = configParser.get('DEFAULT', 'db_path')
+        self.webServer = configParser.get('DEFAULT', 'webServer')
             
         ## from [SETTINGS]
-        # name
-        if configParser.has_option('SETTINGS', 'name'):
-            self.name = configParser.get('SETTINGS', 'name')
-        else:
-            self.name = None
-        # numConsumers
-        if configParser.has_option('SETTINGS', 'numConsumers'):
-            self.num_consumers = configParser.getint('SETTINGS', 'numConsumers')
-        else:
-            self.num_consumers = multiprocessing.cpu_count()
-        # tcoffee_parallel_runs
-        if configParser.has_option('SETTINGS', 'tcoffee_parallel_runs'):
-            self.tcoffee_parallel_runs = configParser.getint('SETTINGS', 'tcoffee_parallel_runs')
-        else:
-            self.tcoffee_parallel_runs = multiprocessing.cpu_count()
+        self.name = configParser.get('SETTINGS', 'name')
+        self.num_consumers = configParser.getint('SETTINGS', 'numConsumers')
+        self.tcoffee_parallel_runs = configParser.getint('SETTINGS', 'tcoffee_parallel_runs')
+        self.outputPath = configParser.get('SETTINGS', 'outputPath')
+        self.savePDB = configParser.get('SETTINGS', 'savePDB')
+        self.runTime = configParser.get('SETTINGS', 'runTime')
+        
         # pdbPath
         if configParser.has_option('SETTINGS', 'pdbPath'):
             self.pdbPath = configParser.get('SETTINGS', 'pdbPath')
         else:
-            raise ConfigError('pdbPath')
+            raise error.ConfigError('pdbPath')
+        # bin
+        if configParser.has_option('SETTINGS', 'bin'):
+            self.executables = configParser.get('SETTINGS', 'bin')
+        else:
+            raise error.ConfigError('bin')
+            
+        ## from [INPUT]
+        # file
+        if configParser.has_option('INPUT', 'file'):
+            self.inputFile = configParser.get('INPUT', 'file')
+            if not os.path.isfile(self.inputFile):
+                raise error.DataError(self.inputFile)
+        else:
+            raise error.ConfigError('file')
+        # mutation_uniprot ### should be renamed template_finding
+        if configParser.has_option('INPUT', 'mutation_uniprot'):
+            self.mutation_uniprot = configParser.getboolean('INPUT', 'mutation_uniprot')
+        else:
+            raise error.ConfigError('mutation_uniprot')
+        
+        ## from [MODELLER]
+        # modeller_runs
+        if configParser.has_option('MODELLER', 'modeller_runs'):
+            self.modeller_runs = configParser.getint('MODELLER', 'modeller_runs')
+        else:
+            raise error.ConfigError('modeller_runs')
+        
+        ## from [FOLDX]
+        # WATER
+        if configParser.has_option('FOLDX', 'WATER'):
+            self.foldX_WATER = configParser.get('FOLDX', 'WATER')
+        else:
+            raise error.ConfigError('WATER')
+        # buildModel_runs
+        if configParser.has_option('FOLDX', 'buildModel_runs'):
+            self.buildModel_runs = configParser.get('FOLDX', 'buildModel_runs')
+        else:
+            raise error.ConfigError('buildModel_runs')
+        
+        #######################################################################
         # matrix (currently hardcoded, can be changed if needed)
         # in that case also change the gap_start and gap_extend options
         # they are used in conjuntion with the matrix to determine the
@@ -755,128 +147,17 @@ class pipeline():
 #        if configParser.has_option('SETTINGS', 'gap_start'):
 #            self.gap_start = configParser.getint('SETTINGS', 'gap_start')
 #        else:
-#            raise ConfigError('gap_start')
+#            raise error.ConfigError('gap_start')
         self.gap_start = -16
         # gap_extend
 #        if configParser.has_option('SETTINGS', 'gap_extend'):
 #            self.gap_extend = configParser.getint('SETTINGS', 'gap_extend')
 #        else:
-#            raise ConfigError('gap_extend')
+#            raise error.ConfigError('gap_extend')
         self.gap_extend = -4
-        
-        
-#        # crystalPDB
-#        if configParser.has_option('SETTINGS', 'crystalPDB'):
-#            self.crystalPDB = configParser.getboolean('SETTINGS', 'crystalPDB')
-#        else:
-#            raise ConfigError('crystalPDB')
-        # outputPath
-        if configParser.has_option('SETTINGS', 'outputPath'):
-            self.outputPath = configParser.get('SETTINGS', 'outputPath')
-            # adjust the savePDB folder if the outputPath changed
-            if configParser.has_option('SETTINGS', 'savePDB'):
-                self.savePDB = configParser.get('SETTINGS', 'savePDB')
-            else:
-                self.savePDB = self.outputPath + 'pdbFiles/'
-        else:
-            self.outputPath = defaults['outputPath']
-            self.savePDB = self.outputPath + 'pdbfiles/'
-        # runTime
-        if configParser.has_option('SETTINGS', 'runTime'):
-            self.runTime = configParser.get('SETTINGS', 'runTime')
-        else:
-            self.runTime = 'INFINITE'
-        # bin
-        if configParser.has_option('SETTINGS', 'bin'):
-            self.executables = configParser.get('SETTINGS', 'bin')
-        else:
-            raise ConfigError('bin')
-            
-        ## from [INPUT]
-        # file
-        if configParser.has_option('INPUT', 'file'):
-            self.inputFile = configParser.get('INPUT', 'file')
-            if not os.path.isfile(self.inputFile):
-                raise DataError(self.inputFile)
-        else:
-            raise ConfigError('file')
-        # mutation_uniprot ### should be renamed template_finding
-        if configParser.has_option('INPUT', 'mutation_uniprot'):
-            self.mutation_uniprot = configParser.getboolean('INPUT', 'mutation_uniprot')
-        else:
-            raise ConfigError('mutation_uniprot')
-        
-        ## from [MODELLER]
-        # MODELLER
-#        if configParser.has_option('MODELLER', 'MODELLER'):
-#            self.MODELLER = configParser.getboolean('MODELLER', 'MODELLER')
-#        else:
-#            raise ConfigError('MODELLER')
-        # modeller_runs
-        if configParser.has_option('MODELLER', 'modeller_runs'):
-            self.modeller_runs = configParser.getint('MODELLER', 'modeller_runs')
-        else:
-            raise ConfigError('modeller_runs')
-        
-        ## from [FOLDX]
-        # WATER
-        if configParser.has_option('FOLDX', 'WATER'):
-            self.foldX_WATER = configParser.get('FOLDX', 'WATER')
-        else:
-            raise ConfigError('WATER')
-        # buildModel_runs
-        if configParser.has_option('FOLDX', 'buildModel_runs'):
-            self.buildModel_runs = configParser.get('FOLDX', 'buildModel_runs')
-        else:
-            raise ConfigError('buildModel_runs')
-#        # MUTATE
-#        if configParser.has_option('FOLDX', 'MUTATE'):
-#            self.MUTATE = configParser.getboolean('FOLDX', 'MUTATE')
-#        else:
-#            raise ConfigError('MUTATE')
-        
-        ## from [DATABASES]
-        # protein_interaction_file
-        if configParser.has_option('DATABASES', 'protein_interaction_file'):
-            self.protein_interaction_file = configParser.get('DATABASES', 'protein_interaction_file')
-        else:
-            raise ConfigError('protein_interaction_file')
-        # threeDidFile
-        if configParser.has_option('DATABASES', 'threeDidFile'):
-            self.threeDidFile = configParser.get('DATABASES', 'threeDidFile')
-        else:
-            raise ConfigError('threeDidFile')
-        # PfamBoundaryCorrection
-        if configParser.has_option('DATABASES', 'PfamBoundaryCorrection'):
-            self.PfamBoundaryCorrection = configParser.get('DATABASES', 'PfamBoundaryCorrection')
-        else:
-            raise ConfigError('threeDidFile')
-        # uniprotSequenceDatabase
-        if configParser.has_option('DATABASES', 'uniprotSequenceDatabase'):
-            self.uniprotSequenceDatabase = configParser.get('DATABASES', 'uniprotSequenceDatabase')
-        else:
-            raise ConfigError('uniprotSequenceDatabase')
-        # pdb_resolution_file
-        if configParser.has_option('DATABASES', 'pdb_resolution_file'):
-            self.pdb_resolution_file = configParser.get('DATABASES', 'pdb_resolution_file')
-        else:
-            raise ConfigError('pdb_resolution_file')
-        # coreTemplatesFile
-        if configParser.has_option('DATABASES', 'coreTemplatesFile'):
-            self.coreTemplatesFile = configParser.get('DATABASES', 'coreTemplatesFile')
-        else:
-            raise ConfigError('coreTemplatesFile')
-        # domain_definition_file
-        if configParser.has_option('DATABASES', 'domain_definition_file'):
-            self.domain_definition_file = configParser.get('DATABASES', 'domain_definition_file')
-        else:
-            raise ConfigError('domain_definition_file')            
-        # domain_interaction_file
-        if configParser.has_option('DATABASES', 'domain_interaction_file'):
-            self.domain_interaction_file = configParser.get('DATABASES', 'domain_interaction_file')
-        else:
-            raise ConfigError('domain_interaction_file')
-            
+
+
+        #######################################################################
         # check the TMPDIR
         # if a TMPDIR is given as environment variable the tmp directory
         # is created relative to that. This is useful when running on banting
@@ -884,7 +165,7 @@ class pipeline():
         # environment variable on Scinet myself though..). Make sure that it
         # points to '/dev/shm/' on Scinet
         childProcess = subprocess.Popen('echo $TMPDIR', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        result, error = childProcess.communicate()
+        result, __ = childProcess.communicate()
         TMPDIR_CLUSTER = result.strip()
         try:
             if TMPDIR_CLUSTER[-1] == '/':
@@ -902,27 +183,15 @@ class pipeline():
         else:
             self.tmpPath = self.TMPDIR_CLUSTER + '/' + tmpPath
 
-
         # create the tmp directories and copy the binary files
         self.__prepareTMP()
         self.__prepareOutputPaths()
-        
-        # load the databases
-#        self.threeDID_database = get3DID(self.threeDidFile, self.PfamBoundaryCorrection)
-#        self.core_template_database = core_Templates(self.coreTemplatesFile)
-        
-        self.uniprot_sequence_database = UniprotSequence(self.uniprotSequenceDatabase)
-        self.domain_definition_database = DomainDefinition(self.domain_definition_file)
-        self.domain_interaction_database = DomainInteraction(self.domain_interaction_file)
-        self.pdb_resolution_database = PDBResolution(self.pdb_resolution_file)
-        
-        self.protein_definition_database = ProteinDefinition()
-        self.protein_interaction_database = ProteinInteraction(self.protein_interaction_file,
-                                                     self.protein_definition_database)
 
         # set the matrix for the substitution score
         self.matrix = self.__selectMatrix(self.matrix_option)
         
+        
+        #######################################################################
         # if running on the cluster copy the database to the tmp DIR for
         # speedup and to avoid killing the network. BLAST is very IO intensive
         # and you don't want that to be run over the network!
@@ -934,14 +203,14 @@ class pipeline():
         # banting: nberliner
         # Scinet: joan
         childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        whoami, error = childProcess.communicate()
+        whoami, __ = childProcess.communicate()
         if whoami.strip() == 'strokach':
             # when running the pipeline on beagle or banting
             system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
                                 'cp -r /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db ' + \
                                 self.tmpPath + 'blast/'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            result, error = childProcess.communicate()
+            result, __ = childProcess.communicate()
             assert childProcess.returncode == 0
             if childProcess.returncode != 0:
                 print 'couldnt copy the blast database!!\n\n\n\n'
@@ -952,7 +221,7 @@ class pipeline():
                                 'cd ' + self.tmpPath + 'blast && ' + \
                                 'ln -s /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            result, error = childProcess.communicate()
+            result, __ = childProcess.communicate()
             assert childProcess.returncode == 0
         if whoami.strip() == 'joan':
             # for scinet, blast is already installed, but the database needs to be copied
@@ -960,9 +229,20 @@ class pipeline():
                                 'cp -r $HOME/niklas-pipeline/blastdb/pdbaa_db ' + \
                                 self.tmpPath + 'blast/'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            result, error = childProcess.communicate()
+            result, __ = childProcess.communicate()
             assert childProcess.returncode == 0
             
+        
+        #######################################################################
+        # Copy the database file
+        if self.db_type == 'sqlite_file':
+            print self.db_path
+            print self.tmpPath
+            system_command = 'cp -r ' + self.db_path + ' ' + self.tmpPath + '/'
+            childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            result, __ = childProcess.communicate()
+            assert childProcess.returncode == 0
+    
     
     
     def __prepareTMP(self):
@@ -1131,9 +411,9 @@ class pipeline():
                 
                 # Enqueue jobs                
                 num_jobs += 1
-                tasks.put( Task(self.mutation_uniprot,
-                                uniprotKB, 
+                tasks.put( Task(uniprotKB, 
                                 mutation,
+                                self.mutation_uniprot,
                                 self.savePDB,
                                 self.tmpPath,
                                 self.outputPath,
@@ -1144,16 +424,7 @@ class pipeline():
                                 self.modeller_runs,
                                 self.buildModel_runs,
                                 self.foldX_WATER,
-                                self.uniprot_sequence_database,
-                                self.domain_definition_database,
-                                self.domain_interaction_database,
-                                self.pdb_resolution_database,
-                                self.protein_definition_database,
-                                self.protein_interaction_database,
-                                self.path_to_archive
-                                )
-                          )
-
+                                self.path_to_archive))
         
         # Add a poison pill for each consumer
         for i in range(1, self.num_consumers+1):
@@ -1252,7 +523,6 @@ class pipeline():
                     resForWrite_wt = (id_data + 'wt\t' +
                                         str(output_dict['normDOPE_wt'])[:6] + '\t' +
                                         '\t'.join(output_dict['AnalyseComplex_energy_wt']) + '\t' +
-                                        '\t'.join(output_dict['Stability_energy_wt']) + 
                                         '\n')
                     
                     # Make line for mutant file
@@ -1319,9 +589,9 @@ if __name__ == '__main__':
         try:
             p = pipeline(configFile)
             p.run()
-        except DataError, e:
+        except error.DataError, e:
             print 'Error: input file',  e.inputFile, ' not found!'
             print 'exiting...'
-        except ConfigError, e:
+        except error.ConfigError, e:
             print 'Error: option', e.option, ' not found!'
             print 'exiting...'

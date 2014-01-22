@@ -4,7 +4,24 @@ Created on Sun Feb  3 15:07:51 2013
 
 @author: niklas
 """
+import os
+import sys
 
+###############################################################################
+# Used to find the location of the files being executed
+def we_are_frozen():
+    # All of the modules are built-in to the interpreter, e.g., by py2exe
+    return hasattr(sys, "frozen")
+
+def path_to_pipeline_code():
+    encoding = sys.getfilesystemencoding()
+    if we_are_frozen():
+        return os.path.dirname(unicode(sys.executable, encoding))
+    return os.path.dirname(unicode(__file__, encoding))
+    
+    
+###############################################################################    
+# Keep track of and raise different kinds of errors
 class TcoffeeError(Exception):
     def __init__(self, message, errors, alignInFile):
         # Call the base class constructor with the parameters it needs
@@ -37,12 +54,10 @@ class ConfigError(Exception):
         Exception.__init__(self)
         self.option = option
 
-
 class TemplateCoreError(Exception):
     def __init__(self, error):
         Exception.__init__(self)
         self.error = error
-
 
 class TemplateInterfaceError(Exception):
     def __init__(self, error):
@@ -62,9 +77,7 @@ class NoStructuralTemplates(Exception):
 class NoSequenceFound(Exception):
     def __init__(self, error):
         Exception.__init__(self)
-        self.error = error    
-        
-        
+        self.error = error
         
 class ProteinDefinitionError(Exception):
     def __init__(self, error):
@@ -74,4 +87,20 @@ class ProteinDefinitionError(Exception):
 class NoTemplatesFound(Exception):
     def __init__(self, error):
         Exception.__init__(self)
-        self.error = error   
+        self.error = error
+        
+class EmptyPDBSequenceError(Exception):
+    def __init__(self, pdb_id, pdb_chain):
+        Exception.__init__(self)
+        self.pdb_id = pdb_id
+        self.pdb_chain = pdb_chain
+        
+class NoPrecalculatedAlignmentFound(Exception):
+    def __init__(self, save_path, alignment_filename):
+        self.save_path = save_path
+        self.alignment_filename = alignment_filename
+        
+class MutationOutsideDomain(Exception):
+    pass
+
+
