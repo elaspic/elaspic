@@ -6,6 +6,51 @@ Created on Wed Jun 19 12:01:51 2013
 """
 import os
 
+def getRSA(SASA, aminoAcid):
+    """ see: 
+        http://prowl.rockefeller.edu/aainfo/volume.htm
+        http://www.biostars.org/p/10650/
+        
+        RSA is a dict with 'Residue Volume' as first entry and 'Surface Area'
+        as second enty with key amino acid in one letter code
+    """
+    RSA = {'A': (88.6, 115), \
+           'R': (173.4, 225), \
+           'D': (111.1, 150), \
+           'N': (114.1, 160), \
+           'C': (108.5, 135), \
+           'E': (138.4, 190), \
+           'Q': (143.8, 180), \
+           'G': (60.1, 75), \
+           'H': (153.2, 195), \
+           'I': (166.7, 175), \
+           'L': (166.7, 170), \
+           'K': (168.6, 200), \
+           'M': (162.9, 185), \
+           'F': (189.9, 210), \
+           'P': (112.7, 145), \
+           'S': (89.0, 115), \
+           'T': (116.1, 140), \
+           'W': (227.8, 255), \
+           'Y': (193.6, 230), \
+           'V': (140.0, 155) \
+           }
+    
+#    if float(SASA) == 0:
+#        return 'NaN'
+
+    if len(aminoAcid) == 3:
+        aa = convert_aa(aminoAcid)
+        result = float(SASA) / RSA[aa][1]
+        return '{:.2f}'.format(result)
+    elif len(aminoAcid) == 1:
+        result = float(SASA) / RSA[aminoAcid][1]
+        return '{:.2f}'.format(result)
+    else:
+        print 'Problem with the calculation of the RSA'
+        return 'NaN' 
+
+
 def convert_aa(aa):
     A_DICT = {'A':'ALA', 'R':'ARG', 'N':'ASN', 'D':'ASP', 'C':'CYS', 'E':'GLU', \
               'Q':'GLN', 'G':'GLY', 'H':'HIS', 'I':'ILE', 'L':'LEU', 'K':'LYS', \

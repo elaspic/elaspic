@@ -10,6 +10,7 @@ import cPickle as pickle
 import pandas as pd
 import numpy as np
 
+from sets import ImmutableSet
 
 # Set up the logger (not the best place to do this, will fix later)
 import logging
@@ -46,11 +47,11 @@ class parse_header_splicing():
 
 
 
-class make_uniprot_pfam_database():
+class make_uniprot_domain_database():
     
     def __init__(self, pfamA_clans_filename='/home/kimlab1/strokach/working/databases/pfam.janelia.org/Pfam-A.clans.tsv',
-                 pfamA_repeating_domains_filename='/home/kimlab1/strokach/working/databases/mysql-query-outputs/pfamA_repeating_domains.txt',
-                 pfamA_superdomains_filename='/home/kimlab1/strokach/working/databases/mysql-query-outputs/pfamA_superdomains.txt'):
+                 pfamA_repeating_domains_filename='/home/kimlab1/strokach/working/databases/mysql/pfamA_repeating_domains.txt',
+                 pfamA_superdomains_filename='/home/kimlab1/strokach/working/databases/mysql/pfamA_superdomains.txt'):
         """ Initialise files required for merging repeating domains and superdomains
         """
         
@@ -93,16 +94,22 @@ class make_uniprot_pfam_database():
         Read in human uniprot and splicing fasta and pfam_scan.pl output files.
         Link repeating and overlapping domains.
         """
-        db_path = '/home/kimlab1/strokach/working/databases/uniprot-yanqi/'
+        db_path = '/home/kimlab1/strokach/working/databases/'
         
-        self.read_uniprot(db_path + 'yanqi-human-uniprot-with-varsplic.fasta', 'uniprot')
+#        self.read_uniprot(db_path + 'uniprot-yanqi/yanqi-human-uniprot-with-varsplic.fasta', 'uniprot')
+#        print len(self.sequence_dict)        
+#        self.read_uniprot(db_path + 'uniprot-yanqi/yanqi-splicing.fasta', 'splicing')
+#        print len(self.sequence_dict)
+        self.read_uniprot(db_path + 'uniprot/uniprot_sprot_human.fasta', 'uniprot')
         print len(self.sequence_dict)        
-        self.read_uniprot(db_path + 'yanqi-splicing.fasta', 'splicing')
+        
+#        self.read_pfamscan(db_path + 'uniprot-yanqi/yanqi-human-uniprot-with-varsplic.pfamscan', 'uniprot')
+#        print len(self.sequence_dict)
+#        self.read_pfamscan(db_path + 'uniprot-yanqi/yanqi-splicing.pfamscan', 'splicing')
+#        print len(self.sequence_dict)
+        self.read_pfamscan(db_path + 'uniprot/uniprot_sprot_human.pfamscan', 'uniprot')
         print len(self.sequence_dict)
-        self.read_pfamscan(db_path + 'yanqi-human-uniprot-with-varsplic.pfamscan', 'uniprot')
-        print len(self.sequence_dict)
-        self.read_pfamscan(db_path + 'yanqi-splicing.pfamscan', 'splicing')
-        print len(self.sequence_dict)
+        
         self.remove_overlapping_domains()
         print len(self.sequence_dict)
         self.link_repeating_domains()
@@ -443,32 +450,33 @@ class make_uniprot_pfam_database():
         
         return new_seq_record
     
+    
    
-    def get_dataframe(self, canonical=True):
+    def get_dataframe(self, filter_canonical=True, keep_domainless=False):
         """ Extract the most important information from the dictionary and 
         convert it into a dataframe
         This can be reversed using: 
         {k: list(v) for k,v in df.groupby("Address")["ID"]}
         (http://stackoverflow.com/a/20112846)
         """
-        temp_dict = OrderedDict()
+        temp_dict = dict()
         temp_dict['uniprot_id'] = []
 #        temp_dict['splicing_id'] = []
         temp_dict['seq_id'] = []
         temp_dict['alignment_def'] = []
         temp_dict['alignment_defs'] = []
-        temp_dict['hmm_acc'] = []
+        temp_dict['hmm_accession'] = []
         temp_dict['hmm_name'] = []
         temp_dict['hmm_type'] = [] # 'type'
-        temp_dict['hmm_clan_acc'] = [] # 'clan'
+        temp_dict['hmm_clan_accession'] = [] # 'clan'
         temp_dict['hmm_clan_name'] = []
         
         for key in self.sequence_dict.keys():
             # Output data only for canonical sequences
-            if canonical and key[0] != key[1]:
+            if filter_canonical and key[0] != key[1]:
                 continue
                 
-            if len(self.sequence_dict[key]) == 1:
+            if keep_domainless and len(self.sequence_dict[key]) == 1:
                 # If no pfam domains were found, still keep an empty record 
                 # for future reference 
                 temp_dict['uniprot_id'].append(key[0])
@@ -476,10 +484,10 @@ class make_uniprot_pfam_database():
                 temp_dict['seq_id'].append('')
                 temp_dict['alignment_def'].append('')
                 temp_dict['alignment_defs'].append('')
-                temp_dict['hmm_acc'].append('')
+                temp_dict['hmm_accession'].append('')
                 temp_dict['hmm_name'].append('')
                 temp_dict['hmm_type'].append('')
-                temp_dict['hmm_clan_acc'].append('')
+                temp_dict['hmm_clan_accession'].append('')
                 temp_dict['hmm_clan_name'].append('')
                 continue
             
@@ -494,34 +502,208 @@ class make_uniprot_pfam_database():
                 temp_dict['seq_id'].append(seqrecord.id)
                 temp_dict['alignment_def'].append((seqrecord.annotations['alignment_defs'][0][0],seqrecord.annotations['alignment_defs'][-1][1],))
                 temp_dict['alignment_defs'].append(seqrecord.annotations['alignment_defs'])
-                temp_dict['hmm_acc'].append(seqrecord.annotations['hmm_acc'])
+                temp_dict['hmm_accession'].append(seqrecord.annotations['hmm_acc'])
                 temp_dict['hmm_name'].append(seqrecord.annotations['hmm_name'])
                 temp_dict['hmm_type'].append(seqrecord.annotations['type'])
-                temp_dict['hmm_clan_acc'].append(seqrecord.annotations['clan_acc'])
+                temp_dict['hmm_clan_accession'].append(seqrecord.annotations['clan_acc'])
                 temp_dict['hmm_clan_name'].append(seqrecord.annotations['clan_name'])
         
         # Compile results into a pandas DataFrame
-        pfam_df = pd.DataFrame(temp_dict)
-        return pfam_df
-    
+        uniprot_domain_df = pd.DataFrame(temp_dict)
         
-    def pickle_dict(self, filename):
-        with open(filename, 'wb') as fh:
-            pickle.dump(self.sequence_dict, fh)
+        # Postprocessing
+        uniprot_domain_df['pfam_name'] = uniprot_domain_df['seq_id']
+    
+        uniprot_domain_df['alignment_def'] = uniprot_domain_df['alignment_defs'].apply(lambda xxx: ','.join([':'.join([str(x) for x in xx]) for xx in xxx]))
+        
+        uniprot_domain_df['hmm_accession'] = uniprot_domain_df['hmm_accession'].apply(lambda xx: ','.join([x for x in xx if xx]))
+        uniprot_domain_df['hmm_name'] = uniprot_domain_df['hmm_name'].apply(lambda xx: ','.join([x for x in xx if xx]))
+        uniprot_domain_df['hmm_type'] = uniprot_domain_df['hmm_type'].apply(lambda xx: ','.join([x for x in xx if xx]))
+        uniprot_domain_df['hmm_clan_accession'] = uniprot_domain_df['hmm_clan_accession'].apply(lambda xx: ','.join([str(x) for x in xx if (xx and xx[0])]))
+        uniprot_domain_df['hmm_clan_name'] = uniprot_domain_df['hmm_clan_name'].apply(lambda xx: ','.join([str(x) for x in xx if (xx and xx[0])]))
+    
+        uniprot_domain_df = uniprot_domain_df[
+            ['uniprot_id', 'pfam_name', 'alignment_def', 'hmm_accession', 
+            'hmm_name', 'hmm_type', 'hmm_clan_accession', 'hmm_clan_name']]
+        
+        return uniprot_domain_df
+    
+    
 
-
-
+class make_uniprot_domain_pair_database(object):
+    
+    def __init__(self, domain_df, domain_contact_df, uniprot_domain_df,
+                 infile='/home/kimlab1/strokach/working/databases/biogrid/pairs_of_interacting_uniprots_human.tsv'):
+        
+        self.domain_gp = domain_df.groupby(['pfam_name'])
+        self.domain_contact_gp = domain_contact_df.groupby(('cath_id_1', 'cath_id_2',))
+        self.uniprot_domain_gp = uniprot_domain_df.groupby(['uniprot_id'])
+        self.infile = infile
+        
+        
+    def get_dataframe(self):
+        """ 
+        Checks if the interaction database is already available as a pickled object.
+        Generates it from file 'textfile_name' otherwise.
+        """
+        
+        # Read in a list of unteracting uniprot pairs obtained using BioGrid
+        # (and biomart to convert enesmble gene accession to uniprot)
+        set_of_interactions = set()
+        with open(self.infile, 'r') as fh:
+            for line in fh:
+                row = [l.strip() for l in line.split('\t')]
+                if row[0] == 'uniprot_id_1':
+                    continue
+                set_of_interactions.add(ImmutableSet([row[0], row[1]]))
+        
+        
+        # For every unique uniprot pair, try to find a template in the 
+        # DomainInteraction database (which is based on pfam...)
+        number_of_missing_pfams = 0
+        
+        column_uniprot_domain_id_1 = []
+        column_uniprot_domain_id_2 = []
+        column_uniprot_id_1 = []
+        column_uniprot_id_2 = []
+        column_pfam_name_1 = []
+        column_pfam_name_2 = []
+        column_alignment_def_1 = []
+        column_alignment_def_2 = []
+        
+        # Go over each unique protein-protein interaction
+        for counter, interaction in enumerate(set_of_interactions):
+            if counter % 1000 == 0:
+                print "Uniprot pair number %i" % counter
+            
+            interaction = list(interaction)
+            # Get a list of pfam domains for each protein in a pair
+            
+            if len(interaction) == 1:
+                # Homodimer
+                uniprot_id_1 = interaction[0]
+                uniprot_id_2 = uniprot_id_1
+                
+                if self.uniprot_domain_gp.groups.has_key(uniprot_id_1):
+                    protein_domains = self.uniprot_domain_gp.get_group(uniprot_id_1)
+                    uniprot_domain_ids_1 = list(protein_domains['uniprot_domain_id'])
+                    pfam_names_1 = list(protein_domains['pfam_name'])
+                    alignment_defs_1 = list(protein_domains['alignment_def'])
+                    uniprot_domain_ids_2 = uniprot_domain_ids_1
+                    pfam_names_2 = pfam_names_1
+                    alignment_defs_2 = alignment_defs_1
+                else:
+                    number_of_missing_pfams += 1
+                    continue
+                
+            elif len(interaction) == 2:
+                # Heterodimer
+                uniprot_id_1 = interaction[0]
+                uniprot_id_2 = interaction[1]
+                
+                if self.uniprot_domain_gp.groups.has_key(uniprot_id_1):
+                    protein_domains_1 = self.uniprot_domain_gp.get_group(uniprot_id_1)
+                    uniprot_domain_ids_1 = list(protein_domains_1['uniprot_domain_id'])
+                    pfam_names_1 = list(protein_domains_1['pfam_name'])
+                    alignment_defs_1 = list(protein_domains_1['alignment_def'])
+                else:
+                    number_of_missing_pfams += 1
+                    continue
+                
+                if self.uniprot_domain_gp.groups.has_key(uniprot_id_2):
+                    protein_domains_2 = self.uniprot_domain_gp.get_group(uniprot_id_2)
+                    uniprot_domain_ids_2 = list(protein_domains_2['uniprot_domain_id'])
+                    pfam_names_2 = list(protein_domains_2['pfam_name'])
+                    alignment_defs_2 = list(protein_domains_2['alignment_def'])
+                else:
+                    number_of_missing_pfams += 1
+                    continue
+            else:
+                raise Exception
+                    
+            for uniprot_domain_id_1, pfam_name_1, alignment_def_1 in zip(uniprot_domain_ids_1, pfam_names_1, alignment_defs_1):
+                for uniprot_domain_id_2, pfam_name_2, alignment_def_2 in zip(uniprot_domain_ids_2, pfam_names_2, alignment_defs_2):
+                    if self.domain_gp.groups.has_key(pfam_name_1) and self.domain_gp.groups.has_key(pfam_name_2):
+                        cath_ids_1 = list(self.domain_gp.get_group(pfam_name_1)['cath_id'])
+                        cath_ids_2 = list(self.domain_gp.get_group(pfam_name_2)['cath_id'])
+                        has_template = False
+                        for cath_id_1 in cath_ids_1:
+                            if not has_template:
+                                for cath_id_2 in cath_ids_2:
+                                    if self.domain_contact_gp.groups.has_key((cath_id_1, cath_id_2,)):
+                                        column_uniprot_domain_id_1.append(uniprot_domain_id_1)
+                                        column_uniprot_domain_id_2.append(uniprot_domain_id_2)
+                                        column_uniprot_id_1.append(uniprot_id_1)
+                                        column_uniprot_id_2.append(uniprot_id_2)
+                                        column_pfam_name_1.append(pfam_name_1)
+                                        column_pfam_name_2.append(pfam_name_2)
+                                        column_alignment_def_1.append(alignment_def_1)
+                                        column_alignment_def_2.append(alignment_def_2)
+                                        has_template = True
+                                        break
+                                        
+                                    elif self.domain_contact_gp.groups.has_key((cath_id_2, cath_id_1,)):
+                                        column_uniprot_domain_id_1.append(uniprot_domain_id_2)
+                                        column_uniprot_domain_id_2.append(uniprot_domain_id_1)
+                                        column_uniprot_id_1.append(uniprot_id_2)
+                                        column_uniprot_id_2.append(uniprot_id_1)
+                                        column_pfam_name_1.append(pfam_name_2)
+                                        column_pfam_name_2.append(pfam_name_1)
+                                        column_alignment_def_1.append(alignment_def_2)
+                                        column_alignment_def_2.append(alignment_def_1)
+                                        has_template = True
+                                        break
+                                
+        
+        # Turn print statement output back on
+        print number_of_missing_pfams
+        
+        # Create a dataframe with the compiled results
+        # Comment out whichever columns you want to keep
+        uniprot_domain_pair_df = pd.DataFrame(index=range(len(column_uniprot_domain_id_1)))
+        
+        uniprot_domain_pair_df['uniprot_domain_id_1'] = column_uniprot_domain_id_1
+#        uniprot_domain_pair_df['uniprot_id_1'] = column_uniprot_id_1
+#        uniprot_domain_pair_df['pfam_name_1'] = column_pfam_name_1
+#        uniprot_domain_pair_df['alignment_def_1'] = column_alignment_def_1
+        uniprot_domain_pair_df['uniprot_domain_id_2'] = column_uniprot_domain_id_2
+#        uniprot_domain_pair_df['uniprot_id_2'] = column_uniprot_id_2
+#        uniprot_domain_pair_df['pfam_name_2'] = column_pfam_name_2
+#        uniprot_domain_pair_df['alignment_def_2'] = column_alignment_def_2
+        
+        print uniprot_domain_pair_df
+        uniprot_domain_pair_df.drop_duplicates(inplace=True)
+        print uniprot_domain_pair_df
+        
+        return uniprot_domain_pair_df
+        
+    
 if __name__ == "__main__":
+    
+    
+    if True:
+        pfam_parser = make_uniprot_domain_database()
+        pfam_parser.run()
+        uniprot_domain_df = pfam_parser.get_dataframe()
+    else:
+        with open('/home/kimlab1/strokach/working/pipeline/code/protein_definition.pickle') as fh:
+            uniprot_domain_df = pickle.load(fh)
 
-    # Instantiate the database object
-    pfamA_clans_filename = '/home/kimlab1/strokach/working/databases/pfam.janelia.org/Pfam-A.clans.tsv'
-    pfamA_repeating_domains_filename = '/home/kimlab1/strokach/working/databases/mysql-query-outputs/pfamA_repeating_domains.txt'
-    pfamA_superdomains_filename = '/home/kimlab1/strokach/working/databases/mysql-query-outputs/pfamA_superdomains.txt'
+    uniprot_domain_df.to_csv('/home/kimlab1/strokach/working/databases/mysql/elaspic/uniprot_domain.txt', sep='\t', na_rep='\N', header=True, index=False)     
+   
+    protein_interaction_database = ProteinInteraction(protein_interaction_file, uniprot_domain_df)
+    protein_interaction_database.db.to_csv('/home/kimlab1/strokach/working/pipeline/code/uniprot_domain_pair.txt', sep='\t', na_rep='\N', header=True, index=False)
     
-    db = make_uniprot_pfam_database(pfamA_clans_filename, pfamA_repeating_domains_filename, pfamA_superdomains_filename)
-    db.run()
+         
+#        if self.grouped_db.groups.has_key(uniprot_id):
+#            return self.grouped_db.get_group(uniprot_id)
+#        else:
+#            # In the future, make it fetch the uniprot sequence, analyse it with pfam_scan.pl,
+#            # and save the output to the database
+#            print "No protein definition entries for the given uniprot_id:", uniprot_id
+#            return None
     
-    
+            
     # Save data incrementally for debugging
     
 #    db_path = '/home/kimlab1/strokach/working/databases/uniprot-yanqi/'
