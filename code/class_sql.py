@@ -12,12 +12,14 @@ from string import uppercase
 
 from sqlalchemy import create_engine, and_, or_
 from sqlalchemy import Column, Index, UniqueConstraint
-from sqlalchemy import Integer, Float, String, Boolean, Text
+from sqlalchemy import Integer, Float, String, Boolean, Text, DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship, backref, aliased
+from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
 
 import Bio
+from Bio import AlignIO
 
 import parse_pfamscan
 import class_error as error
@@ -55,6 +57,10 @@ def decode_domain(domains, merge=True):
     """ Unlike split_domain(), this function returns a tuple of tuples of strings,
     preserving letter numbering (e.g. 10B)
     """
+    if not domains:
+        print 'Domains is None!'
+        return None
+    
     if domains[-1] == ',':
         domains = domains[:-1]
     x = domains
@@ -137,7 +143,7 @@ class UniprotSequence(Base):
     __tablename__ = 'uniprot_sequence'
     
     uniprot_id = Column(String(50, collation=string_collation), primary_key=True, nullable=False)
-    uniprot_name = Column(String(255, collation=string_collation))
+    uniprot_name = Column(String(255, collation=string_collation), nullable=False)
     uniprot_description = Column(String(255, collation=string_collation))
     uniprot_sequence = Column(Text, nullable=False)
 
@@ -148,6 +154,7 @@ class UniprotDomain(Base):
     
     uniprot_domain_id = Column(Integer, primary_key=True)
     
+    organism_name = Column(String(255, collation=string_collation), nullable=False)
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id), index=True, nullable=False)
     pfam_name = Column(String(255, collation=string_collation), index=True, nullable=False) #seq_id
     alignment_def = Column(String(255, collation=string_collation), nullable=False)
@@ -189,13 +196,17 @@ class UniprotDomainTemplate(Base):
     
     uniprot_domain_id = Column(None, ForeignKey(UniprotDomain.uniprot_domain_id), primary_key=True)
     template_errors = Column(Text)
-    alignment_filename = Column(String(255, collation=string_collation))
+    alignment_filename = Column(String(255, collation=binary_collation))
     
     #
     cath_id = Column(None, ForeignKey(Domain.cath_id), index=True)
     domain_def = Column(String(255, collation=string_collation))
     alignment_id = Column(String(255, collation=string_collation))
-    alignment_score = Column(Float)
+    alignment_score = Column(Integer)
+    
+    #
+    date_created = Column(DateTime, nullable=False, default=func.now())
+    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
     
     # Relationships
     uniprot_domain = relationship(UniprotDomain, uselist=False, backref='template') # one to one
@@ -207,13 +218,18 @@ class UniprotDomainModel(Base):
     
     uniprot_domain_id = Column(None, ForeignKey(UniprotDomainTemplate.uniprot_domain_id), primary_key=True)
     model_errors = Column(Text)
-    model_filename = Column(String(255, collation=string_collation))
+    model_filename = Column(String(255, collation=binary_collation))
     
     chain = Column(String(1, collation=string_collation))
     norm_dope = Column(Float)
     het_flag = Column(Boolean)
     switch_chain = Column(Boolean)
-    surface_aa = Column(Text)
+    
+    sasa_score = Column(Text)
+    
+    #
+    date_created = Column(DateTime, nullable=False, default=func.now())
+    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
     
     # Relationships
     template = relationship(UniprotDomainTemplate, uselist=False, backref='model') # one to one
@@ -224,29 +240,24 @@ class UniprotDomainMutation(Base):
     
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id), index=True, nullable=False, primary_key=True)
     uniprot_domain_id = Column(None, ForeignKey(UniprotDomainModel.uniprot_domain_id), primary_key=True)
-    mutation = Column(String(11, collation=string_collation), nullable=False, primary_key=True)
+    mutation = Column(String(8, collation=string_collation), nullable=False, primary_key=True)
     mutation_errors = Column(Text)
     
-    model_filename_wt = Column(String(255, collation=string_collation))
-    model_filename_mut = Column(String(255, collation=string_collation))
+    model_filename_wt = Column(String(255, collation=binary_collation))
+    model_filename_mut = Column(String(255, collation=binary_collation))
     #
-    mutation_pdb = Column(Integer)
-    mutation_modeller = Column(Integer)
-    
-    chain_pdb = Column(String(1, collation=string_collation))
     chain_modeller = Column(String(1, collation=string_collation))
+    mutation_modeller = Column(String(8, collation=string_collation))
+    #
+    AnalyseComplex_energy_wt = Column(Text)
+    Stability_energy_wt = Column(Text)
+    AnalyseComplex_energy_mut = Column(Text)
+    Stability_energy_mut = Column(Text)
     
-    AnalyseComplex_energy_wt = Column(Float)
-    Stability_energy_wt = Column(Float)
-    AnalyseComplex_energy_mut = Column(Float)
-    Stability_energy_mut = Column(Float)
-    
-    interface_size = Column(Float)
-    
-    physChem_wt = Column(Float)
-    physChem_wt_ownChain = Column(Float)
-    physChem_mut = Column(Float)
-    physChem_mut_ownChain = Column(Float)
+    physChem_wt = Column(String(255, collation=binary_collation))
+    physChem_wt_ownChain = Column(String(255, collation=binary_collation))
+    physChem_mut = Column(String(255, collation=binary_collation))
+    physChem_mut_ownChain = Column(String(255, collation=binary_collation))
 
     matrix_score = Column(Float)
     
@@ -256,6 +267,10 @@ class UniprotDomainMutation(Base):
     solvent_accessibility_mut = Column(Float)
            
     ddG = Column(Float)
+    
+    #
+    date_created = Column(DateTime, nullable=False, default=func.now())
+    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
     
     # Relationships
     model = relationship(UniprotDomainModel, backref='mutations') # many to one
@@ -269,19 +284,23 @@ class UniprotDomainPairTemplate(Base):
     # Columns
     uniprot_domain_pair_id = Column(None, ForeignKey(UniprotDomainPair.uniprot_domain_pair_id), primary_key=True)
     template_errors = Column(Text)
-    alignment_filename_1 = Column(String(255, collation=string_collation))
-    alignment_filename_2 = Column(String(255, collation=string_collation))
+    alignment_filename_1 = Column(String(255, collation=binary_collation))
+    alignment_filename_2 = Column(String(255, collation=binary_collation))
     
 #    domain_contact_id = Column(None, ForeignKey(DomainContact.domain_contact_id), index=True)        
     cath_id_1 = Column(None, ForeignKey(Domain.cath_id), index=True)
     domain_def_1 = Column(String(255, collation=string_collation))
     alignment_id_1 = Column(String(255, collation=string_collation))
-    alignment_score_1 = Column(Float)
+    alignment_score_1 = Column(Integer)
 
     cath_id_2 = Column(None, ForeignKey(Domain.cath_id), index=True)
     domain_def_2 = Column(String(255, collation=string_collation))
     alignment_id_2 = Column(String(255, collation=string_collation))
-    alignment_score_2 = Column(Float)
+    alignment_score_2 = Column(Integer)
+    
+    #
+    date_created = Column(DateTime, nullable=False, default=func.now())
+    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
     
     # Relationships
     uniprot_domain_pair = relationship(UniprotDomainPair, uselist=False, backref='template') # one to one
@@ -294,18 +313,26 @@ class UniprotDomainPairModel(Base):
     
     uniprot_domain_pair_id = Column(None, ForeignKey(UniprotDomainPairTemplate.uniprot_domain_pair_id), primary_key=True)
     model_errors = Column(Text)
-    model_filename = Column(String(255, collation=string_collation))
-    
+    model_filename = Column(String(255, collation=binary_collation))
     #
     chain_1 = Column(String(1, collation=string_collation))
     chain_2 = Column(String(1, collation=string_collation))
 
     norm_dope = Column(Float)
-    het_flag = Column(Boolean)
+    het_flag_1 = Column(Boolean)
+    het_flag_2 = Column(Boolean)
     switch_chain = Column(Boolean)
     
-    interface_aa_1 = Column(Text)
-    interface_aa_2 = Column(Text)
+    interface_area_hydrophobic = Column(Float)
+    interface_area_hydrophilic = Column(Float)
+    interface_area_total = Column(Float)
+    interface_dG = Column(Float)
+    interacting_aa_1 = Column(Text)
+    interacting_aa_2 = Column(Text)
+    
+    #
+    date_created = Column(DateTime, nullable=False, default=func.now())
+    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
     
     # Relationships
     template = relationship(UniprotDomainPairTemplate, uselist=False, backref='model') # one to one
@@ -316,29 +343,24 @@ class UniprotDomainPairMutation(Base):
     
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id), index=True, nullable=False, primary_key=True)
     uniprot_domain_pair_id = Column(None, ForeignKey(UniprotDomainPairModel.uniprot_domain_pair_id), primary_key=True)
-    mutation = Column(String(11, collation=string_collation), nullable=False, primary_key=True)
+    mutation = Column(String(8, collation=string_collation), nullable=False, primary_key=True)
     mutation_errors = Column(Text)
-
-    model_filename_wt = Column(String(255, collation=string_collation))
-    model_filename_mut = Column(String(255, collation=string_collation))    
+    
+    model_filename_wt = Column(String(255, collation=binary_collation))
+    model_filename_mut = Column(String(255, collation=binary_collation))
     #
-    mutation_position_pdb = Column(Integer)
-    mutation_position_modeller = Column(Integer)
-    
-    chain_pdb = Column(String(1, collation=string_collation))
     chain_modeller = Column(String(1, collation=string_collation))
+    mutation_modeller = Column(String(8, collation=string_collation))
+    #
+    AnalyseComplex_energy_wt = Column(Text)
+    Stability_energy_wt = Column(Text)
+    AnalyseComplex_energy_mut = Column(Text)
+    Stability_energy_mut = Column(Text)
     
-    AnalyseComplex_energy_wt = Column(Float)
-    Stability_energy_wt = Column(Float)
-    AnalyseComplex_energy_mut = Column(Float)
-    Stability_energy_mut = Column(Float)
-    
-    interface_size = Column(Float)
-    
-    physChem_wt = Column(Float)
-    physChem_wt_ownChain = Column(Float)
-    physChem_mut = Column(Float)
-    physChem_mut_ownChain = Column(Float)
+    physChem_wt = Column(String(255, collation=binary_collation))
+    physChem_wt_ownChain = Column(String(255, collation=binary_collation))
+    physChem_mut = Column(String(255, collation=binary_collation))
+    physChem_mut_ownChain = Column(String(255, collation=binary_collation))
 
     matrix_score = Column(Float)
     
@@ -346,11 +368,16 @@ class UniprotDomainPairMutation(Base):
     solvent_accessibility_wt = Column(Float)
     secondary_structure_mut = Column(Float)
     solvent_accessibility_mut = Column(Float)
-    
+           
     ddG = Column(Float)
+    
+    #
+    date_created = Column(DateTime, nullable=False, default=func.now())
+    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
     
     # Relationships
     model = relationship(UniprotDomainPairModel, backref='mutations') # many to one
+
 
 ###############################################################################
 class MyDatabase(object):
@@ -364,36 +391,38 @@ class MyDatabase(object):
         # Based on configuration, use a different database
         # (Defaults to an in-memmory sqlite engine)
         if sql_flavor == 'sqlite':
+            autocommit=True
+            autoflush=True
             engine = create_engine('sqlite://')
-            if clear_database:
-                Base.metadata.drop_all(engine)
-            Base.metadata.create_all(engine)
         elif sql_flavor == 'sqlite_file':
-            engine = create_engine('sqlite:///' + path_to_sqlite_db)
-            if clear_database:
-                Base.metadata.drop_all(engine)            
-            Base.metadata.create_all(engine)
+            autocommit=True
+            autoflush=True
+            engine = create_engine('sqlite:///' + path_to_sqlite_db, isolation_level='READ UNCOMMITTED')
         elif sql_flavor == 'mysql':
+            autocommit=True
+            autoflush=True
             engine = create_engine('mysql://elaspic:elaspic@192.168.6.19:3306/elaspic')
-            if clear_database:
-                Base.metadata.drop_all(engine)            
-            Base.metadata.create_all(engine)
         elif sql_flavor == 'mysql':
+            autocommit=False
+            autoflush=False
             engine = create_engine('mysql://root:kim630@127.0.0.1:3306/elaspic')
-            if clear_database:
-                Base.metadata.drop_all(engine)            
-            Base.metadata.create_all(engine)
         elif sql_flavor == 'postgresql':
+            autocommit=False
+            autoflush=False
             engine = create_engine('postgresql://elaspic:elaspic@192.168.6.19:5432/elaspic')
-            if clear_database:
-                Base.metadata.drop_all(engine)
+    
+        if clear_database:
+            Base.metadata.drop_all(engine)
             Base.metadata.create_all(engine)
             
-        Session.configure(bind=engine)
+        Session.configure(bind=engine, autocommit=autocommit, autoflush=autoflush)
+            
+        self.autocommit = autocommit
         self.session = Session()
         self.is_immutable = is_immutable
         self.path_to_temp = path_to_temp
         self.path_to_archive = path_to_archive
+
     
     def load_db_from_csv(self):
         """
@@ -425,7 +454,7 @@ class MyDatabase(object):
         for idx, row in domain_df.iterrows():
             self.session.add(Domain(**row.to_dict()))
             if idx % 10000 == 0:
-#                session.flush()
+#                self.session.flush()
                 print idx
         self.session.commit()
         print 'Finished populating table domain'
@@ -438,7 +467,7 @@ class MyDatabase(object):
         for idx, row in domain_contact_df.iterrows():
             self.session.add(DomainContact(**row.to_dict()))
             if idx % 10000 == 0:
-#                session.flush()
+#                self.session.flush()
                 print idx
         self.session.commit()
         print 'Finished populating table domain_contact'
@@ -450,7 +479,7 @@ class MyDatabase(object):
         for idx, row in uniprot_sequence_df.iterrows():
             self.session.add(UniprotSequence(**row.to_dict()))
             if idx % 10000 == 0:
-#                session.flush()
+#                self.session.flush()
                 print idx
         self.session.commit()
         print 'Finished populating table uniprot_sequence'     
@@ -462,13 +491,22 @@ class MyDatabase(object):
             uniprot_domain_df_with_id = pd.read_csv(uniprot_domain_infile, sep='\t', na_values='\N', index_col=False)
             uniprot_domain_df_with_id['alignment_defs'] = uniprot_domain_df_with_id['alignment_def']
             uniprot_domain_df_with_id['alignment_def'] = uniprot_domain_df_with_id['alignment_defs'].apply(lambda x: encode_domain(decode_domain(x)))
-            uniprot_domain_df_with_id['path_to_data'] = (uniprot_domain_df_with_id['uniprot_id'] + '/' +
-                                                        uniprot_domain_df_with_id['pfam_name'] + '*' +
-                                                        uniprot_domain_df_with_id['alignment_def'].apply(lambda x: x.replace(':','-')) + '/')
+            
+            tmp = uniprot_domain_df_with_id.merge(uniprot_sequence_df, how='left', left_on='uniprot_id', right_on='uniprot_id', suffixes=('_domain', ''))
+            uniprot_domain_df_with_id['organism_name'] = tmp['uniprot_name'].apply(lambda x: x.split('_')[-1])
+            
+            uniprot_domain_df_with_id['path_to_data'] = (
+                uniprot_domain_df_with_id['organism_name'].apply(lambda x: x.lower()) + '/' + 
+                uniprot_domain_df_with_id['uniprot_id'].apply(lambda x: x[0:3]) + '/' + 
+                uniprot_domain_df_with_id['uniprot_id'].apply(lambda x: x[3:5]) + '/' +
+                uniprot_domain_df_with_id['uniprot_id'] + '/' + 
+                uniprot_domain_df_with_id['pfam_name'] + '*' +
+                uniprot_domain_df_with_id['alignment_def'].apply(lambda x: x.replace(':','-')) + '/')
+                                                        
             for idx, row in uniprot_domain_df_with_id.iterrows():
                 self.session.add(UniprotDomain(**row.to_dict()))
                 if idx % 10000 == 0:
-#                    session.flush()
+#                    self.session.flush()
                     print idx
             self.session.commit()
             print 'Finished populating table uniprot_domain'
@@ -483,16 +521,9 @@ class MyDatabase(object):
         # Table `uniprot_domain_pair`
         if os.path.isfile(uniprot_domain_pair_infile):
             uniprot_domain_pair_df_with_id = pd.read_csv(uniprot_domain_pair_infile, sep='\t', na_values='\N', index_col=False)
-
-            temp = uniprot_domain_pair_df_with_id\
-            .merge(uniprot_domain_df_with_id, how='left', left_on='uniprot_domain_id_1', right_on='uniprot_domain_id')\
-            .merge(uniprot_domain_df_with_id, how='left', left_on='uniprot_domain_id_2', right_on='uniprot_domain_id', suffixes=('_1', '_2'))
-            temp['path_to_data'] = (temp['uniprot_id_1'] + '/' +
-                                    temp['pfam_name_1'] + '*' +
-                                    temp['alignment_def_1'].apply(lambda x: x.replace(':','-')) + '/' +
-                                    temp['pfam_name_2'] + '*' +
-                                    temp['alignment_def_2'].apply(lambda x: x.replace(':','-')) + '/' +
-                                    temp['uniprot_id_2'] + '/')
+            
+            temp = uniprot_domain_pair_df_with_id.merge(uniprot_domain_df_with_id, how='left', left_on='uniprot_domain_id_1', right_on='uniprot_domain_id').merge(uniprot_domain_df_with_id, how='left', left_on='uniprot_domain_id_2', right_on='uniprot_domain_id', suffixes=('_1', '_2'))
+            temp['path_to_data'] = (temp['path_to_data_1'] + temp['pfam_name_2'] + '*' + temp['alignment_def_2'].apply(lambda x: x.replace(':','-')) + '/' + temp['uniprot_id_2'] + '/')
             temp = temp[['uniprot_domain_pair_id', 'path_to_data']]
             uniprot_domain_pair_df_with_id = uniprot_domain_pair_df_with_id.merge(temp, how='left')
 
@@ -500,7 +531,7 @@ class MyDatabase(object):
             for idx, row in uniprot_domain_pair_df_with_id.iterrows():
                 self.session.add(UniprotDomainPair(**row.to_dict()))
                 if idx % 10000 == 0:
-#                   self.session.flush()
+#                    self.session.flush()
                     print idx
             self.session.commit()
             print 'Finished populating table domain'  
@@ -512,6 +543,38 @@ class MyDatabase(object):
 ##            uniprot_domain_pair_df.to_sql('uniprot_domain_pair', conn, flavor=sql_flavor, if_exists='append')
 ##            uniprot_domain_pair_df_with_id = pd.read_sql('SELECT * from uniprot_domain_pair', conn)
 #            uniprot_domain_pair_df_with_id.to_csv(uniprot_domain_pair_infile, sep='\t', na_values='\N', index=False)
+
+
+
+
+    def load_db_from_archive(self):
+        
+        data = [
+            ['human/*/*/*/*/template.json', UniprotDomainTemplate],
+            ['human/*/*/*/*/model.json', UniprotDomainModel],
+            ['human/*/*/*/*/*/mutation.json', UniprotDomainMutation],
+            ['human/*/*/*/*/*/*/template.json', UniprotDomainPairTemplate],
+            ['human/*/*/*/*/*/*/model.json', UniprotDomainPairModel],
+            ['human/*/*/*/*/*/*/*/mutation.json', UniprotDomainPairMutation],
+        ]
+        
+        for d in data:
+            command = 'ls ' + self.path_to_archive + d[0]
+            childProcess = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            result, __ = childProcess.communicate() 
+            filenames = [fname for fname in result.split('\n') if fname != '']
+            for filename in filenames:
+                with open(filename, 'r') as fh:
+                    row = json.load(fh)
+                try:
+                    self.session.merge(d[1](**row))
+                except TypeError as e:
+                    print 'Error merging %s.\nProbably from an older version of the database. Skipping...' % filename
+                    print '\t', e
+                print 'Merged %s' % filename
+            self.session.commit()
+            print 'Committed changes\n\n\n'
+        
 
 
     ###########################################################################
@@ -570,7 +633,8 @@ class MyDatabase(object):
         """
         if not self.is_immutable:
             self.session.add(uniprot_sequence)
-            self.session.commit()
+            if not self.autocommit:
+                self.session.commit()
         
     
     ###########################################################################
@@ -639,12 +703,12 @@ class MyDatabase(object):
         for uniprot_domain, uniprot_template, uniprot_model in uniprot_definitions:
             tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
             archive_save_path = self.path_to_archive + uniprot_domain.path_to_data      
-            if uniprot_template:
+            if uniprot_template and (uniprot_template.alignment_filename is not None):
                 subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
                 subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename +
                                         ' ' + tmp_save_path + uniprot_template.alignment_filename, shell=True)
-            if uniprot_model:
-                subprocess.check_call('cp ' +  + archive_save_path + uniprot_model.model_filename +
+            if uniprot_model and (uniprot_model.model_filename is not None):
+                subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
                                         ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)
         return uniprot_definitions
         
@@ -684,13 +748,13 @@ class MyDatabase(object):
         for uniprot_domain, uniprot_template, uniprot_model in uniprot_domain_pair_1 + uniprot_domain_pair_2:
             tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
             archive_save_path = self.path_to_archive + uniprot_domain.path_to_data
-            if uniprot_template:
+            if uniprot_template and (uniprot_template.alignment_filename_1 is not None):
                 subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
                 subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_1 +
                                         ' ' + tmp_save_path + uniprot_template.alignment_filename_1, shell=True)                    
                 subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_2 +
                                         ' ' + tmp_save_path + uniprot_template.alignment_filename_2, shell=True)
-            if uniprot_model:
+            if uniprot_model and (uniprot_model.model_filename is not None):
                 subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
                                         ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)                    
         
@@ -699,19 +763,15 @@ class MyDatabase(object):
 
     def _get_uniprot_domain_pair(self, uniprot_id_1, reverse=False):
         
-        domain_id_1 = UniprotDomainPair.uniprot_domain_id_1
-        domain_id_2 = UniprotDomainPair.uniprot_domain_id_2
-        if reverse:
-            domain_id_1, domain_id_2 = domain_id_2, domain_id_1
-            
-        uniprot_domain_1 = aliased(UniprotDomain)
-        uniprot_domain_2 = aliased(UniprotDomain)
+        if not reverse:
+            uniprot_id_of_reference_domain = UniprotDomainPair.uniprot_domain_id_1
+        else:
+            uniprot_id_of_reference_domain = UniprotDomainPair.uniprot_domain_id_2
         
         uniprot_domain_pair = self.session\
             .query(UniprotDomainPair, UniprotDomainPairTemplate, UniprotDomainPairModel)\
-            .join(uniprot_domain_1, domain_id_1==uniprot_domain_1.uniprot_domain_id)\
-            .filter(uniprot_domain_1.uniprot_id==uniprot_id_1)\
-            .join(uniprot_domain_2, domain_id_2==uniprot_domain_2.uniprot_domain_id)\
+            .join(UniprotDomain, UniprotDomain.uniprot_domain_id==uniprot_id_of_reference_domain)\
+            .filter(UniprotDomain.uniprot_id == uniprot_id_1)\
             .outerjoin(UniprotDomainPairTemplate)\
             .outerjoin(UniprotDomainPairModel)\
             .all()
@@ -722,16 +782,10 @@ class MyDatabase(object):
     def get_uniprot_domain_pair_mutation(self, uniprot_domain_pair_id, mutation):
         """
         """
-        position = int(mutation[1:-1])
-        from_aa = mutation[0]
-        to_aa = mutation[-1]
-
         uniprot_mutation = self.session\
             .query(UniprotDomainPairMutation)\
-            .filter(UniprotDomainMutation.uniprot_domain_pair_id==uniprot_domain_pair_id)\
-            .filter(UniprotDomainMutation.mutation_position_uniprot==position)\
-            .filter(UniprotDomainMutation.mutation_from==from_aa)\
-            .filter(UniprotDomainMutation.mutation_to==to_aa)\
+            .filter(UniprotDomainPairMutation.uniprot_domain_pair_id==uniprot_domain_pair_id)\
+            .filter(UniprotDomainPairMutation.mutation==mutation)\
             .all()
             
         if len(uniprot_mutation) == 0:
@@ -749,31 +803,34 @@ class MyDatabase(object):
         
         # Save a copy of the alignment to the export folder
         if path_to_data:
+            
             tmp_save_path = self.path_to_temp + path_to_data 
             archive_save_path = self.path_to_archive + path_to_data
             subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
-            if type(uniprot_template) == UniprotDomainTemplate:
+            
+            if type(uniprot_template) == UniprotDomainTemplate and (uniprot_template.alignment_filename is not None):
                 subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename +
                                         ' ' + archive_save_path + uniprot_template.alignment_filename, shell=True)
-            elif type(uniprot_template) == UniprotDomainPairTemplate:
+                                        
+            elif type(uniprot_template) == UniprotDomainPairTemplate and (uniprot_template.alignment_filename_1 is not None):
                 subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename_1 +
                                         ' ' + archive_save_path + uniprot_template.alignment_filename_1, shell=True)
                 subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename_2 +
                                         ' ' + archive_save_path + uniprot_template.alignment_filename_2, shell=True)
-            else:
-                raise Exception('Wrong uniprot_template type!')
+                
             with open(archive_save_path + 'template.json', 'w') as fh:
                 json.dump(row2dict(uniprot_template), fh, indent=4, separators=(',', ': '))
         
         if not self.is_immutable:
-            self.session.add(uniprot_template)
-            self.session.commit()
+            self.session.merge(uniprot_template)
+            if not self.autocommit:
+                self.session.commit()
     
     
     def add_uniprot_model(self, uniprot_model, path_to_data=False):
         
         # Save a copy of the alignment to the export folder
-        if path_to_data:
+        if path_to_data and (uniprot_model.model_filename is not None):
             tmp_save_path = self.path_to_temp + path_to_data 
             archive_save_path = self.path_to_archive + path_to_data
             subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
@@ -783,13 +840,14 @@ class MyDatabase(object):
                 json.dump(row2dict(uniprot_model), fh, indent=4, separators=(',', ': '))
         
         if not self.is_immutable:
-            self.session.add(uniprot_model)
-            self.session.commit()
+            self.session.merge(uniprot_model)
+            if not self.autocommit:
+                self.session.commit()
     
     
     def add_uniprot_mutation(self, uniprot_mutation, path_to_data=False):
         
-        if path_to_data:
+        if path_to_data and (uniprot_mutation.model_filename_wt is not None):
             tmp_save_path = self.path_to_temp + path_to_data
             archive_save_path = self.path_to_archive + path_to_data
             archive_save_subpath = uniprot_mutation.model_filename_wt.split('/')[0] + '/'
@@ -802,8 +860,9 @@ class MyDatabase(object):
                 json.dump(row2dict(uniprot_mutation), fh, indent=4, separators=(',', ': '))
         
         if not self.is_immutable:
-            self.session.add(uniprot_mutation)
-            self.session.commit()
+            self.session.merge(uniprot_mutation)
+            if not self.autocommit:
+                self.session.commit()
  
     
     ###########################################################################
@@ -861,21 +920,62 @@ class MyDatabase(object):
     
     
     def close(self):
-        self.session.commit()
+        if not self.autocommit:
+            self.session.commit()
         self.session.close()
 
+
+    ###########################################################################
+    def get_alignment(self, uniprot_template, path_to_data=False):
+        
+        if path_to_data:
+            tmp_save_path = self.path_to_temp + path_to_data 
+            archive_save_path = self.path_to_archive + path_to_data
+        else:
+            return
+            
+        if isinstance(uniprot_template, UniprotDomainTemplate):
+            
+            # Load previously-calculated alignments
+            if os.path.isfile(tmp_save_path + uniprot_template.alignment_filename):
+                alignment = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename, 'clustal')
+            elif os.path.isfile(archive_save_path + uniprot_template.alignment_filename):
+                alignment = AlignIO.read(archive_save_path + uniprot_template.alignment_filename, 'clustal')
+            else:
+                raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename)
+            
+            return [alignment, None]
+        
+        elif isinstance(uniprot_template, UniprotDomainPairTemplate):
+            
+            # Read alignment from the temporary folder
+            if (os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_1)
+            and os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_2)):
+                alignment_1 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_1, 'clustal')
+                alignment_2 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_2, 'clustal')
+            # Read alignment from the export database
+            elif (os.path.isfile(archive_save_path + uniprot_template.alignment_filename_1)
+            and os.path.isfile(archive_save_path + uniprot_template.alignment_filename_2)):
+                alignment_1 = AlignIO.read(archive_save_path + uniprot_template.alignment_filename_1, 'clustal')
+                alignment_2 = AlignIO.read(archive_save_path + uniprot_template.alignment_filename_2, 'clustal')
+            else:
+                raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename_1)
+                
+            return [alignment_1, alignment_2]
     ###########################################################################
 
 
 if __name__ == '__main__':
 #    return
     # run to generate an initial state database (with no precalculatios)
-    print 0/0
+#    print 0/0
     print sql_flavor
-    db = MyDatabase('/home/kimlab1/strokach/working/pipeline/db/', 
+    db = MyDatabase('/home/kimlab1/strokach/working/pipeline/db/pipeline.db', 
+                    path_to_archive='/home/kimlab1/database_data/elaspic/',
                     sql_flavor=sql_flavor,
-                    clear_database=True)
-    db.load_db_from_csv()
+                    clear_database=False)
+#    db.load_db_from_csv()
+    db.load_db_from_archive()
     db.session.close()
 
 ###############################################################################

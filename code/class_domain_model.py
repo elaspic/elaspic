@@ -2,23 +2,13 @@
 
 import os
 import subprocess
-import tarfile
-import json
-
-from Bio import SeqIO, AlignIO
 
 from class_pdbTemplate import pdbTemplate
-from class_time import runTime as rt
-from class_interfaceSize import interfaceSize, getDSSP
-from class_pysicoChemicalProperties import pysiChem
-from class_foldX import foldX
 from HelperFunction_prepareModeller import prepareModeller
-from modeller import ModellerError
-
 import class_error as error
 import class_modeller as mod
 import class_sql as sql
-
+import class_analyze_structure
 
 
 class GetModel(object):
@@ -26,16 +16,26 @@ class GetModel(object):
     """
     
     def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
-                  pool, semaphore, db, log, path_to_archive, get_template):
+                  pool, semaphore, db, log,
+                  modeller_runs, buildModel_runs, PWD):
         """
-        input:
-        tmpPath             type 'str'
-        unique              type 'str'
-        pdbPath             type 'str'
-        savePDB             type 'str'
-        saveAlignments      type 'str'
-        pool                type class '__main__.ActivePool'
-        semaphore           type class 'multiprocessing.synchronize.Semaphore'
+        Produces a model of a single uniprot domain or a domain pair
+        
+        Parameters
+        ----------
+        tmpPath : 'str'
+        unique : 'str'
+        pdbPath : 'str'
+        savePDB : 'str'
+        saveAlignments : 'str'
+        pool : '__main__.ActivePool'
+        semaphore : 'multiprocessing.synchronize.Semaphore'
+        
+        Returns
+        -------
+        model : sql.object
+            Object having all the information about the produced model. The model
+            itself is stored in a file on disk.
         """
         self.tmpPath = tmpPath
         self.unique = unique + '/'
@@ -48,31 +48,31 @@ class GetModel(object):
         
         # get the logger from the parent and add a handler
         self.log = log
-        self.path_to_archive = path_to_archive
-        self.get_template = get_template
-    
+        self.modeller_runs = modeller_runs
+        self.buildModel_runs = buildModel_runs
+        self.PWD = PWD
+
     
     def __call__(self, uniprot_domain, uniprot_template):
         
         # Folder for storing files for export to output
-        save_path = self.tmpPath + self.unique + '/' + uniprot_domain.path_to_data + '/'
+        save_path = self.tmpPath + self.unique + str(uniprot_domain.path_to_data)
         
         if type(uniprot_domain) == sql.UniprotDomain:
-            
             # Get the canonical uniprot sequence
             uniprot_sequence = self.db.get_uniprot_sequence(uniprot_domain.uniprot_id)
                 
             # Cut it to domain boundaries
-            uniprot_sequence_domain = self.make_SeqRec_object(
-                                    uniprot_sequence, 
-                                    sql.decode_domain(uniprot_template.domain_def),
-                                    uniprot_domain.uniprot_id)
+            uniprot_sequence_domain = uniprot_sequence[
+                sql.decode_domain(uniprot_template.domain_def)[0]-1:
+                sql.decode_domain(uniprot_template.domain_def)[1]]
             
             # Load previously-calculated alignments
-            alignment, __ = self.get_template.get_alignment(uniprot_template)
+            alignment, __ = self.db.get_alignment(uniprot_template, uniprot_domain.path_to_data)
             
             # Put the data into lists so that it's independent of whether we
             # are looking at a core or interface mutation
+            pdb_id = uniprot_template.domain.pdb_id
             chains_pdb = [uniprot_template.domain.pdb_chain, ]
             pdb_domain_definitions = [sql.decode_domain(uniprot_template.domain.pdb_domain_def), ]
             sequences = [uniprot_sequence_domain, ]
@@ -80,25 +80,23 @@ class GetModel(object):
             
         
         if type(uniprot_domain) == sql.UniprotDomainPair:
-            
             # Get sequences of the first and second protein          
-            uniprot_sequence_1 = self.db.get_uniprot_sequence(uniprot_template.domain_1.uniprot_id)
-            uniprot_sequence_2 = self.db.get_uniprot_sequence(uniprot_template.domain_2.uniprot_id)
+            uniprot_sequence_1 = self.db.get_uniprot_sequence(uniprot_domain.uniprot_domain_1.uniprot_id)
+            uniprot_sequence_2 = self.db.get_uniprot_sequence(uniprot_domain.uniprot_domain_2.uniprot_id)
                 
             # Cut sequence to boundaries and set sequence ID            
-            uniprot_sequence_1_domain = self.make_SeqRec_object(
-                                    uniprot_sequence_1, 
-                                    sql.decode_domain(uniprot_template.domain_def_1),
-                                    uniprot_domain.uniprot_domain_1.uniprot_id)
+            uniprot_sequence_1_domain = uniprot_sequence_1[
+                sql.decode_domain(uniprot_template.domain_def_1)[0]-1:
+                sql.decode_domain(uniprot_template.domain_def_1)[1]]
                 
-            uniprot_sequence_2_domain = self.make_SeqRec_object(
-                                    uniprot_sequence_2, 
-                                    sql.decode_domain(uniprot_template.domain_def_2), 
-                                    uniprot_domain.uniprot_domain_2.uniprot_id)
+            uniprot_sequence_2_domain = uniprot_sequence_2[
+                sql.decode_domain(uniprot_template.domain_def_2)[0]-1:
+                sql.decode_domain(uniprot_template.domain_def_2)[1]]
                 
             # Load previously-calculated alignments
-            alignment_1, alignment_2 = self.get_template.get_alignment(uniprot_template)
+            alignment_1, alignment_2 = self.db.get_alignment(uniprot_template, uniprot_domain.path_to_data)
             
+            pdb_id = uniprot_template.domain_1.pdb_id
             chains_pdb = [uniprot_template.domain_1.pdb_chain, uniprot_template.domain_2.pdb_chain]
             pdb_domain_definitions = [sql.decode_domain(uniprot_template.domain_1.pdb_domain_def),
                                            sql.decode_domain(uniprot_template.domain_2.pdb_domain_def)]
@@ -106,11 +104,14 @@ class GetModel(object):
             alignments = [alignment_1, alignment_2]
 
 
-        # Common -----------------
-        # save_path is where the pdb sequences and the pdb with the required chains are saved
-        sequences, alignments, chains_modeller, switch_chain, HETflag, HETATMsInChain_SEQnumbering = \
-            self.prepareInput(uniprot_template.pdb_id, chains_pdb, pdb_domain_definitions, sequences, alignments, save_path)
+
+
+        for a, b in zip(alignments, chains_pdb):
+            print a
+            print b
+            print
         
+        print 'next'
         # copy the chain IDs... they are used afterwards for renaming and copy 
         # is needed so that they are not overwritten
         target_ids = []
@@ -118,52 +119,76 @@ class GetModel(object):
         for i in range(0,len(alignments)):
             target_ids.append(alignments[i][0].id)
             template_ids.append(alignments[i][1].id)
+
+
+        chains = [template_id[-1] for template_id in template_ids]
+        # Common---------------------------------------------------------------
+        # save_path is where the pdb sequences and the pdb with the required chains are saved
+        sequences, alignments, chains_modeller, switch_chain, HETflag, HETATMsInChain_SEQnumbering = \
+            self.prepareInput(pdb_id, chains, pdb_domain_definitions, sequences, alignments, save_path)
+
         
         normDOPE_wt, pdbFile_wt = self._getModel(alignments, target_ids, template_ids, HETATMsInChain_SEQnumbering, chains_modeller, save_path)
+        print pdbFile_wt
+        
+        
+        # Renumber the model to use uniprot coordinates
+        
+        
+        
         
         # Save another copy of the alignment in the export folder
-        modeller_path = self.tmpPath + self.unique + '/modeller/'
-        archive_save_path = self.path_to_archive + uniprot_domain.path_to_data + '/'
+        modeller_path = self.tmpPath + self.unique + 'modeller/'
+#        archive_save_path = self.path_to_archive + str(uniprot_domain.path_to_data)
         subprocess.check_call('cp ' + modeller_path + pdbFile_wt + ' ' + save_path + pdbFile_wt, shell=True)
-        subprocess.check_call('cp ' + modeller_path + pdbFile_wt + ' ' + archive_save_path + pdbFile_wt, shell=True)
+#        subprocess.check_call('cp ' + modeller_path + pdbFile_wt + ' ' + archive_save_path + pdbFile_wt, shell=True)
 
-        # Rename the wildtype pdb file
-        pdbFile_wt_renamed = self.uniprot_id + '_' + self.mutations + '.pdb'
-        system_command = 'mv ' + modeller_path + pdbFile_wt + ' ' + modeller_path + pdbFile_wt_renamed
-        subprocess.check_call(system_command, shell=True)
-
-        # Save the data to mutation row objects
+        analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, chains_modeller, self.log, domain_defs=None)
         if type(uniprot_domain) == sql.UniprotDomain:
             uniprot_model = sql.UniprotDomainModel()
             uniprot_model.uniprot_domain_id = uniprot_template.uniprot_domain_id
         
             uniprot_model.model_filename = pdbFile_wt
             uniprot_model.chain = chains_modeller[0]
-        
-            uniprot_model.norm_dope = normDOPE_wt
-            uniprot_model.het_flag = HETflag
+            uniprot_model.het_flag = HETflag[chains_modeller[0]]
             uniprot_model.switch_chain = switch_chain
             
-            uniprot_model.interface_aa = ''
-
+            uniprot_model.norm_dope = normDOPE_wt
+            
+            # Get SASA using pops
+            sasa_score = analyze_structure.get_sasa()[chains_modeller[0]]
+            assert len(sasa_score) == (sql.decode_domain(uniprot_template.domain_def)[1] - sql.decode_domain(uniprot_template.domain_def)[0] + 1)
+            uniprot_model.sasa_score = ','.join(['%.2f' % (x*100) for x in sasa_score])
+            
+            
         if type(uniprot_domain) == sql.UniprotDomainPair:
             uniprot_model = sql.UniprotDomainPairModel()
             uniprot_model.uniprot_domain_pair_id = uniprot_template.uniprot_domain_pair_id
         
             uniprot_model.model_filename = pdbFile_wt
-            uniprot_model.norm_dope = normDOPE_wt
-            uniprot_model.het_flag = HETflag
-            uniprot_model.switch_chain = switch_chain
-            
             uniprot_model.chain_1 = chains_modeller[0]
             uniprot_model.chain_2 = chains_modeller[1]
-            uniprot_model.interface_aa_1 = ''
-            uniprot_model.interface_aa_2 = ''
-        
-        # Save the model data to the output folder
-        with open(archive_save_path + 'model.json', 'wb') as fh:
-            json.dump(sql.row2dict(uniprot_model), fh, indent=4, separators=(',', ': ')) # separators to avoid tailing whitespace        
-        
+            uniprot_model.het_flag_1 = HETflag[chains_modeller[0]]
+            uniprot_model.het_flag_2 = HETflag[chains_modeller[1]]
+            uniprot_model.switch_chain = switch_chain            
+            
+            uniprot_model.norm_dope = normDOPE_wt
+            
+            # Get interacting amino acids and interface area          
+            
+            interacting_aa = analyze_structure.get_interacting_aa()
+            interacting_aa_1 = interacting_aa[chains_modeller[0]]
+            uniprot_model.interacting_aa_1 = ','.join(['%i' % x for x in interacting_aa_1])
+            
+            interacting_aa_2 = interacting_aa[chains_modeller[1]]
+            uniprot_model.interacting_aa_2 = ','.join(['%i' % x for x in interacting_aa_2])
+            
+            interface_area = analyze_structure.get_interface_area()
+            uniprot_model.interface_area_hydrophobic = interface_area[0]
+            uniprot_model.interface_area_hydrophilic = interface_area[1]
+            uniprot_model.interface_area_total = interface_area[2]
+            
+            
         return uniprot_model
         
 
@@ -209,10 +234,14 @@ class GetModel(object):
     def _getModel(self, alignments, target_ids, template_ids,
                        HETATMsInChain_SEQnumbering,
                        chains,
-                       savePDB
+                       save_path
                        ):
-        outFile = self.tmpPath + self.unique + '/outFile_wildtype'
+        outFile = self.tmpPath + self.unique + 'modeller/outFile_wildtype'
         
+        for a, b in zip(alignments, chains):
+            print a
+            print b
+            print
         # generate the input for modeller from the above generated alignment
         prepareModeller(outFile, 
                         alignments, 
@@ -231,14 +260,14 @@ class GetModel(object):
         else:
             modeller_template_id = template_ids[0] + template_ids[1][-1] # if more than two chains are used this has to be adjusted
 
-        modeller_path = self.tmpPath + self.unique + '/modeller/'
+        modeller_path = self.tmpPath + self.unique + 'modeller/'
         os.chdir(modeller_path) # from os
 
         modeller = mod.modeller([inFile], 
                                 modeller_target_id, 
                                 modeller_template_id, 
-                                savePDB, 
-                                self.tmpPath + self.unique + '/', 
+                                save_path, # path_to_pdb_for_modeller
+                                self.tmpPath + self.unique + '/', # path to folders with executables
                                 self.modeller_runs,
                                 loopRefinement=True)
         normDOPE, pdbFile = modeller.run()

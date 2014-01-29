@@ -7,8 +7,6 @@ import subprocess, shlex
 from class_error import KNOTerror
 
 
-
-
 class modeller:
     """
     run modeller
@@ -54,7 +52,7 @@ class modeller:
         # some environment settings
         self.filePath = path_to_pdb_for_modeller
         self.tmpPath = tmpPath
-        self.pdbPath = tmpPath + 'modeller/'
+        self.modeller_path = tmpPath + 'modeller/'
         
 
     def run(self):
@@ -79,7 +77,7 @@ class modeller:
             for i in range(len(result)):
                 pdbFile, normDOPE = result[i][0], result[i][1]
                 
-                if self.__call_knot(pdbFile, self.pdbPath) == 0: # i.e. no knot
+                if self.__call_knot(pdbFile, self.modeller_path) == 0: # i.e. no knot
                     if loop:
                         ranking[normDOPE] = (aln, str(pdbFile), True)
                     else:
@@ -197,7 +195,7 @@ class modeller:
 
 
 
-    def __call_knot(self, pdbFile, pdbPath):
+    def __call_knot(self, pdbFile, modeller_path):
         """
         check a PDB structure for knots using the program KNOTS by Willi Taylor
         
@@ -210,18 +208,20 @@ class modeller:
         """
         # for multiprocessing the KNOT program needs to be run from a unique
         # execution folder, this is created in the beginning
-        cmdPath = self.tmpPath + 'KNOT/'
-        system_command = cmdPath + 'topol ' + pdbPath + pdbFile
+
+        system_command = modeller_path + 'topol ' + modeller_path + pdbFile
 
         cmd = shlex.split(system_command)
+        print system_command
+        print cmd
         childProcess = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         output, error = childProcess.communicate()
         rc = childProcess.returncode
     
         line = [ x for x in output.split('\n') ]
         
-        # I found to different forms in which the output appears,
-        # hence to if statements to catch them
+        # I found two different forms in which the output appears,
+        # hence two if statements to catch them
         if line[-4].strip().split(' ')[0] == 'len':
             if int(line[-4].strip().split(' ')[2]) == 2:
                 return 0 # i.e. no knot

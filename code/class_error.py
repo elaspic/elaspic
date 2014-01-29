@@ -97,10 +97,37 @@ class EmptyPDBSequenceError(Exception):
         
 class NoPrecalculatedAlignmentFound(Exception):
     def __init__(self, save_path, alignment_filename):
+        Exception.__init__(self)
         self.save_path = save_path
         self.alignment_filename = alignment_filename
         
 class MutationOutsideDomain(Exception):
-    pass
+    def __init__(self):
+        Exception.__init__(self)
+
+class NotInteracting(Exception):
+    def __init__(self):
+        Exception.__init__(self)
+
+
+
+
+
+
+
+class PopsError(Exception):
+    def __init__(self, e, pdb, chains):
+        Exception.__init__(self)
+        self.error = e
+        self.pdb = pdb
+        self.chains = chains
+        
+
+
+
+
+
+
+
 
 

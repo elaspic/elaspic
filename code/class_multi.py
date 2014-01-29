@@ -131,7 +131,7 @@ class Task(object):
     def __init__(self, uniprot_id, mutation, # UNIQUE FOR EACH JOB
             template_finding, savePDB, tmpPath, outputPath, pdbPath,
             matrix, gap_start, gap_extend, modeller_runs, buildModel_runs,
-            foldX_WATER, path_to_archive):
+            foldX_WATER, path_to_archive, db_type):
         """ Initiate the variables that will be used throughout template finding
         and mutation modelling
         """
@@ -157,7 +157,7 @@ class Task(object):
         self.buildModel_runs = buildModel_runs
         
         self.foldX_WATER = foldX_WATER # water atoms in foldX
-        
+        self.db_type = db_type
         # stuff like modeller_path can't be specified here since self.unique
         # is not yet set. This happens after initialising the Task for each
         # Consumer.
@@ -184,7 +184,7 @@ class Task(object):
         
         # Initialise the sql database for accessing all information
         self.db = sql.MyDatabase(path_to_sqlite_db = self.tmpPath + 'pipeline.db',
-                                 sql_flavor = 'sqlite_file', 
+                                 sql_flavor = self.db_type, 
                                  is_immutable = False,
                                  path_to_temp = self.tmpPath + self.unique + '/',
                                  path_to_archive = self.path_to_archive)
@@ -199,34 +199,39 @@ class Task(object):
         
         self.get_template = class_domain_template.GetTemplate(self.tmpPath, self.unique, self.pdbPath,
             self.savePDB, self.alignments_path, self.pool, self.semaphore, 
-            self.db, self.log, self.path_to_archive)
+            self.db, self.log)
             
         self.get_model = class_domain_model.GetModel(self.tmpPath, self.unique, self.pdbPath,
             self.savePDB, self.alignments_path, self.pool, self.semaphore, 
-            self.db, self.log, self.path_to_archive, self.get_template)
+            self.db, self.log,
+            self.modeller_runs, self.buildModel_runs, self.PWD)
             
         self.get_mutation = class_domain_mutation.GetMutation(self.tmpPath, self.unique, self.pdbPath,
             self.savePDB, self.alignments_path, self.pool, self.semaphore, 
-            self.db, self.log, self.path_to_archive, self.get_template, self.get_model)        
-        
+            self.db, self.log,
+            self.foldX_WATER, self.buildModel_runs, self.PWD, self.matrix, self.gap_s, self.gap_e)
         
         # Core and interface domain definitions
         protein_domains = self.db.get_uniprot_domain(self.uniprot_id)
-        protein_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id)
         
+        protein_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id)
         # Duplicates will occur for homodimers (ie forward and reverse are the same)
-        protein_domain_pairs = list(set(protein_domain_pairs[0] + protein_domain_pairs[1])) 
-        protein_definitions = protein_domain_pairs + protein_domains
+        protein_domain_pairs = list(set(protein_domain_pairs[0] + protein_domain_pairs[1]))
+        
+        #======================================================================
+        # Don't forget to uncomment
+#        protein_definitions = protein_domain_pairs + protein_domains
+        protein_definitions = protein_domains
+        #======================================================================
 
         if protein_definitions == []:
             if self.DEBUG:
                 raise error.ProteinDefinitionError('The protein has no pfam domains')
             else:
-                return      
-                
+                return
         
         self.protein_definitions = protein_definitions
-        self.protien_mutations = None
+        self.protein_mutations = None
         
         #######################################################################
         # Do the calculations
@@ -237,8 +242,8 @@ class Task(object):
         self.compute_models()
         self.log.info("Finished making core homology models...\n")
         
-        self.compute_mutations()
-        self.log.info("Finished evaluating mutations...\n")
+#        self.compute_mutations()
+#        self.log.info("Finished evaluating mutations...\n")
             
         # Need to add some stuff for foldX: <analyse complex>
         
@@ -287,10 +292,12 @@ class Task(object):
         """
         protein_definitions_with_templates = []
         for uniprot_domain, uniprot_template, uniprot_model in self.protein_definitions:
-            print uniprot_domain, uniprot_template, uniprot_model
-            
+            print uniprot_domain, uniprot_template, uniprot_model                
+                
             # Check if tired expanding boundaries for this domain previously, and got erros
             if uniprot_template:
+                protein_definitions_with_templates.append((uniprot_domain, uniprot_template, uniprot_model,))
+                print 'skipping'
                 continue
                 
             # Construct empty templates that will be used if we have errors
@@ -305,6 +312,7 @@ class Task(object):
             # For domains that are not expanded and do not have the template cath_id:
             try:
                 template = self.get_template(uniprot_domain)
+                print "template:"
                 
             except error.NoStructuralTemplates as e:
                 if self.DEBUG:
@@ -350,7 +358,7 @@ class Task(object):
                 else:
                     empty_template.template_errors = e.error
                     template = empty_template
-
+            
             protein_definitions_with_templates.append((uniprot_domain, template, False,))
             self.db.add_uniprot_template(template, uniprot_domain.path_to_data)
                 
@@ -365,6 +373,12 @@ class Task(object):
         """
         protein_definitions_with_models = []
         for uniprot_domain, uniprot_template, uniprot_model in self.protein_definitions:
+            print uniprot_domain, uniprot_template, uniprot_model
+            
+            if uniprot_model:
+                protein_definitions_with_models.append((uniprot_domain, uniprot_template, uniprot_model,))
+                print 'skipping'
+                continue
             
             # Construct empty models that will be used if we have errors
             if type(uniprot_domain) == sql.UniprotDomain:
@@ -373,36 +387,33 @@ class Task(object):
             elif type(uniprot_domain) == sql.UniprotDomainPair:
                 empty_model = sql.UniprotDomainPairModel()
                 empty_model.uniprot_domain_pair_id = uniprot_template.uniprot_domain_pair_id
-                
-            if uniprot_model and uniprot_model.modelling_errors is not None:
-                protein_definitions_with_models.append((uniprot_domain, uniprot_template, uniprot_model,))
-                continue
+
             
-            # For domains that are not expanded and do not have the template cath_id:
-            try:
-                uniprot_model = self.get_model(uniprot_domain, uniprot_template)
-            
-            except error.KNOTerror as e:
-                if self.DEBUG:
-                    raise e
-                else:
-                    uniprot_model = empty_model
-            except ModellerError as e:
-                self.log.error('ModellerError while trying to modellel in __getPDB for ' + self.uniprot_id + ':' + self.mutations)
-                self.log.error('ModellerError args:' + '\n'.join(e.args))
-                self.log.error('ModellerError message:' + e.message)
-                if self.DEBUG:
-                    raise e
-                else:
-                    empty_model.modelling_errors = 'modelling error with message:' + e.message
-                    uniprot_model = empty_model
-            except Exception as e:
-                if self.DEBUG:
-                    raise e
-                else:
-                    # To do: have to make this part more explicit...
-                    empty_model.modelling_errors = 'unknown error'
-                    uniprot_model = empty_model
+#            # For domains that are not expanded and do not have the template cath_id:
+#            try:
+            uniprot_model = self.get_model(uniprot_domain, uniprot_template)
+#
+#            except error.KNOTerror as e:
+#                if self.DEBUG:
+#                    raise e
+#                else:
+#                    uniprot_model = empty_model
+#            except ModellerError as e:
+#                self.log.error('ModellerError while trying to modellel in __getPDB for ' + self.uniprot_id + ':' + self.mutations)
+#                self.log.error('ModellerError args:' + '\n'.join(e.args))
+#                self.log.error('ModellerError message:' + e.message)
+#                if self.DEBUG:
+#                    raise e
+#                else:
+#                    empty_model.modelling_errors = 'modelling error with message:' + e.message
+#                    uniprot_model = empty_model                 
+#            except Exception as e:
+#                if self.DEBUG:
+#                    raise e
+#                else:
+#                    # To do: have to make this part more explicit...
+#                    empty_model.modelling_errors = 'unknown error'
+##                    uniprot_model = empty_model
             
             protein_definitions_with_models.append((uniprot_domain, uniprot_template, uniprot_model,))
             self.db.add_uniprot_model(uniprot_model, uniprot_domain.path_to_data)
@@ -428,14 +439,14 @@ class Task(object):
                 elif type(uniprot_domain) == sql.UniprotDomainPair:
                     precalculated_mutation = self.db.get_uniprot_domain_pair_mutation(uniprot_template.uniprot_domain_pair_id, mutation)
                     empty_mutation = sql.UniprotDomainPairMutation()
-                    empty_mutation.uniprot_domain_id = uniprot_domain.uniprot_domain_pair_id
+                    empty_mutation.uniprot_domain_pair_id = uniprot_domain.uniprot_domain_pair_id
                     
                 if precalculated_mutation != []:
                     list_of_mutations.append(precalculated_mutation)
                     continue
                 
                 try:
-                    uniprot_mutation = self.get_mutation(uniprot_domain, uniprot_template, uniprot_model, mutation)
+                    uniprot_mutation = self.get_mutation(uniprot_domain, uniprot_template, uniprot_model, self.uniprot_id, mutation)
                     
                 except error.FoldXError as e:
                     self.log.error('FoldXError while repairing the wildtype for ' + self.uniprot_id + ':' + self.mutations)
@@ -450,6 +461,15 @@ class Task(object):
                         raise e
                     else:
                         return 'pdbError'
+                except error.NotInteracting as e:
+                    if self.DEBUG:
+                        print ('Uniprot 1: %s, uniprot domain pair id: %s, Mutation %s not at interface!' 
+                            % (self.uniprot_id, uniprot_domain.uniprot_domain_pair_id, mutation,))
+                        continue
+                    else:
+                        print ('Uniprot 1: %s, uniprot domain pair id: %s, Mutation %s not at interface!' 
+                            % (self.uniprot_id, uniprot_domain.uniprot_domain_pair_id, mutation,))
+                        continue
                         
                 list_of_mutations.append(uniprot_mutation)
                 self.db.add_uniprot_mutation(uniprot_mutation, uniprot_domain.path_to_data)          

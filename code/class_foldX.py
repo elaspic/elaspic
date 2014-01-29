@@ -19,7 +19,7 @@ class foldX():
         self.chainID = chainID
 #        self.chainID = 'A'
         
-        self.PATH = tmpPath + '/FoldX/'
+        self.PATH = tmpPath + 'FoldX/'
         self.runFile = self.PATH + 'runfile_FoldX.txt'
         self.executablePath = self.PATH
         
