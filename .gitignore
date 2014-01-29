@@ -12,7 +12,6 @@
 *.sql
 
 # Folders
-bin/
 backup/
 input/
 results/
