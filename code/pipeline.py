@@ -219,14 +219,14 @@ class pipeline():
             # a symlink is enough
             system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
                                 'cd ' + self.tmpPath + 'blast && ' + \
-                                'ln -s /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
+                                'ln -sf /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, __ = childProcess.communicate()
             assert childProcess.returncode == 0
         if whoami.strip() == 'joan':
             # for scinet, blast is already installed, but the database needs to be copied
             system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
-                                'cp -r $HOME/niklas-pipeline/blastdb/pdbaa_db ' + \
+                                'cp -ru $HOME/niklas-pipeline/blastdb/pdbaa_db ' + \
                                 self.tmpPath + 'blast/'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, __ = childProcess.communicate()
@@ -238,7 +238,7 @@ class pipeline():
         if self.db_type == 'sqlite_file':
             print self.db_path
             print self.tmpPath
-            system_command = 'cp -r ' + self.db_path + ' ' + self.tmpPath + '/'
+            system_command = 'cp -u ' + self.db_path + ' ' + self.tmpPath + '/'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, __ = childProcess.communicate()
             assert childProcess.returncode == 0
@@ -247,14 +247,13 @@ class pipeline():
     
     def __prepareTMP(self):
         # create the basic tmp directory
-        # delete its content if it exists
+        # delete its content if it exists (AS: disabled so that I can continue from previous run)
         if not os.path.isdir(self.tmpPath):
             subprocess.check_call('mkdir -p ' + self.tmpPath, shell=True)
-        else:
-            if not self.tmpPath[-1] == '/':
-                self.tmpPath = self.tmpPath +'/'
-            subprocess.check_call('rm -r ' + self.tmpPath + '*', shell=True)
-        
+#        else:
+#            if not self.tmpPath[-1] == '/':
+#                self.tmpPath = self.tmpPath +'/'
+#            subprocess.check_call('rm -r ' + self.tmpPath + '*', shell=True)
         
         for i in range(1, self.num_consumers + 1):
             # the consumers
@@ -277,40 +276,52 @@ class pipeline():
                 # copy the executables
                 cp_command = 'cp ' + self.executables + 'FoldX.linux64 ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/ && ' + \
                            'cp ' + self.executables + 'rotabase.txt ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/'
-                # call the command
                 subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
+                # Copy dssp into the folder for modelling
+                cp_command = 'cp ' + self.executables + 'dssp-2.0.4-linux-amd64 ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/'
+                subprocess.check_call(cp_command, shell=True)
             
             # modeller
             if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/modeller'):
                 # create workingfolder for modeller
                 mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
                 subprocess.check_call(mkdir_command, shell=True)
-            
-            # create tmp for KNOT
-            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/KNOT'):
-                # make the directories
-                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/KNOT'
-                # copy the executables
-                cp_command = 'cp ' + self.executables + 'topol ' + self.tmpPath + 'Consumer-' + str(i) + '/KNOT'
-                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
-            
-            # create tmp for pops
-            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/pops'):
-                # make the directories
-                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/pops'
-                # copy the executables
-                cp_command = 'cp ' + self.executables + 'pops ' + self.tmpPath + 'Consumer-' + str(i) + '/pops'
-                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
-            
-            # create tmp for output
-            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/output'):
-                # make the directories
-                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output && ' + \
-                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/alignments && ' + \
-                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/bestModels && ' + \
-                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/pdbFiles && ' + \
-                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/output/pickled'
-                subprocess.check_call(mkdir_command, shell=True)
+                # Copy knot into the same folder as modeller
+                cp_command = 'cp ' + self.executables + 'topol ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
+                subprocess.check_call(cp_command, shell=True)
+                # Copy pops into the folder for modelling
+                cp_command = 'cp ' + self.executables + 'pops ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
+                subprocess.check_call(cp_command, shell=True)
+                # Copy dssp into the folder for modelling
+                cp_command = 'cp ' + self.executables + 'dssp-2.0.4-linux-amd64 ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
+                subprocess.check_call(cp_command, shell=True)
+                
+#            
+#            # create tmp for KNOT
+#            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/KNOT'):
+#                # make the directories
+#                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/KNOT'
+#                # copy the executables
+#                cp_command = 'cp ' + self.executables + 'topol ' + self.tmpPath + 'Consumer-' + str(i) + '/KNOT'
+#                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
+#            
+#            # create tmp for pops
+#            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/pops'):
+#                # make the directories
+#                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/pops'
+#                # copy the executables
+#                cp_command = 'cp ' + self.executables + 'pops ' + self.tmpPath + 'Consumer-' + str(i) + '/pops'
+#                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
+#                
+#            # create tmp folder for dssp
+#                # make the directories
+#                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/dssp'
+#                # copy the executables
+#                cp_command = 'cp ' + self.executables + 'dssp-2.0.4-linux-amd64 ' + self.tmpPath + 'Consumer-' + str(i) + '/dssp'
+#                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
+#
+
+
 
 
     def __prepareOutputPaths(self):
@@ -424,7 +435,8 @@ class pipeline():
                                 self.modeller_runs,
                                 self.buildModel_runs,
                                 self.foldX_WATER,
-                                self.path_to_archive))
+                                self.path_to_archive,
+                                self.db_type))
         
         # Add a poison pill for each consumer
         for i in range(1, self.num_consumers+1):

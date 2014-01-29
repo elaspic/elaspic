@@ -55,8 +55,14 @@ class tcoffee_alignment:
         write the alignment in clustal format to the folder specified for the class instance
         """
 #        AlignIO.write(alignment, self.alnPath + seqID, self.alnFormat)
-        AlignIO.write(alignment, self.alnPath + alignment[0].id + '_' + alignment[1].id + '.aln', self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
-
+        try:
+            AlignIO.write(alignment, self.alnPath + alignment[0].id + '_' + alignment[1].id + '.aln', self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
+        except IndexError as e:
+            print alignment
+            print self.alnPath
+            print alignment[0].id
+            print alignment[1].id
+            raise e
 
     def __call_tcoffee_system_command(self, alignInFile, out, mode):
         # to be able to run parallel instances of T_Coffee the environment

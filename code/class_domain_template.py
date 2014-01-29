@@ -5,7 +5,6 @@ Created on Thu May  2 17:25:45 2013
 @author: niklas
 """
 
-import os
 import subprocess
 from math import fabs
 
@@ -14,11 +13,12 @@ import datetime
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
-
+    
 from class_pdbTemplate import pdbTemplate
 import class_callTcoffee as tc
 import class_error as error
 import class_sql as sql
+
 
 #from Bio.Align import MultipleSeqAlignment
 
@@ -29,7 +29,7 @@ class GetTemplate():
     uniprot sequence
     """
     def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
-                  pool, semaphore, db, log, path_to_archive):
+                  pool, semaphore, db, log):
         """
         input:
         tmpPath             type 'str'
@@ -51,7 +51,6 @@ class GetTemplate():
         
         # get the logger from the parent and add a handler
         self.log = log
-        self.path_to_archive = path_to_archive
         
         self.bad_pdbs = ['3C4D', '3LB7', '3NSV', '2NP8', '2WN0']
         
@@ -139,6 +138,14 @@ class GetTemplate():
         if type(uniprot_domain) == sql.UniprotDomain:
             domain_list = self.db.get_domain(uniprot_domain.pfam_name)
             
+            max_domain_length = 0
+            for domain in domain_list:
+                domain_length = sql.decode_domain(domain.pdb_domain_def)[1] - sql.decode_domain(domain.pdb_domain_def)[0] + 1
+                if domain_length > max_domain_length:
+                    max_domain_length = domain_length
+        
+        
+        
         elif type(uniprot_domain) == sql.UniprotDomainPair:
             domain_list_1, domain_list_2 = \
                 self.db.get_domain_contact(uniprot_domain.uniprot_domain_1.pfam_name, 
@@ -146,12 +153,25 @@ class GetTemplate():
             # In the second list, domains are in opposite order relative to the query uniprots
             for idx, domain_contact in enumerate(domain_list_2):
                 domain_contact.cath_id_1, domain_contact.cath_id_2 = \
-                domain_contact.cath_id_2, domain_contact.cath_id_1
+                    domain_contact.cath_id_2, domain_contact.cath_id_1
                 domain_contact.pdb_contact_residues_1, domain_contact.pdb_contact_residues_2 = \
-                domain_contact.pdb_contact_residues_2, domain_contact.pdb_contact_residues_1
+                    domain_contact.pdb_contact_residues_2, domain_contact.pdb_contact_residues_1
+                domain_contact.domain_1, domain_contact.domain_2 = \
+                    domain_contact.domain_2, domain_contact.domain_1
                 domain_list_2[idx] = domain_contact
             
             domain_list = list(set(domain_list_1 + domain_list_2))
+            
+            max_domain_length_1 = 0
+            max_domain_length_2 = 0
+            for domain in domain_list:
+                domain_length_1 = sql.decode_domain(domain.domain_1.pdb_domain_def)[1] - sql.decode_domain(domain.domain_1.pdb_domain_def)[0] + 1
+                domain_length_2 = sql.decode_domain(domain.domain_2.pdb_domain_def)[1] - sql.decode_domain(domain.domain_2.pdb_domain_def)[0] + 1
+                if domain_length_1 > max_domain_length_1:
+                    max_domain_length_1 = domain_length_1        
+                if domain_length_2 > max_domain_length_2:
+                    max_domain_length_2 = domain_length_2
+                    
         
         
         if len(domain_list) == 0:
@@ -180,11 +200,15 @@ class GetTemplate():
                 try:
                     (template.domain_def, template.alignment_id, 
                      template.alignment_score, template.alignment_filename) = \
-                     self.calculate_alignment(uniprot_domain, domain, refine, second_domain=False)
+                     self.calculate_alignment(uniprot_domain, domain, max_domain_length, refine, second_domain=False)
                                             
                 except error.EmptyPDBSequenceError as e:
                     self.log.error('Empty pdb sequence file for pdb: %s, chain: %s' % (e.pdb_id, e.pdb_chain))
                     continue
+                except error.pdbError as e:
+                    self.log.error(e.error)
+                    continue                    
+                
 
             ###################################################################
             elif type(uniprot_domain) == sql.UniprotDomainPair:
@@ -195,7 +219,8 @@ class GetTemplate():
                 if refine:
                     if set([domain.cath_id_1, domain.cath_id_2]) != set([refine.cath_id_1, refine.cath_id_2]):
                         continue
-                    template = refine
+                    else:
+                        template = refine
                 else:
                     template = sql.UniprotDomainPairTemplate()
                     template.uniprot_domain_pair_id = uniprot_domain.uniprot_domain_pair_id          
@@ -207,11 +232,11 @@ class GetTemplate():
                 try:
                     (template.domain_def_1, template.alignment_id_1, 
                      template.alignment_score_1, template.alignment_filename_1) = \
-                     self.calculate_alignment(uniprot_domain, domain, refine, second_domain=False)
+                     self.calculate_alignment(uniprot_domain, domain, max_domain_length_1, refine, second_domain=False)
                      
                     (template.domain_def_2, template.alignment_id_2, 
                      template.alignment_score_2, template.alignment_filename_2) = \
-                     self.calculate_alignment(uniprot_domain, domain, refine, second_domain=True)
+                     self.calculate_alignment(uniprot_domain, domain, max_domain_length_2, refine, second_domain=True)
                                             
                 except error.EmptyPDBSequenceError as e:
                     self.log.error('Empty pdb sequence file for pdb: %s, chain: %s' % (e.pdb_id, e.pdb_chain))
@@ -222,7 +247,8 @@ class GetTemplate():
         return list_of_templates
 
 
-    def calculate_alignment(self, uniprot_domain, domain, refine, second_domain=False):            
+
+    def calculate_alignment(self, uniprot_domain, domain, max_domain_length, refine, second_domain=False):            
 
         if type(uniprot_domain) == sql.UniprotDomainPair:
             if not second_domain:
@@ -245,16 +271,87 @@ class GetTemplate():
         # get the sequence from the pdb
         pdb_sequence, pdb_domain_def, chainNumberingDomain = self.get_pdb_sequence(pdb_id, pdb_chain, pdb_domain_def)
 
-        # get the uniprot sequence
-        uniprot_sequence_domain = self.make_SeqRec_object(uniprot_sequence, domain_def, uniprot_id)
+
+        self.log.debug("Aligning: " + uniprot_id + ':' + pdb_id + pdb_chain)
         
-        # get the alignment
-        alignment, alignment_score, alignment_id = self.map_to_uniprot_helper(uniprot_sequence_domain, pdb_sequence, self.saveAlignments)
+        # get the uniprot sequence and align it to the pdb sequence
+        uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
+        alignment, alignment_id = self.map_to_uniprot_helper(uniprot_sequence_domain, pdb_sequence, self.saveAlignments)
         
-        # if it is the last round optimise the alignment
-        if refine:
-            alignment, alignment_score, cut_uniprot, cut_pdb = self.align_shorten(alignment, alignment_score, alignment_id, self.saveAlignments)
-            domain_def = [ domain_def[0] + cut_uniprot[0], domain_def[1] - cut_uniprot[1] ]
+        #----------------------------------------------------------------------
+        # Expanding domain boundaries
+        uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
+        self.log.debug(alignment_id)
+        self.log.debug(alignment)
+        self.log.debug(uniprot_alignment_sequence.seq)
+        self.log.debug(pdb_alignment_sequence.seq)
+        
+        left_extend_length, right_extend_length = [2 * extend_length for extend_length in self.count_overhangs_and_gaps(uniprot_alignment_sequence)]
+        alignment_score = self.score_align(alignment, max_domain_length)
+        self.log.debug('Extend left by: %i' % left_extend_length)
+        self.log.debug('Extend right by: %i' % right_extend_length)
+        
+        
+        loop_counter = 0
+        while ( (left_extend_length + right_extend_length > 0) 
+        and not (domain_def[0] == 1 and domain_def[1] == len(uniprot_sequence))
+        and loop_counter <= 5 ):
+            
+            loop_counter += 1
+            
+            #------------------------------------------------------------------
+            # Expand left domain boundaries
+            if (domain_def[0] - 1 - left_extend_length) >= 0:
+                domain_def[0] -= left_extend_length
+            else:
+                domain_def[0] = 1
+                
+            # Expand right domain boundaries
+            if (domain_def[1] + right_extend_length) <= len(uniprot_sequence):
+                domain_def[1] += right_extend_length
+            else:
+                domain_def[1] = len(uniprot_sequence)
+                
+            #------------------------------------------------------------------
+            # get the uniprot sequence and align it to the pdb sequence
+            uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
+            alignment, alignment_id = self.map_to_uniprot_helper(uniprot_sequence_domain, pdb_sequence, self.saveAlignments)
+            uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
+            self.log.debug(uniprot_alignment_sequence.seq)
+            self.log.debug(pdb_alignment_sequence.seq)
+
+            left_extend_length, right_extend_length = [-1 * extend_length for extend_length in self.count_overhangs_and_gaps(pdb_alignment_sequence)]
+            self.log.debug('Extend left by: %i' % left_extend_length)
+            self.log.debug('Extend right by: %i' % right_extend_length)
+            
+            domain_def[0] -= left_extend_length
+            domain_def[1] += right_extend_length
+            
+            #------------------------------------------------------------------
+            # get the uniprot sequence and align it to the pdb sequence
+            uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
+            alignment, alignment_id = self.map_to_uniprot_helper(uniprot_sequence_domain, pdb_sequence, self.saveAlignments)
+            uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
+            self.log.debug(uniprot_alignment_sequence.seq)
+            self.log.debug(pdb_alignment_sequence.seq)
+
+            left_extend_length, right_extend_length = [2 * extend_length for extend_length in self.count_overhangs_and_gaps(uniprot_alignment_sequence)]
+            alignment_score = self.score_align(alignment, max_domain_length)
+            self.log.debug('Extend left by: %i' % left_extend_length)
+            self.log.debug('Extend right by: %i' % right_extend_length)
+            self.log.debug('\n')            
+            
+            #------------------------------------------------------------------
+
+        alignment_score = self.score_align(alignment, max_domain_length)
+        
+        self.log.debug("Done aligning: " + uniprot_id + ':' + alignment_id)
+        self.log.debug('\n\n\n')
+        
+#        # if it is the last round optimise the alignment
+#        if refine:
+#            alignment, cut_uniprot, cut_pdb = self.align_shorten(alignment, alignment_id, self.saveAlignments)
+#            domain_def = [ domain_def[0] + cut_uniprot[0], domain_def[1] - cut_uniprot[1] ]
         
         
         domain_def = sql.encode_domain(domain_def) # turn it into a string object to be saved in the database
@@ -262,6 +359,73 @@ class GetTemplate():
         
         return domain_def, alignment_id, alignment_score, alignment_filename
   
+
+
+    def count_overhangs_and_gaps(self, alignment_sequence):
+        
+        overhang_length = [0, 0]
+        loner_started = [False, False]
+        loner_length = [0, 0]
+        gap_started = [False, False]
+        gap_length = [0, 0]
+        second_loner_started = [False, False]
+        second_loner_length = [0, 0]
+        second_gap_started = [False, False]
+        second_gap_length = [0, 0]
+        second_gap_ended = [False, False]
+        
+        for i in range(len(alignment_sequence)):
+            
+            # Stop after reaching the half-way point
+            if i >= len(alignment_sequence)-1-i:
+                break
+            if second_gap_ended[0] and second_gap_ended[1]:
+                break
+            
+            # One step forward, one step reverse            
+            for direction_flag in [0, 1]:
+                
+                if direction_flag:
+                    i = len(alignment_sequence)-1-i
+                
+                if alignment_sequence[i] == '-' and not loner_started[direction_flag]:
+                    overhang_length[direction_flag] += 1        
+                elif alignment_sequence[i] == '-' and loner_started[direction_flag] and not second_loner_started[direction_flag]:
+                    gap_started[direction_flag] = True
+                    gap_length[direction_flag] += 1
+                elif alignment_sequence[i] == '-' and second_loner_started[direction_flag] and not second_gap_ended[direction_flag]:
+                    second_gap_started[direction_flag] = True
+                    second_gap_length[direction_flag] += 1
+                    
+                elif alignment_sequence[i] != '-' and not gap_started[direction_flag]:
+                    loner_started[direction_flag] = True
+                    loner_length[direction_flag] += 1
+                elif alignment_sequence[i] != '-' and gap_started[direction_flag] and not second_gap_started[direction_flag]:
+                    second_loner_started[direction_flag] = True
+                    second_loner_length[direction_flag] += 1
+                elif alignment_sequence[i] != '-' and second_gap_started[direction_flag]:
+                    second_gap_ended[direction_flag] = True
+                    
+                elif second_gap_ended[direction_flag]:
+                    continue
+                
+                else:
+                    raise Exception('Didn\'t take into account all possibilities!')
+                    
+        extend_length = [None,None]
+        for direction_flag in [0, 1]:
+            if second_gap_length[direction_flag] * 2 > (loner_length[direction_flag] + second_loner_length[direction_flag]):
+                extend_length[direction_flag] = second_gap_length[direction_flag] + gap_length[direction_flag] + overhang_length[direction_flag]
+            elif gap_length[direction_flag] * 2 > loner_length[direction_flag]:
+                extend_length[direction_flag] = gap_length[direction_flag] + overhang_length[direction_flag]
+            else:
+                extend_length[direction_flag] = overhang_length[direction_flag]
+                
+#        self.log.debug('Left overhang:\t %i,\t gap:\t %i,\t gap^2:\t %i,\t total:\t %i' % (overhang_length[0], gap_length[0], second_gap_length[0], extend_length[0]))
+#        self.log.debug('Right overhang:\t %i,\t gap:\t %i,\t gap^2:\t %i,\t total:\t %i' % (overhang_length[1], gap_length[1], second_gap_length[1], extend_length[1]))     
+        
+        return (extend_length[0], extend_length[1])
+
 
     
     def make_SeqRec_object(self, sequence, domain, ID):
@@ -303,16 +467,15 @@ class GetTemplate():
         """
 
         # write both sequences to one file
-        seqFiles = open(self.tmpPath + self.unique + 'seqfiles.fasta', 'w')
-        SeqIO.write([uniprot_sequence, pdb_sequence], seqFiles, 'fasta')
-        seqFiles.close()
+        with open(self.tmpPath + self.unique + 'seqfiles.fasta', 'w') as seqFiles:
+            SeqIO.write([uniprot_sequence, pdb_sequence], seqFiles, 'fasta')
         
         seqIDs = [uniprot_sequence.id, pdb_sequence.id]
         
         # do the alignment and get the score
-        alignment, score = self.do_align(seqIDs, saveAlignments)
-
-        return alignment, score, pdb_sequence.id
+        alignment = self.do_align(seqIDs, saveAlignments)
+        
+        return alignment, pdb_sequence.id
         
     
     
@@ -330,9 +493,7 @@ class GetTemplate():
         score               type 'float'
         """
         # use the try statement to ensure that the sempaphore is released
-        # in the end
-        self.log.debug("Aligning: " + seqIDs[0] + ':' + seqIDs[1])
-        
+        # in the end        
         if self.semaphore:
             try:
                 with self.semaphore:
@@ -355,18 +516,104 @@ class GetTemplate():
                                seqIDs)
             alignments = tcoffee.align()
         
+        return alignments[0]
+            
+
+    def score_align(self, alignment, max_domain_length):
         
-        self.log.debug("Done aligning: " + seqIDs[0] + ':' + seqIDs[1])
+        seq_identity = self.get_identity(alignment)/100.0  # percent -> decimal
+        seq_coverage = self.get_coverage(alignment,max_domain_length)/100.0 # percent -> decimal
+        
+        # New way to discourage seq identity < 40%
+        a = 0.95
+        if seq_identity < 40:
+            score = a * (seq_identity)**2 / 0.40 * (seq_coverage) + (1.0 - a) * (seq_coverage)
+        else:
+            score = a * (seq_identity) * (seq_coverage) + (1.0 - a) * (seq_coverage)
+        score = int(score*10000)
         
         # see http://www.nature.com/nmeth/journal/v10/n1/full/nmeth.2289.html#methods
         # getting the score like Aloy did, based on sequence identity and coverage
-        score_id = self.get_identity(alignments[0])
-        score_cov = self.get_coverage(alignments[0])
         a = 0.95
-        score = a*score_id/100.0 * score_cov/100 + (1.0-a)*score_cov/100
+        score2 = a * seq_identity * seq_coverage + (1.0-a)*seq_coverage
+        score2 = int(score2*10000)
         
-        return alignments[0], score
+        # another posibility...
+        score3 = seq_identity**2*seq_coverage
+        score3 = int(score3*10000)
+        
+        self.log.debug('Identity: %.2f, coverage: %.2f, score: %i, score2: %i, score3: %i' % (seq_identity*100, seq_coverage*100, score, score2, score3))
+        return score
+       
+    
+    def get_coverage(self, alignment, max_domain_length=None):
+        """
+        Returns the coverage of the alginment in % 
+        
+        input
+        alignment       type class 'Bio.Align.MultipleSeqAlignment'>
+        """
+        
+        assert( len(alignment) == 2 )
+        
+        length_seq1 = len(alignment[0].seq.tostring().replace('-', ''))
+        
+        if not max_domain_length:
+            # The old way of doing it, which assumes that the alignments are always
+            # of the same length
+            length_seq2 = len(alignment[1].seq.tostring().replace('-', ''))
+        else:
+            length_seq2 = max_domain_length
+        
+        self.log.debug('Length of target domain: %i; length of longest template: %i' % (length_seq1, length_seq2))
+        
+        if length_seq1 >= length_seq2:
+            return 100.0 * float(length_seq2) / float(length_seq1)
+        else:
+            return 100.0 * float(length_seq1) / float(length_seq2)
+                 
+
             
+    def get_identity(self, alignment):
+        """
+        Return the sequence identity of two aligned sequences
+        It takes the longer sequence as the reference
+        takes a biopython alignment object as input. make sure that the alignment
+        has only two sequences
+        
+        input
+        alignment       type class 'Bio.Align.MultipleSeqAlignment'
+        
+        return:
+                        type float
+        """
+        assert( len(alignment) == 2 )
+        
+        length_seq1 = len(alignment[0].seq.tostring().replace('-', ''))
+        length_seq2 = len(alignment[1].seq.tostring().replace('-', ''))
+        
+        j = 0 # counts positions in first sequence
+        i = 0 # counts identity hits
+    
+        if length_seq1 <= length_seq2:
+            for amino_acid in alignment[0].seq:
+                if amino_acid == '-':
+                    pass
+                else:
+                    if amino_acid == alignment[1].seq[j]:
+                        i += 1
+                j += 1
+        else:
+            for amino_acid in alignment[1].seq:
+                if amino_acid == '-':
+                    pass
+                else:
+                    if amino_acid == alignment[0].seq[j]:
+                        i += 1
+                j += 1
+        
+        return float(100*i/min(length_seq1, length_seq2))
+
 
         
     def align_shorten(self, alignment, score, pdb_sequence_id, saveAlignments):
@@ -418,9 +665,9 @@ class GetTemplate():
                 cut_right_all_pdb += cut_right
 
             if cut:
-                alignment, score, pdb_sequence.id = self.map_to_uniprot_helper(uniprot_sequence, pdb_sequence, saveAlignments)
+                alignment, pdb_sequence.id = self.map_to_uniprot_helper(uniprot_sequence, pdb_sequence, saveAlignments)
 
-        return alignment, score, [cut_left_all_uniprot, cut_right_all_uniprot], [cut_left_all_pdb, cut_right_all_pdb]
+        return alignment, [cut_left_all_uniprot, cut_right_all_uniprot], [cut_left_all_pdb, cut_right_all_pdb]
         
     
     
@@ -428,12 +675,13 @@ class GetTemplate():
         """
         Checks for loners and shortens the sequence
         
-        input:
+        Parameters
+        ----------
         alignment               type class 'Bio.Align.MultipleSeqAlignment'
         pdb_sequence_id         type 'str'
         
-        
-        return:
+        Returns
+        -------
         cut                     type 'bool'
         cut_left                type 'int'
         cut_right               type 'int'
@@ -449,14 +697,11 @@ class GetTemplate():
         
         ## check for loners
         # left
-        print uniprot_alignment
-        print pdb_alignment
-        print
-        seq_left, uniprot_or_pdb_left   = self.check_for_loners(uniprot_alignment, pdb_alignment, 'left')
-        do_shorten_left, loners_left    = self.check_loners(seq_left, 'left')
+        seq_left, uniprot_or_pdb_left = self.check_for_loners(uniprot_alignment, pdb_alignment, 'left')
+        do_shorten_left, loners_left = self.check_loners(seq_left, 'left')
         # right
         seq_right, uniprot_or_pdb_right = self.check_for_loners(uniprot_alignment, pdb_alignment, 'right')
-        do_shorten_right, loners_right  = self.check_loners(seq_right, 'right')
+        do_shorten_right, loners_right = self.check_loners(seq_right, 'right')
 
         
         cut = False
@@ -700,63 +945,8 @@ class GetTemplate():
 #        pdb_sequence = next(SeqIO.parse(self.tmpPath + self.unique + pdbCode + chain + '.seq.txt', 'fasta'))
 #        return pdb_sequence, domain_pdb, chainNumberingDomain    
     
-    
-    def get_identity(self, alignment):
-        """
-        Return the sequence identity of two aligned sequences
-        It takes the longer sequence as the reference
-        takes a biopython alignment object as input. make sure that the alignment
-        has only two sequences
-        
-        input
-        alignment       type class 'Bio.Align.MultipleSeqAlignment'
-        
-        return:
-                        type float
-        """
-        assert( len(alignment) == 2 )
-        
-        length_seq1 = len(alignment[0].seq.tostring().replace('-', ''))
-        length_seq2 = len(alignment[1].seq.tostring().replace('-', ''))
-        
-        j = 0 # counts positions in first sequence
-        i = 0 # counts identity hits
-    
-        if length_seq1 <= length_seq2:
-            for amino_acid in alignment[0].seq:
-                if amino_acid == '-':
-                    pass
-                else:
-                    if amino_acid == alignment[1].seq[j]:
-                        i += 1
-                j += 1
-        else:
-            for amino_acid in alignment[1].seq:
-                if amino_acid == '-':
-                    pass
-                else:
-                    if amino_acid == alignment[0].seq[j]:
-                        i += 1
-                j += 1
-        
-        return float(100*i/min(length_seq1, length_seq2))
-    
-    
-    def get_coverage(self, alignment):
-        """
-        Returns the coverage of the alginment in % 
-        
-        input
-        alignment       type class 'Bio.Align.MultipleSeqAlignment'>
-        """
-        assert( len(alignment) == 2 )
-        length_seq1 = len(alignment[0].seq.tostring().replace('-', ''))
-        length_seq2 = len(alignment[1].seq.tostring().replace('-', ''))
-        
-        if length_seq1 >= length_seq2:
-            return 100.0 * float(length_seq2) / float(length_seq1)
-        else:
-            return 100.0 * float(length_seq1) / float(length_seq2)
+
+
     
 
     def check_loners(self, aligned_sequence, left_or_right):
@@ -815,74 +1005,47 @@ class GetTemplate():
         else:
             return False, []
 
-
-
-
-
-
-
         
 ###############################################################################
 
-    def get_alignment(self, uniprot_template):
-        
-        tmp_save_path = self.tmpPath + self.unique + '/' + uniprot_template.path_to_data
-        
-        if type(uniprot_template) == sql.UniprotDomainTemplate:
-            # Load previously-calculated alignments
-            if os.path.isfile(tmp_save_path + uniprot_template.alignment_filename):
-                alignment = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename, 'clustal')
-            elif os.path.isfile(self.path_to_archive + uniprot_template.alignment_filename):
-                alignment = AlignIO.read(self.path_to_archive + uniprot_template.alignment_filename, 'clustal')
-            else:
-                raise error.NoPrecalculatedAlignmentFound(self.path_to_archive, uniprot_template.alignment_filename)
-            return [alignment, None]
-            
-        elif  type(uniprot_template) == sql.UniprotDomainTemplate:
-            # Read alignment from the temporary folder
-            if (os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_1)
-            and os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_2)):
-                alignment_1 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_1, 'clustal')
-                alignment_2 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_2, 'clustal')
-            # Read alignment from the export database
-            elif (os.path.isfile(self.path_to_archive + uniprot_template.alignment_filename_1)
-            and os.path.isfile(self.path_to_archive + uniprot_template.alignment_filename_2)):
-                alignment_1 = AlignIO.read(self.path_to_archive + uniprot_template.alignment_filename_1, 'clustal')
-                alignment_2 = AlignIO.read(self.path_to_archive + uniprot_template.alignment_filename_2, 'clustal')
-            else:
-                raise error.NoPrecalculatedAlignmentFound(self.path_to_archive, uniprot_template.alignment_filename_1)
-            return [alignment_1, alignment_2]        
-        
-    #
-    # ends here
-    ###########
 
+        
 
 
 if __name__ == '__main__':
     
-    from pipeline import ActivePool
-    from pipeline import getUniprotSequence
-    import multiprocessing
-    from Bio import AlignIO
+    import logging
+        
+    pool = None # ActivePool()
+    semaphore = None
     
-    get_uniprot_seq = getUniprotSequence('doesntmatter')
-    pool = ActivePool()
-    semaphore = multiprocessing.Semaphore(2)
-    
-    tmpPath = '/tmp/test/'
-    unique = 'unique'
-    pdbPath = '/home/niklas/pdb_database/structures/divided/pdb/'
-    savePDB = '/tmp/test/trash/'
-    saveAlignments = '/tmp/test/alignments/'
-    
-    a = GetTemplate(tmpPath, unique, pdbPath, savePDB, saveAlignments, pool, semaphore, get_uniprot_seq)
+    db = sql.MyDatabase('/tmp/cosmic_driver_proteins_2/pipeline.db',
+                        path_to_archive='/tmp/cosmic_driver_proteins_2/Consumer-1/human')
 
-    alignment = AlignIO.read('/home/niklas/tmp/alignment_cluttered.fasta', 'fasta')
-#    print alignment
-    score = '100'
-    pdb_sequence_id = '1LFD'
+    tmp_path = '/tmp/cosmic_driver_proteins_2/'
+    unique = 'Consumer-1'
+    pdbPath = '/home/kimlab1/database_data/pdb/data/data/structures/divided/pdb/'
+    savePDB = '/tmp/cosmic_driver_proteins_2/Consumer-1/tmp/'
+    saveAlignments = '/tmp/cosmic_driver_proteins_2/Consumer-1/tmp/'
     
-    alignment, score = a.align_shorten(alignment, score, pdb_sequence_id, saveAlignments)
+    ###########################################################################
     
-#    print alignment
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    
+    handler = logging.FileHandler(tmp_path + 'templates.log', mode='w', delay=True)
+#    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+    
+    ###########################################################################
+    
+    get_template = GetTemplate(tmp_path, unique, pdbPath, savePDB, saveAlignments, pool, 
+                    semaphore, db, logger)
+    
+    protein_domains = db.get_uniprot_domain('Q8NEU8')
+    for uniprot_domain, uniprot_template, uniprot_model in protein_domains:
+        template = get_template(uniprot_domain)
+    
+    
+    

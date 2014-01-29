@@ -175,6 +175,7 @@ def write_fasta_to_modeller(outfile,
         f.write('\n\n')
     return
 
+
         
 def cut_alignments(alignment, templateIDs, OVERHANG=2):
     """ removes overhanging alignments
@@ -203,7 +204,6 @@ def cut_alignments(alignment, templateIDs, OVERHANG=2):
             cut_right = i
             break
     
-    
     # make sure that the cutting indices do not exceed the limits 0 and length
     # of the sequences (with '-'). String slicing with negative indices is wrong
     # but does not raise an error!!    
@@ -218,8 +218,6 @@ def cut_alignments(alignment, templateIDs, OVERHANG=2):
 
     # make the new, shortened alignment object
     return alignment[:,cut_left:cut_right]
-
-
 
 
 
