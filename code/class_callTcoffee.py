@@ -7,7 +7,7 @@ Created on Sat Dec 22 19:03:01 2012
 import subprocess
 from os import environ
 from Bio import AlignIO
-from class_error import TcoffeeError
+import class_error
 
 
 class tcoffee_alignment:
@@ -49,7 +49,6 @@ class tcoffee_alignment:
         return alignments
 
 
-
     def __writeAlignment(self, alignment, seqID):
         """
         write the alignment in clustal format to the folder specified for the class instance
@@ -63,6 +62,7 @@ class tcoffee_alignment:
             print alignment[0].id
             print alignment[1].id
             raise e
+
 
     def __call_tcoffee_system_command(self, alignInFile, out, mode):
         # to be able to run parallel instances of T_Coffee the environment
@@ -86,7 +86,9 @@ class tcoffee_alignment:
                              ' -outorder=input' + \
                              ' -output fasta_aln' + \
                              ' -quiet -no_warning' + \
-                             ' -outfile=' + out
+                             ' -outfile=' + out + \
+                             ' -multi_core no' + \
+                             ' -n_core 1' #AS changed !!!
         if mode == 't_coffee':
             system_command = 'cd ' + self.tmpPath + ' && t_coffee' + \
                              ' -mode expresso' + \
@@ -98,11 +100,14 @@ class tcoffee_alignment:
                              ' -outorder=input' + \
                              ' -output fasta_aln' + \
                              ' -quiet -no_warning' + \
-                             ' -outfile=' + out
+                             ' -outfile=' + out + \
+                             ' -multi_core no' + \
+                             ' -n_core 1' #AS changed !!!
 
         return system_command, my_env
-        
-    def __call_tcoffee(self, alignInFile, GAPOPEN=-0.0, GAPEXTEND=-0.0):
+    
+    
+    def __call_tcoffee(self, alignInFile, GAPOPEN=-0.0, GAPEXTEND=-0.0, recursion_counter=0):
         """
         calls t_coffee in expresso mode (make sure BLAST is installed locally)
         
@@ -142,6 +147,14 @@ class tcoffee_alignment:
             # sequence the same pdb template is selected. If that happens
             # sap fails to align and the alignment does not work
             for line in error.split('\n'):
+                if 'Impossible to find EXPRESSO Templates' in line:
+                    # Try a bunch of times, maybe just a temporary thing???
+                    if recursion_counter < 5:
+                        recursion_counter += 1
+                        return self.__call_tcoffee(alignInFile, GAPOPEN, GAPEXTEND, recursion_counter)
+                    else:
+                        raise class_error.TcoffeeBlastError(result, error, alignInFile)
+                    
                 if 'SAP failed to align' in line:
                     # if it happens because the same PDB was taken by blast
                     # it means that the sequences are fairly identical and 
@@ -167,4 +180,4 @@ class tcoffee_alignment:
             print 'out', out
             print 'alignInFile', alignInFile
             print 'error', error
-            raise TcoffeeError(result, error, alignInFile)
+            raise class_error.TcoffeeError(result, error, alignInFile)

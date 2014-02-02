@@ -8,8 +8,6 @@ Created on Thu May  2 17:25:45 2013
 import subprocess
 from math import fabs
 
-import datetime
-
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
@@ -19,7 +17,7 @@ import class_callTcoffee as tc
 import class_error as error
 import class_sql as sql
 
-
+import random
 #from Bio.Align import MultipleSeqAlignment
 
 
@@ -28,8 +26,7 @@ class GetTemplate():
     Parent class holding functions for finding the correct template given a
     uniprot sequence
     """
-    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
-                  pool, semaphore, db, log):
+    def __init__(self, tmpPath, unique, pdbPath, db, log):
         """
         input:
         tmpPath             type 'str'
@@ -37,16 +34,11 @@ class GetTemplate():
         pdbPath             type 'str'
         savePDB             type 'str'
         saveAlignments      type 'str'
-        pool                type class '__main__.ActivePool'
-        semaphore           type class 'multiprocessing.synchronize.Semaphore'
         """
         self.tmpPath = tmpPath
         self.unique = unique + '/'
+        self.saveAlignments = self.tmpPath + self.unique + 'tcoffee/'
         self.pdbPath = pdbPath
-        self.savePDB = savePDB
-        self.saveAlignments = saveAlignments
-        self.pool = pool
-        self.semaphore = semaphore
         self.db = db
         
         # get the logger from the parent and add a handler
@@ -59,15 +51,22 @@ class GetTemplate():
         """
         """
         list_of_templates = self.run(uniprot_domain, None)
+        self.log.debug('Number of templates: %i'% len(list_of_templates))
+        
         best_template = self.chose_best_template(list_of_templates)
-        best_template = self.run(uniprot_domain, best_template)[0]
+        self.log.debug('The best template: ')
+        self.log.debug(best_template)
+        # Don't need refinement anymore, each template is refined already
+#        best_template = self.run(uniprot_domain, best_template)[0]
+#        self.log.debug('The best template refined: ')
+#        self.log.debug(best_template)   
         
        #######################################################################
         # Set up the paths and exporting the alignments
         if type(uniprot_domain) == sql.UniprotDomain:
             
             # Save one copy of the allignment for immediate usage in the tmp folder
-            tmp_save_path = self.tmpPath + self.unique + '/' + uniprot_domain.path_to_data
+            tmp_save_path = self.tmpPath + uniprot_domain.path_to_data
             subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
             subprocess.check_call('cp ' + self.saveAlignments + best_template.alignment_filename +
                                     ' ' + tmp_save_path + best_template.alignment_filename, shell=True)
@@ -76,7 +75,7 @@ class GetTemplate():
         elif type(uniprot_domain) == sql.UniprotDomainPair:
             
             # Save one copy of the allignment for immediate usage in the tmp folder
-            tmp_save_path = self.tmpPath + self.unique + '/' + uniprot_domain.path_to_data 
+            tmp_save_path = self.tmpPath + uniprot_domain.path_to_data 
             subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
             subprocess.check_call('cp ' + self.saveAlignments + best_template.alignment_filename_1 +
                                     ' ' + tmp_save_path + best_template.alignment_filename_1, shell=True)
@@ -175,8 +174,16 @@ class GetTemplate():
         
         
         if len(domain_list) == 0:
-            raise error.NoStructuralTemplates(str(datetime.datetime.now().date()) + ': no templates found')
+            raise error.NoStructuralTemplates('no templates found')
         
+        #######################################################################
+        # Bad hack, but gotta get those sequences
+        domains_subsampled = False
+        if len(domain_list) > 100:
+            domain_list = domain_list[:100]
+            domains_subsampled = True
+        #######################################################################
+            
         list_of_templates = []
         for domain in domain_list:
             
@@ -196,18 +203,26 @@ class GetTemplate():
                     template.uniprot_domain_id = uniprot_domain.uniprot_domain_id
                     template.cath_id = domain.cath_id
                     template.domain = domain
+                    if domains_subsampled:
+                        template.template_errors = 'not all domains evaluated'
                 
                 try:
                     (template.domain_def, template.alignment_id, 
                      template.alignment_score, template.alignment_filename) = \
                      self.calculate_alignment(uniprot_domain, domain, max_domain_length, refine, second_domain=False)
-                                            
+                
+                except error.NoPDBFound as e:
+                    self.log.error(e.error)
+                    continue              
                 except error.EmptyPDBSequenceError as e:
                     self.log.error('Empty pdb sequence file for pdb: %s, chain: %s' % (e.pdb_id, e.pdb_chain))
                     continue
                 except error.pdbError as e:
                     self.log.error(e.error)
-                    continue                    
+                    continue
+                except error.TcoffeeBlastError as e:
+                    self.log.error('Tcoffee blast error with message: %.30s' % e.error)
+                    continue
                 
 
             ###################################################################
@@ -241,9 +256,11 @@ class GetTemplate():
                 except error.EmptyPDBSequenceError as e:
                     self.log.error('Empty pdb sequence file for pdb: %s, chain: %s' % (e.pdb_id, e.pdb_chain))
                     continue
-                
+            
+            
             ###################################################################
             list_of_templates.append(template)
+            
         return list_of_templates
 
 
@@ -276,7 +293,9 @@ class GetTemplate():
         
         # get the uniprot sequence and align it to the pdb sequence
         uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
+        
         alignment, alignment_id = self.map_to_uniprot_helper(uniprot_sequence_domain, pdb_sequence, self.saveAlignments)
+        
         
         #----------------------------------------------------------------------
         # Expanding domain boundaries
@@ -286,17 +305,16 @@ class GetTemplate():
         self.log.debug(uniprot_alignment_sequence.seq)
         self.log.debug(pdb_alignment_sequence.seq)
         
-        left_extend_length, right_extend_length = [2 * extend_length for extend_length in self.count_overhangs_and_gaps(uniprot_alignment_sequence)]
+        left_extend_length, right_extend_length = \
+            [int((random.random() * 2 + 1) * extend_length) for extend_length in self.count_overhangs_and_gaps(uniprot_alignment_sequence)]
         alignment_score = self.score_align(alignment, max_domain_length)
         self.log.debug('Extend left by: %i' % left_extend_length)
         self.log.debug('Extend right by: %i' % right_extend_length)
         
-        
         loop_counter = 0
-        while ( (left_extend_length + right_extend_length > 0) 
-        and not (domain_def[0] == 1 and domain_def[1] == len(uniprot_sequence))
-        and loop_counter <= 5 ):
-            
+        while ((abs(left_extend_length) > 0 and domain_def[0] > 1) \
+        or (abs(right_extend_length) > 0 and domain_def[1] < len(uniprot_sequence))) \
+        and loop_counter <= 6:
             loop_counter += 1
             
             #------------------------------------------------------------------
@@ -334,19 +352,45 @@ class GetTemplate():
             uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
             self.log.debug(uniprot_alignment_sequence.seq)
             self.log.debug(pdb_alignment_sequence.seq)
-
-            left_extend_length, right_extend_length = [2 * extend_length for extend_length in self.count_overhangs_and_gaps(uniprot_alignment_sequence)]
+            
+            left_extend_length, right_extend_length = \
+                [int((random.random() * 2 + 1) * extend_length) for extend_length in self.count_overhangs_and_gaps(uniprot_alignment_sequence)]
             alignment_score = self.score_align(alignment, max_domain_length)
             self.log.debug('Extend left by: %i' % left_extend_length)
             self.log.debug('Extend right by: %i' % right_extend_length)
-            self.log.debug('\n')            
             
-            #------------------------------------------------------------------
-
-        alignment_score = self.score_align(alignment, max_domain_length)
         
-        self.log.debug("Done aligning: " + uniprot_id + ':' + alignment_id)
-        self.log.debug('\n\n\n')
+        #------------------------------------------------------------------
+        self.log.debug('Removing final overhangs...')
+        left_extend_length, right_extend_length = [-1 * extend_length for extend_length in self.count_overhangs_and_gaps(pdb_alignment_sequence)]
+        alignment_score = self.score_align(alignment, max_domain_length)
+        self.log.debug('Extend left by: %i' % left_extend_length)
+        self.log.debug('Extend right by: %i' % right_extend_length)
+        
+        domain_def[0] -= left_extend_length
+        domain_def[1] += right_extend_length
+        
+        loop_counter = 0
+        while (abs(left_extend_length) > 0 or abs(right_extend_length) > 0) \
+        and (domain_def[0] < domain_def[1]):
+            loop_counter += 1
+            #------------------------------------------------------------------
+            # get the uniprot sequence and align it to the pdb sequence
+            uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
+            alignment, alignment_id = self.map_to_uniprot_helper(uniprot_sequence_domain, pdb_sequence, self.saveAlignments)
+            uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
+            self.log.debug(uniprot_alignment_sequence.seq)
+            self.log.debug(pdb_alignment_sequence.seq)
+
+            left_extend_length, right_extend_length = [-1 * extend_length for extend_length in self.count_overhangs_and_gaps(pdb_alignment_sequence)]
+            alignment_score = self.score_align(alignment, max_domain_length)
+            self.log.debug('Extend left by: %i' % left_extend_length)
+            self.log.debug('Extend right by: %i' % right_extend_length)
+            
+            domain_def[0] -= left_extend_length
+            domain_def[1] += right_extend_length        
+        
+        self.log.debug("Done aligning: " + uniprot_id + ':' + alignment_id + '\n\n')
         
 #        # if it is the last round optimise the alignment
 #        if refine:
@@ -492,29 +536,12 @@ class GetTemplate():
         alignments[0]       type class 'Bio.Align.MultipleSeqAlignment'
         score               type 'float'
         """
-        # use the try statement to ensure that the sempaphore is released
-        # in the end        
-        if self.semaphore:
-            try:
-                with self.semaphore:
-                    # register to keep track of the running t_coffee instances
-                    # the maximal number is set in the configfile.
-                    self.pool.makeActive(self.unique)
-                    tcoffee = tc.tcoffee_alignment(self.tmpPath, self.unique,
-                                                   saveAlignments, 
-                                                   [self.tmpPath + self.unique + 'seqfiles.fasta', ], 
-                                                   seqIDs)
-                    alignments = tcoffee.align()
-            except:
-                raise
-            finally:
-                    self.pool.makeInactive(self.unique)
-        else:
-            tcoffee = tc.tcoffee_alignment(self.tmpPath, self.unique,
-                               saveAlignments, 
-                               [self.tmpPath + self.unique + 'seqfiles.fasta', ], 
-                               seqIDs)
-            alignments = tcoffee.align()
+        
+        tcoffee = tc.tcoffee_alignment(self.tmpPath, self.unique,
+                           saveAlignments, 
+                           [self.tmpPath + self.unique + 'seqfiles.fasta', ], 
+                           seqIDs)
+        alignments = tcoffee.align()
         
         return alignments[0]
             
@@ -526,7 +553,7 @@ class GetTemplate():
         
         # New way to discourage seq identity < 40%
         a = 0.95
-        if seq_identity < 40:
+        if seq_identity < 0.40:
             score = a * (seq_identity)**2 / 0.40 * (seq_coverage) + (1.0 - a) * (seq_coverage)
         else:
             score = a * (seq_identity) * (seq_coverage) + (1.0 - a) * (seq_coverage)
@@ -542,7 +569,7 @@ class GetTemplate():
         score3 = seq_identity**2*seq_coverage
         score3 = int(score3*10000)
         
-        self.log.debug('Identity: %.2f, coverage: %.2f, score: %i, score2: %i, score3: %i' % (seq_identity*100, seq_coverage*100, score, score2, score3))
+        self.log.debug('Identity: %.3f, coverage: %.3f, score: %i, score2: %i, score3: %i' % (seq_identity, seq_coverage, score, score2, score3))
         return score
        
     
@@ -744,9 +771,9 @@ class GetTemplate():
                     pass
                 #    pdb_sequence = pdb_sequence[cut_left:]
                 else:
-                    print 'You must specify uniprot or pdb!'
-                    print 'uniprot_or_pdb_right', uniprot_or_pdb_right
-                    print 'uniprot_or_pdb_left', uniprot_or_pdb_left
+                    self.log.error('You must specify uniprot or pdb!')
+                    self.log.error('uniprot_or_pdb_right', uniprot_or_pdb_right)
+                    self.log.error('uniprot_or_pdb_left', uniprot_or_pdb_left)
             else:
                 if uniprot_or_pdb_right == 'uniprot' and uniprot_or_pdb_left == 'uniprot':
                     uniprot_sequence = uniprot_sequence[cut_left:-cut_right]
@@ -760,9 +787,9 @@ class GetTemplate():
                 #    pdb_sequence = pdb_sequence[cut_left:-cut_right]
                     pass
                 else:
-                    print 'You must specify uniprot or pdb!'
-                    print 'uniprot_or_pdb_right', uniprot_or_pdb_right
-                    print 'uniprot_or_pdb_left', uniprot_or_pdb_left
+                    self.log.error('You must specify uniprot or pdb!')
+                    self.log.error('uniprot_or_pdb_right', uniprot_or_pdb_right)
+                    self.log.error('uniprot_or_pdb_left', uniprot_or_pdb_left)
         
         # since only the uniprot sequence is shortend, but above it works in
         # principle for both sequences simultaniously, a endless while loop can occur
@@ -821,7 +848,7 @@ class GetTemplate():
                 elif pdb_alignment[i] == '-':
                     return pdb_alignment, 'uniprot'
         else:
-            print 'You must specify left or right correctly!'
+            self.log.error('You must specify left or right correctly!')
             return
 
     
@@ -935,11 +962,11 @@ class GetTemplate():
 #            # Translate the pdb_domain from pdb numbering to sequence numbering                
 #            domain_pdb = chainNumberingDomain.index(domain_pdb[0])+1, chainNumberingDomain.index(domain_pdb[1])+1
 #        except ValueError:
-#            print "PDB code, chain:", pdbCode, chain
-#            print "Domains:", domains
-#            print "Dobain_pdb 1/2:", domain_pdb[0], domain_pdb[1]
-#            print "ChainNumberingDomain:"
-#            print chainNumberingDomain            
+#            self.log.error("PDB code, chain:", pdbCode, chain)
+#            self.log.error("Domains:", domains)
+#            self.log.error("Dobain_pdb 1/2:", domain_pdb[0], domain_pdb[1])
+#            self.log.error("ChainNumberingDomain:")
+#            self.log.error(chainNumberingDomain)        
 #            raise error.pdbError('ValueError when mapping domain boundaries to sequence numbering: ' + pdbCode + '_' + chain)
 #
 #        pdb_sequence = next(SeqIO.parse(self.tmpPath + self.unique + pdbCode + chain + '.seq.txt', 'fasta'))
@@ -971,7 +998,7 @@ class GetTemplate():
         elif left_or_right == 'right':
             indexes = range(len(aligned_sequence)-1,-1,-1)
         else:
-            print 'You must specify left or right!'
+            self.log.error('You must specify left or right!')
         for i in indexes:
             if aligned_sequence[i] == '-' and FIRST:
                 continue
@@ -1008,19 +1035,12 @@ class GetTemplate():
         
 ###############################################################################
 
-
-        
-
-
 if __name__ == '__main__':
     
     import logging
-        
-    pool = None # ActivePool()
-    semaphore = None
     
     db = sql.MyDatabase('/tmp/cosmic_driver_proteins_2/pipeline.db',
-                        path_to_archive='/tmp/cosmic_driver_proteins_2/Consumer-1/human')
+                path_to_archive='/tmp/cosmic_driver_proteins_2/Consumer-1/human')
 
     tmp_path = '/tmp/cosmic_driver_proteins_2/'
     unique = 'Consumer-1'
@@ -1040,8 +1060,7 @@ if __name__ == '__main__':
     
     ###########################################################################
     
-    get_template = GetTemplate(tmp_path, unique, pdbPath, savePDB, saveAlignments, pool, 
-                    semaphore, db, logger)
+    get_template = GetTemplate(tmp_path, unique, pdbPath, savePDB, saveAlignments, db, logger)
     
     protein_domains = db.get_uniprot_domain('Q8NEU8')
     for uniprot_domain, uniprot_template, uniprot_model in protein_domains:

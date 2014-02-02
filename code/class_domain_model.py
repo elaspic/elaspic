@@ -15,9 +15,7 @@ class GetModel(object):
     """
     """
     
-    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
-                  pool, semaphore, db, log,
-                  modeller_runs, buildModel_runs, PWD):
+    def __init__(self, tmpPath, unique, pdbPath, db, log, modeller_runs, buildModel_runs, PWD):
         """
         Produces a model of a single uniprot domain or a domain pair
         
@@ -27,9 +25,6 @@ class GetModel(object):
         unique : 'str'
         pdbPath : 'str'
         savePDB : 'str'
-        saveAlignments : 'str'
-        pool : '__main__.ActivePool'
-        semaphore : 'multiprocessing.synchronize.Semaphore'
         
         Returns
         -------
@@ -40,10 +35,6 @@ class GetModel(object):
         self.tmpPath = tmpPath
         self.unique = unique + '/'
         self.pdbPath = pdbPath
-        self.savePDB = savePDB
-        self.saveAlignments = saveAlignments
-        self.pool = pool
-        self.semaphore = semaphore
         self.db = db
         
         # get the logger from the parent and add a handler
@@ -56,7 +47,7 @@ class GetModel(object):
     def __call__(self, uniprot_domain, uniprot_template):
         
         # Folder for storing files for export to output
-        save_path = self.tmpPath + self.unique + str(uniprot_domain.path_to_data)
+        save_path = self.tmpPath + str(uniprot_domain.path_to_data)
         
         if type(uniprot_domain) == sql.UniprotDomain:
             # Get the canonical uniprot sequence
@@ -103,15 +94,13 @@ class GetModel(object):
             sequences = [uniprot_sequence_1_domain, uniprot_sequence_2_domain]
             alignments = [alignment_1, alignment_2]
 
-
-
-
-        for a, b in zip(alignments, chains_pdb):
-            print a
-            print b
-            print
+        model_errors = ''
         
-        print 'next'
+        for a, b in zip(alignments, chains_pdb):
+            self.log.debug('Alignment: ')
+            self.log.debug(a)
+            self.log.debug('Chain: %s' % b)
+        
         # copy the chain IDs... they are used afterwards for renaming and copy 
         # is needed so that they are not overwritten
         target_ids = []
@@ -124,26 +113,19 @@ class GetModel(object):
         chains = [template_id[-1] for template_id in template_ids]
         # Common---------------------------------------------------------------
         # save_path is where the pdb sequences and the pdb with the required chains are saved
+        self.log.debug('Prepare input...')
         sequences, alignments, chains_modeller, switch_chain, HETflag, HETATMsInChain_SEQnumbering = \
             self.prepareInput(pdb_id, chains, pdb_domain_definitions, sequences, alignments, save_path)
-
         
-        normDOPE_wt, pdbFile_wt = self._getModel(alignments, target_ids, template_ids, HETATMsInChain_SEQnumbering, chains_modeller, save_path)
-        print pdbFile_wt
-        
-        
-        # Renumber the model to use uniprot coordinates
-        
-        
-        
-        
-        # Save another copy of the alignment in the export folder
+        normDOPE_wt, pdbFile_wt, knotted = self._getModel(alignments, target_ids, template_ids, HETATMsInChain_SEQnumbering, chains_modeller, save_path)
+        if knotted:
+            model_errors += 'knotted, '
+        self.log.debug('Model pdb file: %s, knotted: %s' % (pdbFile_wt, knotted,))
+                
+        # Save another copy of the modelled structure in the tmp export folder
         modeller_path = self.tmpPath + self.unique + 'modeller/'
-#        archive_save_path = self.path_to_archive + str(uniprot_domain.path_to_data)
         subprocess.check_call('cp ' + modeller_path + pdbFile_wt + ' ' + save_path + pdbFile_wt, shell=True)
-#        subprocess.check_call('cp ' + modeller_path + pdbFile_wt + ' ' + archive_save_path + pdbFile_wt, shell=True)
-
-        analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, chains_modeller, self.log, domain_defs=None)
+        
         if type(uniprot_domain) == sql.UniprotDomain:
             uniprot_model = sql.UniprotDomainModel()
             uniprot_model.uniprot_domain_id = uniprot_template.uniprot_domain_id
@@ -156,11 +138,24 @@ class GetModel(object):
             uniprot_model.norm_dope = normDOPE_wt
             
             # Get SASA using pops
-            sasa_score = analyze_structure.get_sasa()[chains_modeller[0]]
-            assert len(sasa_score) == (sql.decode_domain(uniprot_template.domain_def)[1] - sql.decode_domain(uniprot_template.domain_def)[0] + 1)
-            uniprot_model.sasa_score = ','.join(['%.2f' % (x*100) for x in sasa_score])
+            analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, ['A'], self.log, domain_defs=None)
+            try:
+                self.log.debug('chains: %s, chains_modeller: %s' % (chains, chains_modeller,) )
+                sasa_score = analyze_structure.get_sasa()['A']
+                
+                if len(sasa_score) != \
+                (sql.decode_domain(uniprot_template.domain_def)[1] - sql.decode_domain(uniprot_template.domain_def)[0] + 1):
+                    model_errors += 'pops score length mismatch, '
+            except error.PopsError as e:
+                self.log.error('PopsError:')
+                self.log.error(e.error)
+                model_errors += 'pops error, '
+                sasa_score = ''
             
-            
+            uniprot_model.sasa_score = ','.join(['%.2f' % (x*100) for x in sasa_score])            
+            uniprot_model.model_errors = model_errors
+        
+        
         if type(uniprot_domain) == sql.UniprotDomainPair:
             uniprot_model = sql.UniprotDomainPairModel()
             uniprot_model.uniprot_domain_pair_id = uniprot_template.uniprot_domain_pair_id
@@ -175,7 +170,7 @@ class GetModel(object):
             uniprot_model.norm_dope = normDOPE_wt
             
             # Get interacting amino acids and interface area          
-            
+            analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, [chains_modeller[0]], self.log, domain_defs=None)
             interacting_aa = analyze_structure.get_interacting_aa()
             interacting_aa_1 = interacting_aa[chains_modeller[0]]
             uniprot_model.interacting_aa_1 = ','.join(['%i' % x for x in interacting_aa_1])
@@ -239,9 +234,9 @@ class GetModel(object):
         outFile = self.tmpPath + self.unique + 'modeller/outFile_wildtype'
         
         for a, b in zip(alignments, chains):
-            print a
-            print b
-            print
+            self.log.debug('Alignment: ')
+            self.log.debug(a)
+            self.log.debug('Chain: %s' % b)
         # generate the input for modeller from the above generated alignment
         prepareModeller(outFile, 
                         alignments, 
@@ -270,8 +265,8 @@ class GetModel(object):
                                 self.tmpPath + self.unique + '/', # path to folders with executables
                                 self.modeller_runs,
                                 loopRefinement=True)
-        normDOPE, pdbFile = modeller.run()
+        normDOPE, pdbFile, knotted = modeller.run()
 
         os.chdir(self.PWD) # go back to the working directory
         
-        return normDOPE, pdbFile        
+        return normDOPE, pdbFile, knotted

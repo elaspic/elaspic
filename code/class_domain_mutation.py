@@ -19,8 +19,7 @@ class GetMutation(object):
     """
     """
     
-    def __init__(self, tmpPath, unique, pdbPath, savePDB, saveAlignments,
-                  pool, semaphore, db, log,
+    def __init__(self, tmpPath, unique, pdbPath, db, log,
                   foldX_WATER, buildModel_runs, PWD, matrix, gap_s, gap_e):
         """
         input:
@@ -28,17 +27,10 @@ class GetMutation(object):
         unique              type 'str'
         pdbPath             type 'str'
         savePDB             type 'str'
-        saveAlignments      type 'str'
-        pool                type class '__main__.ActivePool'
-        semaphore           type class 'multiprocessing.synchronize.Semaphore'
         """
         self.tmpPath = tmpPath
         self.unique = unique + '/'
         self.pdbPath = pdbPath
-        self.savePDB = savePDB
-        self.saveAlignments = saveAlignments
-        self.pool = pool
-        self.semaphore = semaphore
         self.db = db
         
         # get the logger from the parent and add a handler
@@ -70,7 +62,7 @@ class GetMutation(object):
         """
         
         if type(uniprot_domain) == sql.UniprotDomain:
-            print "single domain"
+            self.log.error("single domain")
             domain_def = uniprot_template.domain_def
             
 #            pdb_id = uniprot_template.domain.pdb_id
@@ -89,8 +81,9 @@ class GetMutation(object):
         elif type(uniprot_domain) == sql.UniprotDomainPair:
             
             if mutated_uniprot_id == uniprot_domain.uniprot_domain_1.uniprot_id:
-                print mutated_uniprot_id, uniprot_domain.uniprot_domain_1.uniprot_id
-                print "\ndomain_pair_right_order"
+                self.log.debug('mutated_uniprot_id: %s, uniprot_id: %s' 
+                    % (mutated_uniprot_id, uniprot_domain.uniprot_domain_1.uniprot_id,) )
+                self.log.debug("domain pair right order")
                 
                 domain_def = uniprot_template.domain_def_1
                 
@@ -114,8 +107,9 @@ class GetMutation(object):
             
             
             elif mutated_uniprot_id == uniprot_domain.uniprot_domain_2.uniprot_id:
-                print mutated_uniprot_id, uniprot_domain.uniprot_domain_1.uniprot_id
-                print "\ndomain_pair_reversed_order"
+                self.log.debug('mutated_uniprot_id: %s, uniprot_id: %s' 
+                    % (mutated_uniprot_id, uniprot_domain.uniprot_domain_1.uniprot_id,) )
+                self.log.debug("domain pair reversed order")
                 
                 alignment_2, alignment_1 = self.db.get_alignment(uniprot_template, uniprot_domain.path_to_data)
                 
@@ -141,7 +135,7 @@ class GetMutation(object):
         
         mutation_errors = ''
         
-        save_path = self.tmpPath + self.unique + uniprot_domain.path_to_data
+        save_path = self.tmpPath + uniprot_domain.path_to_data
         pdbFile_wt = uniprot_model.model_filename
         
         chains = chains_modeller
@@ -533,7 +527,6 @@ class GetMutation(object):
         #######################################################################
         self.log.info('Finished processing template:')
         self.log.info(save_path.split('/')[-2])
-        self.log.info('\n\n')
                 
         return uniprot_mutation
 
@@ -566,7 +559,7 @@ class GetMutation(object):
             alignment_protein = alignment[1]
             alignment_uniprot = alignment[0]
         else:
-            print 'Could not assign the alignment to pdb and uniprot correctly!'
+            self.log.error('Could not assign the alignment to pdb and uniprot correctly!')
             return 1
 
         # now get the position
@@ -645,9 +638,11 @@ class GetMutation(object):
             wt_seq = sequence.seq[left:right]
             mut_seq = sequence.seq[left:int(mutation[3:-1])-1] + mutation[-1] + sequence.seq[int(mutation[3:-1]):right]
 
-            print mutation
-            print sequence
-            print sequence.seq[int(mutation[3:-1])-1-5:int(mutation[3:-1])+5]
+            self.log.debug('mutation:')
+            self.log.debug(mutation)
+            self.log.debug('sequence:')
+            self.log.debug(sequence)
+            self.log.debug(sequence.seq[int(mutation[3:-1])-1-5:int(mutation[3:-1])+5])
             assert( sequence.seq[int(mutation[3:-1])-1] == mutation[2] )
             
             mutations_foldX.append((m_pos, str(wt_seq) + '\n' + str(mut_seq)))
@@ -702,7 +697,7 @@ class GetMutation(object):
                         elif chains_new[1] == 'C':
                             mutChain = 'C'
                         else:
-                            print 'could not assign the chain for mutation correctly!'
+                            self.log.error('could not assign the chain for mutation correctly!')
                             mutChain = None
                     
             mut.append( mutChain + '_' + mutation[2:] )

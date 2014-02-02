@@ -1,77 +1,58 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jan 15 11:09:11 2013
+Created on Sun Dec 23 18:37:36 2012
 
 @author: niklas
 """
 import os
-import subprocess
 import logging
+import subprocess
+import tempfile 
 import optparse
-import multiprocessing
+
+from modeller import ModellerError
+
+import class_error as error
+import class_sql as sql
+
+import class_domain_template
+import class_domain_model
+import class_domain_mutation
 
 from Bio.SubsMat import MatrixInfo
 from ConfigParser import SafeConfigParser
-
-import class_error as error
-
-from class_multi import Consumer, Task
-from class_logging import MultiProcessingLog
 from scinetCleanup import scinetCleanup
 
-# credit goes to here:
-# http://pymotw.com/2/multiprocessing/communication.html#controlling-access-to-resources
-class ActivePool(object):
-    """
-    Used to control how many parallel T_Coffee calls can be run
-    Originally implemented because I had problems with running T_Coffee in
-    parallel it can now be used if there are memory limitations
-    
-    The problem I had with T_Coffee is that I made the programm call from the
-    same directory. Switching to a unique directory for every call solved
-    the issue.
-    """
-    def __init__(self):
-        super(ActivePool, self).__init__()
-        self.mgr = multiprocessing.Manager()
-        self.active = self.mgr.list()
-        self.lock = multiprocessing.Lock()
-    def makeActive(self, name):
-        with self.lock:
-            self.active.append(name)
-    def makeInactive(self, name):
-        with self.lock:
-            self.active.remove(name)
-    def __str__(self):
-        with self.lock:
-            return str(self.active)
 
 
-class pipeline():
-    
+class Pipeline(object):
+
     def __init__(self, configFile):
-        #######################################################################  
+       
+       #######################################################################
         # read the configuration file and set the variables
         configParser = SafeConfigParser(
-            defaults={'tmpPath':'/tmp/pipeline/',
-                      'HETATM':True,
-                      'DEBUG':False,
-                      'saveTo':'$SCRATCH/niklas-pipeline/',
-                      'saveScinet':False,
+            defaults={'tmpPath': '/tmp/pipeline/',
+                      'HETATM': True,
+                      'DEBUG': False,
+                      'saveTo': '$SCRATCH/niklas-pipeline/',
+                      'saveScinet': False,
                       'path_to_archive': '/home/kimlab1/database_data/elaspic/human/',
-                      'db_type': 'sqlite_file',
+                      'db_type': sql.sql_flavor,
                       'db_path': error.path_to_pipeline_code() + '/../db/pipeline.db',
                       'webServer': False,
-                      'name': 'pipeline',
-                      'numConsumers': multiprocessing.cpu_count(),
-                      'tcoffee_parallel_runs': multiprocessing.cpu_count(),
-                      'outputPath':'results/',
+                      'numConsumers': '1',
+                      'tcoffee_parallel_runs': '1',
+                      'outputPath': '../results/',
                       'savePDB': 'results/pdb_files/',
-                      'runTime': 'INFINITE'})
+                      'runTime': 'INFINITE',
+                      'matrix': 'blosum80',
+                      'gap_start': '-16',
+                      'gap_extend': '-4'})
 
         configParser.read(configFile)
 
-        ## from [DEFAULT]
+        # from [DEFAULT]
         tmpPath = configParser.get('DEFAULT', 'tmpPath')
         self.DEBUG = configParser.getboolean('DEFAULT', 'DEBUG')
         self.HETATM = configParser.getboolean('DEFAULT', 'HETATM')
@@ -82,57 +63,24 @@ class pipeline():
         self.db_path = configParser.get('DEFAULT', 'db_path')
         self.webServer = configParser.get('DEFAULT', 'webServer')
             
-        ## from [SETTINGS]
-        self.name = configParser.get('SETTINGS', 'name')
+        # from [SETTINGS]
         self.num_consumers = configParser.getint('SETTINGS', 'numConsumers')
         self.tcoffee_parallel_runs = configParser.getint('SETTINGS', 'tcoffee_parallel_runs')
         self.outputPath = configParser.get('SETTINGS', 'outputPath')
         self.savePDB = configParser.get('SETTINGS', 'savePDB')
         self.runTime = configParser.get('SETTINGS', 'runTime')
-        
-        # pdbPath
-        if configParser.has_option('SETTINGS', 'pdbPath'):
-            self.pdbPath = configParser.get('SETTINGS', 'pdbPath')
-        else:
-            raise error.ConfigError('pdbPath')
-        # bin
-        if configParser.has_option('SETTINGS', 'bin'):
-            self.executables = configParser.get('SETTINGS', 'bin')
-        else:
-            raise error.ConfigError('bin')
+        self.pdbPath = configParser.get('SETTINGS', 'pdbPath')
+        self.executables = configParser.get('SETTINGS', 'bin')
             
-        ## from [INPUT]
-        # file
-        if configParser.has_option('INPUT', 'file'):
-            self.inputFile = configParser.get('INPUT', 'file')
-            if not os.path.isfile(self.inputFile):
-                raise error.DataError(self.inputFile)
-        else:
-            raise error.ConfigError('file')
-        # mutation_uniprot ### should be renamed template_finding
-        if configParser.has_option('INPUT', 'mutation_uniprot'):
-            self.mutation_uniprot = configParser.getboolean('INPUT', 'mutation_uniprot')
-        else:
-            raise error.ConfigError('mutation_uniprot')
+        # from [INPUT]
+        self.template_finding = configParser.getboolean('INPUT', 'mutation_uniprot')
         
-        ## from [MODELLER]
-        # modeller_runs
-        if configParser.has_option('MODELLER', 'modeller_runs'):
-            self.modeller_runs = configParser.getint('MODELLER', 'modeller_runs')
-        else:
-            raise error.ConfigError('modeller_runs')
+        # from [MODELLER]
+        self.modeller_runs = configParser.getint('MODELLER', 'modeller_runs')
         
-        ## from [FOLDX]
-        # WATER
-        if configParser.has_option('FOLDX', 'WATER'):
-            self.foldX_WATER = configParser.get('FOLDX', 'WATER')
-        else:
-            raise error.ConfigError('WATER')
-        # buildModel_runs
-        if configParser.has_option('FOLDX', 'buildModel_runs'):
-            self.buildModel_runs = configParser.get('FOLDX', 'buildModel_runs')
-        else:
-            raise error.ConfigError('buildModel_runs')
+        # from [FOLDX]
+        self.foldX_WATER = configParser.get('FOLDX', 'WATER')
+        self.buildModel_runs = configParser.get('FOLDX', 'buildModel_runs')
         
         #######################################################################
         # matrix (currently hardcoded, can be changed if needed)
@@ -140,21 +88,26 @@ class pipeline():
         # they are used in conjuntion with the matrix to determine the
         # sequence similariy (could be used to determine the sequence similarity
         # between to interfaces. Might help to improve the modelling)
-#        if configParser.has_option('SETTINGS', 'matrix'):
-#            self.matrix_option = configParser.get('SETTINGS', 'matrix')
-        self.matrix_option = 'blosum80'
+        
+        # matrix type
+        self.matrix_option = configParser.get('SETTINGS', 'matrix')
+#        self.matrix_option = 'blosum80'
+        
         # gap_start
-#        if configParser.has_option('SETTINGS', 'gap_start'):
-#            self.gap_start = configParser.getint('SETTINGS', 'gap_start')
-#        else:
-#            raise error.ConfigError('gap_start')
-        self.gap_start = -16
+        self.gap_start = configParser.getint('SETTINGS', 'gap_start')
+#        self.gap_start = -16
+        
         # gap_extend
-#        if configParser.has_option('SETTINGS', 'gap_extend'):
-#            self.gap_extend = configParser.getint('SETTINGS', 'gap_extend')
-#        else:
-#            raise error.ConfigError('gap_extend')
-        self.gap_extend = -4
+        self.gap_extend = configParser.getint('SETTINGS', 'gap_extend')
+#        self.gap_extend = -4        
+        
+        # set the matrix for the substitution score
+        if self.matrix_option == 'blosum80':
+            self.matrix =  MatrixInfo.blosum80
+        elif self.matrix_option == 'blosum60':
+            self.matrix =  MatrixInfo.blosum60
+        else:
+            raise Exception('Specified matrix not found!')
 
 
         #######################################################################
@@ -182,14 +135,7 @@ class pipeline():
             self.tmpPath = self.TMPDIR_CLUSTER + tmpPath
         else:
             self.tmpPath = self.TMPDIR_CLUSTER + '/' + tmpPath
-
-        # create the tmp directories and copy the binary files
-        self.__prepareTMP()
-        self.__prepareOutputPaths()
-
-        # set the matrix for the substitution score
-        self.matrix = self.__selectMatrix(self.matrix_option)
-        
+            
         
         #######################################################################
         # if running on the cluster copy the database to the tmp DIR for
@@ -204,47 +150,354 @@ class pipeline():
         # Scinet: joan
         childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         whoami, __ = childProcess.communicate()
-        if whoami.strip() == 'strokach':
-            # when running the pipeline on beagle or banting
-            system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
-                                'cp -r /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db ' + \
-                                self.tmpPath + 'blast/'
-            childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            result, __ = childProcess.communicate()
-            assert childProcess.returncode == 0
-            if childProcess.returncode != 0:
-                print 'couldnt copy the blast database!!\n\n\n\n'
-        if whoami.strip() == 'alexey':
-            # when running the pipeline locally there is no need to copy the database
-            # a symlink is enough
-            system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
-                                'cd ' + self.tmpPath + 'blast && ' + \
-                                'ln -sf /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
-            childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            result, __ = childProcess.communicate()
-            assert childProcess.returncode == 0
-        if whoami.strip() == 'joan':
-            # for scinet, blast is already installed, but the database needs to be copied
-            system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
-                                'cp -ru $HOME/niklas-pipeline/blastdb/pdbaa_db ' + \
-                                self.tmpPath + 'blast/'
-            childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            result, __ = childProcess.communicate()
-            assert childProcess.returncode == 0
+        path_to_local_pdbaa = '/home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
+        path_to_tmp_pdbaa = self.tmpPath + 'blast/pdbaa_db'
+        if not os.path.isdir(path_to_tmp_pdbaa):
+#            childProcess = subprocess.Popen('hostname | cut -d. -f1', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+#            host_name, __ = childProcess.communicate()
+            if whoami.strip() == 'strokach':
+                # when running the pipeline on beagle or banting, copy the database
+                # to a local folder
+                system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
+                                    'cp -r ' + path_to_local_pdbaa + ' ' + path_to_tmp_pdbaa
+            elif whoami.strip() == 'alexey':
+                # when running the pipeline locally there is no need to copy the database
+                # a symlink is enough
+                system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
+                                    'cd ' + self.tmpPath + 'blast && ' + \
+                                    'ln -sf /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
+            elif whoami.strip() == 'joan':
+                # for scinet, blast is already installed, but the database needs to be copied
+                system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
+                                    'cp -ru $HOME/niklas-pipeline/blastdb/pdbaa_db ' + \
+                                    self.tmpPath + 'blast/'
             
+            childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            result, __ = childProcess.communicate()
+            if childProcess.returncode != 0:
+                raise Exception('Couldnt copy the blast database!')
+                
         
         #######################################################################
         # Copy the database file
-        if self.db_type == 'sqlite_file':
-            print self.db_path
+        if self.db_type == 'sqlite_file' and not os.path.isfile(self.tmpPath + '/' + self.db_path.strip().split('/')[-1]):
             print self.tmpPath
+            print self.db_path
             system_command = 'cp -u ' + self.db_path + ' ' + self.tmpPath + '/'
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, __ = childProcess.communicate()
-            assert childProcess.returncode == 0
+            if childProcess.returncode != 0:
+                raise Exception('Could not copy the sqlite3 database!')
     
     
+        #######################################################################
+        # Create output folder if it doesn't exist
+        if not os.path.isdir(self.outputPath):
+            subprocess.check_call('mkdir -p ' + self.outputPath, shell=True)
+        
     
+
+    def __call__(self, uniprot_id, mutation):
+        """ Run the main function of the program and parse errors
+        """
+        
+        self.uniprot_id = uniprot_id
+        self.mutations = mutation
+        print self.uniprot_id
+        
+        self.unique = tempfile.mkdtemp(prefix='', dir=self.tmpPath).split('/')[-1]
+        print self.unique
+        
+        # create temporary folders
+        self.__prepareTMP()
+
+        
+        # initialize the logger
+        logger = logging.getLogger(__name__)
+        if self.DEBUG:
+            logger.setLevel(logging.DEBUG)
+        else:
+            logger.setLevel(logging.INFO)
+        
+        if False:
+            handler = logging.FileHandler(self.outputPath + self.uniprot_id + '_' + 
+                            self.mutation + '.log', mode='w', delay=True, maxsize=0, rotate=5)
+        else:
+            handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+            
+        logger.addHandler(handler)
+        
+        self.log = logger
+
+
+        # Initialise the sql database for accessing all information
+        self.db = sql.MyDatabase(path_to_sqlite_db=(self.tmpPath + 'pipeline.db'),
+                                 sql_flavor=self.db_type, 
+                                 is_immutable=False,
+                                 path_to_temp=self.tmpPath,
+                                 path_to_archive=self.path_to_archive)
+
+        
+        # go to a unique directory
+        self.PWD = self.tmpPath + self.unique + '/'
+        os.chdir(self.PWD)
+
+        
+        # Initialize the classes used for calculating templates, models and mutations
+        self.get_template = class_domain_template.GetTemplate(self.tmpPath, self.unique, self.pdbPath, self.db, self.log)
+            
+        self.get_model = class_domain_model.GetModel(self.tmpPath, self.unique, self.pdbPath, self.db, self.log, 
+            self.modeller_runs, self.buildModel_runs, self.PWD)
+            
+        self.get_mutation = class_domain_mutation.GetMutation(self.tmpPath, self.unique, self.pdbPath, self.db, self.log, 
+            self.foldX_WATER, self.buildModel_runs, self.PWD, self.matrix, self.gap_start, self.gap_extend)
+        
+        
+        #######################################################################
+        # Find all domains and domain pairs for a given uniprot
+        
+        # Core and interface domain definitions
+        protein_domains = self.db.get_uniprot_domain(self.uniprot_id)
+
+        # Don't forget to uncomment        
+        protein_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id)
+        # Duplicates will occur for homodimers (ie forward and reverse are the same)
+        protein_domain_pairs = list(set(protein_domain_pairs[0] + protein_domain_pairs[1]))
+        
+        protein_definitions = protein_domain_pairs + protein_domains
+        protein_definitions = protein_domains
+
+        if protein_definitions == []:
+            self.log.error('Uniprot %s has no pfam domains' % self.uniprot_id)
+        
+        self.protein_definitions = protein_definitions
+        self.protein_mutations = None
+        
+        
+        #######################################################################
+        # Do the calculations
+        self.log.info("Finding templates...")
+        self.compute_templates()
+        
+        self.log.info("Building models...")
+        self.compute_models()
+
+        self.log.info("Analyzing mutations...")        
+        self.compute_mutations()
+
+            
+        # Need to add some stuff for foldX: <analyse complex>
+        
+        
+        #######################################################################
+        # save the results from ramdisk
+        if self.saveScinet:
+            scinetCleanup(self.outputPath, self.saveTo)
+            
+        # Leave everything the way you found it
+        self.db.session.close()
+        
+        os.chdir(self.PWD)        
+            
+        
+        # modeller_path = self.tmpPath + self.unique + '/modeller/'
+
+#        if self.template_finding:
+        
+#        #######################################################################
+#        
+#        if self.template_finding and self.mutations != '':
+#            # If we are given a mutation (or a list of tab-separated mutations)
+#            # calculate the dG for each of those mutations
+#            
+#        
+#        #######################################################################
+#        
+#        if not self.template_finding and self.mutations != '':
+#            
+#            # Modell mutations using the structure from the pdb
+#            template, template_mutations = self.get_pdb_and_mutations(self.mutations)                     
+#                                
+#            # Get the data for a particular mutation (or a set of mutations)
+#            template_mutations = self.analyse_mutations(template, template_mutations)
+#            
+#            protein_definitions = [template.update(template_mutations),]
+#
+#        
+#        # Switch back to the original directory
+#        os.chdir(self.PWD)
+#        
+#        return protein_definitions
+
+    
+    def compute_templates(self):
+        """ Align uniprot domains to structural domains in pdbfam, find the best 
+        template, and expand domain boundaries
+        """
+        protein_definitions_with_templates = []
+        for uniprot_domain, uniprot_template, uniprot_model in self.protein_definitions:
+            self.log.info('%s\t%s\t%s' % (uniprot_domain, uniprot_template, uniprot_model,) )
+                
+            # Check if tired expanding boundaries for this domain previously, and got erros
+            if uniprot_template and uniprot_template.template_errors != 'no templates found':
+                protein_definitions_with_templates.append((uniprot_domain, uniprot_template, uniprot_model,))
+                self.log.info('skipping')
+                continue
+                
+            # Construct empty templates that will be used if we have errors
+            if type(uniprot_domain) == sql.UniprotDomain:
+                empty_template = sql.UniprotDomainTemplate()
+                empty_template.uniprot_domain_id = uniprot_domain.uniprot_domain_id
+            elif type(uniprot_domain) == sql.UniprotDomainPair:
+                empty_template = sql.UniprotDomainPairTemplate()
+                empty_template.uniprot_domain_pair_id = uniprot_domain.uniprot_domain_pair_id
+            
+            
+            # For domains that are not expanded and do not have the template cath_id:
+            try:
+                template = self.get_template(uniprot_domain)
+                
+            except error.NoStructuralTemplates as e:
+                empty_template.template_errors = e.error
+                template = empty_template
+            except error.NoSequenceFound as e:
+                empty_template.template_errors = e.error
+                template = empty_template
+            except error.TemplateCoreError as e:
+                self.log.error('Error while getting the core template for ' + self.uniprot_id + ':' + self.mutations)
+                self.log.error('TemplateCoreError error:' + e.error)
+                empty_template.template_errors = e.error
+                template = empty_template
+            except error.TemplateInterfaceError as e:
+                self.log.error('Error while getting the interface template for ' + self.uniprot_id + ':' + self.mutations)
+                self.log.error('TemplateInterfaceError error:' + e.error)
+                empty_template.template_errors = e.error
+                template = empty_template
+            except error.TcoffeeError as e:
+                self.log.error('t_coffee: problem occured while getting the wildtype PDB\n')
+                self.log.error('t_coffee: alignment error in file: ' + e.alignInFile + '\n')
+                self.log.error('t_coffee: message raised:\n')
+                self.log.error('t_coffee:' + e.errors + '\n\n\n')
+                empty_template.template_errors = 't_coffee error with message: %.30s' % e.error.replace('\n','; ')
+                template = empty_template
+            except:
+                raise
+            
+            protein_definitions_with_templates.append((uniprot_domain, template, False,))
+            self.log.info('adding template')
+            self.db.add_uniprot_template(template, uniprot_domain.path_to_data)
+                
+        self.protein_definitions = protein_definitions_with_templates
+        self.log.info('Finished processing all templates for ' + self.uniprot_id + ' ' + self.mutations + '\n')
+
+
+
+    def compute_models(self):            
+        """ Use modeller to make a homology model for each uniprot domain that
+        has a template in pdbfam
+        """
+        protein_definitions_with_models = []
+        for uniprot_domain, uniprot_template, uniprot_model in self.protein_definitions:
+            self.log.info('%s\t%s\t%s' % (uniprot_domain, uniprot_template, uniprot_model,) )
+            
+            if uniprot_model and uniprot_model.model_errors is None:
+                protein_definitions_with_models.append((uniprot_domain, uniprot_template, uniprot_model,))
+                self.log.info('skipping')
+                continue
+            
+            # Construct empty models that will be used if we have errors
+            if type(uniprot_domain) == sql.UniprotDomain:
+                empty_model = sql.UniprotDomainModel()
+                empty_model.uniprot_domain_id = uniprot_template.uniprot_domain_id
+                if uniprot_template.domain_def is None:
+                    continue
+            elif type(uniprot_domain) == sql.UniprotDomainPair:
+                empty_model = sql.UniprotDomainPairModel()
+                empty_model.uniprot_domain_pair_id = uniprot_template.uniprot_domain_pair_id
+                if uniprot_template.uniprot_domain_1.domain_def is None or uniprot_template.uniprot_domain_2.domain_def:
+                    continue
+            
+            # For domains that are not expanded and do not have the template cath_id:
+            try:
+                uniprot_model = self.get_model(uniprot_domain, uniprot_template)
+            
+            except error.KNOTerror as e:
+                self.log.error('knot error')
+                uniprot_model = empty_model
+                uniprot_model.model_errors = 'knot error'
+            except ModellerError as e:
+                self.log.error('ModellerError while trying to modellel in __getPDB for ' + self.uniprot_id + ':' + self.mutations)
+                self.log.error('ModellerError args:' + '\n'.join(e.args))
+                self.log.error('ModellerError message:' + e.message)
+                if 'Alignment sequence not found in PDB file' in e.message:
+                    empty_model.model_errors = 'alignment sequence not found in PDB file, '
+                else:
+                    empty_model.model_errors = 'modelling error with message: %.30s' % e.message.replace('\n','; ')
+                uniprot_model = empty_model
+            except:
+                raise
+            
+            protein_definitions_with_models.append((uniprot_domain, uniprot_template, uniprot_model,))
+            self.log.info('adding model')
+            self.db.add_uniprot_model(uniprot_model, uniprot_domain.path_to_data)
+            
+        self.protein_definitions = protein_definitions_with_models
+        self.log.info('Finished processing all models for ' + self.uniprot_id + ' ' + self.mutations + '\n')
+
+
+
+    def compute_mutations(self):
+                
+        list_of_mutations_for_each_domain = []
+        for uniprot_domain, uniprot_template, uniprot_model in self.protein_definitions:
+            
+            list_of_mutations = []
+            for mutation in self.mutations.split(','):
+                
+                # Construct empty models that will be used if we have errors
+                if type(uniprot_domain) == sql.UniprotDomain:
+                    precalculated_mutation = self.db.get_uniprot_domain_mutation(uniprot_template.uniprot_domain_id, mutation)
+                    empty_mutation = sql.UniprotDomainMutation()
+                    empty_mutation.uniprot_domain_id = uniprot_domain.uniprot_domain_id
+                    
+                elif type(uniprot_domain) == sql.UniprotDomainPair:
+                    precalculated_mutation = self.db.get_uniprot_domain_pair_mutation(uniprot_template.uniprot_domain_pair_id, mutation)
+                    empty_mutation = sql.UniprotDomainPairMutation()
+                    empty_mutation.uniprot_domain_pair_id = uniprot_domain.uniprot_domain_pair_id
+                    
+                if precalculated_mutation != []:
+                    list_of_mutations.append(precalculated_mutation)
+                    continue
+                
+                try:
+                    uniprot_mutation = self.get_mutation(uniprot_domain, uniprot_template, uniprot_model, self.uniprot_id, mutation)
+                    
+                except error.FoldXError as e:
+                    self.log.error('FoldXError while repairing the wildtype for ' + self.uniprot_id + ':' + self.mutations)
+                    self.log.error('FoldXError error:' + e.error)
+                    return 'foldx_error'
+                except error.pdbError as e:
+                    self.log.error(e.error)
+                    return 'pdbError'
+                except error.NotInteracting as e:
+                    self.log.error('Uniprot 1: %s, uniprot domain pair id: %s, Mutation %s not at interface!' 
+                        % (self.uniprot_id, uniprot_domain.uniprot_domain_pair_id, mutation,))
+                    continue
+                except:
+                    raise
+                        
+                list_of_mutations.append(uniprot_mutation)
+                self.db.add_uniprot_mutation(uniprot_mutation, uniprot_domain.path_to_data)          
+                    
+            list_of_mutations_for_each_domain.append(list_of_mutations)
+        
+        self.protein_mutations = list_of_mutations_for_each_domain        
+        self.log.info('Finished processing all mutations for ' + self.uniprot_id + ' ' + self.mutations + '\n')
+
+
+
     def __prepareTMP(self):
         # create the basic tmp directory
         # delete its content if it exists (AS: disabled so that I can continue from previous run)
@@ -257,45 +510,44 @@ class pipeline():
         
         for i in range(1, self.num_consumers + 1):
             # the consumers
-            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i)):
-                subprocess.check_call('mkdir ' + self.tmpPath + 'Consumer-' + str(i), shell=True)
+            if not os.path.isdir(self.tmpPath + self.unique):
+                subprocess.check_call('mkdir ' + self.tmpPath + self.unique, shell=True)
                 
             # tcoffee
-            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/tcoffee'):
+            if not os.path.isdir(self.tmpPath + self.unique + '/tcoffee'):
                 # create tmp for tcoffee
-                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee && ' + \
-                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee/tmp && ' + \
-                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee/lck && ' + \
-                                'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/tcoffee/cache'
+                mkdir_command = 'mkdir ' + self.tmpPath + self.unique + '/tcoffee && ' + \
+                                'mkdir ' + self.tmpPath + self.unique + '/tcoffee/tmp && ' + \
+                                'mkdir ' + self.tmpPath + self.unique + '/tcoffee/lck && ' + \
+                                'mkdir ' + self.tmpPath + self.unique + '/tcoffee/cache'
                 subprocess.check_call(mkdir_command, shell=True)
         
             # FoldX
-            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/FoldX'):
+            if not os.path.isdir(self.tmpPath + self.unique + '/FoldX'):
                 # make the directories
-                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX'
+                mkdir_command = 'mkdir ' + self.tmpPath + self.unique + '/FoldX'
                 # copy the executables
-                cp_command = 'cp ' + self.executables + 'FoldX.linux64 ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/ && ' + \
-                           'cp ' + self.executables + 'rotabase.txt ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/'
+                cp_command = 'cp ' + self.executables + 'FoldX.linux64 ' + self.tmpPath + self.unique + '/FoldX/ && ' + \
+                           'cp ' + self.executables + 'rotabase.txt ' + self.tmpPath + self.unique + '/FoldX/'
                 subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
                 # Copy dssp into the folder for modelling
-                cp_command = 'cp ' + self.executables + 'dssp-2.0.4-linux-amd64 ' + self.tmpPath + 'Consumer-' + str(i) + '/FoldX/'
+                cp_command = 'cp ' + self.executables + 'dssp-2.0.4-linux-amd64 ' + self.tmpPath + self.unique + '/FoldX/'
                 subprocess.check_call(cp_command, shell=True)
             
             # modeller
             if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/modeller'):
                 # create workingfolder for modeller
-                mkdir_command = 'mkdir ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
+                mkdir_command = 'mkdir ' + self.tmpPath + self.unique + '/modeller'
                 subprocess.check_call(mkdir_command, shell=True)
                 # Copy knot into the same folder as modeller
-                cp_command = 'cp ' + self.executables + 'topol ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
+                cp_command = 'cp ' + self.executables + 'topol ' + self.tmpPath + self.unique + '/modeller'
                 subprocess.check_call(cp_command, shell=True)
                 # Copy pops into the folder for modelling
-                cp_command = 'cp ' + self.executables + 'pops ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
+                cp_command = 'cp ' + self.executables + 'pops ' + self.tmpPath + self.unique + '/modeller'
                 subprocess.check_call(cp_command, shell=True)
                 # Copy dssp into the folder for modelling
-                cp_command = 'cp ' + self.executables + 'dssp-2.0.4-linux-amd64 ' + self.tmpPath + 'Consumer-' + str(i) + '/modeller'
+                cp_command = 'cp ' + self.executables + 'dssp-2.0.4-linux-amd64 ' + self.tmpPath + self.unique + '/modeller'
                 subprocess.check_call(cp_command, shell=True)
-                
 #            
 #            # create tmp for KNOT
 #            if not os.path.isdir(self.tmpPath + 'Consumer-' + str(i) + '/KNOT'):
@@ -319,291 +571,37 @@ class pipeline():
 #                # copy the executables
 #                cp_command = 'cp ' + self.executables + 'dssp-2.0.4-linux-amd64 ' + self.tmpPath + 'Consumer-' + str(i) + '/dssp'
 #                subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
-#
-
-
-
-
-    def __prepareOutputPaths(self):
-        if not os.path.isdir(self.outputPath):
-            subprocess.check_call('mkdir ' + self.outputPath, shell=True)
-        # Files are compressed into individual tar archives, do not need these paths anymore
-#        if not os.path.isdir(self.outputPath + 'alignments/'):
-#            subprocess.check_call('mkdir ' + self.outputPath + 'alignments/', shell=True)
-#        if not os.path.isdir(self.outputPath + 'bestModels/'):
-#            subprocess.check_call('mkdir ' + self.outputPath + 'bestModels/', shell=True)
-#        if not os.path.isdir(self.outputPath + 'pdbFiles/'):
-#            subprocess.check_call('mkdir ' +  self.outputPath + 'pdbFiles/', shell=True)
-
-        
-    def __selectMatrix(self, matrix):
-        if matrix == 'blosum80':
-            return MatrixInfo.blosum80
-        if matrix == 'blosum60':
-            return MatrixInfo.blosum60
-        else:
-            print 'specified matrix not found!'
-        
-        
-
-    def run(self):
-                    
-        ## Part for multiprocessing ##
-        # see: http://doughellmann.com/2009/04/pymotw-multiprocessing-part-1.html
-        # Establish communication queues
-        tasks = multiprocessing.JoinableQueue()
-        results = multiprocessing.Queue()
-        
-        # create a logger instance
-        # I started to play with the logger a little bit but didn't have the time
-        # to fully implement it to be really usefull. It works, one just has
-        # to set the desired logging with the information where needed
-        logger = MultiProcessingLog(self.outputPath + self.name + '.log', mode='w', maxsize=0, rotate=1)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        logger.setFormatter(formatter)
-        
-        log = logging.getLogger(__name__)
-        log.addHandler(logger)
-        if self.DEBUG:
-            log.setLevel(logging.DEBUG)
-        else:
-            log.setLevel(logging.INFO)
-        
-        # create the pool to control the number of t_coffee instances
-        # that are allowed to run in parallel
-        pool = ActivePool()
-        s = multiprocessing.Semaphore(self.tcoffee_parallel_runs)
-        
-        # Start consumers
-        print 'Creating %d consumers' % self.num_consumers
-        proc_name = [ 'Consumer-' + str(i) for i in range(1, self.num_consumers + 1) ]
-        consumers = [ Consumer(proc_name[i-1], tasks, results, self.runTime, pool, s, self.DEBUG, self.outputPath, logger, webServer=self.webServer)
-                      for i in range(1, self.num_consumers + 1) ]
-
-        for w in consumers:
-            w.start()
-    
-        # check if a skip file is present
-        # I normally didn't use it but the idea is that if you run the pipeline
-        # and it reached the maximum runtime, you could easily re-run and skip
-        # the already calculated entries.
-        if os.path.isfile('processed.log'):
-            skipFile = open('processed.log', 'r')
-            skip = list()
-            for line in skipFile:
-                skip.append(line.strip())
-            skipFile.close()
-            SKIP = True
-        else:
-            SKIP = False
-        
-        num_jobs = 0
-        with open(self.inputFile, 'r') as f:
-            for l in f:
-                if l[0][0] == ' ' or l[0][0] == '\t':
-                    continue
                 
-                line = [ ll.strip() for ll in l.split('\t') ]
                 
-                # AS: Mutation does not necessarily have to be specified
-                if len(line) > 1:
-                    uniprotKB, mutation = line[0], line[1]
-                elif len(line) == 1:
-                    uniprotKB = line[0]
-                    mutation = ''
-                    
-                # check if some entries should be skipped
-                if SKIP:
-                    if uniprotKB + mutation in skip:
-                        print 'skipping ', uniprotKB, mutation
-                        continue
-                
-                log.debug('Added to queue uniprot %s with mutation %s' % (uniprotKB, mutation) )
-                
-                # Enqueue jobs                
-                num_jobs += 1
-                tasks.put( Task(uniprotKB, 
-                                mutation,
-                                self.mutation_uniprot,
-                                self.savePDB,
-                                self.tmpPath,
-                                self.outputPath,
-                                self.pdbPath,
-                                self.matrix,
-                                self.gap_start,
-                                self.gap_extend,
-                                self.modeller_runs,
-                                self.buildModel_runs,
-                                self.foldX_WATER,
-                                self.path_to_archive,
-                                self.db_type))
-        
-        # Add a poison pill for each consumer
-        for i in range(1, self.num_consumers+1):
-            tasks.put( None )
-       
-        # Wait for all of the tasks to finish
-        tasks.join()
-
-        # process the result
-        res_wt = open(self.outputPath + 'result_wt.log', 'w')
-        res_mut = open(self.outputPath + 'result_mut.log', 'w')
-        res_if = open(self.outputPath + 'result_additional_information.log', 'w')
-        skiplog = open(self.outputPath + 'not_processed.log', 'w')
-        
-        # Write header
-        id_labels = 'uniprotIDs\t' + 'pfamIDs\t' + 'domain_defs\t' + 'mutation\t' + 'wt_or_mut\t'
-                    
-        value_labels = 'normDOPE\t' + \
-                    'intraclashes_energy1\t' + 'intraclashes_energy2\t' + \
-                    'interaction_energy\t' + 'backbone_hbond\t' + \
-                    'sidechain_hbond\t' + 'van_der_waals\t' + \
-                    'electrostatics\t' + 'solvation_polar\t' + \
-                    'solvation_hydrophobic\t' + 'Van_der_Waals_clashes\t' + \
-                    'entropy_sidechain\t' + 'entropy_mainchain\t' + \
-                    'sloop_entropy\t' + 'mloop_entropy\t' + 'cis_bond\t' + \
-                    'torsional_clash\t' + 'backbone_clash\t' + 'helix_dipole\t' + \
-                    'water_bridge\t' + 'disulfide\t' + 'electrostatic_kon\t' + \
-                    'partial_covalent_bonds\t' + 'energy_ionisation\t' + \
-                    'entropy_complex\t' + 'number_of_residues\t' + \
-                    'stability_energy\t' + 'stability_backbone_hbond\t' + \
-                    'stability_sidechain_hbond\t' + 'stability_Van_der_Waals\t' + \
-                    'stability_electrostatics\t' + 'stability_solvation_polar\t' + \
-                    'stability_solvation_hydrophobic\t' + 'stability_Van_der_Waals_clashes\t' + \
-                    'stability_entropy_sidechain\t' + 'stability_entropy_mainchain\t' + \
-                    'stability_sloop_entropy\t' + 'stability_mloop_entropy\t' + \
-                    'stability_cis_bond\t' + 'stability_torsional_clash\t' + \
-                    'stability_backbone_clash\t' + 'stability_helix_dipole\t' + \
-                    'stability_water_bridge\t' + 'stability_disulfide\t' + \
-                    'stability_electrostatic_kon\t' + 'stability_partial_covalent_bonds\t' + \
-                    'stability_energy_ionisation\t' + 'stability_entropy_complex\t' + \
-                    'stability_number_of_residues\n'
-                    
-        value_labels_extra = 'core_or_interface\t' + 'seq_id_avg\t' + \
-                    'seq_id_chain1\t' + 'seq_id_chain2\t' + \
-                    'matrix_score\t' + 'if_hydrophobic\t' + \
-                    'if_hydrophilic\t' + 'if_total\t' + \
-                    'contactVector_wt_ownChain\t' + 'contactVector_wt\t' + \
-                    'contactVector_mut_ownChain\t' + 'contactVector_mut\t' + \
-                    'secondary_structure_wt\t' + 'solvent_accessibility_wt\t' + \
-                    'secondary_structure_mut\t' + 'solvent_accessibility_mut\n'
-        
-        res_wt.write(id_labels + value_labels)
-        res_mut.write(id_labels + value_labels)
-        res_if.write(id_labels + value_labels_extra)
-
-        # Start printing results
-        while num_jobs:
-            num_jobs -= 1
-            # if the timeout was reached and the calculation stopped before
-            # every task was calculated the queue is empty before num_jobs is 0
-            
-            # check if the que is empty
-            if results.empty():
-                break
-            
-            output_data = results.get()
-            log.debug('output_data: \n%s' % output_data)            
-            for output_dict in output_data:
-                if isinstance(output_dict, list) and (output_dict[0] == None):
-                    skiplog.write(output_dict[1] + '\t' + output_dict[2] + '\n')
-                    continue
-                elif isinstance(output_dict, list) and (output_dict[0] == 'no template found'):
-                    skiplog.write(output_dict[1] + '\t' + 'no template found' + '\n')
-                    continue
-                else:
-                    # Add sequences that were not present already in the database
-                    if output_dict.has_key('new_sequences'):
-                        self.get_uniprot_sequence.add(output_dict['new_sequences'])
-                        
-                    # Unique identifier for each line
-                    id_data = ('-'.join(output_dict['uniprotIDs']) + '\t' + 
-                             '-'.join(output_dict['pfamIDs']) + '\t' + 
-                             '_'.join(['-'.join([str(i) for i in x]) for x in output_dict['domain_defs']]) + '\t' + 
-                             output_dict['mutation'] + '\t')
-#
-#                    # Unique identifier for each line
-#                    id_data =   output_dict['uniprotIDs'][0] + '\t' + \
-#                                output_dict['uniprotIDs'][1] + '\t' + \
-#                                output_dict['pfamIDs'][0] + '\t' + \
-#                                output_dict['pfamIDs'][1] + '\t' + \
-#                                str(output_dict['domain_defs'][0][0]) + '-' + str(output_dict['domain_defs'][0][1]) + '\t' + \
-#                                str(output_dict['domain_def2'][1][0]) + '-' + str(output_dict['domain_def2'][1][1]) + '\t' + \
-#                                output_dict['mutation'] + '\t'
-                                          
-                    # Make line for wildtype file
-                    resForWrite_wt = (id_data + 'wt\t' +
-                                        str(output_dict['normDOPE_wt'])[:6] + '\t' +
-                                        '\t'.join(output_dict['AnalyseComplex_energy_wt']) + '\t' +
-                                        '\n')
-                    
-                    # Make line for mutant file
-                    resForWrite_mut = (id_data + 'mut\t' + 
-                                        '-' + '\t' + # mutant structure has no normDOPE score (same as wildtype)
-                                        '\t'.join(output_dict['AnalyseComplex_energy_mut']) + '\t' +
-                                        '\t'.join(output_dict['Stability_energy_mut']) +
-                                        '\n')
-                    
-                    # Make line for additional information file
-                    resForWrite_if = (id_data + '-\t' +
-                                str(output_dict['is_in_core']) + '\t' +
-                                '\t'.join([str(i) for i in output_dict['alignment_scores']]) + '\t' +
-                                 str(output_dict['matrix_score']) + '\t' +
-                                 '\t'.join(output_dict['interface_size']) + '\t' +
-                                 ','.join(output_dict['physChem_wt_ownChain']) + '\t' +
-                                 ','.join(output_dict['physChem_wt']) + '\t' +
-                                 ','.join(output_dict['physChem_mut_ownChain']) + '\t' +
-                                 ','.join(output_dict['physChem_mut']) + '\t' +
-                                 str(output_dict['secondary_structure_wt'])  + '\t' +
-                                 str(output_dict['solvent_accessibility_wt']) + '\t' +
-                                 str(output_dict['secondary_structure_mut'])  + '\t' +
-                                 str(output_dict['solvent_accessibility_mut']) +
-                                 '\n')
-
-                    # Make another file to keep precalculated values?
-                    # resForWrite_precalc = []
-                    # output_dict['interactingAA']
-                    # output_dict['surfaceAA']
-                                 
-                    # Write output lines             
-                    res_wt.write(str(resForWrite_wt))
-                    res_mut.write(str(resForWrite_mut))
-                    res_if.write(str(resForWrite_if))                 
-        
-        # save the database (needed if new sequences were added)
-        self.get_uniprot_sequence.close()
-        
-        # close and flush the output files        
-        res_wt.close()
-        res_mut.close()
-        res_if.close()
-        skiplog.close()
-        logger.close()
-        
-        # save the results from ramdisk
-        if self.saveScinet:
-            scinetCleanup(self.outputPath, self.saveTo, self.name)
-
-
-
 if __name__ == '__main__':
     # read which configFile to use    
     optParser = optparse.OptionParser()
-    optParser.add_option('-c', '--config', action="store", dest='configFile')
+    optParser.add_option('-c', '--config', action="store", dest='config_file')
+    optParser.add_option('-i', '--input', action='store', dest='input_file')
     options, args = optParser.parse_args()
-       
-    configFile = options.configFile
+           
+    assert os.path.isfile(options.config_file)
+    assert os.path.isfile(options.input_file)
     
-    if not os.path.isfile(configFile):
-        print 'Error: configFile not found!'
-        print 'exiting'
-    else:
-        try:
-            p = pipeline(configFile)
-            p.run()
-        except error.DataError, e:
-            print 'Error: input file',  e.inputFile, ' not found!'
-            print 'exiting...'
-        except error.ConfigError, e:
-            print 'Error: option', e.option, ' not found!'
-            print 'exiting...'
+    pipeline = Pipeline(options.config_file)
+    print options.input_file
+    with open(options.input_file, 'r') as fh:
+        for l in fh:
+            # Can skip lines by adding spaces or tabs before them
+            if l[0][0] == ' ' or l[0][0] == '\t':
+                continue
+            
+            line = [ ll.strip() for ll in l.split('\t') ]
+            
+            # AS: Mutation does not necessarily have to be specified
+            if len(line) > 1:
+                uniprot_id, mutation = line[0], line[1]
+            elif len(line) == 1:
+                uniprot_id = line[0]
+                mutation = ''
+    
+            print uniprot_id, mutation
+            
+            # Enqueue jobs                
+            pipeline(uniprot_id, mutation)
+    
