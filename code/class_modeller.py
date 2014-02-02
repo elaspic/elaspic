@@ -61,40 +61,39 @@ class modeller:
         result = list()
         ranking = dict() # key: assessment score
                          # values: alignment, pdb of modell, from loop refinement yes or no
-        for aln in self.alignment:
-            # There is a chance that modeller fails to automatically select the
-            # regions for the loop modelling. In that case it tries to model
-            # without loop refinement. Worst thing that could happen is that
-            # the model is bad
-            try:
-                result, loop = self.__run_modeller(aln, result, self.loopRefinement)
-            except IndexError:
-                raise
-            except:
-                result, loop = self.__run_modeller(aln, result, False)
+        ranking_knotted = dict()
+        
+        knotted = True
+        counter = 0
+        while knotted and counter < 10:
+            counter += 1
+            
+            ## NB: You can actually supply many alignments and modeller will give
+            # you the alignment with the best model, and that model
+            for aln in self.alignment:
+                # There is a chance that modeller fails to automatically select the
+                # regions for the loop modelling. In that case it tries to model
+                # without loop refinement. Worst thing that could happen is that
+                # the model is bad
+                try:
+                    result, loop = self.__run_modeller(aln, result, self.loopRefinement)
+                except IndexError:
+                    raise
+                except:
+                    result, loop = self.__run_modeller(aln, result, False)
+                    
+                for i in range(len(result)):
+                    pdbFile, normDOPE = result[i][0], result[i][1]
+                    if self.__call_knot(pdbFile, self.modeller_path):  # i.e. knotted
+                        ranking_knotted[normDOPE] = (aln, str(pdbFile), loop,)
+                    else: 
+                        ranking[normDOPE] = (aln, str(pdbFile), loop,)
+                        knotted = False                            
 
-                
-            for i in range(len(result)):
-                pdbFile, normDOPE = result[i][0], result[i][1]
-                
-                if self.__call_knot(pdbFile, self.modeller_path) == 0: # i.e. no knot
-                    if loop:
-                        ranking[normDOPE] = (aln, str(pdbFile), True)
-                    else:
-                        ranking[normDOPE] = (aln, str(pdbFile), False)
-                else: # i.e. structure is knotted and is ignored
-                    continue
-                            
-
-        if len(ranking) == 0: # i.e. all structures were knotted
-            # Add logging here or some kind of counter to check how often this
-            # actually happens
-            raise KNOTerror
+        if not knotted:
+            return min(ranking), ranking[min(ranking)][1], knotted
         else:
-            if loop == True:
-                return min(ranking), ranking[min(ranking)][1]
-            else:
-                return min(ranking), ranking[min(ranking)][1]
+            return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], knotted
 
 
 
@@ -212,8 +211,6 @@ class modeller:
         system_command = modeller_path + 'topol ' + modeller_path + pdbFile
 
         cmd = shlex.split(system_command)
-        print system_command
-        print cmd
         childProcess = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         output, error = childProcess.communicate()
         rc = childProcess.returncode
@@ -224,18 +221,18 @@ class modeller:
         # hence two if statements to catch them
         if line[-4].strip().split(' ')[0] == 'len':
             if int(line[-4].strip().split(' ')[2]) == 2:
-                return 0 # i.e. no knot
+                return False # i.e. no knot
             if int(line[-4].strip().split(' ')[2]) > 2:
-                return 1 # i.e. knotted
+                return True # i.e. knotted
         elif line[-2].strip().split(' ')[0] == 'len':
             if int(line[-2].strip().split(' ')[2]) == 2:
-                return 0 # i.e. no knot
+                return False # i.e. no knot
             if int(line[-2].strip().split(' ')[2]) > 2:
-                return 1 # i.e. knotted
+                return True # i.e. knotted
         else:
             # in case the output can't be read, the model is classified as
             # knotted and thus disregarded. This could be improved.
-            return 1
+            return True
 
 
 

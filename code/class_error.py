@@ -23,14 +23,19 @@ def path_to_pipeline_code():
 ###############################################################################    
 # Keep track of and raise different kinds of errors
 class TcoffeeError(Exception):
-    def __init__(self, message, errors, alignInFile):
+    def __init__(self, message, error, alignInFile):
         # Call the base class constructor with the parameters it needs
         Exception.__init__(self, message)
-
         # Now for your custom code...
-        self.errors = errors
+        self.error = error
         self.alignInFile = alignInFile
 
+class TcoffeeBlastError(Exception):
+    def __init__(self, message, error, alignInFile):
+        Exception.__init__(self, message)
+        self.error = error
+        self.alignInFile = alignInFile
+        
 class KNOTerror(Exception):
     pass
 
@@ -124,10 +129,7 @@ class PopsError(Exception):
         
 
 
-
-
-
-
-
-
-
+class NoPDBFound(Exception):
+    def __init__(self, pdb_filename):
+        Exception.__init__(self)
+        self.error = 'PDB with filename %s not found!' % pdb_filename

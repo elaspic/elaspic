@@ -9,6 +9,7 @@ import urllib2
 import subprocess
 import json
 from string import uppercase
+import datetime
 
 from sqlalchemy import create_engine, and_, or_
 from sqlalchemy import Column, Index, UniqueConstraint
@@ -24,31 +25,6 @@ from Bio import AlignIO
 import parse_pfamscan
 import class_error as error
 
-
-###############################################################################
-
-# Not the best place to define this, bot collation changes depending on the 
-# database type...
-
-sql_flavor = 'sqlite_file'
-#sql_flavor = 'postgresql'
-
-if sql_flavor.split('_')[0] == 'sqlite':
-    binary_collation = 'RTRIM' # same as binary, except that trailing space characters are ignored.
-    string_collation = 'NOCASE'
-elif sql_flavor.split('_')[0] == 'mysql':
-    binary_collation = 'utf8_bin'
-    string_collation = 'utf8_unicode_ci'
-elif sql_flavor.split('_')[0] == 'postgresql':
-    binary_collation = 'en_US.utf8'
-    string_collation = 'en_US.utf8'
-else:
-    raise Exception('Unknown database type!')
-
-Base = declarative_base()
-
-# Get the session that will be used for all future queries
-Session = sessionmaker()
 
 ###############################################################################
 # Helper functions for dealing with sql objects
@@ -100,8 +76,38 @@ def row2dict(row):
     d = {}
     for column in row.__table__.columns:
         d[column.name] = getattr(row, column.name)
+        if type(d[column.name]) == datetime.datetime:
+            d[column.name] = d[column.name].strftime('%Y-%m-%d %H-%M-%S-%f')
 
     return d
+
+
+###############################################################################
+
+# Not the best place to define this, bot collation changes depending on the 
+# database type...
+
+#sql_flavor = 'sqlite_file'
+sql_flavor = 'postgresql'
+
+if sql_flavor.split('_')[0] == 'sqlite':
+    binary_collation = 'RTRIM' # same as binary, except that trailing space characters are ignored.
+    string_collation = 'NOCASE'
+elif sql_flavor.split('_')[0] == 'mysql':
+    binary_collation = 'utf8_bin'
+    string_collation = 'utf8_unicode_ci'
+elif sql_flavor.split('_')[0] == 'postgresql':
+    binary_collation = 'en_US.utf8'
+    string_collation = 'en_US.utf8'
+else:
+    raise Exception('Unknown database type!')
+
+Base = declarative_base()
+
+# Get the session that will be used for all future queries
+Session = sessionmaker()
+
+
 
 #############################################################################
 
@@ -205,8 +211,7 @@ class UniprotDomainTemplate(Base):
     alignment_score = Column(Integer)
     
     #
-    date_created = Column(DateTime, nullable=False, default=func.now())
-    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
     
     # Relationships
     uniprot_domain = relationship(UniprotDomain, uselist=False, backref='template') # one to one
@@ -228,8 +233,7 @@ class UniprotDomainModel(Base):
     sasa_score = Column(Text)
     
     #
-    date_created = Column(DateTime, nullable=False, default=func.now())
-    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
     
     # Relationships
     template = relationship(UniprotDomainTemplate, uselist=False, backref='model') # one to one
@@ -269,8 +273,7 @@ class UniprotDomainMutation(Base):
     ddG = Column(Float)
     
     #
-    date_created = Column(DateTime, nullable=False, default=func.now())
-    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
     
     # Relationships
     model = relationship(UniprotDomainModel, backref='mutations') # many to one
@@ -287,7 +290,7 @@ class UniprotDomainPairTemplate(Base):
     alignment_filename_1 = Column(String(255, collation=binary_collation))
     alignment_filename_2 = Column(String(255, collation=binary_collation))
     
-#    domain_contact_id = Column(None, ForeignKey(DomainContact.domain_contact_id), index=True)        
+#    domain_contact_id = Column(None, ForeignKey(DomainContact.domain_contact_id), index=True)
     cath_id_1 = Column(None, ForeignKey(Domain.cath_id), index=True)
     domain_def_1 = Column(String(255, collation=string_collation))
     alignment_id_1 = Column(String(255, collation=string_collation))
@@ -299,8 +302,7 @@ class UniprotDomainPairTemplate(Base):
     alignment_score_2 = Column(Integer)
     
     #
-    date_created = Column(DateTime, nullable=False, default=func.now())
-    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
     
     # Relationships
     uniprot_domain_pair = relationship(UniprotDomainPair, uselist=False, backref='template') # one to one
@@ -331,8 +333,7 @@ class UniprotDomainPairModel(Base):
     interacting_aa_2 = Column(Text)
     
     #
-    date_created = Column(DateTime, nullable=False, default=func.now())
-    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
     
     # Relationships
     template = relationship(UniprotDomainPairTemplate, uselist=False, backref='model') # one to one
@@ -372,11 +373,11 @@ class UniprotDomainPairMutation(Base):
     ddG = Column(Float)
     
     #
-    date_created = Column(DateTime, nullable=False, default=func.now())
-    date_modified = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
+    date_modified = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
     
     # Relationships
     model = relationship(UniprotDomainPairModel, backref='mutations') # many to one
+
 
 
 ###############################################################################
@@ -384,7 +385,7 @@ class MyDatabase(object):
     """
     """
     
-    def __init__(self, path_to_sqlite_db='', sql_flavor='sqlite_file', is_immutable=False,
+    def __init__(self, path_to_sqlite_db='', sql_flavor=sql_flavor, is_immutable=False,
                  path_to_temp='/tmp/', path_to_archive='/tmp/human/', clear_database=False):
         """
         """
@@ -413,7 +414,7 @@ class MyDatabase(object):
     
         if clear_database:
             Base.metadata.drop_all(engine)
-            Base.metadata.create_all(engine)
+        Base.metadata.create_all(engine)
             
         Session.configure(bind=engine, autocommit=autocommit, autoflush=autoflush)
             
@@ -423,7 +424,419 @@ class MyDatabase(object):
         self.path_to_temp = path_to_temp
         self.path_to_archive = path_to_archive
 
+
+    ###########################################################################
+    def get_uniprot_sequence(self, uniprot_id):
+        """
+        """
+        if uniprot_id in ['A6NF79', 'C9JUS1', 'Q6N045', 'A6NMD1']:
+            # these uniprotKBs made problems
+            return []
+        elif uniprot_id == 'P02735':
+            # this sequence got replaced. I don't know right now if I can take
+            # replaced sequence so I rather dismiss it.
+            return []
+        
+        uniprot_sequence = self.session.query(UniprotSequence)\
+                            .filter(UniprotSequence.uniprot_id==uniprot_id)\
+                            .all()
+        
+        if len(uniprot_sequence) == 1:
+            uniprot_sequence = uniprot_sequence[0]        
+        
+        elif len(uniprot_sequence) == 0:
+            # the True/False value is used to add new sequences to the database in
+            # end. Only usefull if you run one instance at a time otherwise you will
+            # get diverging sequence databases.
+            childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            whoami, e = childProcess.communicate()
+            if whoami.strip() == 'joan':
+                print 'uniprot sequence not found'
+            else:
+                print 'Fetching uniprot sequence', uniprot_id, 'from server'
+                address = 'http://www.uniprot.org/uniprot/' + uniprot_id + '.fasta'
+                handle = urllib2.urlopen(address)
+                sequence = next(Bio.SeqIO.parse(handle, "fasta"))
+                
+                uniprot_sequence = UniprotSequence()
+                uniprot_sequence.uniprot_id = uniprot_id
+                uniprot_sequence.uniprot_name = sequence.name
+                uniprot_sequence.uniprot_description = sequence.description
+                uniprot_sequence.uniprot_sequence = str(sequence.seq)
+#                self.session.add(uniprot_sequence)
+        
+        if uniprot_sequence == []:
+            raise error.NoSequenceFound('No sequence found for ' + uniprot_id)
+        
+        uniprot_seqio_oject = Bio.SeqIO.SeqRecord(seq=Bio.Seq.Seq(str(uniprot_sequence.uniprot_sequence)), 
+                               id=uniprot_sequence.uniprot_id,
+                               name=uniprot_sequence.uniprot_name,
+                               description=uniprot_sequence.uniprot_description)
+        
+        return uniprot_seqio_oject
     
+    
+    def add_uniprot_sequence(self, uniprot_sequence):
+        """ 
+        Add the new items (which is a list of tuples) to the database
+        """
+        if not self.is_immutable:
+            self.session.add(uniprot_sequence)
+            if not self.autocommit:
+                self.session.commit()
+        
+    
+    ###########################################################################
+    def get_domain(self, pfam_name):
+        """ 
+        Contains pdbfam-based definitions of all pfam domains in the pdb
+        """
+        
+        domain = self.session.query(Domain)\
+                    .filter(Domain.pfam_name==pfam_name)\
+                    .all()
+
+        if domain == []:
+            print 'No domain definitions found for pfam: %s' % pfam_name
+            
+        return domain
+
+
+    def get_domain_contact(self, pfam_name_1, pfam_name_2):
+        """ Keeps the domain-domain interaction information from pdbfam
+        Note that the produced dataframe may not have the same order as the keys
+        """
+        domain_contact_1 = self._get_domain_contact(pfam_name_1, pfam_name_2, reverse=False)
+        domain_contact_2 = self._get_domain_contact(pfam_name_1, pfam_name_2, reverse=True)
+            
+        if len(domain_contact_1)==0 and len(domain_contact_2)==0:
+            print 'No domain contact template found for domains %s, %s' % (pfam_name_1, pfam_name_2,)
+            
+        return [domain_contact_1, domain_contact_2]
+        
+        
+    def _get_domain_contact(self, pfam_name_1, pfam_name_2, reverse=False):
+        """        
+        """  
+        if reverse:
+            pfam_name_1, pfam_name_2 = pfam_name_2, pfam_name_1
+
+        domain_1 = aliased(Domain)
+        domain_2 = aliased(Domain)
+        
+        domain_contact = self.session\
+            .query(DomainContact)\
+            .join(domain_1, DomainContact.cath_id_1==domain_1.cath_id)\
+            .filter(domain_1.pfam_name==pfam_name_1)\
+            .join(domain_2, DomainContact.cath_id_2==domain_2.cath_id)\
+            .filter(domain_2.pfam_name==pfam_name_2)\
+            .all()
+        
+        return domain_contact
+
+
+    ###########################################################################
+    def get_uniprot_domain(self, uniprot_id, copy_data=True):
+        """ 
+        Initiated using parsed pfam_scan.pl output for the human uniprot (or the entire uniprot)
+        The database is updated with information about calculated models
+        """
+        uniprot_definitions = self.session\
+            .query(UniprotDomain, UniprotDomainTemplate, UniprotDomainModel)\
+            .filter(UniprotDomain.uniprot_id==uniprot_id)\
+            .outerjoin(UniprotDomainTemplate)\
+            .outerjoin(UniprotDomainModel)\
+            .all()
+        
+        if len(uniprot_definitions)==0:
+            print 'No domain found in uniprot %s' % uniprot_id
+        
+        if copy_data:
+            for uniprot_domain, uniprot_template, uniprot_model in uniprot_definitions:
+                tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
+                archive_save_path = self.path_to_archive + uniprot_domain.path_to_data      
+                if uniprot_template and (uniprot_template.alignment_filename is not None):
+                    subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
+                    subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename +
+                                            ' ' + tmp_save_path + uniprot_template.alignment_filename, shell=True)
+                if uniprot_model and (uniprot_model.model_filename is not None):
+                    subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
+                                            ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)
+        
+        return uniprot_definitions
+        
+    
+    def get_uniprot_domain_mutation(self, uniprot_domain_id, mutation, path_to_data=False):
+        """
+        """
+        uniprot_mutation = self.session\
+            .query(UniprotDomainMutation)\
+            .filter(UniprotDomainMutation.uniprot_domain_id==uniprot_domain_id)\
+            .filter(UniprotDomainMutation.mutation==mutation)\
+            .all()
+            
+        if len(uniprot_mutation) == 0:
+            print 'No precalculated mutation %s for uniprot domain number %s' % (mutation, uniprot_domain_id)
+        
+#        if path_to_data:
+#            tmp_save_path = self.path_to_temp + path_to_data
+#            archive_save_path = self.path_to_archive + path_to_data
+        
+        return uniprot_mutation
+        
+
+    ###########################################################################
+    def get_uniprot_domain_pair(self, uniprot_id):
+        """ 
+        Contains known interactions between uniprot proteins
+        Checks if the interaction database is already available as a pickled object.
+        Generates it from file 'textfile_name' otherwise.
+        """
+        
+        uniprot_domain_pair_1 = self._get_uniprot_domain_pair(uniprot_id, reverse=False)
+        uniprot_domain_pair_2 = self._get_uniprot_domain_pair(uniprot_id, reverse=True)
+        
+        if len(uniprot_domain_pair_1)==0 and len(uniprot_domain_pair_2)==0:
+            print 'No known interactions with uniprot %s' % uniprot_id
+        
+        for uniprot_domain, uniprot_template, uniprot_model in uniprot_domain_pair_1 + uniprot_domain_pair_2:
+            tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
+            archive_save_path = self.path_to_archive + uniprot_domain.path_to_data
+            if uniprot_template and (uniprot_template.alignment_filename_1 is not None):
+                subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
+                subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_1 +
+                                        ' ' + tmp_save_path + uniprot_template.alignment_filename_1, shell=True)                    
+                subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_2 +
+                                        ' ' + tmp_save_path + uniprot_template.alignment_filename_2, shell=True)
+            if uniprot_model and (uniprot_model.model_filename is not None):
+                subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
+                                        ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)                    
+        
+        return [uniprot_domain_pair_1, uniprot_domain_pair_2]
+
+
+    def _get_uniprot_domain_pair(self, uniprot_id_1, reverse=False):
+        """
+        """
+        if not reverse:
+            uniprot_id_of_reference_domain = UniprotDomainPair.uniprot_domain_id_1
+        else:
+            uniprot_id_of_reference_domain = UniprotDomainPair.uniprot_domain_id_2
+        
+        uniprot_domain_pair = self.session\
+            .query(UniprotDomainPair, UniprotDomainPairTemplate, UniprotDomainPairModel)\
+            .join(UniprotDomain, UniprotDomain.uniprot_domain_id==uniprot_id_of_reference_domain)\
+            .filter(UniprotDomain.uniprot_id == uniprot_id_1)\
+            .outerjoin(UniprotDomainPairTemplate)\
+            .outerjoin(UniprotDomainPairModel)\
+            .all()
+        
+        return uniprot_domain_pair
+    
+    
+    def get_uniprot_domain_pair_mutation(self, uniprot_domain_pair_id, mutation):
+        """
+        """
+        uniprot_mutation = self.session\
+            .query(UniprotDomainPairMutation)\
+            .filter(UniprotDomainPairMutation.uniprot_domain_pair_id==uniprot_domain_pair_id)\
+            .filter(UniprotDomainPairMutation.mutation==mutation)\
+            .all()
+            
+        if len(uniprot_mutation) == 0:
+            print 'No precalculated mutation %s for uniprot domain pair number %s' % (mutation, uniprot_domain_pair_id)
+            
+#        if path_to_data:
+#            tmp_save_path = self.path_to_temp + path_to_data
+#            archive_save_path = self.path_to_archive + path_to_data
+            
+        return uniprot_mutation
+
+        
+    ###########################################################################
+    def add_uniprot_template(self, uniprot_template, path_to_data=False):
+        """
+        """
+        uniprot_template.date_modified = datetime.datetime.utcnow()
+                
+        # Save a copy of the alignment to the export folder
+        if path_to_data:
+            tmp_save_path = self.path_to_temp + path_to_data 
+            archive_save_path = self.path_to_archive + path_to_data
+            subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
+            
+            with open(archive_save_path + 'template.json', 'w') as fh:
+                json.dump(row2dict(uniprot_template), fh, indent=4, separators=(',', ': '))         
+            
+            if self.path_to_temp != self.path_to_archive: # Not running on SciNet
+                if type(uniprot_template) == UniprotDomainTemplate and (uniprot_template.alignment_filename is not None):
+                    subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename +
+                                            ' ' + archive_save_path + uniprot_template.alignment_filename, shell=True)
+                                            
+                elif type(uniprot_template) == UniprotDomainPairTemplate and (uniprot_template.alignment_filename_1 is not None):
+                    subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename_1 +
+                                            ' ' + archive_save_path + uniprot_template.alignment_filename_1, shell=True)
+                    subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename_2 +
+                                            ' ' + archive_save_path + uniprot_template.alignment_filename_2, shell=True)
+        
+        if not self.is_immutable:
+            self.session.merge(uniprot_template)
+            if not self.autocommit:
+                self.session.commit()
+    
+    
+    def add_uniprot_model(self, uniprot_model, path_to_data=False):
+        """
+        """
+        uniprot_model.date_modified = datetime.datetime.utcnow()
+            
+        # Save a copy of the alignment to the export folder
+        if path_to_data:
+            tmp_save_path = self.path_to_temp + path_to_data 
+            archive_save_path = self.path_to_archive + path_to_data
+            
+            with open(archive_save_path + 'model.json', 'w') as fh:
+                json.dump(row2dict(uniprot_model), fh, indent=4, separators=(',', ': '))            
+            
+            if (self.path_to_temp != self.path_to_archive) and (uniprot_model.model_filename is not None): 
+                # Not running on SciNet and have a structure to save
+                subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
+                subprocess.check_call('cp ' + tmp_save_path + uniprot_model.model_filename +
+                                        ' ' + archive_save_path + uniprot_model.model_filename, shell=True)
+        
+        if not self.is_immutable:
+            self.session.merge(uniprot_model)
+            if not self.autocommit:
+                self.session.commit()
+    
+    
+    def add_uniprot_mutation(self, uniprot_mutation, path_to_data=False):
+        """
+        """
+        uniprot_mutation.date_modified = datetime.datetime.utcnow()
+        
+        if path_to_data :
+            tmp_save_path = self.path_to_temp + path_to_data
+            archive_save_path = self.path_to_archive + path_to_data
+            archive_save_subpath = uniprot_mutation.model_filename_wt.split('/')[0] + '/'
+            
+            with open(archive_save_path + archive_save_subpath + 'mutation.json', 'w') as fh:
+                json.dump(row2dict(uniprot_mutation), fh, indent=4, separators=(',', ': '))   
+                
+            if (self.path_to_temp != self.path_to_archive) and (uniprot_mutation.model_filename_wt is not None): 
+                # Not running on SciNet and have structures to save
+                subprocess.check_call('mkdir -p ' + archive_save_path + archive_save_subpath, shell=True)
+                subprocess.check_call('cp ' + tmp_save_path + uniprot_mutation.model_filename_wt +
+                                        ' ' + archive_save_path + uniprot_mutation.model_filename_wt, shell=True)
+                subprocess.check_call('cp ' + tmp_save_path + uniprot_mutation.model_filename_mut +
+                                        ' ' + archive_save_path + uniprot_mutation.model_filename_mut, shell=True)
+                         
+        if not self.is_immutable:
+            self.session.merge(uniprot_mutation)
+            if not self.autocommit:
+                self.session.commit()
+ 
+    
+    ###########################################################################
+    def _split_domain(self, domain):
+        """ 
+        Takes a string of two domain boundaries and returns a list with int
+        The separator is '-' and it can happen that both or one boundary is
+        negative, i.e.
+        
+            -150-200,   meaning from -150 to 200
+            -150--100,  meaning from -150 to -100, etc.
+        
+        NOTE! Currently the icode (see Biopython) is disregarded. That means
+        that if the numbering is 3B, all '3's are taken. That is the letters
+        are stripped! One might want to improve that behaviour.
+        """
+        # split the domain boundaries, keep eventual minus signs
+        if domain[0] == '-' and len(domain[1:].split('-')) == 2:
+            domain = ['-' + domain[1:].split('-')[0], domain[1:].split('-')[1]]
+        elif domain[0] == '-' and len(domain[1:].split('-')) > 2:
+            domain = ['-' + domain[1:].split('-')[0], '-' + domain[1:].split('-')[-1]]
+        else:
+            domain = [domain.split('-')[0], domain.split('-')[1]]
+        # strip the letters
+        if domain[0][-1] in uppercase:
+            domain[0] = domain[0][:-1]
+        if domain[1][-1] in uppercase:
+            domain[1] = domain[1][:-1]
+        domain = [int(domain[0]), int(domain[1])]
+        return domain
+        
+        
+    def _split_domain_semicolon(self, domains):
+        """ Unlike split_domain(), this function returns a tuple of tuples of strings,
+        preserving letter numbering (e.g. 10B)
+        """
+        x = domains
+        return tuple([ tuple([r.strip() for r in ro.split(':')]) for ro in x.split(',') ])
+
+        
+    def _split_interface_aa(self, interface_aa):
+        """
+        """
+        if interface_aa and (interface_aa != '') and (interface_aa != 'NULL'):
+            if interface_aa[-1] == ',':
+                interface_aa = interface_aa[:-1]
+        
+            x  = interface_aa
+            return_tuple = tuple([int(r.strip()) for r in x.split(',')])
+            
+        else:
+            return_tuple = []
+            
+        return return_tuple
+    
+    
+    def close(self):
+        if not self.autocommit:
+            self.session.commit()
+        self.session.close()
+
+
+    ###########################################################################
+    def get_alignment(self, uniprot_template, path_to_data=False):
+        """
+        """
+        if path_to_data:
+            tmp_save_path = self.path_to_temp + path_to_data 
+            archive_save_path = self.path_to_archive + path_to_data
+        else:
+            return
+            
+        if isinstance(uniprot_template, UniprotDomainTemplate):
+            
+            # Load previously-calculated alignments
+            if os.path.isfile(tmp_save_path + uniprot_template.alignment_filename):
+                alignment = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename, 'clustal')
+            elif os.path.isfile(archive_save_path + uniprot_template.alignment_filename):
+                alignment = AlignIO.read(archive_save_path + uniprot_template.alignment_filename, 'clustal')
+            else:
+                raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename)
+            
+            return [alignment, None]
+        
+        elif isinstance(uniprot_template, UniprotDomainPairTemplate):
+            
+            # Read alignment from the temporary folder
+            if (os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_1)
+            and os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_2)):
+                alignment_1 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_1, 'clustal')
+                alignment_2 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_2, 'clustal')
+            # Read alignment from the export database
+            elif (os.path.isfile(archive_save_path + uniprot_template.alignment_filename_1)
+            and os.path.isfile(archive_save_path + uniprot_template.alignment_filename_2)):
+                alignment_1 = AlignIO.read(archive_save_path + uniprot_template.alignment_filename_1, 'clustal')
+                alignment_2 = AlignIO.read(archive_save_path + uniprot_template.alignment_filename_2, 'clustal')
+            else:
+                raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename_1)
+                
+            return [alignment_1, alignment_2]
+            
+    ###########################################################################
     def load_db_from_csv(self):
         """
         """
@@ -545,10 +958,9 @@ class MyDatabase(object):
 #            uniprot_domain_pair_df_with_id.to_csv(uniprot_domain_pair_infile, sep='\t', na_values='\N', index=False)
 
 
-
-
     def load_db_from_archive(self):
-        
+        """
+        """
         data = [
             ['human/*/*/*/*/template.json', UniprotDomainTemplate],
             ['human/*/*/*/*/model.json', UniprotDomainModel],
@@ -576,399 +988,11 @@ class MyDatabase(object):
             print 'Committed changes\n\n\n'
         
 
-
-    ###########################################################################
-    def get_uniprot_sequence(self, uniprot_id):
-        """
-        """
-        if uniprot_id in ['A6NF79', 'C9JUS1', 'Q6N045', 'A6NMD1']:
-            # these uniprotKBs made problems
-            return []
-        elif uniprot_id == 'P02735':
-            # this sequence got replaced. I don't know right now if I can take
-            # replaced sequence so I rather dismiss it.
-            return []
-        
-        uniprot_sequence = self.session.query(UniprotSequence)\
-                            .filter(UniprotSequence.uniprot_id==uniprot_id)\
-                            .all()
-        
-        if len(uniprot_sequence) == 1:
-            uniprot_sequence = uniprot_sequence[0]        
-        
-        elif len(uniprot_sequence) == 0:
-            # the True/False value is used to add new sequences to the database in
-            # end. Only usefull if you run one instance at a time otherwise you will
-            # get diverging sequence databases.
-            childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-            whoami, e = childProcess.communicate()
-            if whoami.strip() == 'joan':
-                print 'uniprot sequence not found'
-            else:
-                print 'Fetching uniprot sequence', uniprot_id, 'from server'
-                address = 'http://www.uniprot.org/uniprot/' + uniprot_id + '.fasta'
-                handle = urllib2.urlopen(address)
-                sequence = next(Bio.SeqIO.parse(handle, "fasta"))
-                
-                uniprot_sequence = UniprotSequence()
-                uniprot_sequence.uniprot_id = uniprot_id
-                uniprot_sequence.uniprot_name = sequence.name
-                uniprot_sequence.uniprot_description = sequence.description
-                uniprot_sequence.uniprot_sequence = str(sequence.seq)
-#                self.session.add(uniprot_sequence)
-        
-        if uniprot_sequence == []:
-            raise error.NoSequenceFound('No sequence found for ' + uniprot_id)
-        
-        uniprot_seqio_oject = Bio.SeqIO.SeqRecord(seq=Bio.Seq.Seq(str(uniprot_sequence.uniprot_sequence)), 
-                               id=uniprot_sequence.uniprot_id,
-                               name=uniprot_sequence.uniprot_name,
-                               description=uniprot_sequence.uniprot_description)
-        
-        return uniprot_seqio_oject
-    
-    
-    def add_uniprot_sequence(self, uniprot_sequence):
-        """ Add the new items (which is a list of tuples) to the database
-        """
-        if not self.is_immutable:
-            self.session.add(uniprot_sequence)
-            if not self.autocommit:
-                self.session.commit()
-        
-    
-    ###########################################################################
-    def get_domain(self, pfam_name):
-        """ Contains pdbfam-based definitions of all pfam domains in the pdb
-        """
-        
-        domain = self.session.query(Domain)\
-                    .filter(Domain.pfam_name==pfam_name)\
-                    .all()
-
-        if domain == []:
-            print 'No domain template found for domain %s' % pfam_name
-            
-        return domain
-
-
-    def get_domain_contact(self, pfam_name_1, pfam_name_2):
-        """ Keeps the domain-domain interaction information from pdbfam
-        Note that the produced dataframe may not have the same order as the keys
-        """
-        domain_contact_1 = self._get_domain_contact(pfam_name_1, pfam_name_2, reverse=False)
-        domain_contact_2 = self._get_domain_contact(pfam_name_1, pfam_name_2, reverse=True)
-            
-        if len(domain_contact_1)==0 and len(domain_contact_2)==0:
-            print 'No domain contact template found for domains %s, %s' % (pfam_name_1, pfam_name_2,)
-            
-        return [domain_contact_1, domain_contact_2]
-        
-        
-    def _get_domain_contact(self, pfam_name_1, pfam_name_2, reverse=False):
-        """        
-        """  
-        if reverse:
-            pfam_name_1, pfam_name_2 = pfam_name_2, pfam_name_1
-
-        domain_1 = aliased(Domain)
-        domain_2 = aliased(Domain)
-        
-        domain_contact = self.session\
-            .query(DomainContact)\
-            .join(domain_1, DomainContact.cath_id_1==domain_1.cath_id)\
-            .filter(domain_1.pfam_name==pfam_name_1)\
-            .join(domain_2, DomainContact.cath_id_2==domain_2.cath_id)\
-            .filter(domain_2.pfam_name==pfam_name_2)\
-            .all()
-        
-        return domain_contact
-
-
-    ###########################################################################
-    def get_uniprot_domain(self, uniprot_id):
-        """ Initiated using parsed pfam_scan.pl output for the human uniprot (or the entire uniprot)
-        The database is updated with information about calculated models
-        """
-        uniprot_definitions = self.session\
-            .query(UniprotDomain, UniprotDomainTemplate, UniprotDomainModel)\
-            .filter(UniprotDomain.uniprot_id==uniprot_id)\
-            .outerjoin(UniprotDomainTemplate)\
-            .outerjoin(UniprotDomainModel)\
-            .all()
-        
-        if len(uniprot_definitions)==0:
-            print 'No domain found in uniprot %s' % uniprot_id
-        
-        for uniprot_domain, uniprot_template, uniprot_model in uniprot_definitions:
-            tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
-            archive_save_path = self.path_to_archive + uniprot_domain.path_to_data      
-            if uniprot_template and (uniprot_template.alignment_filename is not None):
-                subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-                subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename +
-                                        ' ' + tmp_save_path + uniprot_template.alignment_filename, shell=True)
-            if uniprot_model and (uniprot_model.model_filename is not None):
-                subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
-                                        ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)
-        return uniprot_definitions
-        
-    
-    def get_uniprot_domain_mutation(self, uniprot_domain_id, mutation, path_to_data=False):
-        """
-        """
-        uniprot_mutation = self.session\
-            .query(UniprotDomainMutation)\
-            .filter(UniprotDomainMutation.uniprot_domain_id==uniprot_domain_id)\
-            .filter(UniprotDomainMutation.mutation==mutation)\
-            .all()
-            
-        if len(uniprot_mutation) == 0:
-            print 'No precalculated mutation %s for uniprot domain number %s' % (mutation, uniprot_domain_id)
-        
-#        if path_to_data:
-#            tmp_save_path = self.path_to_temp + path_to_data
-#            archive_save_path = self.path_to_archive + path_to_data
-        
-        return uniprot_mutation
-        
-
-    ###########################################################################
-    def get_uniprot_domain_pair(self, uniprot_id):
-        """ Contains known interactions between uniprot proteins
-        Checks if the interaction database is already available as a pickled object.
-        Generates it from file 'textfile_name' otherwise.
-        """
-        
-        uniprot_domain_pair_1 = self._get_uniprot_domain_pair(uniprot_id, reverse=False)
-        uniprot_domain_pair_2 = self._get_uniprot_domain_pair(uniprot_id, reverse=True)
-        
-        if len(uniprot_domain_pair_1)==0 and len(uniprot_domain_pair_2)==0:
-            print 'No known interactions with uniprot %s' % uniprot_id
-        
-        for uniprot_domain, uniprot_template, uniprot_model in uniprot_domain_pair_1 + uniprot_domain_pair_2:
-            tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
-            archive_save_path = self.path_to_archive + uniprot_domain.path_to_data
-            if uniprot_template and (uniprot_template.alignment_filename_1 is not None):
-                subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-                subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_1 +
-                                        ' ' + tmp_save_path + uniprot_template.alignment_filename_1, shell=True)                    
-                subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_2 +
-                                        ' ' + tmp_save_path + uniprot_template.alignment_filename_2, shell=True)
-            if uniprot_model and (uniprot_model.model_filename is not None):
-                subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
-                                        ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)                    
-        
-        return [uniprot_domain_pair_1, uniprot_domain_pair_2]
-
-
-    def _get_uniprot_domain_pair(self, uniprot_id_1, reverse=False):
-        
-        if not reverse:
-            uniprot_id_of_reference_domain = UniprotDomainPair.uniprot_domain_id_1
-        else:
-            uniprot_id_of_reference_domain = UniprotDomainPair.uniprot_domain_id_2
-        
-        uniprot_domain_pair = self.session\
-            .query(UniprotDomainPair, UniprotDomainPairTemplate, UniprotDomainPairModel)\
-            .join(UniprotDomain, UniprotDomain.uniprot_domain_id==uniprot_id_of_reference_domain)\
-            .filter(UniprotDomain.uniprot_id == uniprot_id_1)\
-            .outerjoin(UniprotDomainPairTemplate)\
-            .outerjoin(UniprotDomainPairModel)\
-            .all()
-        
-        return uniprot_domain_pair
-    
-    
-    def get_uniprot_domain_pair_mutation(self, uniprot_domain_pair_id, mutation):
-        """
-        """
-        uniprot_mutation = self.session\
-            .query(UniprotDomainPairMutation)\
-            .filter(UniprotDomainPairMutation.uniprot_domain_pair_id==uniprot_domain_pair_id)\
-            .filter(UniprotDomainPairMutation.mutation==mutation)\
-            .all()
-            
-        if len(uniprot_mutation) == 0:
-            print 'No precalculated mutation %s for uniprot domain pair number %s' % (mutation, uniprot_domain_pair_id)
-            
-#        if path_to_data:
-#            tmp_save_path = self.path_to_temp + path_to_data
-#            archive_save_path = self.path_to_archive + path_to_data
-            
-        return uniprot_mutation
-
-        
-    ###########################################################################
-    def add_uniprot_template(self, uniprot_template, path_to_data=False):
-        
-        # Save a copy of the alignment to the export folder
-        if path_to_data:
-            
-            tmp_save_path = self.path_to_temp + path_to_data 
-            archive_save_path = self.path_to_archive + path_to_data
-            subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
-            
-            if type(uniprot_template) == UniprotDomainTemplate and (uniprot_template.alignment_filename is not None):
-                subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename +
-                                        ' ' + archive_save_path + uniprot_template.alignment_filename, shell=True)
-                                        
-            elif type(uniprot_template) == UniprotDomainPairTemplate and (uniprot_template.alignment_filename_1 is not None):
-                subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename_1 +
-                                        ' ' + archive_save_path + uniprot_template.alignment_filename_1, shell=True)
-                subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename_2 +
-                                        ' ' + archive_save_path + uniprot_template.alignment_filename_2, shell=True)
-                
-            with open(archive_save_path + 'template.json', 'w') as fh:
-                json.dump(row2dict(uniprot_template), fh, indent=4, separators=(',', ': '))
-        
-        if not self.is_immutable:
-            self.session.merge(uniprot_template)
-            if not self.autocommit:
-                self.session.commit()
-    
-    
-    def add_uniprot_model(self, uniprot_model, path_to_data=False):
-        
-        # Save a copy of the alignment to the export folder
-        if path_to_data and (uniprot_model.model_filename is not None):
-            tmp_save_path = self.path_to_temp + path_to_data 
-            archive_save_path = self.path_to_archive + path_to_data
-            subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
-            subprocess.check_call('cp ' + tmp_save_path + uniprot_model.model_filename +
-                                    ' ' + archive_save_path + uniprot_model.model_filename, shell=True)
-            with open(archive_save_path + 'model.json', 'w') as fh:
-                json.dump(row2dict(uniprot_model), fh, indent=4, separators=(',', ': '))
-        
-        if not self.is_immutable:
-            self.session.merge(uniprot_model)
-            if not self.autocommit:
-                self.session.commit()
-    
-    
-    def add_uniprot_mutation(self, uniprot_mutation, path_to_data=False):
-        
-        if path_to_data and (uniprot_mutation.model_filename_wt is not None):
-            tmp_save_path = self.path_to_temp + path_to_data
-            archive_save_path = self.path_to_archive + path_to_data
-            archive_save_subpath = uniprot_mutation.model_filename_wt.split('/')[0] + '/'
-            subprocess.check_call('mkdir -p ' + archive_save_path + archive_save_subpath, shell=True)
-            subprocess.check_call('cp ' + tmp_save_path + uniprot_mutation.model_filename_wt +
-                                    ' ' + archive_save_path + uniprot_mutation.model_filename_wt, shell=True)
-            subprocess.check_call('cp ' + tmp_save_path + uniprot_mutation.model_filename_mut +
-                                    ' ' + archive_save_path + uniprot_mutation.model_filename_mut, shell=True)
-            with open(archive_save_path + archive_save_subpath + 'mutation.json', 'w') as fh:
-                json.dump(row2dict(uniprot_mutation), fh, indent=4, separators=(',', ': '))
-        
-        if not self.is_immutable:
-            self.session.merge(uniprot_mutation)
-            if not self.autocommit:
-                self.session.commit()
- 
-    
-    ###########################################################################
-    def _split_domain(self, domain):
-        """ 
-        Takes a string of two domain boundaries and returns a list with int
-        The separator is '-' and it can happen that both or one boundary is
-        negative, i.e.
-        
-            -150-200,   meaning from -150 to 200
-            -150--100,  meaning from -150 to -100, etc.
-        
-        NOTE! Currently the icode (see Biopython) is disregarded. That means
-        that if the numbering is 3B, all '3's are taken. That is the letters
-        are stripped! One might want to improve that behaviour.
-        """
-        # split the domain boundaries, keep eventual minus signs
-        if domain[0] == '-' and len(domain[1:].split('-')) == 2:
-            domain = ['-' + domain[1:].split('-')[0], domain[1:].split('-')[1]]
-        elif domain[0] == '-' and len(domain[1:].split('-')) > 2:
-            domain = ['-' + domain[1:].split('-')[0], '-' + domain[1:].split('-')[-1]]
-        else:
-            domain = [domain.split('-')[0], domain.split('-')[1]]
-        # strip the letters
-        if domain[0][-1] in uppercase:
-            domain[0] = domain[0][:-1]
-        if domain[1][-1] in uppercase:
-            domain[1] = domain[1][:-1]
-        domain = [int(domain[0]), int(domain[1])]
-        return domain
-        
-        
-    def _split_domain_semicolon(self, domains):
-        """ Unlike split_domain(), this function returns a tuple of tuples of strings,
-        preserving letter numbering (e.g. 10B)
-        """
-        x = domains
-        return tuple([ tuple([r.strip() for r in ro.split(':')]) for ro in x.split(',') ])
-
-        
-    def _split_interface_aa(self, interface_aa):
-        """
-        """
-        if interface_aa and (interface_aa != '') and (interface_aa != 'NULL'):
-            if interface_aa[-1] == ',':
-                interface_aa = interface_aa[:-1]
-        
-            x  = interface_aa
-            return_tuple = tuple([int(r.strip()) for r in x.split(',')])
-            
-        else:
-            return_tuple = []
-            
-        return return_tuple
-    
-    
-    def close(self):
-        if not self.autocommit:
-            self.session.commit()
-        self.session.close()
-
-
-    ###########################################################################
-    def get_alignment(self, uniprot_template, path_to_data=False):
-        
-        if path_to_data:
-            tmp_save_path = self.path_to_temp + path_to_data 
-            archive_save_path = self.path_to_archive + path_to_data
-        else:
-            return
-            
-        if isinstance(uniprot_template, UniprotDomainTemplate):
-            
-            # Load previously-calculated alignments
-            if os.path.isfile(tmp_save_path + uniprot_template.alignment_filename):
-                alignment = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename, 'clustal')
-            elif os.path.isfile(archive_save_path + uniprot_template.alignment_filename):
-                alignment = AlignIO.read(archive_save_path + uniprot_template.alignment_filename, 'clustal')
-            else:
-                raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename)
-            
-            return [alignment, None]
-        
-        elif isinstance(uniprot_template, UniprotDomainPairTemplate):
-            
-            # Read alignment from the temporary folder
-            if (os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_1)
-            and os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_2)):
-                alignment_1 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_1, 'clustal')
-                alignment_2 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_2, 'clustal')
-            # Read alignment from the export database
-            elif (os.path.isfile(archive_save_path + uniprot_template.alignment_filename_1)
-            and os.path.isfile(archive_save_path + uniprot_template.alignment_filename_2)):
-                alignment_1 = AlignIO.read(archive_save_path + uniprot_template.alignment_filename_1, 'clustal')
-                alignment_2 = AlignIO.read(archive_save_path + uniprot_template.alignment_filename_2, 'clustal')
-            else:
-                raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename_1)
-                
-            return [alignment_1, alignment_2]
-    ###########################################################################
-
-
+###############################################################################
 if __name__ == '__main__':
 #    return
     # run to generate an initial state database (with no precalculatios)
-#    print 0/0
+    print 0/0
     print sql_flavor
     db = MyDatabase('/home/kimlab1/strokach/working/pipeline/db/pipeline.db', 
                     path_to_archive='/home/kimlab1/database_data/elaspic/',
@@ -977,155 +1001,4 @@ if __name__ == '__main__':
 #    db.load_db_from_csv()
     db.load_db_from_archive()
     db.session.close()
-
-###############################################################################
-
-#
-#class UniprotSequence(object):
-#    
-#    def __init__(self, database):
-#        self.database = database
-#        
-#        self.database_name = 'pipeline_uniprot_sequences.pickle'
-#        
-#        if isfile(self.database_name):
-#            print 'Loading uniprot sequence database'
-#            f = open(self.database_name, 'rb')    
-#            self.uniprot_data = pickle.load(f)
-#            print 'it contains', len(self.uniprot_data), 'sequences'
-#            f.close()
-#        else:
-#            self.uniprot_data = dict()
-#
-#
-#            
-##        #######################################################
-##        ### one time: add sequences from a files            ###
-##        ### do that if you need to expand the database      ###
-##        ### fetching new sequences does not work on scient! ###
-##
-##        fileNames = ['/home/niklas/playground/mutations_clasified_recep/uniprot_list_interactions.fasta', \
-##                     '/home/niklas/playground/mutations_clasified_recep/uniprot_list.fasta' ]
-##        fileNames = ['/home/niklas/playground/mutations_clasified_recep/hapmap_uniprot_sequences.fasta', ]
-##        for fileName in fileNames:
-##            for seq_record in SeqIO.parse(fileName, "fasta"):
-##                seq_record.id = seq_record.id.split('|')[1]
-##                self.uniprot_data[seq_record.id] = seq_record
-##        # save the newly added sequences
-##        self.close()
-##
-##        ###           end                                   ###
-##        #######################################################
-#
-#        
-#    def __call__(self, uniprot_id):
-#        """
-#        returns the uniprot sequence. If the sequence is not in the database it
-#        tries to retrieve it from the uniprot website.
-#        
-#        Note: retrieval from the website does not work on Scinet!
-#        
-#        """
-#        if uniprot_id in ['A6NF79', 'C9JUS1', 'Q6N045', 'A6NMD1']:
-#            # these uniprotKBs made problems
-#            return 'no sequences'
-#        elif uniprot_id == 'P02735':
-#            # this sequence got replaced. I don't know right now if I can take
-#            # replaced sequence so I rather dismiss it.
-#            return 'no sequences'
-#        
-#        # the True/False value is used to add new sequences to the database in
-#        # end. Only usefull if you run one instance at a time otherwise you will
-#        # get diverging sequence databases.
-#        try:
-#            return self.uniprot_data[uniprot_id]
-#        except KeyError:
-#            childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-#            whoami, error = childProcess.communicate()
-#            if whoami.strip() == 'joan':
-#                print 'uniprot sequence not found'
-#                return None
-#            else:
-#                print 'Fetching uniprot sequence', uniprot_id, 'from server'
-#                address = 'http://www.uniprot.org/uniprot/' + uniprot_id + '.fasta'
-#                handle = urllib2.urlopen(address)
-#                sequence = next(SeqIO.parse(handle, "fasta"))
-#                sequence.id = uniprot_id
-#                self.uniprot_data[uniprot_id] = sequence
-#                return sequence
-#
-#    
-#    def add(self, items):
-#        """
-#        add the new items (which is a list of tuples) to the database
-#        """
-#        for key, value in items:
-#            if self.uniprot_data.has_key(key):
-#                print 'Strange..., the uniprot database seems to already have the entry', key, value
-#                print 'I am overwriting it'
-#            print 'adding', key, 'to the uniprot database'
-#            self.uniprot_data[key] = value
-#
-#    
-#    def close(self):
-#        """
-#        save the database back to disk. Do it at the end if
-#        new sequences where added.
-#        """
-#        print 'saving the uniprot database'
-#        f = open(self.database_name, 'wb')    
-#        pickle.dump(self.uniprot_data, f)
-#        f.close()
-#        
-
-
-#class PDBResolution(object):
-#    """
-#    In the file pdbtosp.txt from the pdb website one finds the measurement type
-#    and resolution of each structure. This information is used for the selection
-#    of the best interface template.
-#    """
-#    def __init__(self, pdbtosp):
-#        self.pdbResolution_xray = dict()
-#        self.pdbResolution_nmr = dict()
-#        self.pdbResolution_rest = dict()
-#        
-#        with open(pdbtosp, 'r') as f:
-#            for x in range(25):
-#                f.readline()
-#            for l in f:
-#                if l.strip() == '':
-#                    break
-#                if l[0] == ' ':
-#                    continue
-#                line = [ item.strip() for item in l.split(' ') if item != '']
-#                try:
-#                    if line[1] == 'X-ray' or line[1] == 'Neutron':
-#                        self.pdbResolution_xray[line[0]] = float(line[2])
-#                    elif line[1] == 'NMR':
-#                        self.pdbResolution_nmr[line[0]] = float(line[2])
-#                    elif line[1] in ['Model', 'Other', 'IR']:
-#                        continue
-#                    elif line[1] in ['EM', 'Fiber']:
-#                        self.pdbResolution_rest[line[0]] = float(line[2])
-#                    else:
-#                        print 'Could not associate the method for', line[1]
-#                except:
-#                    continue
-#    
-#    def __call__(self, pdbID):
-#        """
-#        the first return value is used to indicate the measurement type,
-#        the second return value is the resolution.
-#        
-#        0 means X-ray, 2 NMR, 3 other
-#        """
-#        if self.pdbResolution_xray.has_key(pdbID):
-#            return 0, self.pdbResolution_xray[pdbID]
-#        elif self.pdbResolution_nmr.has_key(pdbID):
-#            return 1, self.pdbResolution_nmr[pdbID]
-#        elif self.pdbResolution_rest.has_key(pdbID):
-#            return 2, self.pdbResolution_rest[pdbID]
-#        else:
-#            return 'None', '-'
 

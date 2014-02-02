@@ -15,6 +15,8 @@ from Bio.PDB.Polypeptide import PPBuilder
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 
+import class_error as error
+
 
 
 class pdbTemplate():
@@ -152,7 +154,11 @@ class pdbTemplate():
         """
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         pdbFile = self.pdbPath + pdbCode[1:3].lower() + '/pdb' + pdbCode.lower() + '.ent.gz'
-        pdbFileUncompressed = gzip.open(pdbFile, 'r')
+        try:
+            pdbFileUncompressed = gzip.open(pdbFile, 'r')
+        except IOError:
+            raise error.NoPDBFound('pdb' + pdbCode.lower() + '.ent.gz')
+            
         return parser.get_structure('ID', pdbFileUncompressed)
         
     def __extractChains(self, pdbStructure, chains, domainBoundaries):
