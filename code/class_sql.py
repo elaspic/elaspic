@@ -22,7 +22,7 @@ from sqlalchemy.ext.declarative import declarative_base
 import Bio
 from Bio import AlignIO
 
-import parse_pfamscan
+#import parse_pfamscan
 import class_error as error
 
 
