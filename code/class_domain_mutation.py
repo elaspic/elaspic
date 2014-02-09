@@ -777,7 +777,7 @@ class GetMutation(object):
         pdbPath = self.pdbPath
         domains = [['Null', 'Null'], ] # extract the full sequence
 
-        pdb = pdbTemplate(pdbPath, pdbCode, chain, domains, self.tmpPath + self.unique + '/')
+        pdb = pdbTemplate(pdbPath, pdbCode, chain, domains, self.tmpPath + self.unique)
         
         HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
         chainNumberingDomain = pdb.getChainNumberingNOHETATMS(chain)

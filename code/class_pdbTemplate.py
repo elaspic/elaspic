@@ -15,7 +15,7 @@ from Bio.PDB.Polypeptide import PPBuilder
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 
-import class_error as error
+import class_error
 
 
 
@@ -42,11 +42,10 @@ class pdbTemplate():
         self.domainBoundaries = domainBoundaries
 
         childProcess = subprocess.Popen('echo $TMPDIR', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        result, error = childProcess.communicate()
+        result, e = childProcess.communicate()
         self.tmpPath = result.strip() + '/tmp/'
         
         self.pdbStructure = self.__getPDB(self.pdbCode)
-
         
        
     def extract(self, returnHETATM=False):
@@ -74,16 +73,7 @@ class pdbTemplate():
         for chainID in chains_pdb_order:
             chainNumbering = self.getChainNumberingNOHETATMS(chainID)
             if chainNumbering == []:
-                # then something went wrong! This is for debugging purposes
-                # you might want to make an exception out of it an add it to
-                # the logger.
-                print 'self.pdbCode', self.pdbCode
-                print 'self.chains', self.chains
-                print 'self.domainBoundaries', self.domainBoundaries
-                print 'in class_pdbTemplate'
-                print 'chainID', chainID
-                print 'chainNumbering', chainNumbering
-                return None, None, None
+                raise class_error.PDBChainError(self.pdbCode, self.chains)
                 
             seq = self.extractSequence(chainID)
             
@@ -157,7 +147,7 @@ class pdbTemplate():
         try:
             pdbFileUncompressed = gzip.open(pdbFile, 'r')
         except IOError:
-            raise error.NoPDBFound('pdb' + pdbCode.lower() + '.ent.gz')
+            raise class_error.NoPDBFound('pdb' + pdbCode.lower() + '.ent.gz')
             
         return parser.get_structure('ID', pdbFileUncompressed)
         
@@ -318,8 +308,8 @@ class pdbTemplate():
         # sequence as well
         # see: http://biopython.org/DIST/docs/api/Bio.PDB.Polypeptide-module.html
         sequence = Seq('', IUPAC.protein)
-#        for pb in PPBuilder().build_peptides(chain, aa_only=False):
-        for pb in PPBuilder().build_peptides(chain, aa_only=True):
+        for pb in PPBuilder().build_peptides(chain, aa_only=False):
+#        for pb in PPBuilder().build_peptides(chain, aa_only=True):
             tmp = sequence + pb.get_sequence()
             sequence = tmp
         return sequence

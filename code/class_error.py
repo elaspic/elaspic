@@ -27,17 +27,36 @@ class TcoffeeError(Exception):
         # Call the base class constructor with the parameters it needs
         Exception.__init__(self, message)
         # Now for your custom code...
-        self.error = error
-        self.alignInFile = alignInFile
+        self.error = 'tcoffee error for file: %s, with error message: %s' % (alignInFile, error)
+        self.message = message
 
 class TcoffeeBlastError(Exception):
     def __init__(self, message, error, alignInFile):
         Exception.__init__(self, message)
-        self.error = error
-        self.alignInFile = alignInFile
+        self.error = 'tcoffee blast error for file: %s, with error message: %s' % (alignInFile, error)
+        self.message = message
         
-class KNOTerror(Exception):
-    pass
+class TcoffeePDBidError(Exception):        
+    def __init__(self, message, error, alignInFile):
+        Exception.__init__(self, message)
+        self.error = 'tcoffee pdbid error for file: %s, with error message: %s' % (alignInFile, error)
+        
+
+
+
+class pdbError(Exception):
+    def __init__(self, error):
+        Exception.__init__(self)
+        self.error = error
+        
+class EmptyPDBSequenceError(Exception):
+    def __init__(self, pdb_id, pdb_chain):
+        Exception.__init__(self)
+        self.error = 'Empty pdb sequence file for pdb: %s, chain: %s' % (pdb_id, pdb_chain)
+        self.pdb_id = pdb_id
+        self.pdb_chain = pdb_chain
+
+
 
 class ModellError(Exception):
     pass
@@ -54,10 +73,6 @@ class DataError(Exception):
         Exception.__init__(self)
         self.inputFile = inputFile
 
-class ConfigError(Exception):
-    def __init__(self, option):
-        Exception.__init__(self)
-        self.option = option
 
 class TemplateCoreError(Exception):
     def __init__(self, error):
@@ -69,10 +84,14 @@ class TemplateInterfaceError(Exception):
         Exception.__init__(self)
         self.error = error
 
-class pdbError(Exception):
-    def __init__(self, error):
+
+
+class PDBChainError(Exception):
+    def __init__(self, pdb_code, chains):
         Exception.__init__(self)
-        self.error = error
+        self.error = 'PDBChainError in pdb: %s and chain: %s' % (pdb_code, chains,)
+
+
 
 class NoStructuralTemplates(Exception):
     def __init__(self, error):
@@ -84,6 +103,8 @@ class NoSequenceFound(Exception):
         Exception.__init__(self)
         self.error = error
         
+        
+        
 class ProteinDefinitionError(Exception):
     def __init__(self, error):
         Exception.__init__(self)
@@ -93,12 +114,10 @@ class NoTemplatesFound(Exception):
     def __init__(self, error):
         Exception.__init__(self)
         self.error = error
-        
-class EmptyPDBSequenceError(Exception):
-    def __init__(self, pdb_id, pdb_chain):
-        Exception.__init__(self)
-        self.pdb_id = pdb_id
-        self.pdb_chain = pdb_chain
+      
+      
+      
+
         
 class NoPrecalculatedAlignmentFound(Exception):
     def __init__(self, save_path, alignment_filename):
