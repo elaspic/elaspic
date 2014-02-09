@@ -94,7 +94,7 @@ class GetModel(object):
             sequences = [uniprot_sequence_1_domain, uniprot_sequence_2_domain]
             alignments = [alignment_1, alignment_2]
 
-        model_errors = ''
+        model_errors = []
         
         for a, b in zip(alignments, chains_pdb):
             self.log.debug('Alignment: ')
@@ -103,28 +103,34 @@ class GetModel(object):
         
         # copy the chain IDs... they are used afterwards for renaming and copy 
         # is needed so that they are not overwritten
-        target_ids = []
-        template_ids = []
+        chains = []
         for i in range(0,len(alignments)):
-            target_ids.append(alignments[i][0].id)
-            template_ids.append(alignments[i][1].id)
+            chains.append(alignments[i][1].id[-1])
 
-
-        chains = [template_id[-1] for template_id in template_ids]
         # Common---------------------------------------------------------------
         # save_path is where the pdb sequences and the pdb with the required chains are saved
         self.log.debug('Prepare input...')
         sequences, alignments, chains_modeller, switch_chain, HETflag, HETATMsInChain_SEQnumbering = \
             self.prepareInput(pdb_id, chains, pdb_domain_definitions, sequences, alignments, save_path)
         
+        # __getModel uses template ids to find pdb files
+        target_ids = []
+        template_ids = []
+        for i in range(0,len(alignments)):
+            target_ids.append(alignments[i][0].id)
+            template_ids.append(alignments[i][1].id)
+            
+            
         normDOPE_wt, pdbFile_wt, knotted = self._getModel(alignments, target_ids, template_ids, HETATMsInChain_SEQnumbering, chains_modeller, save_path)
         if knotted:
-            model_errors += 'knotted, '
+            model_errors.append('knotted')
         self.log.debug('Model pdb file: %s, knotted: %s' % (pdbFile_wt, knotted,))
                 
         # Save another copy of the modelled structure in the tmp export folder
         modeller_path = self.tmpPath + self.unique + 'modeller/'
         subprocess.check_call('cp ' + modeller_path + pdbFile_wt + ' ' + save_path + pdbFile_wt, shell=True)
+        
+        self.log.debug('chains: %s, chains_modeller: %s' % (chains, chains_modeller,) )
         
         if type(uniprot_domain) == sql.UniprotDomain:
             uniprot_model = sql.UniprotDomainModel()
@@ -140,20 +146,18 @@ class GetModel(object):
             # Get SASA using pops
             analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, ['A'], self.log, domain_defs=None)
             try:
-                self.log.debug('chains: %s, chains_modeller: %s' % (chains, chains_modeller,) )
                 sasa_score = analyze_structure.get_sasa()['A']
                 
                 if len(sasa_score) != \
                 (sql.decode_domain(uniprot_template.domain_def)[1] - sql.decode_domain(uniprot_template.domain_def)[0] + 1):
-                    model_errors += 'pops score length mismatch, '
+                    model_errors.append('pops score length mismatch')
             except error.PopsError as e:
                 self.log.error('PopsError:')
                 self.log.error(e.error)
-                model_errors += 'pops error, '
+                model_errors.append('pops error')
                 sasa_score = ''
             
-            uniprot_model.sasa_score = ','.join(['%.2f' % (x*100) for x in sasa_score])            
-            uniprot_model.model_errors = model_errors
+            uniprot_model.sasa_score = ','.join(['%.2f' % (x*100) for x in sasa_score])
         
         
         if type(uniprot_domain) == sql.UniprotDomainPair:
@@ -169,21 +173,37 @@ class GetModel(object):
             
             uniprot_model.norm_dope = normDOPE_wt
             
+            if not HETflag[chains_modeller[0]]:
+                if not switch_chain:
+                    modeller_chains = ['A', 'B']
+                else:
+                    modeller_chains = ['B', 'A']
+            else:
+                if not switch_chain:
+                    modeller_chains = ['A', 'C']
+                else:
+                    modeller_chains = ['C', 'A']
+            
             # Get interacting amino acids and interface area          
-            analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, [chains_modeller[0]], self.log, domain_defs=None)
+            analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, modeller_chains, self.log, domain_defs=None)
             interacting_aa = analyze_structure.get_interacting_aa()
-            interacting_aa_1 = interacting_aa[chains_modeller[0]]
+            interacting_aa_1 = interacting_aa[modeller_chains[0]]
             uniprot_model.interacting_aa_1 = ','.join(['%i' % x for x in interacting_aa_1])
             
-            interacting_aa_2 = interacting_aa[chains_modeller[1]]
+            interacting_aa_2 = interacting_aa[modeller_chains[1]]
             uniprot_model.interacting_aa_2 = ','.join(['%i' % x for x in interacting_aa_2])
             
             interface_area = analyze_structure.get_interface_area()
             uniprot_model.interface_area_hydrophobic = interface_area[0]
             uniprot_model.interface_area_hydrophilic = interface_area[1]
             uniprot_model.interface_area_total = interface_area[2]
-            
-            
+        
+        
+        # Values common for single domains and interactions
+        model_errors =', '.join(model_errors)
+        if model_errors != '':
+            uniprot_model.model_errors = model_errors
+        
         return uniprot_model
         
 
@@ -251,9 +271,16 @@ class GetModel(object):
         modeller_target_id = '_'.join(target_ids)
         
         if len(template_ids) == 1:
+            # If you're only modelling one domain
             modeller_template_id = template_ids[0]
-        else:
-            modeller_template_id = template_ids[0] + template_ids[1][-1] # if more than two chains are used this has to be adjusted
+        elif len(template_ids) == 2:
+            if template_ids[0][-1] == template_ids[1][-1]:
+                # Modelling two domains using the same chain in the pdb
+                modeller_template_id = template_ids[0]
+            else:
+                # Modelling two domains using two chains in the pdb
+                # if more than two chains are used this has to be adjusted
+                modeller_template_id = template_ids[0] + template_ids[1][-1]
 
         modeller_path = self.tmpPath + self.unique + 'modeller/'
         os.chdir(modeller_path) # from os
@@ -262,7 +289,7 @@ class GetModel(object):
                                 modeller_target_id, 
                                 modeller_template_id, 
                                 save_path, # path_to_pdb_for_modeller
-                                self.tmpPath + self.unique + '/', # path to folders with executables
+                                self.tmpPath + self.unique, # path to folders with executables
                                 self.modeller_runs,
                                 loopRefinement=True)
         normDOPE, pdbFile, knotted = modeller.run()

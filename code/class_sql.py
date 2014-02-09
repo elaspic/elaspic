@@ -204,7 +204,7 @@ class UniprotDomainTemplate(Base):
     template_errors = Column(Text)
     alignment_filename = Column(String(255, collation=binary_collation))
     
-    #
+    # failed_cath_id = Column(Text)
     cath_id = Column(None, ForeignKey(Domain.cath_id), index=True)
     domain_def = Column(String(255, collation=string_collation))
     alignment_id = Column(String(255, collation=string_collation))
@@ -291,6 +291,7 @@ class UniprotDomainPairTemplate(Base):
     alignment_filename_2 = Column(String(255, collation=binary_collation))
     
 #    domain_contact_id = Column(None, ForeignKey(DomainContact.domain_contact_id), index=True)
+    # failed_cath_ids = Column(Text) # cath_id_1)underscore)cath_id_2
     cath_id_1 = Column(None, ForeignKey(Domain.cath_id), index=True)
     domain_def_1 = Column(String(255, collation=string_collation))
     alignment_id_1 = Column(String(255, collation=string_collation))
@@ -586,7 +587,7 @@ class MyDatabase(object):
         
 
     ###########################################################################
-    def get_uniprot_domain_pair(self, uniprot_id):
+    def get_uniprot_domain_pair(self, uniprot_id, copy_data=True):
         """ 
         Contains known interactions between uniprot proteins
         Checks if the interaction database is already available as a pickled object.
@@ -599,20 +600,22 @@ class MyDatabase(object):
         if len(uniprot_domain_pair_1)==0 and len(uniprot_domain_pair_2)==0:
             print 'No known interactions with uniprot %s' % uniprot_id
         
-        for uniprot_domain, uniprot_template, uniprot_model in uniprot_domain_pair_1 + uniprot_domain_pair_2:
-            tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
-            archive_save_path = self.path_to_archive + uniprot_domain.path_to_data
-            if uniprot_template and (uniprot_template.alignment_filename_1 is not None):
-                subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-                subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_1 +
-                                        ' ' + tmp_save_path + uniprot_template.alignment_filename_1, shell=True)                    
-                subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_2 +
-                                        ' ' + tmp_save_path + uniprot_template.alignment_filename_2, shell=True)
-            if uniprot_model and (uniprot_model.model_filename is not None):
-                subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
-                                        ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)                    
+        if copy_data:
+            for uniprot_domain, uniprot_template, uniprot_model in uniprot_domain_pair_1 + uniprot_domain_pair_2:
+                tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
+                archive_save_path = self.path_to_archive + uniprot_domain.path_to_data
+                if uniprot_template and (uniprot_template.alignment_filename_1 is not None):
+                    subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
+                    subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_1 +
+                                            ' ' + tmp_save_path + uniprot_template.alignment_filename_1, shell=True)                    
+                    subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_2 +
+                                            ' ' + tmp_save_path + uniprot_template.alignment_filename_2, shell=True)
+                if uniprot_model and (uniprot_model.model_filename is not None):
+                    subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
+                                            ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)                    
         
-        return [uniprot_domain_pair_1, uniprot_domain_pair_2]
+#        return [uniprot_domain_pair_1, uniprot_domain_pair_2]
+        return list(set(uniprot_domain_pair_1 + uniprot_domain_pair_2))
 
 
     def _get_uniprot_domain_pair(self, uniprot_id_1, reverse=False):

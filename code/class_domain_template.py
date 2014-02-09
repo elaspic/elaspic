@@ -14,7 +14,7 @@ from Bio.Seq import Seq
     
 from class_pdbTemplate import pdbTemplate
 import class_callTcoffee as tc
-import class_error as error
+import class_error
 import class_sql as sql
 
 import random
@@ -52,6 +52,8 @@ class GetTemplate():
         """
         list_of_templates = self.run(uniprot_domain, None)
         self.log.debug('Number of templates: %i'% len(list_of_templates))
+        if len(list_of_templates) == 0:
+            raise class_error.NoTemplatesFound('Templates present in PDBfam were not useable')
         
         best_template = self.chose_best_template(list_of_templates)
         self.log.debug('The best template: ')
@@ -174,13 +176,14 @@ class GetTemplate():
         
         
         if len(domain_list) == 0:
-            raise error.NoStructuralTemplates('no templates found')
+            raise class_error.NoStructuralTemplates('no templates found')
         
         #######################################################################
         # Bad hack, but gotta get those sequences
         domains_subsampled = False
-        if len(domain_list) > 100:
-            domain_list = domain_list[:100]
+        max_num_of_templates = 20
+        if len(domain_list) > max_num_of_templates:
+            domain_list = domain_list[:max_num_of_templates]
             domains_subsampled = True
         #######################################################################
             
@@ -211,24 +214,23 @@ class GetTemplate():
                      template.alignment_score, template.alignment_filename) = \
                      self.calculate_alignment(uniprot_domain, domain, max_domain_length, refine, second_domain=False)
                 
-                except error.NoPDBFound as e:
-                    self.log.error(e.error)
-                    continue              
-                except error.EmptyPDBSequenceError as e:
-                    self.log.error('Empty pdb sequence file for pdb: %s, chain: %s' % (e.pdb_id, e.pdb_chain))
-                    continue
-                except error.pdbError as e:
+                except (class_error.NoPDBFound, 
+                        class_error.EmptyPDBSequenceError, 
+                        class_error.pdbError, 
+                        class_error.TcoffeeBlastError, 
+                        class_error.TcoffeePDBidError) as e:
                     self.log.error(e.error)
                     continue
-                except error.TcoffeeBlastError as e:
-                    self.log.error('Tcoffee blast error with message: %.30s' % e.error)
-                    continue
-                
 
             ###################################################################
             elif type(uniprot_domain) == sql.UniprotDomainPair:
                 # there are some obsolete pdbs, ignore them... or 2NP8 has only one chain
                 if domain.domain_1.pdb_id in self.bad_pdbs:
+                    continue
+                
+                if domain.domain_1.pdb_chain == domain.domain_2.pdb_chain:
+                    # For now, we are just focusing on interactions between different chains
+                    # in the pdb. This may be changed in the future.
                     continue
                 
                 if refine:
@@ -253,8 +255,12 @@ class GetTemplate():
                      template.alignment_score_2, template.alignment_filename_2) = \
                      self.calculate_alignment(uniprot_domain, domain, max_domain_length_2, refine, second_domain=True)
                                             
-                except error.EmptyPDBSequenceError as e:
-                    self.log.error('Empty pdb sequence file for pdb: %s, chain: %s' % (e.pdb_id, e.pdb_chain))
+                except (class_error.NoPDBFound, #PDBNotFoundError
+                        class_error.EmptyPDBSequenceError, #PDBEmptySequenceError
+                        class_error.pdbError, #PDBError
+                        class_error.TcoffeeBlastError, 
+                        class_error.TcoffeePDBidError) as e:
+                    self.log.error(e.error)
                     continue
             
             
@@ -893,7 +899,7 @@ class GetTemplate():
 
         chainNumberingDomain = pdb.getChainNumberingNOHETATMS(chain)
         if chainNumberingDomain == []:
-            raise error.pdbError('Could not get the pdb numbering for ' + pdbCode + '_' + chain)
+            raise class_error.pdbError('Could not get the pdb numbering for ' + pdbCode + '_' + chain)
 
         # it happend that the given domain boundaries are larger than the
         # chain found in the pdb file. In this case, set the boundaries to the
@@ -907,12 +913,12 @@ class GetTemplate():
         try:
             domain_pdb = chainNumberingDomain.index(domain_pdb[0])+1, chainNumberingDomain.index(domain_pdb[1])+1
         except ValueError:
-            raise error.pdbError('ValueError when mapping domain boundaries to sequence numbering: ' + pdbCode + '_' + chain)
+            raise class_error.pdbError('ValueError when mapping domain boundaries to sequence numbering: ' + pdbCode + '_' + chain)
 
 
         pdb_sequence = next(SeqIO.parse(self.tmpPath + self.unique + pdbCode + chain + '.seq.txt', 'fasta'))
         if str(pdb_sequence.seq) == '':
-            raise error.EmptyPDBSequenceError(pdbCode, chain)
+            raise class_error.EmptyPDBSequenceError(pdbCode, chain)
         return pdb_sequence, domain_pdb, chainNumberingDomain
 
     

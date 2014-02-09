@@ -147,28 +147,19 @@ class tcoffee_alignment:
             # sequence the same pdb template is selected. If that happens
             # sap fails to align and the alignment does not work
             for line in error.split('\n'):
-                if 'Impossible to find EXPRESSO Templates' in line:
-                    # Try a bunch of times, maybe just a temporary thing???
-                    if recursion_counter < 5:
-                        recursion_counter += 1
-                        return self.__call_tcoffee(alignInFile, GAPOPEN, GAPEXTEND, recursion_counter)
-                    else:
-                        raise class_error.TcoffeeBlastError(result, error, alignInFile)
-                    
+                
                 if 'SAP failed to align' in line:
                     # if it happens because the same PDB was taken by blast
                     # it means that the sequences are fairly identical and 
                     # and normal t_coffee mode should be accurate enough
                     # the line looks like this: pid 5479 -- SAP failed to align: 1KU6A.pdb against 1KU6A.pdb [T-COFFEE:WARNING]
-                    
                     # try running it with tmalign method
                     system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 't_coffee')
                     childProcess = subprocess.Popen(system_command, 
                                     stdout=subprocess.PIPE, 
                                     stderr=subprocess.PIPE, 
                                     shell=True, 
-                                    env=my_env
-                                    )
+                                    env=my_env)
                     result, error = childProcess.communicate()
                     rc = childProcess.returncode
                     if rc == 0:
@@ -176,8 +167,16 @@ class tcoffee_alignment:
                         if len(alignment) != 2:
                             print 'Alignment len not 2', out
                         return alignment
-            # raise an error if it still didn't work
-            print 'out', out
-            print 'alignInFile', alignInFile
-            print 'error', error
+                
+                if 'Impossible to find EXPRESSO Templates' in line:
+                    # Try a bunch of times, maybe just a temporary thing???
+                    if recursion_counter < 5:
+                        recursion_counter += 1
+                        return self.__call_tcoffee(alignInFile, GAPOPEN, GAPEXTEND, recursion_counter)
+                    else:
+                        raise class_error.TcoffeeBlastError(result, error, alignInFile)
+                
+                if 'Could Not Parse PDBID' in line:
+                    raise class_error.TcoffeePDBidError(result, error, alignInFile)
+                
             raise class_error.TcoffeeError(result, error, alignInFile)

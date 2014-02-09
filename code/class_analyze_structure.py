@@ -38,6 +38,9 @@ class AnalyzeStructure():
         
         self.__split_pdb_into_chains()
         
+        self.amino_acids = ['ARG', 'HIS', 'LYS', 'ASP', 'GLU', 'SER', 'THR', 'ASN',
+               'GLN', 'CYS', 'GLY', 'PRO', 'ALA', 'VAL', 'ILE', 'LEU', 
+               'MET', 'PHE', 'TYR', 'TRP']
         
     ###########################################################################
     
@@ -188,7 +191,7 @@ class AnalyzeStructure():
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:
         # if output[-1] == 'Clean termination' the run should be OK
-        self.log.debug('result: %.30' % result.replace('\n','; '))
+        self.log.debug('result: %.30s' % result.replace('\n','; '))
         output = [ line for line in result.split('\n') if line != '' ]
         return output[-1], rc, e
 
@@ -233,7 +236,7 @@ class AnalyzeStructure():
                                         )
         result, e = childProcess.communicate()
         rc = childProcess.returncode
-        self.log.debug('result: %.30' % result.replace('\n','; '))
+        self.log.debug('result: %.30s' % result.replace('\n','; '))
         # the returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:
@@ -262,21 +265,25 @@ class AnalyzeStructure():
         for chain_1 in chains:
             interacting_aa[chain_1.id] = set()
             for idx, residue_1 in enumerate(chain_1):
-                for atom_1 in residue_1:
-                    
-                    for chain_2 in [c for c in chains if c != chain_1]:
-                        for residue_2 in chain_2:
+                
+                for chain_2 in [c for c in chains if c != chain_1]:
+                    for residue_2 in chain_2:
+                        
+                        if residue_1.resname not in self.amino_acids \
+                        or residue_2.resname not in self.amino_acids:
+                            continue
+                
+                        for atom_1 in residue_1:
                             for atom_2 in residue_2:
-                                
                                 r = self.calculate_distance(atom_1, atom_2)
                                 if r <= 5.0:
                                     interacting_aa[chain_1.id].add(idx+1) # pdb domain defs and indices always start from 1
+            # Change set to list
             interacting_aa[chain_1.id] = list(interacting_aa[chain_1.id])
         
         self.log.debug('interacting_aa_keys:')
         self.log.debug(interacting_aa.keys())
         self.log.debug('chain ids: %s' % self.chain_ids)
-        assert set(interacting_aa.keys()) == set(self.chain_ids)
         return interacting_aa
         
      
@@ -343,6 +350,8 @@ class AnalyzeStructure():
                 self.log.error('Not a valid amino acid')
                 return
         self.log.error('Not a valid amino acid')
+        
+        
         
 
 ###############################################################################        
@@ -437,11 +446,8 @@ class AnalyzeStructure():
         chainNumbering      type 'list' of 'int'
         """
         chainNumbering = list()
-        amino_acids = ['ARG', 'HIS', 'LYS', 'ASP', 'GLU', 'SER', 'THR', 'ASN',
-                       'GLN', 'CYS', 'GLY', 'PRO', 'ALA', 'VAL', 'ILE', 'LEU', 
-                       'MET', 'PHE', 'TYR', 'TRP']
         for residue in chain:
-            if residue.resname in amino_acids and residue.id[0] == ' ':
+            if residue.resname in self.amino_acids and residue.id[0] == ' ':
                 chainNumbering.append(residue.id[1])
 
 #        chainNumbering = [residue.id[1] for residue in chain if is_aa(residue, standard=True)]

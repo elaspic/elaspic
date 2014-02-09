@@ -4,8 +4,6 @@ from modeller.automodel import *	# Load the automodel class
 
 import subprocess, shlex
 
-from class_error import KNOTerror
-
 
 class modeller:
     """
@@ -19,7 +17,6 @@ class modeller:
             tmpPath                     type: string    path for storing tmp files
             modeller_runs               type: int       how many rounds of modelling should be done
             loopRefinement              type: boolean   if True calculate loop refinemnts
-    
     """
     def __init__(self, 
                  alignment, 

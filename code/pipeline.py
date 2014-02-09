@@ -263,15 +263,12 @@ class Pipeline(object):
         # Find all domains and domain pairs for a given uniprot
         
         # Core and interface domain definitions
-        protein_domains = self.db.get_uniprot_domain(self.uniprot_id)
-
-        # Don't forget to uncomment        
+#        protein_domains = self.db.get_uniprot_domain(self.uniprot_id)
         protein_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id)
-        # Duplicates will occur for homodimers (ie forward and reverse are the same)
-        protein_domain_pairs = list(set(protein_domain_pairs[0] + protein_domain_pairs[1]))
         
-        protein_definitions = protein_domain_pairs + protein_domains
-        protein_definitions = protein_domains
+#        protein_definitions = protein_domain_pairs + protein_domains
+#        protein_definitions = protein_domains
+        protein_definitions = protein_domain_pairs
 
         if protein_definitions == []:
             self.log.error('Uniprot %s has no pfam domains' % self.uniprot_id)
@@ -288,8 +285,8 @@ class Pipeline(object):
         self.log.info("Building models...")
         self.compute_models()
 
-        self.log.info("Analyzing mutations...")        
-        self.compute_mutations()
+#        self.log.info("Analyzing mutations...")        
+#        self.compute_mutations()
 
             
         # Need to add some stuff for foldX: <analyse complex>
@@ -303,7 +300,7 @@ class Pipeline(object):
         # Leave everything the way you found it
         self.db.session.close()
         
-        os.chdir(self.PWD)        
+        os.chdir(self.PWD)
             
         
         # modeller_path = self.tmpPath + self.unique + '/modeller/'
@@ -343,13 +340,33 @@ class Pipeline(object):
         protein_definitions_with_templates = []
         for uniprot_domain, uniprot_template, uniprot_model in self.protein_definitions:
             self.log.info('%s\t%s\t%s' % (uniprot_domain, uniprot_template, uniprot_model,) )
+            
+            if uniprot_template:
                 
-            # Check if tired expanding boundaries for this domain previously, and got erros
-            if uniprot_template and uniprot_template.template_errors != 'no templates found':
-                protein_definitions_with_templates.append((uniprot_domain, uniprot_template, uniprot_model,))
-                self.log.info('skipping')
-                continue
+                if uniprot_model and uniprot_model.model_errors:
+                    # recalculate the templates if the model has errors
+                    self.log.debug('Recalculating templates because the model had errors')
+                    pass
                 
+                # Have templates from a previous run
+                elif type(uniprot_template) == sql.UniprotDomainPairTemplate and \
+                uniprot_template.domain_1 and uniprot_template.domain_1 and \
+                uniprot_template.domain_1.pdb_chain == uniprot_template.domain_2.pdb_chain:
+                    # Recalculate the ones where the two chains are the same
+                    pass
+                
+#                elif uniprot_template.template_errors != 'no templates found':
+#                    # Recalculate the cases where a template was found but errors occured
+#                    pass     
+                
+                else:
+                    # Skip the ones for which we already have a template without errors, 
+                    # or no template could be found
+                    protein_definitions_with_templates.append((uniprot_domain, uniprot_template, uniprot_model,))
+                    self.log.info('skipping')
+                    continue
+                
+            
             # Construct empty templates that will be used if we have errors
             if type(uniprot_domain) == sql.UniprotDomain:
                 empty_template = sql.UniprotDomainTemplate()
@@ -363,12 +380,13 @@ class Pipeline(object):
             try:
                 template = self.get_template(uniprot_domain)
                 
-            except error.NoStructuralTemplates as e:
+            except (error.NoStructuralTemplates,
+                    error.NoSequenceFound,
+                    error.NoTemplatesFound,
+                    error.TcoffeeError) as e:
+                self.log.error(e.error)
                 empty_template.template_errors = e.error
-                template = empty_template
-            except error.NoSequenceFound as e:
-                empty_template.template_errors = e.error
-                template = empty_template
+                template = empty_template             
             except error.TemplateCoreError as e:
                 self.log.error('Error while getting the core template for ' + self.uniprot_id + ':' + self.mutations)
                 self.log.error('TemplateCoreError error:' + e.error)
@@ -378,13 +396,6 @@ class Pipeline(object):
                 self.log.error('Error while getting the interface template for ' + self.uniprot_id + ':' + self.mutations)
                 self.log.error('TemplateInterfaceError error:' + e.error)
                 empty_template.template_errors = e.error
-                template = empty_template
-            except error.TcoffeeError as e:
-                self.log.error('t_coffee: problem occured while getting the wildtype PDB\n')
-                self.log.error('t_coffee: alignment error in file: ' + e.alignInFile + '\n')
-                self.log.error('t_coffee: message raised:\n')
-                self.log.error('t_coffee:' + e.errors + '\n\n\n')
-                empty_template.template_errors = 't_coffee error with message: %.30s' % e.error.replace('\n','; ')
                 template = empty_template
             except:
                 raise
@@ -406,7 +417,8 @@ class Pipeline(object):
         for uniprot_domain, uniprot_template, uniprot_model in self.protein_definitions:
             self.log.info('%s\t%s\t%s' % (uniprot_domain, uniprot_template, uniprot_model,) )
             
-            if uniprot_model and uniprot_model.model_errors is None:
+            if uniprot_model and not uniprot_model.model_errors:
+                # Have models from a previous run
                 protein_definitions_with_models.append((uniprot_domain, uniprot_template, uniprot_model,))
                 self.log.info('skipping')
                 continue
@@ -416,29 +428,31 @@ class Pipeline(object):
                 empty_model = sql.UniprotDomainModel()
                 empty_model.uniprot_domain_id = uniprot_template.uniprot_domain_id
                 if uniprot_template.domain_def is None:
+                    self.log.error('Template is missing domain definitions')
                     continue
             elif type(uniprot_domain) == sql.UniprotDomainPair:
                 empty_model = sql.UniprotDomainPairModel()
                 empty_model.uniprot_domain_pair_id = uniprot_template.uniprot_domain_pair_id
-                if uniprot_template.uniprot_domain_1.domain_def is None or uniprot_template.uniprot_domain_2.domain_def:
+                if (uniprot_template.domain_def_1 is None) or (uniprot_template.domain_def_2 is None):
+                    self.log.error('Template is missing domain definitions')
                     continue
             
             # For domains that are not expanded and do not have the template cath_id:
             try:
                 uniprot_model = self.get_model(uniprot_domain, uniprot_template)
-            
-            except error.KNOTerror as e:
-                self.log.error('knot error')
+                
+            except error.PDBChainError as e:
+                self.log.error(e.error)
                 uniprot_model = empty_model
-                uniprot_model.model_errors = 'knot error'
+                uniprot_model.model_errors = e.error
             except ModellerError as e:
                 self.log.error('ModellerError while trying to modellel in __getPDB for ' + self.uniprot_id + ':' + self.mutations)
                 self.log.error('ModellerError args:' + '\n'.join(e.args))
                 self.log.error('ModellerError message:' + e.message)
                 if 'Alignment sequence not found in PDB file' in e.message:
-                    empty_model.model_errors = 'alignment sequence not found in PDB file, '
+                    empty_model.model_errors = 'alignment sequence not found in PDB file'
                 else:
-                    empty_model.model_errors = 'modelling error with message: %.30s' % e.message.replace('\n','; ')
+                    empty_model.model_errors = 'modelling error with message: %s' % e.message.replace('\n','; ')
                 uniprot_model = empty_model
             except:
                 raise
