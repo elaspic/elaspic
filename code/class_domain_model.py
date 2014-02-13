@@ -33,7 +33,8 @@ class GetModel(object):
             itself is stored in a file on disk.
         """
         self.tmpPath = tmpPath
-        self.unique = unique + '/'
+        self.unique = unique 
+        self.unique_temp_folder = tmpPath + unique + '/'
         self.pdbPath = pdbPath
         self.db = db
         
@@ -125,10 +126,9 @@ class GetModel(object):
         if knotted:
             model_errors.append('knotted')
         self.log.debug('Model pdb file: %s, knotted: %s' % (pdbFile_wt, knotted,))
-                
+        
         # Save another copy of the modelled structure in the tmp export folder
-        modeller_path = self.tmpPath + self.unique + 'modeller/'
-        subprocess.check_call('cp ' + modeller_path + pdbFile_wt + ' ' + save_path + pdbFile_wt, shell=True)
+        subprocess.check_call('cp ' + self.unique_temp_folder + 'modeller/' + pdbFile_wt + ' ' + save_path + pdbFile_wt, shell=True)
         
         self.log.debug('chains: %s, chains_modeller: %s' % (chains, chains_modeller,) )
         
@@ -144,7 +144,10 @@ class GetModel(object):
             uniprot_model.norm_dope = normDOPE_wt
             
             # Get SASA using pops
-            analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, ['A'], self.log, domain_defs=None)
+            modeller_chains = ['A']
+            analyze_structure = class_analyze_structure.AnalyzeStructure(self.unique_temp_folder + 'modeller/', 
+                                                                         self.unique_temp_folder + 'analyze_structure/', 
+                                                                         pdbFile_wt, modeller_chains, None, self.log)
             try:
                 sasa_score = analyze_structure.get_sasa()['A']
                 
@@ -185,7 +188,9 @@ class GetModel(object):
                     modeller_chains = ['C', 'A']
             
             # Get interacting amino acids and interface area          
-            analyze_structure = class_analyze_structure.AnalyzeStructure(modeller_path, pdbFile_wt, modeller_chains, self.log, domain_defs=None)
+            analyze_structure = class_analyze_structure.AnalyzeStructure(self.unique_temp_folder + 'modeller/', 
+                                                                         self.unique_temp_folder + 'analyze_structure/', 
+                                                                         pdbFile_wt, modeller_chains, None, self.log)
             interacting_aa = analyze_structure.get_interacting_aa()
             interacting_aa_1 = interacting_aa[modeller_chains[0]]
             uniprot_model.interacting_aa_1 = ','.join(['%i' % x for x in interacting_aa_1])
@@ -251,7 +256,7 @@ class GetModel(object):
                        chains,
                        save_path
                        ):
-        outFile = self.tmpPath + self.unique + 'modeller/outFile_wildtype'
+        outFile = self.unique_temp_folder + 'modeller/outFile_wildtype'
         
         for a, b in zip(alignments, chains):
             self.log.debug('Alignment: ')
@@ -282,14 +287,14 @@ class GetModel(object):
                 # if more than two chains are used this has to be adjusted
                 modeller_template_id = template_ids[0] + template_ids[1][-1]
 
-        modeller_path = self.tmpPath + self.unique + 'modeller/'
+        modeller_path = self.unique_temp_folder + 'modeller/'
         os.chdir(modeller_path) # from os
 
         modeller = mod.modeller([inFile], 
                                 modeller_target_id, 
                                 modeller_template_id, 
                                 save_path, # path_to_pdb_for_modeller
-                                self.tmpPath + self.unique, # path to folders with executables
+                                self.unique_temp_folder, # path to folders with executables
                                 self.modeller_runs,
                                 loopRefinement=True)
         normDOPE, pdbFile, knotted = modeller.run()

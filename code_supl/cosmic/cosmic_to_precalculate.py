@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-import __main__
+
+#import __main__
 #__main__.pymol_argv = [ 'pymol', '-c'] # Quiet and no GUI (-qc)
 
 import sys
@@ -16,8 +17,11 @@ import json
 import pymol
 import class_sql as sql
 
-pymol.finish_launching()
+from Bio import SeqIO
 
+import class_analyze_structure
+
+#pymol.finish_launching()
 
 ###############################################################################
 
@@ -36,6 +40,97 @@ cosmic_driver_df = cosmic_df[cosmic_df['mType'] == 'Driver']
 uniprots_to_precalculate = set(cosmic_driver_df['uniprot'])
 
 db = sql.MyDatabase(path_to_archive='/home/kimlab1/database_data/elaspic/human')
+
+
+###############################################################################
+### Make a flatfile with sasa score for every mutation, or a reason why it couldn't be calculated
+
+mutations = cosmic_driver_df[['uniprot', 'location']].values
+num_of_mutations = mutations.shape[0]
+sasa_score = np.empty((num_of_mutations,1), dtype=float)
+sasa_old_score = np.empty((num_of_mutations,1), dtype=float)
+pfam_name = np.empty((num_of_mutations,1), dtype=object)
+errors_log = np.empty((num_of_mutations,1),dtype=object)
+uniprot_domain_mutations = dict()
+#uniprot_definitions = db.get_uniprot_domain('P04637', copy_data=False)
+for i, (idx, mutation_df) in enumerate(cosmic_driver_df.iterrows()):
+    sasa = None
+    pfam = None
+    log = []
+    
+    # Uniprot domains (calculate sasa)
+    uniprot_definitions = db.get_uniprot_domain(mutation_df.uniprot, copy_data=False)
+    for idx, (uniprot_domain, uniprot_template, uniprot_model) in enumerate(uniprot_definitions):
+        if not uniprot_template \
+        or not uniprot_template.domain_def \
+        or not uniprot_model \
+        or (not uniprot_model.model_errors and not uniprot_model.model_filename):
+            domain_start, domain_end = sql.decode_domain(uniprot_domain.alignment_def)
+            if mutation_df.location < domain_start or mutation_df.location > domain_end:
+                log.append(uniprot_domain.pfam_name + ': mutation outside of pfam domain')
+            else:
+                log.append(uniprot_domain.pfam_name + ': mutation falls inside pfam domain but no structural template was found')
+        else:
+            domain_start, domain_end = sql.decode_domain(uniprot_template.domain_def)
+            if mutation_df.location < domain_start or mutation_df.location > domain_end:
+                log.append(uniprot_domain.pfam_name + ': mutation outside of pdbfam domain')
+            else:
+                mutation_idx = domain_start - mutation_df.location - 1
+                if uniprot_model.sasa_score is None:
+                    log.append(uniprot_domain.pfam_name + ': mutation inside pdbfam domain but sasa score could not be calculated')
+                else:
+                    domain_length = domain_end - domain_start + 1
+                    sasa_old = [score for score in uniprot_model.sasa_score.split(',')]
+                    pfam = uniprot_domain.pfam_name
+                    
+                    analyze_structure = class_analyze_structure.AnalyzeStructure(
+                        '/home/kimlab1/database_data/elaspic/' + uniprot_domain.path_to_data, 
+                        '/tmp/elaspic/NUORFs/analyze_structure/',
+                        uniprot_model.model_filename,
+                        ['A'], None, None)
+                    sasa = analyze_structure.get_sasa()[0]['A']
+                    try:
+                        assert len(sasa_old) == len(sasa)
+                    except:
+                        print idx, domain_length, len(sasa_old), len(sasa)
+                        print sasa_old[mutation_idx], sasa[mutation_idx]
+                        sasa_old = None
+                        sasa = None
+                        break
+                    
+                    sasa_old = sasa_old[mutation_idx]
+                    sasa = sasa[mutation_idx]
+                    
+                    # log = [uniprot_domain.pfam_name + ': affected by mutation']
+                    mutation = ''.join([str(x) for x in mutation_df[['fromAA','location','toAA']].values])
+                    uniprot_domain_mutations.setdefault((uniprot_domain, uniprot_template, uniprot_model,), list())\
+                        .append(mutation)
+                    break
+    sasa_score[i] = sasa
+    sasa_old_score[i] = sasa_old
+    pfam_name[i] = pfam
+    if not pfam:
+        errors_log[i] = '; '.join(log)
+        for l in log:
+            if 'mutation outside of pdbfam domain' not in l:
+                pfam_name[i] = 'no structural template'
+                break
+            pfam_name[i] = 'mutation outside of domain'
+    
+
+cosmic_driver_df['sasa_score'] = sasa_score
+cosmic_driver_df['pfam_name'] = pfam_name
+cosmic_driver_df['errors_log'] = errors_log
+cosmic_driver_df['uniprot_name'] = cosmic_driver_df['uniprot'].apply(lambda x: db.get_uniprot_sequence(x).name)
+cosmic_driver_df['uniprot_description'] = cosmic_driver_df['uniprot'].apply(lambda x: db.get_uniprot_sequence(x).description.split(' OS=Homo ')[0])
+cosmic_driver_df['mutation'] = cosmic_driver_df['fromAA'] + cosmic_driver_df['location'].apply(lambda x: str(x)) + cosmic_driver_df['toAA']
+
+#print cosmic_driver_df
+
+cosmic_driver_df_final = cosmic_driver_df[['uniprot', 'uniprot_name', 'uniprot_description', 'mutid', 'mutation', 'sasa_score', 'pfam_name']]
+cosmic_driver_df_final.columns = ['uniprot_id', 'uniprot_name', 'uniprot_description', 'cosmic_mutation_id', 'mutation', 'sasa_score', 'pfam_domain_affected']
+cosmic_driver_df_final.to_csv('driver_data_final.tsv', sep='\t', index=False)
+
 
 ###############################################################################
 
@@ -111,17 +206,16 @@ def show_pymol(domain_definition, list_of_mutations=None):
 #    pymol.cmd.save(path_to_pdb.replace('.pdb','-sasa_bfactors.pdb'))
 #    return (d.uniprot_id + '_' + d.pfam_name + '.png')
 
-idx = 6
-show_pymol(uniprot_domain_mutations.items()[idx][0], uniprot_domain_mutations.items()[idx][1])
-filename = (save_path +
-             uniprot_domain_mutations.items()[idx][0][0].uniprot_id + '*' +
-             uniprot_domain_mutations.items()[idx][0][0].pfam_name +
-             '.png')
+if False:
+    idx = 6
+    show_pymol(uniprot_domain_mutations.items()[idx][0], uniprot_domain_mutations.items()[idx][1])
+    filename = (save_path +
+                 uniprot_domain_mutations.items()[idx][0][0].uniprot_id + '*' +
+                 uniprot_domain_mutations.items()[idx][0][0].pfam_name +
+                 '.png')
 
-
-pymol.cmd.png(filename, ray=1, dpi=300)
-
-
+if False:
+    pymol.cmd.png(filename, ray=1, dpi=300)
 
 
 ################################################################################
@@ -137,60 +231,6 @@ pymol.cmd.png(filename, ray=1, dpi=300)
 #
 #db.close()
 
-
-###############################################################################
-### Make a flatfile with sasa score for every mutation, or a reason why it couldn't be calculated
-
-mutations = cosmic_driver_df[['uniprot', 'location']].values
-num_of_mutations = mutations.shape[0]
-sasa_score = np.empty((num_of_mutations,1), dtype=float)
-pfam_name = np.empty((num_of_mutations,1), dtype=object)
-errors_log = np.empty((num_of_mutations,1),dtype=object)
-uniprot_domain_mutations = dict()
-#uniprot_definitions = db.get_uniprot_domain('P04637', copy_data=False)
-for i, (idx, mutation_df) in enumerate(cosmic_driver_df.iterrows()):
-    sasa = None
-    pfam = None
-    log = []
-    
-    # Uniprot domains (calculate sasa)
-    uniprot_definitions = db.get_uniprot_domain(mutation_df.uniprot, copy_data=False)
-    for uniprot_domain, uniprot_template, uniprot_model in uniprot_definitions:
-        if not uniprot_template \
-        or not uniprot_template.domain_def \
-        or not uniprot_model \
-        or (not uniprot_model.model_errors and not uniprot_model.model_filename ):
-            domain_start, domain_end = sql.decode_domain(uniprot_domain.alignment_def)
-            if mutation_df.location < domain_start or mutation_df.location > domain_end:
-                log.append(uniprot_domain.pfam_name + ': mutation outside of pfam domain')
-            else:
-                log.append(uniprot_domain.pfam_name + ': mutation falls inside pfam domain but no structural template was found')
-        else:
-            domain_start, domain_end = sql.decode_domain(uniprot_template.domain_def)
-            if mutation_df.location < domain_start or mutation_df.location > domain_end:
-                log.append(uniprot_domain.pfam_name + ': mutation outside of pdbfam domain')
-            else:
-                mutation_idx = domain_start - mutation_df.location - 1
-                if uniprot_model.sasa_score is None:
-                    log.append(uniprot_domain.pfam_name + ': mutation inside pdbfam domain but sasa score could not be calculated')
-                else:
-                    sasa = [score for score in uniprot_model.sasa_score.split(',')][mutation_idx]
-                    pfam = uniprot_domain.pfam_name
-                    # log = [uniprot_domain.pfam_name + ': affected by mutation']
-                    mutation = ''.join([str(x) for x in mutation_df[['fromAA','location','toAA']].values])
-                    uniprot_domain_mutations.setdefault((uniprot_domain, uniprot_template, uniprot_model,), list())\
-                        .append(mutation)
-                    break
-    sasa_score[i] = sasa
-    pfam_name[i] = pfam
-    if not pfam:
-        errors_log[i] = '; '.join(log)        
-    
-cosmic_driver_df['sasa_score'] = sasa_score
-cosmic_driver_df['pfam_name'] = pfam_name
-cosmic_driver_df['errors_log'] = errors_log
-print cosmic_driver_df
-cosmic_driver_df.to_csv('driver_data.tsv', sep='\t')
 
 
 ###############################################################################

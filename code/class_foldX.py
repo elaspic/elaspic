@@ -74,6 +74,8 @@ class foldX():
                 return self.PATH + 'RepairPDB_' + self.pdbFile
             return
         else:
+            print error
+            print rc
             print 'FoldX error!!!', whatToRun
             print 'self.pdbFile', self.pdbFile
             print 'error', error

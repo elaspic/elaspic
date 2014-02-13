@@ -15,6 +15,151 @@ from class_pysicoChemicalProperties import pysiChem
 from class_foldX import foldX
 
 
+###############################################################################
+# Useful functions
+
+def map_mutation_to_structure(alignment, alignment_id, mutation_domain, mutated_uniprot_id=None):
+    """
+    """     
+           
+    if alignment[0].id == alignment_id:
+        alignment_uniprot = str(alignment[1].seq)
+        alignment_protein = str(alignment[0].seq)
+    elif alignment[1].id == alignment_id:
+        alignment_uniprot = str(alignment[0].seq)
+        alignment_protein = str(alignment[1].seq)
+    
+    # now get the position
+    uniprot_position = 0
+    pdb_position = 0
+    for idx in range(len(alignment_uniprot)):
+        if uniprot_position >= int(mutation_domain[1:-1])-1 and not alignment_uniprot[idx] == '-':
+            break
+        if alignment_uniprot[idx] != '-':
+            uniprot_position += 1
+        if alignment_protein[idx] != '-':
+            pdb_position += 1
+        
+    assert alignment_uniprot[idx] == mutation_domain[0]
+    mutation_structure = mutation_domain[0] + str(pdb_position + 1) + mutation_domain[-1]
+    return mutation_structure
+
+ 
+
+def score_pairwise(seq1, seq2, matrix, gap_s, gap_e):
+    """ Required to get the BLOSUM score
+    """
+    
+    def score_match(pair_match, matrix_match):
+        if pair_match not in matrix_match:
+            return matrix_match[(tuple(reversed(pair_match)))]
+        else:
+            return matrix_match[pair_match]
+    
+    score = 0
+    gap = False
+    for i in range(len(seq1)):
+        pair = (seq1[i], seq2[i])
+        if not gap:
+            if '-' in pair:
+                gap = True
+                score += gap_s
+            else:
+                score += score_match(pair, matrix)
+        else:
+            if '-' not in pair:
+                gap = False
+                score += score_match(pair, matrix)
+            else:
+                score += gap_e
+    return score
+
+
+   
+def prepareMutationFoldX(sequence, mutation):
+    """
+    Create the sequence snippets for the mutation with FoldX
+    also, record the position of the mutation in the snippet
+    """            
+    
+    if int(mutation[3:-1]) < 7:
+        left = 0
+        m_pos = int(mutation[3:-1]) # the position of the muation in the snippet
+    else:
+        left = int(mutation[3:-1])-7
+        m_pos = 7
+    if int(mutation[3:-1]) >= len(sequence) - 8:
+        right = len(sequence)
+    else:
+        right = int(mutation[3:-1])+8
+
+    wt_seq = sequence.seq[left:right]
+    mut_seq = sequence.seq[left:int(mutation[3:-1])-1] + mutation[-1] + sequence.seq[int(mutation[3:-1]):right]
+
+    assert( str(sequence.seq)[int(mutation[3:-1])-1] == mutation[2] )
+    
+    mutation_foldX = (m_pos, str(wt_seq) + '\n' + str(mut_seq))
+    return mutation_foldX
+
+
+
+def setChainID(chains, mutation, HETflag, SWITCH_CHAIN, do_modelling):
+    """
+    modeller renames the chains, in order to keep track of the chain IDs
+    they are renamed here to match the modeller output. Modeller labels the
+    chains subsequently, i.e. A, B, C etc., thus, depending on wether HETATMs
+    are present as seperate chain, the chain labels are A, B or A, C
+    """
+    
+    mutChain = str(chains.index(mutation[0]))
+
+    # get the chain names correct
+    if do_modelling:
+        if len(chains) == 1:
+            # if no HETATMs are present, the chain ID is empty
+            # otherwise the chain IDs are A and B for the atoms 
+            # and HETATMs respectively
+            if HETflag[chains[0]] == False:
+                chains_new = [' ']
+                mutChain = ' '
+            else:
+                chains_new = ['A']
+                mutChain = 'A'
+        else:
+            a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+            index = 0
+            chains_new = list()
+            for chainID in chains:
+                if HETflag[chainID] == True:
+                    # if True, then there are HETATMs associated to this chain
+                    # in modeller they will be listed as two different chains.
+                    # thus the chain names have to jump by two
+                    chains_new.append(a[index])
+                    index += 2
+                else:
+                    chains_new.append(a[index])
+                    index += 1
+            
+            if mutChain == '0':
+                mutChain = 'A'
+            elif mutChain == '1':
+                if chains_new[1] == 'B':
+                    mutChain = 'B'
+                elif chains_new[1] == 'C':
+                    mutChain = 'C'
+                else:
+                    mutChain = None
+                
+    return mutChain + '_' + mutation[2:]
+
+
+def make_tarfile(output_filename, source_dir):
+    with tarfile.open(output_filename, "w:bz2") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
+
+###############################################################################
+
 class GetMutation(object):
     """
     """
@@ -30,6 +175,7 @@ class GetMutation(object):
         """
         self.tmpPath = tmpPath
         self.unique = unique + '/'
+        self.unique_temp_folder = tmpPath + unique + '/'
         self.pdbPath = pdbPath
         self.db = db
         
@@ -45,124 +191,98 @@ class GetMutation(object):
         self.gap_e = gap_e
 
 
-    def __call__(self, uniprot_domain, uniprot_template, uniprot_model, mutated_uniprot_id, mutation):
+    def __call__(self, d, t, m, mutated_uniprot_id, mutation):
         """
-        AS: renamed the __run() function with some restructuring.
-        
-        input:  save_path        path to PDB files for modeller
-                self.tmpPath    path to store some tmp data (not tcoffee)
-                self.unique     set environment for tcoffee (for parallelization)
-                pdbFile_wt      name of the wildtype structure file (either raw or from modeller)
-                mutations_pdb   list of mutations in `Chain`_`AAwt``AAnumber``AAmut` format, where AAnumber is 
-                                the index of the AA in the pdb
-                chains_modeller     list of chains in pdbFile_wt, with the first chain in the list being mutated
-                mutations_modeller  same as above, only compensated for chain switching and other changes made by modeller
-                sequences       list of sequences of each chain in the pdb
-                switch_chain    whether or not the order of the sequences was reversed during modelling
         """
         
-        if type(uniprot_domain) == sql.UniprotDomain:
-            self.log.error("single domain")
-            domain_def = uniprot_template.domain_def
+        if type(d) == sql.UniprotDomain:
+            self.log.debug("single domain")
             
-#            pdb_id = uniprot_template.domain.pdb_id
-            chains_pdb = [uniprot_template.domain.pdb_chain, ]
-            chains_modeller = [uniprot_model.chain, ]
+            domain_start, domain_end = sql.decode_domain(t.domain_def)
+            alignment, __ = self.db.get_alignment(t, d.path_to_data)
+            alignment_id = t.alignment_id
+            
+            chains_pdb = [t.domain.pdb_chain, ]
+            chains_modeller = [m.chain, ]
                 
             uniprot_sequences = [self.db.get_uniprot_sequence(mutated_uniprot_id), ]
-            domain_sequences = [uniprot_sequences[0][sql.decode_domain(domain_def)[0]-1:
-                                                        sql.decode_domain(domain_def)[1]], ]
-            alignment, __ = self.db.get_alignment(uniprot_template, uniprot_domain.path_to_data)
-            alignment_id = uniprot_template.alignment_id
-            HETflag = {chains_pdb[0]: uniprot_model.het_flag}
-            switch_chain = uniprot_model.switch_chain
+            domain_sequences = [uniprot_sequences[0][sql.decode_domain(t.domain_def)[0]-1:
+                                                        sql.decode_domain(t.domain_def)[1]],]
+
+            HETflag = {chains_pdb[0]: m.het_flag}
+            switch_chain = m.switch_chain
             
         
-        elif type(uniprot_domain) == sql.UniprotDomainPair:
+        elif type(d) == sql.UniprotDomainPair:
             
-            if mutated_uniprot_id == uniprot_domain.uniprot_domain_1.uniprot_id:
+            if mutated_uniprot_id == d.uniprot_domain_1.uniprot_id:
                 self.log.debug('mutated_uniprot_id: %s, uniprot_id: %s' 
-                    % (mutated_uniprot_id, uniprot_domain.uniprot_domain_1.uniprot_id,) )
+                    % (mutated_uniprot_id, d.uniprot_domain_1.uniprot_id,) )
                 self.log.debug("domain pair right order")
                 
-                domain_def = uniprot_template.domain_def_1
+                domain_start, domain_end = sql.decode_domain(t.domain_def_1)
+                alignment, __ = self.db.get_alignment(t, d.path_to_data)
+                alignment_id = t.alignment_id_1
                 
-#                pdb_id = uniprot_template.domain_1.pdb_id
-                chains_pdb = [uniprot_template.domain_1.pdb_chain, uniprot_template.domain_2.pdb_chain]
-                chains_modeller = [uniprot_model.chain_1, uniprot_model.chain_2]
+                chains_pdb = [t.domain_1.pdb_chain, t.domain_2.pdb_chain]
+                chains_modeller = [m.chain_1, m.chain_2]
                 
                 uniprot_sequences = [self.db.get_uniprot_sequence(mutated_uniprot_id), 
-                                     self.db.get_uniprot_sequence(uniprot_domain.uniprot_domain_2.uniprot_id)]
-                domain_sequences = [uniprot_sequences[0][sql.decode_domain(uniprot_template.domain_def_1)[0]-1:
-                                                            sql.decode_domain(uniprot_template.domain_def_1)[1]], 
-                                    uniprot_sequences[1][sql.decode_domain(uniprot_template.domain_def_2)[0]-1:
-                                                            sql.decode_domain(uniprot_template.domain_def_2)[1]]]
-                alignment_1, alignment_2 = self.db.get_alignment(uniprot_template, uniprot_domain.path_to_data)
-                alignment = alignment_1
-                alignment_id = uniprot_template.alignment_id_1
+                                     self.db.get_uniprot_sequence(d.uniprot_domain_2.uniprot_id)]
+                domain_sequences = [uniprot_sequences[0][sql.decode_domain(t.domain_def_1)[0]-1:
+                                                            sql.decode_domain(t.domain_def_2)[1]],
+                                    uniprot_sequences[1][sql.decode_domain(t.domain_def_2)[0]-1:
+                                                            sql.decode_domain(t.domain_def_1)[1]]]
+                
                 # HETflag is a dictionary, doesn't matter the order. But key-value should match
-                HETflag = {uniprot_template.domain_1.pdb_chain: uniprot_model.het_flag_1,
-                           uniprot_template.domain_2.pdb_chain: uniprot_model.het_flag_2}
-                switch_chain = uniprot_model.switch_chain
+                HETflag = {t.domain_1.pdb_chain: m.het_flag_1,
+                           t.domain_2.pdb_chain: m.het_flag_2}
+                switch_chain = m.switch_chain
             
             
-            elif mutated_uniprot_id == uniprot_domain.uniprot_domain_2.uniprot_id:
+            elif mutated_uniprot_id == d.uniprot_domain_2.uniprot_id:
                 self.log.debug('mutated_uniprot_id: %s, uniprot_id: %s' 
-                    % (mutated_uniprot_id, uniprot_domain.uniprot_domain_1.uniprot_id,) )
+                    % (mutated_uniprot_id, d.uniprot_domain_1.uniprot_id,) )
                 self.log.debug("domain pair reversed order")
                 
-                alignment_2, alignment_1 = self.db.get_alignment(uniprot_template, uniprot_domain.path_to_data)
+                domain_start, domain_end = sql.decode_domain(t.domain_def_2)
+                __, alignment = self.db.get_alignment(t, d.path_to_data)
+                alignment_id = t.alignment_id_2
                 
-                domain_def = uniprot_template.domain_def_2
+                chains_pdb = [t.domain_1.pdb_chain, t.domain_2.pdb_chain]
+                chains_modeller = [m.chain_1, m.chain_2]
                 
-#                pdb_id = uniprot_template.domain_2.pdb_id
-                chains_pdb = [uniprot_template.domain_1.pdb_chain, uniprot_template.domain_2.pdb_chain]
-                chains_modeller = [uniprot_model.chain_1, uniprot_model.chain_2]
+                uniprot_sequences = [self.db.get_uniprot_sequence(d.uniprot_domain_2.uniprot_id),
+                                     self.db.get_uniprot_sequence(d.uniprot_domain_1.uniprot_id)]
+                domain_sequences = [uniprot_sequences[0][sql.decode_domain(t.domain_def_2)[0]-1:
+                                                            sql.decode_domain(t.domain_def_2)[1]],
+                                    uniprot_sequences[1][sql.decode_domain(t.domain_def_1)[0]-1:
+                                                            sql.decode_domain(t.domain_def_1)[1]]]
                 
-                uniprot_sequences = [self.db.get_uniprot_sequence(uniprot_domain.uniprot_domain_2.uniprot_id),
-                                     self.db.get_uniprot_sequence(uniprot_domain.uniprot_domain_1.uniprot_id)]
-                domain_sequences = [uniprot_sequences[0][sql.decode_domain(uniprot_template.domain_def_2)[0]-1:
-                                                            sql.decode_domain(uniprot_template.domain_def_2)[1]],
-                                    uniprot_sequences[1][sql.decode_domain(uniprot_template.domain_def_1)[0]-1:
-                                                            sql.decode_domain(uniprot_template.domain_def_1)[1]]]
-                alignment_1, alignment_2 = self.db.get_alignment(uniprot_template, uniprot_domain.path_to_data)
-                alignment = alignment_2
-                alignment_id = uniprot_template.alignment_id_2
                 # HETflag is a dictionary, doesn't matter the order. But key-value should match
-                HETflag = {uniprot_template.domain_1.pdb_chain: uniprot_model.het_flag_1,
-                           uniprot_template.domain_2.pdb_chain: uniprot_model.het_flag_2}
-                switch_chain = not uniprot_model.switch_chain
+                HETflag = {t.domain_1.pdb_chain: m.het_flag_1,
+                           t.domain_2.pdb_chain: m.het_flag_2}
+                switch_chain = not m.switch_chain
+        
+        
+        #######################################################################
+        if int(mutation[1:-1]) < domain_start or int(mutation[1:-1]) > domain_end:
+            raise error.MutationOutsideDomain(d.uniprot_id, d.pfam_name, t.domain_def, mutation)
         
         mutation_errors = ''
-        
-        save_path = self.tmpPath + uniprot_domain.path_to_data
-        pdbFile_wt = uniprot_model.model_filename
-        
+        save_path = self.tmpPath + d.path_to_data
+        pdbFile_wt = m.model_filename
         chains = chains_modeller
         sequences = domain_sequences
-        #######################################################################
         
         # Convert mutation from uniprot domain numbering to pdb domain numbering
-        mutation_uniprot_domain_no_chain = int(mutation[1:-1]) - sql.decode_domain(domain_def)[0] + 1 # +1 to have the numbering staring with 1                    
-        
-        mutation_pdb_no_chain = self.map_to_pdb_sequence(alignment, alignment_id, mutation_uniprot_domain_no_chain)
-        if mutation_pdb_no_chain == 'in gap':
-            raise error.MutationOutsideDomain()
-        
-        mutation_uniprot = chains_pdb[0] + '_' + mutation[0] + str(mutation_uniprot_domain_no_chain) + mutation[-1]
-        mutations_uniprot = [mutation_uniprot,]
-        
-        mutation_pdb = chains_pdb[0] + '_' + mutation[0] + str(mutation_pdb_no_chain) + mutation[-1]
-        mutations_pdb = [mutation_pdb,]
-        
+        position_domain = int(mutation[1:-1]) - domain_start + 1 # +1 to have the numbering staring with 1
+        mutation_domain = mutation[0] + str(position_domain) + mutation[-1]
+        chain_mutation_domain = chains_pdb[0] + '_' + mutation_domain
+        mutation_structure = map_mutation_to_structure(alignment, alignment_id, mutation_domain, mutated_uniprot_id)
+        chain_mutation_structure = chains_pdb[0] + '_' + mutation_structure
         # Rename chains in mutation by modeller output
-        mutations_modeller = self.setChainID(chains_modeller, mutations_pdb, HETflag, switch_chain, True) 
-        
-
-        
-        # Have to figure out a better way of doing this anyway
-#        if not contacts_chain1[chains_pdb[1]]:
-#            raise error.NotInteracting
+        chain_mutation_modeller = setChainID(chains_modeller, chain_mutation_structure, HETflag, switch_chain, True) 
             
         #######################################################################
         # Logging
@@ -178,9 +298,9 @@ class GetMutation(object):
         ## 1st: get a snippet of AAs around the mutation, as well as the mutation residue (no chain)
         # This is required input for FoldX
         if not switch_chain:
-            mutations_foldX = self.prepareMutationFoldX(sequences[0], mutations_uniprot)
+            mutations_foldX = [prepareMutationFoldX(sequences[0], chain_mutation_domain),]
         else:
-            mutations_foldX = self.prepareMutationFoldX(sequences[1], mutations_uniprot)
+            mutations_foldX = [prepareMutationFoldX(sequences[1], chain_mutation_domain),]
 
         self.log.debug("mutations_foldX:")
         self.log.debug(mutations_foldX)   
@@ -374,7 +494,7 @@ class GetMutation(object):
         # mutations is of the form I_V70A
         # pysiChem need is like I70 (chain that is mutated and the position)
         # self.mutationss is a list which can contain more than one mutations
-        mut_physChem = [ mut[0] + mut[3:-1] for mut in mutations_modeller ]
+        mut_physChem = [ chain_mutation_modeller[0] + chain_mutation_modeller[3:-1] ]
         physChem_mut = list()
         physChem_wt = list()
         physChem_mut_ownChain = list()
@@ -392,7 +512,7 @@ class GetMutation(object):
                 mut_snippet_pos = mutations_foldX[i][0]
                 
                 chains_complex = [ chain for chain in chains[0] ]
-                atomicContactVector, atomicContactVector_ownChain, mutpos_tmp = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
+                atomicContactVector, atomicContactVector_ownChain, mutpos = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
                 for index in range(0,4):
                     res_wt[index] += atomicContactVector[index]
                 for index in range(0,4):
@@ -411,7 +531,7 @@ class GetMutation(object):
                 mut_snippet_pos = mutations_foldX[i][0]
                 
                 chains_complex = [ chain for chain in chains[0] ]
-                atomicContactVector, atomicContactVector_ownChain, mutpos_tmp = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
+                atomicContactVector, atomicContactVector_ownChain, mutpos = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
                 # what ever happens here:
                 # atomicContactVector seems not to be a normal list..
                 # thus I convert it to one in this ugly way...
@@ -424,33 +544,35 @@ class GetMutation(object):
 
 
         #######################################################################
-        # if self.templateFinding:
-        mutpos_DSSP = mutpos_tmp
-#        else:
-#            mutpos_DSSP = mutations_modeller[0][3:-1]
-        
-        dssp_tmp_path = '/'.join(repairedPDB_wt_list[0].split('/')[:-1]) + '/'
-        dssp_chain = [mutations_modeller[0][0],]
-        dssp_position = mutpos_DSSP
-        
-        dssp_pdb_file_wt = repairedPDB_wt_list[0].split('/')[-1]
-        dssp_residue_wt = mutations_modeller[0][2]
-        analyze_structure_wt = class_analyze_structure.AnalyzeStructure(dssp_tmp_path, dssp_pdb_file_wt, dssp_chain, domain_defs=None, log=self.log)
-        
-        dssp_pdb_file_mut = repairedPDB_mut_list[0].split('/')[-1]
-        dssp_residue_mut = mutations_modeller[0][-1]
-        analyze_structure_mut = class_analyze_structure.AnalyzeStructure(dssp_tmp_path, dssp_pdb_file_mut, dssp_chain, domain_defs=None, log=self.log)
+        # Calculate secondary structure, sasa, and interchain distance
 
-#        try:
-        solvent_accessibility_wt, secondary_structure_wt = analyze_structure_wt.get_dssp(dssp_residue_wt, dssp_position)
-        solvent_accessibility_mut, secondary_structure_mut = analyze_structure_mut.get_dssp(dssp_residue_mut, dssp_position)
+        
+        dssp_chain = chain_mutation_modeller
+        dssp_pdb_file_wt = repairedPDB_wt_list[0].split('/')[-1]
+        analyze_structure_wt = class_analyze_structure.AnalyzeStructure(self.unique_temp_folder + 'FoldX/',self.unique_temp_folder + 'analyze_structure/', dssp_pdb_file_wt, dssp_chain, None, self.log)
+        dssp_pdb_file_mut = repairedPDB_mut_list[0].split('/')[-1]
+        analyze_structure_mut = class_analyze_structure.AnalyzeStructure(self.unique_temp_folder + 'FoldX/', self.unique_temp_folder + 'analyze_structure/',  dssp_pdb_file_mut, dssp_chain, None, self.log)
+        
+        sasa_allchain_wt, sasa_splitchain_wt = analyze_structure_wt.get_sasa()
+        solvent_accessibility_wt = sasa_allchain_wt[chain_mutation_modeller[0]][int(chain_mutation_modeller[3:-1])]
+        sasa_allchain_mut, sasa_splitchain_mut = analyze_structure_mut.get_sasa()
+        solvent_accessibility_mut = sasa_allchain_mut[chain_mutation_modeller[0]][int(chain_mutation_modeller[3:-1])]
+        
+        secondary_structure_wt, solvent_accessibility_dssp_wt = analyze_structure_wt.get_dssp()
+        secondary_structure_wt = secondary_structure_wt[chain_mutation_modeller[0]][int(chain_mutation_modeller[3:-1])]
+        secondary_structure_mut, solvent_accessibility_dssp_mut = analyze_structure_mut.get_dssp()
+        secondary_structure_mut = secondary_structure_mut[chain_mutation_modeller[0]][int(chain_mutation_modeller[3:-1])]
+        
+        if type(d) == sql.UniprotDomainPair:
+            contact_distance_wt = analyze_structure_wt.get_interchain_distances(chain_mutation_modeller)[chain_mutation_modeller[0]][0]
+            contact_distance_mut = analyze_structure_mut.get_interchain_distances(chain_mutation_modeller)[chain_mutation_modeller[0]][0]
 #        except:
 #            print "DSSP DID NOT WORK!"
 #            self.log.error('DSSP did not work!')
 #            solvent_accessibility_wt, secondary_structure_wt = '-1', '-1'
 #            solvent_accessibility_mut, secondary_structure_mut = '-1', '-1'
 #            mutation_errors += 'dssp did not work; '
-            
+      
         
         #######################################################################
         ## 10th: cobine the results
@@ -474,21 +596,21 @@ class GetMutation(object):
         ## 11th: get the BLOSUM (or what ever matrix is given) score
         # self.mutationss is a list containing the mutations of the form A_H56T
         matrix_score = 0
-        for mutation in mutations_modeller:
-            fromAA = mutation.split('_')[1][0]
-            toAA   = mutation.split('_')[1][-1]
-            matrix_score += self.score_pairwise(fromAA, toAA, self.matrix, self.gap_s, self.gap_e)
+        for mut in [chain_mutation_modeller]:
+            fromAA = mut.split('_')[1][0]
+            toAA   = mut.split('_')[1][-1]
+            matrix_score += score_pairwise(fromAA, toAA, self.matrix, self.gap_s, self.gap_e)
         
         
         #######################################################################
         #
-        if type(uniprot_domain) == sql.UniprotDomain:
+        if type(d) == sql.UniprotDomain:
             uniprot_mutation = sql.UniprotDomainMutation()
-            uniprot_mutation.uniprot_domain_id = uniprot_template.uniprot_domain_id
+            uniprot_mutation.uniprot_domain_id = t.uniprot_domain_id
             
-        elif type(uniprot_domain) == sql.UniprotDomainPair:
+        elif type(d) == sql.UniprotDomainPair:
             uniprot_mutation = sql.UniprotDomainPairMutation()
-            uniprot_mutation.uniprot_domain_pair_id = uniprot_template.uniprot_domain_pair_id            
+            uniprot_mutation.uniprot_domain_pair_id = t.uniprot_domain_pair_id            
         
         uniprot_mutation.uniprot_id = mutated_uniprot_id
         uniprot_mutation.mutation = mutation
@@ -497,8 +619,8 @@ class GetMutation(object):
         uniprot_mutation.model_filename_wt = model_filename_wt
         uniprot_mutation.model_filename_mut = model_filename_mut        
         
-        uniprot_mutation.chain_modeller = mutations_modeller[0][0]
-        uniprot_mutation.mutation_modeller = mutations_modeller[0][2:]
+        uniprot_mutation.chain_modeller = chain_mutation_modeller[0]
+        uniprot_mutation.mutation_modeller = chain_mutation_modeller[2:]
         
         uniprot_mutation.AnalyseComplex_energy_wt = AnalyseComplex_energy_wt
         uniprot_mutation.Stability_energy_wt = Stability_energy_wt            
@@ -517,6 +639,10 @@ class GetMutation(object):
         uniprot_mutation.secondary_structure_mut = secondary_structure_mut
         uniprot_mutation.solvent_accessibility_mut = solvent_accessibility_mut
         
+        uniprot_mutation.secondary_structure_wt = secondary_structure_wt
+        uniprot_mutation.solvent_accessibility_wt = solvent_accessibility_wt
+        uniprot_mutation.secondary_structure_mut = secondary_structure_mut
+        uniprot_mutation.solvent_accessibility_mut = solvent_accessibility_mut              
         
         #######################################################################
         # Save alignments and modeller models to output database for storage
@@ -529,179 +655,6 @@ class GetMutation(object):
         self.log.info(save_path.split('/')[-2])
                 
         return uniprot_mutation
-
-
-    
-    def make_tarfile(self, output_filename, source_dir):
-        with tarfile.open(output_filename, "w:bz2") as tar:
-            tar.add(source_dir, arcname=os.path.basename(source_dir))
-
-
-    def map_to_pdb_sequence(self, alignment, alignmentID, position):
-        """
-        Given an alignment and a position of the uniprot sequence, this function
-        maps the position of the uniprot sequence to the pdb sequence
-        !! Note that the position numbering start with 1 !!
-        
-        input
-        alignment       type class 'Bio.Align.MultipleSeqAlignment'
-        alignmentID     type 'str'
-        position        type 'int'
-        
-        
-        pdb_position    type 'int'
-
-        """
-        if alignment[0].id == alignmentID:
-            alignment_protein = alignment[0]
-            alignment_uniprot = alignment[1]
-        elif alignment[1].id == alignmentID:
-            alignment_protein = alignment[1]
-            alignment_uniprot = alignment[0]
-        else:
-            self.log.error('Could not assign the alignment to pdb and uniprot correctly!')
-            return 1
-
-        # now get the position
-        pdb_position = 0
-        uniprot_position = 0
-        for index in range(len(alignment_uniprot)):
-            if uniprot_position >= int(position)-1 and not alignment_uniprot[index] == '-':
-                check = index
-                break
-            elif alignment_uniprot[index] == '-':
-                pdb_position += 1
-                continue
-            elif alignment_protein[index] == '-':
-                uniprot_position += 1
-                continue
-            else:
-                pdb_position += 1
-                uniprot_position += 1
-        
-        # check if the uniprot position falls into a gap
-        if alignment_protein[check] == '-':
-            return 'in gap'
-        else:
-            return pdb_position + 1
-
- 
-
-    def score_pairwise(self, seq1, seq2, matrix, gap_s, gap_e):
-        """ Required to get the BLOSUM score
-        """
-        
-        def score_match(pair_match, matrix_match):
-            if pair_match not in matrix_match:
-                return matrix_match[(tuple(reversed(pair_match)))]
-            else:
-                return matrix_match[pair_match]
-        
-        score = 0
-        gap = False
-        for i in range(len(seq1)):
-            pair = (seq1[i], seq2[i])
-            if not gap:
-                if '-' in pair:
-                    gap = True
-                    score += gap_s
-                else:
-                    score += score_match(pair, matrix)
-            else:
-                if '-' not in pair:
-                    gap = False
-                    score += score_match(pair, matrix)
-                else:
-                    score += gap_e
-        return score
-
-
-       
-    def prepareMutationFoldX(self, sequence, mutations):
-        """
-        create the sequence snippets for the mutation with FoldX
-        also, record the position of the mutation in the snippet
-        """
-        mutations_foldX = list()
-        for mutation in mutations:
-            if int(mutation[3:-1]) < 7:
-                left = 0
-                m_pos = int(mutation[3:-1]) # the position of the muation in the snippet
-            else:
-                left = int(mutation[3:-1])-7
-                m_pos = 7
-            if int(mutation[3:-1]) >= len(sequence) - 8:
-                right = len(sequence)
-            else:
-                right = int(mutation[3:-1])+8
-
-            wt_seq = sequence.seq[left:right]
-            mut_seq = sequence.seq[left:int(mutation[3:-1])-1] + mutation[-1] + sequence.seq[int(mutation[3:-1]):right]
-
-            self.log.debug('mutation:')
-            self.log.debug(mutation)
-            self.log.debug('sequence:')
-            self.log.debug(sequence)
-            self.log.debug(sequence.seq[int(mutation[3:-1])-1-5:int(mutation[3:-1])+5])
-            assert( sequence.seq[int(mutation[3:-1])-1] == mutation[2] )
-            
-            mutations_foldX.append((m_pos, str(wt_seq) + '\n' + str(mut_seq)))
-
-        return mutations_foldX
-
-
-    
-    def setChainID(self, chains, mutations, HETflag, SWITCH_CHAIN, do_modelling):
-        """
-        modeller renames the chains, in order to keep track of the chain IDs
-        they are renamed here to match the modeller output. Modeller labels the
-        chains subsequently, i.e. A, B, C etc., thus, depending on wether HETATMs
-        are present as seperate chain, the chain labels are A, B or A, C
-        """
-        mut = list()
-        for mutation in mutations:
-            mutChain = str(chains.index(mutation[0]))
-
-            # get the chain names correct
-            if do_modelling:
-                if len(chains) == 1:
-                    # if no HETATMs are present, the chain ID is empty
-                    # otherwise the chain IDs are A and B for the atoms 
-                    # and HETATMs respectively
-                    if HETflag[chains[0]] == False:
-                        chains_new = [' ']
-                        mutChain = ' '
-                    else:
-                        chains_new = ['A']
-                        mutChain = 'A'
-                else:
-                    a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-                    index = 0
-                    chains_new = list()
-                    for chainID in chains:
-                        if HETflag[chainID] == True:
-                            # if True, then there are HETATMs associated to this chain
-                            # in modeller they will be listed as two different chains.
-                            # thus the chain names have to jump by two
-                            chains_new.append(a[index])
-                            index += 2
-                        else:
-                            chains_new.append(a[index])
-                            index += 1
-                    
-                    if mutChain == '0':
-                        mutChain = 'A'
-                    elif mutChain == '1':
-                        if chains_new[1] == 'B':
-                            mutChain = 'B'
-                        elif chains_new[1] == 'C':
-                            mutChain = 'C'
-                        else:
-                            self.log.error('could not assign the chain for mutation correctly!')
-                            mutChain = None
-                    
-            mut.append( mutChain + '_' + mutation[2:] )
-        return mut
 
 
 
