@@ -19,6 +19,28 @@ import class_error
 
 
 
+
+def get_PDB(self, pdbCode, pdbPath):
+    """
+    parse a pdb file with biopythons PDBParser() and return the structure
+    
+    input: pdbCode  type String     four letter code of the PDB file
+    
+    return: Biopython pdb structure
+    """
+    
+    parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
+    pdbFile = pdbPath + pdbCode[1:3].lower() + '/pdb' + pdbCode.lower() + '.ent.gz'
+    try:
+        pdbFileUncompressed = gzip.open(pdbFile, 'r')
+    except IOError:
+        raise class_error.NoPDBFound('pdb' + pdbCode.lower() + '.ent.gz')
+    result = parser.get_structure('ID', pdbFileUncompressed)
+    return result
+
+
+
+
 class pdbTemplate():
     
     def __init__(self, pdbPath, pdbCode, chains, domainBoundaries, outputPath):
@@ -45,7 +67,7 @@ class pdbTemplate():
         result, e = childProcess.communicate()
         self.tmpPath = result.strip() + '/tmp/'
         
-        self.pdbStructure = self.__getPDB(self.pdbCode)
+        self.pdbStructure = get_PDB(self.pdbCode, self.pdbPath)
         
        
     def extract(self, returnHETATM=False):
@@ -132,25 +154,8 @@ class pdbTemplate():
             chainNumbering.append(residue.id[1])
         
         return chainNumbering
-
-            
-    def __getPDB(self, pdbCode):
-        """
-        parse a pdb file with biopythons PDBParser() and return the structure
-        
-        input: pdbCode  type String     four letter code of the PDB file
-        
-        return: Biopython pdb structure
-        """
-        parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
-        pdbFile = self.pdbPath + pdbCode[1:3].lower() + '/pdb' + pdbCode.lower() + '.ent.gz'
-        try:
-            pdbFileUncompressed = gzip.open(pdbFile, 'r')
-        except IOError:
-            raise class_error.NoPDBFound('pdb' + pdbCode.lower() + '.ent.gz')
-            
-        return parser.get_structure('ID', pdbFileUncompressed)
-        
+    
+    
     def __extractChains(self, pdbStructure, chains, domainBoundaries):
         """
         extract the wanted chains out of the PDB file

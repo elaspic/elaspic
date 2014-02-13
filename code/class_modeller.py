@@ -51,6 +51,7 @@ class modeller:
         self.tmpPath = tmpPath
         self.modeller_path = tmpPath + 'modeller/'
         
+        
 
     def run(self):
         """
@@ -92,6 +93,13 @@ class modeller:
         else:
             return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], knotted
 
+
+
+    def __make_alignment(self):
+        """
+        Functionality for modeller to make the alignment instead of relying on tcoffee
+        """
+        pass
 
 
 

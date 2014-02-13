@@ -265,9 +265,9 @@ class UniprotDomainMutation(Base):
 
     matrix_score = Column(Float)
     
-    secondary_structure_wt = Column(Float)
+    secondary_structure_wt = Column(String(1, collation=string_collation))
     solvent_accessibility_wt = Column(Float)
-    secondary_structure_mut = Column(Float)
+    secondary_structure_mut = Column(String(1, collation=string_collation))
     solvent_accessibility_mut = Column(Float)
            
     ddG = Column(Float)
@@ -366,9 +366,9 @@ class UniprotDomainPairMutation(Base):
 
     matrix_score = Column(Float)
     
-    secondary_structure_wt = Column(Float)
+    secondary_structure_wt = Column(String(1, collation=string_collation))
     solvent_accessibility_wt = Column(Float)
-    secondary_structure_mut = Column(Float)
+    secondary_structure_mut = Column(String(1, collation=string_collation))
     solvent_accessibility_mut = Column(Float)
            
     ddG = Column(Float)
@@ -566,27 +566,7 @@ class MyDatabase(object):
         
         return uniprot_definitions
         
-    
-    def get_uniprot_domain_mutation(self, uniprot_domain_id, mutation, path_to_data=False):
-        """
-        """
-        uniprot_mutation = self.session\
-            .query(UniprotDomainMutation)\
-            .filter(UniprotDomainMutation.uniprot_domain_id==uniprot_domain_id)\
-            .filter(UniprotDomainMutation.mutation==mutation)\
-            .all()
-            
-        if len(uniprot_mutation) == 0:
-            print 'No precalculated mutation %s for uniprot domain number %s' % (mutation, uniprot_domain_id)
-        
-#        if path_to_data:
-#            tmp_save_path = self.path_to_temp + path_to_data
-#            archive_save_path = self.path_to_archive + path_to_data
-        
-        return uniprot_mutation
-        
 
-    ###########################################################################
     def get_uniprot_domain_pair(self, uniprot_id, copy_data=True):
         """ 
         Contains known interactions between uniprot proteins
@@ -636,25 +616,33 @@ class MyDatabase(object):
         
         return uniprot_domain_pair
     
+
     
-    def get_uniprot_domain_pair_mutation(self, uniprot_domain_pair_id, mutation):
+    def get_uniprot_mutation(self, model, mutation):
         """
         """
-        uniprot_mutation = self.session\
-            .query(UniprotDomainPairMutation)\
-            .filter(UniprotDomainPairMutation.uniprot_domain_pair_id==uniprot_domain_pair_id)\
-            .filter(UniprotDomainPairMutation.mutation==mutation)\
-            .all()
-            
-        if len(uniprot_mutation) == 0:
-            print 'No precalculated mutation %s for uniprot domain pair number %s' % (mutation, uniprot_domain_pair_id)
-            
+        
+        if type(model) == UniprotDomainModel:
+            uniprot_mutation = self.session\
+                .query(UniprotDomainMutation)\
+                .filter(UniprotDomainMutation.uniprot_domain_id==model.uniprot_domain_id)\
+                .filter(UniprotDomainMutation.mutation==mutation)\
+                .all()
+        elif type(model) == UniprotDomainPairModel:
+            uniprot_mutation = self.session\
+                .query(UniprotDomainPairMutation)\
+                .filter(UniprotDomainPairMutation.uniprot_domain_pair_id==model.uniprot_domain_pair_id)\
+                .filter(UniprotDomainPairMutation.mutation==mutation)\
+                .all()
+        else:
+            raise Exception('Wrong format for model!')
+        
 #        if path_to_data:
 #            tmp_save_path = self.path_to_temp + path_to_data
 #            archive_save_path = self.path_to_archive + path_to_data
-            
+        
         return uniprot_mutation
-
+        
         
     ###########################################################################
     def add_uniprot_template(self, uniprot_template, path_to_data=False):
@@ -723,8 +711,10 @@ class MyDatabase(object):
             archive_save_path = self.path_to_archive + path_to_data
             archive_save_subpath = uniprot_mutation.model_filename_wt.split('/')[0] + '/'
             
+            if not os.path.isdir(archive_save_path + archive_save_subpath):
+                os.mkdir(archive_save_path + archive_save_subpath)
             with open(archive_save_path + archive_save_subpath + 'mutation.json', 'w') as fh:
-                json.dump(row2dict(uniprot_mutation), fh, indent=4, separators=(',', ': '))   
+                json.dump(row2dict(uniprot_mutation), fh, indent=4, separators=(',', ': '))
                 
             if (self.path_to_temp != self.path_to_archive) and (uniprot_mutation.model_filename_wt is not None): 
                 # Not running on SciNet and have structures to save
@@ -801,14 +791,12 @@ class MyDatabase(object):
 
 
     ###########################################################################
-    def get_alignment(self, uniprot_template, path_to_data=False):
+    def get_alignment(self, uniprot_template, path_to_data):
         """
         """
-        if path_to_data:
-            tmp_save_path = self.path_to_temp + path_to_data 
-            archive_save_path = self.path_to_archive + path_to_data
-        else:
-            return
+        
+        tmp_save_path = self.path_to_temp + path_to_data 
+        archive_save_path = self.path_to_archive + path_to_data
             
         if isinstance(uniprot_template, UniprotDomainTemplate):
             

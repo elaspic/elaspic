@@ -114,9 +114,7 @@ class NoTemplatesFound(Exception):
     def __init__(self, error):
         Exception.__init__(self)
         self.error = error
-      
-      
-      
+
 
         
 class NoPrecalculatedAlignmentFound(Exception):
@@ -135,10 +133,6 @@ class NotInteracting(Exception):
 
 
 
-
-
-
-
 class PopsError(Exception):
     def __init__(self, e, pdb, chains):
         Exception.__init__(self)
@@ -146,9 +140,38 @@ class PopsError(Exception):
         self.pdb = pdb
         self.chains = chains
         
-
-
 class NoPDBFound(Exception):
     def __init__(self, pdb_filename):
         Exception.__init__(self)
         self.error = 'PDB with filename %s not found!' % pdb_filename
+        
+
+class NoDomainFound(Exception):
+    def __init__(self, pdb_filename):
+        Exception.__init__(self)
+        self.error = 'PDB with filename %s not found!' % pdb_filename
+
+
+###############################################################################
+
+class MutationOutsideDomain(Exception):
+    def __init__(self, uniprot_id, pfam_name, domain_def, mutation):
+        Exception.__init__(self)
+        self.uniprot_id = uniprot_id 
+        self.pfam_name = pfam_name
+        self.domain_def = domain_def
+        self.mutation = mutation
+        self.error = 'Mutation %s in uniprot %s falls outside pfam domain %s with domain defs %s' \
+            % (mutation, uniprot_id, pfam_name, domain_def)
+
+
+class MutationOutsideInterface(Exception):
+    def __init__(self, uniprot_id_1, uniprot_id_2, pfam_name, mutation):
+        Exception.__init__(self)
+        self.uniprot_id_1 = uniprot_id_1
+        self.uniprot_id_2 = uniprot_id_2
+        self.pfam_name = pfam_name
+        self.mutation = mutation
+        self.error = 'Mutation %s in uniprot %s and pfam domain %s is not at the interface with %s' \
+            % (mutation, uniprot_id_1, pfam_name, uniprot_id_2)
+     
