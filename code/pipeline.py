@@ -642,9 +642,9 @@ if __name__ == '__main__':
                 row = [ l.strip() for l in line.split('\t') ]
                 
                 # AS: Mutation does not necessarily have to be specified
-                if len(line) > 1:
+                if len(row) > 1:
                     uniprot_id, mutation = row[0], row[1]
-                elif len(line) == 1:
+                elif len(row) == 1:
                     uniprot_id = row[0]
                     mutation = ''
                 #
