@@ -20,7 +20,7 @@ import class_error
 
 
 
-def get_PDB(self, pdbCode, pdbPath):
+def get_PDB(pdbCode, pdbPath):
     """
     parse a pdb file with biopythons PDBParser() and return the structure
     

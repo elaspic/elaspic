@@ -11,11 +11,69 @@ from math import sqrt
 
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB import PDBIO
-from Bio.PDB import DSSP
 
 import logging
 import class_error as error
+import class_pdbTemplate
 
+
+        
+amino_acids = ['ARG', 'HIS', 'LYS', 'ASP', 'GLU', 'SER', 'THR', 'ASN',
+   'GLN', 'CYS', 'GLY', 'PRO', 'ALA', 'VAL', 'ILE', 'LEU', 
+   'MET', 'PHE', 'TYR', 'TRP']
+
+
+def convert_position_to_resid(model, chain, positions):
+    """ maps the mutation sequence position of the pdb to pdb numbering
+    
+    input
+    model       class 'Bio.PDB.Model.Model'
+    mutation    type 'str'                      ; B_Q61L
+    
+    return:
+    chainNumbering[position-1]      type 'int'
+    """
+    
+    chain_structure = model[chain]
+    chainNumbering = getChainNumberingNOHETATMS(chain_structure)
+    return [chainNumbering[p-1] for p in positions]
+
+
+def convert_resid_to_position(model, chain, resids, pdb_domain_start, pdb_domain_end):
+    """ maps the mutation sequence position of the pdb to pdb numbering
+    
+    input
+    model       class 'Bio.PDB.Model.Model'
+    mutation    type 'str'                      ; B_Q61L
+    
+    return:
+    chainNumbering[position-1]      type 'int'
+    """
+    
+    chain_structure = model[chain]
+    chainNumbering = getChainNumberingNOHETATMS(chain_structure)
+    chainNumbering = chainNumbering[chainNumbering.index(pdb_domain_start):chainNumbering.index(pdb_domain_end)+1]
+    return [chainNumbering.index(resid) for resid in resids if resid in chainNumbering]
+
+
+def getChainNumberingNOHETATMS(chain):
+    """
+    returns a list with the numbering of the chains
+    
+    input:
+    chain               class 'Bio.PDB.Chain.Chain'
+    
+    return:
+    chainNumbering      type 'list' of 'int'
+    """
+    
+    chainNumbering = list()
+    for residue in chain:
+        if residue.resname in amino_acids and residue.id[0] == ' ':
+            chainNumbering.append(residue.id[1])
+
+#        chainNumbering = [residue.id[1] for residue in chain if is_aa(residue, standard=True)]
+    return chainNumbering
 
 
 class AnalyzeStructure(object):
@@ -50,10 +108,6 @@ class AnalyzeStructure(object):
         self.structure = parser.get_structure('ID', self.data_path + self.pdb_file)
         
         self.__split_pdb_into_chains()
-        
-        self.amino_acids = ['ARG', 'HIS', 'LYS', 'ASP', 'GLU', 'SER', 'THR', 'ASN',
-               'GLN', 'CYS', 'GLY', 'PRO', 'ALA', 'VAL', 'ILE', 'LEU', 
-               'MET', 'PHE', 'TYR', 'TRP']
                
     
     def __split_pdb_into_chains(self):
@@ -272,7 +326,8 @@ class AnalyzeStructure(object):
         chains = [ chain for chain in model ]
         
         if chain_mutation_structure:
-            position = self.convert_mutation_position(model, chain_mutation_structure) # convert the position numbering
+            positions = self.convert_position_to_resid(model, chain_mutation_structure[0], int(chain_mutation_structure[3:-1])) # convert the position numbering
+            position = chain_mutation_structure[:3] + str(positions[0]) + chain_mutation_structure[-1]
         
         shortest_interchain_distances = {}
         for chain_1 in chains:
@@ -313,45 +368,6 @@ class AnalyzeStructure(object):
         b = atom2.coord
         assert(len(a) == 3 and len(b) == 3)
         return sqrt(sum( (a - b)**2 for a, b in zip(a, b) ))
-
-
-    def convert_mutation_position(self, model, chain_mutation_structure):
-        """ maps the mutation sequence position of the pdb to pdb numbering
-        
-        input
-        model       class 'Bio.PDB.Model.Model'
-        mutation    type 'str'                      ; B_Q61L
-        
-        return:
-        chainNumbering[position-1]      type 'int'
-        """
-        
-        chain = model[chain_mutation_structure[0]]
-        position = int(chain_mutation_structure[3:-1])
-        
-        chainNumbering = self.getChainNumberingNOHETATMS(chain)
-
-        return chainNumbering[position-1]
-
-
-    def getChainNumberingNOHETATMS(self, chain):
-        """
-        returns a list with the numbering of the chains
-        
-        input:
-        chain               class 'Bio.PDB.Chain.Chain'
-        
-        return:
-        chainNumbering      type 'list' of 'int'
-        """
-        
-        chainNumbering = list()
-        for residue in chain:
-            if residue.resname in self.amino_acids and residue.id[0] == ' ':
-                chainNumbering.append(residue.id[1])
-
-#        chainNumbering = [residue.id[1] for residue in chain if is_aa(residue, standard=True)]
-        return chainNumbering
         
       
 ###############################################################################
@@ -483,13 +499,14 @@ class AnalyzeStructure(object):
                                       key:   chainID                type 'str'
                                       value: contact to chainID     type boolean
         """
-        structure = get_PDB(pdbCode, self.pdbPath)
+        structure = class_pdbTemplate.get_PDB(pdbCode, self.pdbPath)
         model = structure[0]
         
         chains   = [ chain for chain in model]
         chainIDs = [ chain.id for chain in model]
     
-        position = self.convert_mutation_position(model, mutation) # convert the position numbering
+        positions = self.convert_position_to_resid(model, mutation[0], int(mutation[3:-1])) # convert the position numbering
+        position = mutation[:3] + str(positions[0]) + mutation[-1]        
         contacts = { chainID: False for chainID in chainIDs if not chainID == mutation[0] }
         
         for i in range(len(chains)):
@@ -554,9 +571,7 @@ class AnalyzeStructure(object):
     
 
     
-if __name__ == '__main__':
-    import logging
-    
+if __name__ == '__main__':    
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
     

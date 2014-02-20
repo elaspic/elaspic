@@ -43,6 +43,22 @@ class TcoffeePDBidError(Exception):
         
 
 
+###############################################################################
+# Common
+
+class ProveanError(Exception):
+    def __init__(self, error):
+        Exception.__init__(self)
+        self.error = 'provean exited with an error:\n %s' % error
+
+
+
+
+
+
+
+###############################################################################
+# Finding templates
 
 class pdbError(Exception):
     def __init__(self, error):
@@ -57,6 +73,11 @@ class EmptyPDBSequenceError(Exception):
         self.pdb_chain = pdb_chain
 
 
+
+
+
+###############################################################################
+# Making models
 
 class ModellError(Exception):
     pass
@@ -85,6 +106,9 @@ class TemplateInterfaceError(Exception):
         self.error = error
 
 
+
+###############################################################################
+# Computing mutations
 
 class PDBChainError(Exception):
     def __init__(self, pdb_code, chains):

@@ -121,6 +121,10 @@ class Domain(Base):
     pdb_resolution = Column(Float, nullable=True)
     pdb_chain = Column(String(1, collation=string_collation), nullable=False)
     pdb_domain_def = Column(String(255, collation=string_collation), nullable=False)
+    cdhit_cluster = Column(Integer, nullable=True)
+    cdhit_cluster_idx = Column(Float, nullable=True)
+    cdhit_cluster_length = Column(Integer, nullable=True)
+    cdhit_cluster_identity = Column(Float, nullable=True)
     
     pfam_autopfam = Column(Integer, nullable=False)
     pfam_name = Column(String(255, collation=string_collation), nullable=False)
@@ -203,6 +207,7 @@ class UniprotDomainTemplate(Base):
     uniprot_domain_id = Column(None, ForeignKey(UniprotDomain.uniprot_domain_id), primary_key=True)
     template_errors = Column(Text)
     alignment_filename = Column(String(255, collation=binary_collation))
+    provean_supset_filename = Column(String(255, collation=string_collation))
     
     # failed_cath_id = Column(Text)
     cath_id = Column(None, ForeignKey(Domain.cath_id), index=True)
@@ -387,7 +392,7 @@ class MyDatabase(object):
     """
     
     def __init__(self, path_to_sqlite_db='', sql_flavor=sql_flavor, is_immutable=False,
-                 path_to_temp='/tmp/', path_to_archive='/tmp/human/', clear_database=False):
+                 path_to_temp='/tmp/', path_to_archive='/home/kimlab1/database_data/elaspic', clear_database=False):
         """
         """
         # Based on configuration, use a different database
@@ -553,16 +558,21 @@ class MyDatabase(object):
             print 'No domain found in uniprot %s' % uniprot_id
         
         if copy_data:
-            for uniprot_domain, uniprot_template, uniprot_model in uniprot_definitions:
-                tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
-                archive_save_path = self.path_to_archive + uniprot_domain.path_to_data      
-                if uniprot_template and (uniprot_template.alignment_filename is not None):
-                    subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-                    subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename +
-                                            ' ' + tmp_save_path + uniprot_template.alignment_filename, shell=True)
-                if uniprot_model and (uniprot_model.model_filename is not None):
-                    subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
-                                            ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)
+            for d, t, m in uniprot_definitions:
+                tmp_save_path = self.path_to_temp + d.path_to_data
+                archive_save_path = self.path_to_archive + d.path_to_data      
+                if t:
+                    subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)                   
+                    if t.alignment_filename:
+                        subprocess.check_call('cp ' + archive_save_path + t.alignment_filename +
+                                                ' ' + tmp_save_path + t.alignment_filename, shell=True)
+                    if t.provean_supset_filename:
+                        subprocess.check_call('cp ' + archive_save_path + t.provean_supset_filename +
+                                                ' ' + tmp_save_path + t.provean_supset_filename, shell=True)                        
+                if m:
+                    if m.model_filename:
+                        subprocess.check_call('cp ' + archive_save_path + m.model_filename +
+                                                ' ' + tmp_save_path + m.model_filename, shell=True)
         
         return uniprot_definitions
         
@@ -581,18 +591,20 @@ class MyDatabase(object):
             print 'No known interactions with uniprot %s' % uniprot_id
         
         if copy_data:
-            for uniprot_domain, uniprot_template, uniprot_model in uniprot_domain_pair_1 + uniprot_domain_pair_2:
-                tmp_save_path = self.path_to_temp + uniprot_domain.path_to_data
-                archive_save_path = self.path_to_archive + uniprot_domain.path_to_data
-                if uniprot_template and (uniprot_template.alignment_filename_1 is not None):
-                    subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-                    subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_1 +
-                                            ' ' + tmp_save_path + uniprot_template.alignment_filename_1, shell=True)                    
-                    subprocess.check_call('cp ' + archive_save_path + uniprot_template.alignment_filename_2 +
-                                            ' ' + tmp_save_path + uniprot_template.alignment_filename_2, shell=True)
-                if uniprot_model and (uniprot_model.model_filename is not None):
-                    subprocess.check_call('cp ' + archive_save_path + uniprot_model.model_filename +
-                                            ' ' + tmp_save_path + uniprot_model.model_filename, shell=True)                    
+            for d, t, m in uniprot_domain_pair_1 + uniprot_domain_pair_2:
+                tmp_save_path = self.path_to_temp + d.path_to_data
+                archive_save_path = self.path_to_archive + d.path_to_data
+                if t:
+                    if t.alignment_filename_1 and t.alignment_filename_2:
+                        subprocess.check_call('mkdir -p ' + tmp_save_path + 
+                            t.alignment_filename_1[:t.alignment_filename_1.rfind('/')], shell=True)
+                        subprocess.check_call('cp ' + archive_save_path + t.alignment_filename_1 +
+                                                ' ' + tmp_save_path + t.alignment_filename_1, shell=True)                    
+                        subprocess.check_call('cp ' + archive_save_path + t.alignment_filename_2 +
+                                                ' ' + tmp_save_path + t.alignment_filename_2, shell=True)
+                if m and (m.model_filename is not None):
+                    subprocess.check_call('cp ' + archive_save_path + m.model_filename +
+                                            ' ' + tmp_save_path + m.model_filename, shell=True)                    
         
 #        return [uniprot_domain_pair_1, uniprot_domain_pair_2]
         return list(set(uniprot_domain_pair_1 + uniprot_domain_pair_2))
@@ -645,30 +657,34 @@ class MyDatabase(object):
         
         
     ###########################################################################
-    def add_uniprot_template(self, uniprot_template, path_to_data=False):
+    def add_uniprot_template(self, t, path_to_data=False):
         """
         """
-        uniprot_template.date_modified = datetime.datetime.utcnow()
+        t.date_modified = datetime.datetime.utcnow()
                 
         # Save a copy of the alignment to the export folder
         if path_to_data:
             tmp_save_path = self.path_to_temp + path_to_data 
             archive_save_path = self.path_to_archive + path_to_data
             subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
-            
+                
             with open(archive_save_path + 'template.json', 'w') as fh:
-                json.dump(row2dict(uniprot_template), fh, indent=4, separators=(',', ': '))         
+                json.dump(row2dict(t), fh, indent=4, separators=(',', ': '))         
             
             if self.path_to_temp != self.path_to_archive: # Not running on SciNet
-                if type(uniprot_template) == UniprotDomainTemplate and (uniprot_template.alignment_filename is not None):
-                    subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename +
-                                            ' ' + archive_save_path + uniprot_template.alignment_filename, shell=True)
-                                            
-                elif type(uniprot_template) == UniprotDomainPairTemplate and (uniprot_template.alignment_filename_1 is not None):
-                    subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename_1 +
-                                            ' ' + archive_save_path + uniprot_template.alignment_filename_1, shell=True)
-                    subprocess.check_call('cp ' + tmp_save_path + uniprot_template.alignment_filename_2 +
-                                            ' ' + archive_save_path + uniprot_template.alignment_filename_2, shell=True)
+                if isinstance(t, UniprotDomainTemplate):
+                    if t.alignment_filename:
+                        subprocess.check_call('cp ' + tmp_save_path + t.alignment_filename +
+                                                ' ' + archive_save_path + t.alignment_filename, shell=True)
+                    if t.provean_supset_filename:
+                        subprocess.check_call('cp ' + tmp_save_path + t.provean_supset_filename +
+                                            ' ' + archive_save_path + t.provean_supset_filename, shell=True)
+                if isinstance(t, UniprotDomainPairTemplate):
+                    if t.alignment_filename_1:
+                        subprocess.check_call('cp ' + tmp_save_path + t.alignment_filename_1 +
+                                                ' ' + archive_save_path + t.alignment_filename_1, shell=True)
+                        subprocess.check_call('cp ' + tmp_save_path + t.alignment_filename_2 +
+                                                ' ' + archive_save_path + t.alignment_filename_2, shell=True)
         
         if not self.is_immutable:
             self.session.merge(uniprot_template)
@@ -826,7 +842,8 @@ class MyDatabase(object):
                 raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename_1)
                 
             return [alignment_1, alignment_2]
-            
+    
+    
     ###########################################################################
     def load_db_from_csv(self):
         """
