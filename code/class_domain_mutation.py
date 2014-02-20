@@ -546,12 +546,16 @@ class GetMutation(object):
         #######################################################################
         # Calculate secondary structure, sasa, and interchain distance
 
-        
-        dssp_chain = chain_mutation_modeller
-        dssp_pdb_file_wt = repairedPDB_wt_list[0].split('/')[-1]
-        analyze_structure_wt = class_analyze_structure.AnalyzeStructure(self.unique_temp_folder + 'FoldX/',self.unique_temp_folder + 'analyze_structure/', dssp_pdb_file_wt, dssp_chain, None, self.log)
-        dssp_pdb_file_mut = repairedPDB_mut_list[0].split('/')[-1]
-        analyze_structure_mut = class_analyze_structure.AnalyzeStructure(self.unique_temp_folder + 'FoldX/', self.unique_temp_folder + 'analyze_structure/',  dssp_pdb_file_mut, dssp_chain, None, self.log)
+        analyze_structure_wt = class_analyze_structure.AnalyzeStructure(
+            self.unique_temp_folder + 'FoldX/', 
+            self.unique_temp_folder + 'analyze_structure/', 
+            repairedPDB_wt_list[0].split('/')[-1], # dssp file wildtype
+            [chain_mutation_modeller[0]], None, self.log)
+        analyze_structure_mut = class_analyze_structure.AnalyzeStructure(
+            self.unique_temp_folder + 'FoldX/',
+            self.unique_temp_folder + 'analyze_structure/',
+            repairedPDB_mut_list[0].split('/')[-1], # dssp file mut
+            [chain_mutation_modeller[0]], None, self.log)
         
         sasa_allchain_wt, sasa_splitchain_wt = analyze_structure_wt.get_sasa()
         solvent_accessibility_wt = sasa_allchain_wt[chain_mutation_modeller[0]][int(chain_mutation_modeller[3:-1])]

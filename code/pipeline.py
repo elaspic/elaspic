@@ -164,22 +164,23 @@ class Pipeline(object):
         # Scinet: joan
         childProcess = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         whoami, __ = childProcess.communicate()
-        path_to_local_pdbaa = '/home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
-        path_to_tmp_pdbaa = self.tmpPath + 'blast/pdbaa_db'
-        if not os.path.isdir(path_to_tmp_pdbaa):
+        path_to_local_blast_db = '/home/kimlab1/strokach/ncbi-blast-2.2.28+/'
+        if not os.path.isdir(self.tmpPath + 'blast/'):
 #            childProcess = subprocess.Popen('hostname | cut -d. -f1', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 #            host_name, __ = childProcess.communicate()
             if whoami.strip() == 'strokach':
                 # when running the pipeline on beagle or banting, copy the database
                 # to a local folder
                 system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
-                                    'cp -r ' + path_to_local_pdbaa + ' ' + path_to_tmp_pdbaa
+                                    'cp -r ' + path_to_local_blast_db + 'pdbaa_db/ ' + self.tmpPath + 'blast/pdbaa_db/ && ' + \
+                                    'cd ' + self.tmpPath + 'blast && ln -sf ' + path_to_local_blast_db + 'db'
             elif whoami.strip() == 'alexey':
                 # when running the pipeline locally there is no need to copy the database
                 # a symlink is enough
                 system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
                                     'cd ' + self.tmpPath + 'blast && ' + \
-                                    'ln -sf /home/kimlab1/strokach/ncbi-blast-2.2.28+/pdbaa_db'
+                                    'ln -sf ' + path_to_local_blast_db + 'pdbaa_db && ' + \
+                                    'ln -sf ' + path_to_local_blast_db + 'db'
             elif whoami.strip() == 'witvliet':
                 system_command = 'mkdir -p ' + self.tmpPath + 'blast && ' + \
                                     'cd ' + self.tmpPath + 'blast && ' + \
@@ -190,10 +191,11 @@ class Pipeline(object):
                                     'cp -ru $HOME/niklas-pipeline/blastdb/pdbaa_db ' + \
                                     self.tmpPath + 'blast/'
             
+            print system_command
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, __ = childProcess.communicate()
             if childProcess.returncode != 0:
-                raise Exception('Couldnt copy the blast database!')
+                raise Exception('Couldn\'t copy the blast database!')
                 
         
         #######################################################################
@@ -348,20 +350,20 @@ class Pipeline(object):
         """
         
         # Go over all domains and domain pairs for a given protein
-        for d in self.protein_definitions:
-            self.log.info('%s\t%s\t%s' % (d.domain, d.template, d.model,) )
+        for pdef in self.protein_definitions:
+            self.log.info('%s\t%s\t%s' % (pdef.domain, pdef.template, pdef.model,) )
             
-            if d.template:
+            if pdef.template:
                 if False:
                     pass # So that I can comment out all the elifs
 #                elif d.model and d.model.model_errors:
 #                    # Recalculate templates if the model has errors
 #                    self.log.debug('Recalculating templates because the model had errors')
 #                    pass
-                elif type(d.template) == sql.UniprotDomainPairTemplate and \
-                d.template.domain_1 and d.template.domain_2 and \
-                d.template.domain_1 == d.template.domain_2 and \
-                d.template.domain_1.pdb_chain == d.template.domain_2.pdb_chain:
+                elif isinstance(pdef.template, sql.UniprotDomainPairTemplate) and \
+                pdef.template.domain_1 and pdef.template.domain_2 and \
+                pdef.template.domain_1 == pdef.template.domain_2 and \
+                pdef.template.domain_1.pdb_chain == pdef.template.domain_2.pdb_chain:
                     # Recalculate cases where the two chains are the same
                     self.log.debug('Recalculating templates because both interacting partners mapped to the same pdb chain')
                     pass
@@ -369,25 +371,35 @@ class Pipeline(object):
 #                    # Recalculate cases where a template was found but errors occured
 #                    self.log.debug('Recalculating templates because odd errors occured the last time we tried')
 #                    pass
+                if not pdef.template.provean_supset_filename:
+                    pass
                 else:
                     self.log.info('skipping template')
                     continue
             
             # Construct empty templates that will be used if we have errors
-            if type(d.domain) == sql.UniprotDomain:
+            if type(pdef.domain) == sql.UniprotDomain:
                 empty_template = sql.UniprotDomainTemplate()
-                empty_template.uniprot_domain_id = d.domain.uniprot_domain_id
-            elif type(d.domain) == sql.UniprotDomainPair:
+                empty_template.uniprot_domain_id = pdef.domain.uniprot_domain_id
+            elif type(pdef.domain) == sql.UniprotDomainPair:
                 empty_template = sql.UniprotDomainPairTemplate()
-                empty_template.uniprot_domain_pair_id = d.domain.uniprot_domain_pair_id
+                empty_template.uniprot_domain_pair_id = pdef.domain.uniprot_domain_pair_id
             
             # Find templates and catch errors
             try:
-                template = self.get_template(d.domain)
+                if isinstance(pdef.template, sql.UniprotDomainTemplate) \
+                and pdef.template.alignment_filename \
+                and not pdef.template.template_errors \
+                and not pdef.template.provean_supset_filename:
+                    template = pdef.template
+                    template.provean_supset_filename = self.get_template.build_provean_supporting_set(pdef.domain, template)
+                else:
+                    template = self.get_template(pdef.domain)
             except (error.NoStructuralTemplates,
                     error.NoSequenceFound,
                     error.NoTemplatesFound,
-                    error.TcoffeeError) as e:
+                    error.TcoffeeError,
+                    error.ProveanError) as e:
                 self.log.error(e.error)
                 empty_template.template_errors = e.error
                 template = empty_template
@@ -395,8 +407,8 @@ class Pipeline(object):
                 raise
             
             self.log.info('adding template')
-            d.template = template
-            self.db.add_uniprot_template(template, d.domain.path_to_data)
+            pdef.template = template
+            self.db.add_uniprot_template(template, pdef.domain.path_to_data)
                 
         self.log.info('Finished processing all templates for ' + self.uniprot_id + ' ' + self.mutations + '\n')
 
@@ -556,11 +568,18 @@ class Pipeline(object):
                 cp_command = 'cp ' + self.executables + 'topol ' + self.tmpPath + self.unique + '/modeller'
                 subprocess.check_call(cp_command, shell=True)
             
+            # sequence conservation
+            if not os.path.isdir(self.tmpPath + self.unique + '/sequence_conservation'):
+                mkdir_command = 'mkdir ' + self.tmpPath + self.unique + '/sequence_conservation'
+                subprocess.check_call(mkdir_command, shell=True)
+                # provean
+                cp_command = 'cp ' + self.executables + 'provean ' + self.tmpPath + self.unique + '/sequence_conservation/'
+            
             # analyze_structure
             if not os.path.isdir(self.tmpPath + self.unique + '/analyze_structure'):
                 # create workingfolder for analyzing structure sasa and secondary structure
                 mkdir_command = 'mkdir ' + self.tmpPath + self.unique + '/analyze_structure'
-                subprocess.check_call(mkdir_command, shell=True)                
+                subprocess.check_call(mkdir_command, shell=True)
                 # Pops
                 cp_command = 'cp ' + self.executables + 'pops ' + self.tmpPath + self.unique + '/analyze_structure'
                 subprocess.check_call(cp_command, shell=True)
@@ -624,9 +643,9 @@ if __name__ == '__main__':
                 
                 # AS: Mutation does not necessarily have to be specified
                 if len(line) > 1:
-                    uniprot_id, mutation = line[0], line[1]
+                    uniprot_id, mutation = row[0], row[1]
                 elif len(line) == 1:
-                    uniprot_id = line[0]
+                    uniprot_id = row[0]
                     mutation = ''
                 #
                 uniprot_ids.append(uniprot_id)
