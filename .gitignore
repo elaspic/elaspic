@@ -5,6 +5,7 @@
 # Binary and configuration files
 *.dat
 *.ini
+*.spyderproject
 
 # Logs and databases
 *.log
