@@ -664,7 +664,7 @@ class MyDatabase(object):
     
 
     
-    def get_uniprot_mutation(self, model, uniprot_id, mutation):
+    def get_uniprot_mutation(self, model, uniprot_id, mutation, path_to_data=False):
         """
         """
         
@@ -688,6 +688,25 @@ class MyDatabase(object):
 #        if path_to_data:
 #            tmp_save_path = self.path_to_temp + path_to_data
 #            archive_save_path = self.path_to_archive + path_to_data
+        if path_to_data:
+            for mut in uniprot_mutation:
+                if mut.model_filename_wt:
+                    tmp_save_path = self.path_to_temp + path_to_data
+                    archive_save_path = self.path_to_archive + path_to_data
+                    mutation_save_subpath = mut.model_filename_wt.split('/')[0] + '/'
+                    if (self.path_to_temp != self.path_to_archive): 
+                        # Not running on SciNet and have structures to save
+                        subprocess.check_call(
+                            'mkdir -p ' + 
+                            tmp_save_path + mutation_save_subpath, shell=True)
+                        subprocess.check_call(
+                            'cp ' + 
+                            archive_save_path + mut.model_filename_wt + ' ' + 
+                            tmp_save_path + mut.model_filename_wt, shell=True)
+                        subprocess.check_call(
+                            'cp ' + 
+                            archive_save_path + mut.model_filename_mut + ' ' + 
+                            tmp_save_path + mut.model_filename_mut, shell=True)
         
         return uniprot_mutation
         

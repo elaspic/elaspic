@@ -26,17 +26,17 @@ class tcoffee_alignment:
     return: Biopython alignment object
 
     """
-    def __init__(self, tmpPath, unique, alnPath, seqFiles, seqIDs):
+    def __init__(self, global_temp_path, tmpPath, alnPath, seqFiles, seqIDs, n_cores):
 
-        self.blastPath = tmpPath
-        self.tmpPath = tmpPath + unique + '/'
+        self.global_temp_path = global_temp_path
+        self.tmpPath = tmpPath
         
         self.seqFiles = seqFiles
         self.seqIDs = seqIDs
         
         self.alnPath = alnPath
         self.alnFormat = 'clustal'
-        
+        self.n_cores = n_cores
     
     def align(self):
         """
@@ -75,35 +75,36 @@ class tcoffee_alignment:
         my_env['CACHE_4_TCOFFEE'] = self.tmpPath + 'tcoffee/cache/'
         my_env['LOCKDIR_4_TCOFFEE'] = self.tmpPath + 'tcoffee/lck/'
         my_env['ERRORFILE_4_TCOFFEE'] = self.tmpPath + 't_coffee.ErrorReport'
-        my_env['BLASTDB'] = self.blastPath + 'blast/pdbaa_db/'
+        my_env['BLASTDB'] = self.global_temp_path + 'blast/pdbaa_db/'
         if mode == 'expresso':
-            system_command = 'cd ' + self.tmpPath + ' && t_coffee' + \
-                             ' -mode expresso' + \
-                             ' -seq ' + alignInFile + \
-                             ' -blast_server=LOCAL' + \
-                             ' -method clustalw_pair slow_pair' + \
-                             ' -pdb_db=pdbaa -protein_db=uniprot' + \
-                             ' -outorder=input' + \
-                             ' -output fasta_aln' + \
-                             ' -quiet -no_warning' + \
-                             ' -outfile=' + out + \
-                             ' -multi_core no' + \
-                             ' -n_core 1' #AS changed !!!
+            system_command = (
+                'cd ' + self.tmpPath + ' && t_coffee' + 
+                ' -mode expresso' + 
+                ' -seq ' + alignInFile + 
+                ' -blast_server=LOCAL' + 
+                ' -method clustalw_pair slow_pair' + 
+                ' -pdb_db=pdbaa -protein_db=uniprot' + 
+                ' -outorder=input' + 
+                ' -output fasta_aln' + 
+                ' -quiet -no_warning' + 
+                ' -outfile=' + out + 
+#                ' -multi_core no' + 
+                ' -n_core ' + '{}'.format(self.n_cores)) #AS changed !!!
         if mode == 't_coffee':
-            system_command = 'cd ' + self.tmpPath + ' && t_coffee' + \
-                             ' -mode expresso' + \
-                             ' -method TMalign_pair' + \
-                             ' -seq ' + alignInFile + \
-                             ' -blast_server=LOCAL' + \
-                             ' -method clustalw_pair slow_pair' + \
-                             ' -pdb_db=pdbaa -protein_db=pdbaa' + \
-                             ' -outorder=input' + \
-                             ' -output fasta_aln' + \
-                             ' -quiet -no_warning' + \
-                             ' -outfile=' + out + \
-                             ' -multi_core no' + \
-                             ' -n_core 1' #AS changed !!!
-
+            system_command = (
+                'cd ' + self.tmpPath + ' && t_coffee' + 
+                ' -mode expresso' + 
+                ' -method TMalign_pair' + 
+                ' -seq ' + alignInFile + 
+                ' -blast_server=LOCAL' + 
+                ' -method clustalw_pair slow_pair' + 
+                ' -pdb_db=pdbaa -protein_db=pdbaa' + 
+                ' -outorder=input' + 
+                ' -output fasta_aln' + 
+                ' -quiet -no_warning' + 
+                ' -outfile=' + out + 
+#                ' -multi_core no' + 
+                ' -n_core ' + '{}'.format(self.n_cores)) #AS changed !!!
         return system_command, my_env
     
     
