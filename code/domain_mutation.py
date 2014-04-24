@@ -172,6 +172,11 @@ def make_tarfile(output_filename, source_dir):
 class MutationData(object):
     
     def __init__(self):
+        self.d = None
+        self.t = None
+        self.m = None
+        self.uniprot_id_1 = None
+        self.mutation = None
         self.pfam_name = None
         self.domain_start = None
         self.domain_end = None
@@ -194,13 +199,12 @@ class MutationData(object):
 
 
 class GetMutation(object):
-    """
-    """
     
-    def __init__(self, tmpPath, unique, pdbPath, db, log,
-                  foldX_WATER, buildModel_runs, PWD, matrix, gap_s, gap_e):
+    def __init__(self, global_temp_path, tmpPath, unique, pdbPath, db, log,
+                  foldX_WATER, buildModel_runs, PWD, matrix, gap_s, gap_e, n_cores):
         """
         """
+        self.global_temp_path = global_temp_path
         self.tmpPath = tmpPath
         self.unique = unique + '/'
         self.unique_temp_folder = tmpPath + unique + '/'
@@ -213,12 +217,13 @@ class GetMutation(object):
         self.matrix = matrix
         self.gap_s = gap_s
         self.gap_e = gap_e
+        self.n_cores = n_cores
 
 
-
-    def fill_mutation_data(self, d, t, m, uniprot_id_1, mutation):
+    def get_mutation_data(self, d, t, m, uniprot_id_1, mutation):
         """
         """
+        path_to_provean_supset = None
         #######################################################################
         # Core
         if isinstance(d, sql_db.UniprotDomain):
@@ -232,8 +237,6 @@ class GetMutation(object):
             domain_sequences = [uniprot_sequences[0][domain_start-1:domain_end],]
             HETflag = {chains_pdb[0]: m.het_flag}
             chains_modeller = [m.chain, ]
-#            switch_chain = m.switch_chain
-#            chains_modeller = ['A']
             uniprot_domain_id = d.uniprot_domain_id
             if t.provean_supset_filename:
                 path_to_provean_supset = self.tmpPath + d.path_to_data + t.provean_supset_filename
@@ -251,17 +254,6 @@ class GetMutation(object):
                 chains_pdb = [t.domain_1.pdb_chain, t.domain_2.pdb_chain]
                 interacting_aa = [int(uniprot_num) for uniprot_num in m.interacting_aa_1.split(',') if uniprot_num]
                 chains_modeller = [m.chain_1, m.chain_2]
-#                switch_chain = m.switch_chain             
-#                if not switch_chain:
-#                    if not HETflag[chains_pdb[0]]:
-#                        chains_modeller = ['A', 'B']
-#                    else:
-#                        chains_modeller = ['A', 'C']
-#                else:
-#                    if not HETflag[chains_pdb[0]]:
-#                        chains_modeller = ['B', 'A']
-#                    else:
-#                        chains_modeller = ['C', 'A']
             
             elif uniprot_id_1 == d.uniprot_domain_2.uniprot_id:
                 self.log.debug('Mutated uniprot is uniprot 2. Rearranging...')
@@ -273,18 +265,7 @@ class GetMutation(object):
                 alignment_id = t.alignment_id_2
                 chains_pdb = [t.domain_2.pdb_chain, t.domain_1.pdb_chain]
                 interacting_aa = [int(uniprot_num) for uniprot_num in m.interacting_aa_2.split(',') if uniprot_num]
-                chains_modeller = [m.chain_2, m.chain_1]                
-#                switch_chain = not m.switch_chain
-#                if not switch_chain:
-#                    if not HETflag[chains_pdb[1]]:
-#                        chains_modeller = ['A', 'B']
-#                    else:
-#                        chains_modeller = ['A', 'C']
-#                else:
-#                    if not HETflag[chains_pdb[1]]:
-#                        chains_modeller = ['B', 'A']
-#                    else:
-#                        chains_modeller = ['C', 'A']
+                chains_modeller = [m.chain_2, m.chain_1]
             
             self.log.debug('Analysing interface mutation between uniprots %s and %s' % (uniprot_id_1, uniprot_id_2,) )
             pfam_name = d_1.pfam_name
@@ -316,7 +297,7 @@ class GetMutation(object):
         if int(mutation[1:-1]) < domain_start or int(mutation[1:-1]) > domain_end:
 #            raise error.MutationOutsideDomain('Mutation %s outside of domain %s with boundaries %i:%i' \
 #            % (mutation, pfam_name, domain_start, domain_end))
-            raise errors.MutationOutsideDomain('outside domain')
+            raise errors.MutationOutsideDomain('Mutation falls outside domain')
         
         save_path = self.tmpPath + d.path_to_data
         pdbFile_wt = m.model_filename
@@ -334,58 +315,59 @@ class GetMutation(object):
         mutation_modeller = mutation[0] + position_modeller[0] + mutation[-1]
         
         # Save the results
-        md = MutationData()
+        mut_data = MutationData()
         
-        md.d = d
-        md.t = t
-        md.m = m
-        md.uniprot_id_1 = uniprot_id_1
-        md.mutation = mutation
-        md.pfam_name = pfam_name
-        md.domain_start = domain_start
-        md.domain_end = domain_end
-        md.alignment = alignment
-        md.alignment_id = alignment_id
-        md.chains_pdb = chains_pdb
-        md.uniprot_sequences = uniprot_sequences
-        md.domain_sequences = domain_sequences
-        md.HETflag = HETflag
-        md.chains_modeller = chains_modeller
-        md.uniprot_domain_id = uniprot_domain_id
-        md.path_to_provean_supset = path_to_provean_supset
-        md.save_path = save_path
-        md.pdbFile_wt = pdbFile_wt
-        md.position_domain = position_domain
-        md.mutation_domain = mutation_domain
-        md.structure = structure
-        md.position_modeller = position_modeller
-        md.mutation_modeller = mutation_modeller
+        mut_data.d = d
+        mut_data.t = t
+        mut_data.m = m
+        mut_data.uniprot_id_1 = uniprot_id_1
+        mut_data.mutation = mutation
+        mut_data.pfam_name = pfam_name
+        mut_data.domain_start = domain_start
+        mut_data.domain_end = domain_end
+        mut_data.alignment = alignment
+        mut_data.alignment_id = alignment_id
+        mut_data.chains_pdb = chains_pdb
+        mut_data.uniprot_sequences = uniprot_sequences
+        mut_data.domain_sequences = domain_sequences
+        mut_data.HETflag = HETflag
+        mut_data.chains_modeller = chains_modeller
+        mut_data.uniprot_domain_id = uniprot_domain_id
+        mut_data.path_to_provean_supset = path_to_provean_supset
+        mut_data.save_path = save_path
+        mut_data.pdbFile_wt = pdbFile_wt
+        mut_data.position_domain = position_domain
+        mut_data.mutation_domain = mutation_domain
+        mut_data.structure = structure
+        mut_data.position_modeller = position_modeller
+        mut_data.mutation_modeller = mutation_modeller
 
-        for key, value in md.__dict__.iteritems():
+        for key, value in mut_data.__dict__.iteritems():
             self.log.debug(key + ':')
             self.log.debug(value)
         
-        self.md = md
+        return mut_data
 
 
 
-    def evaluate_mutation(self):
+    def evaluate_mutation(self, mut_data):
         
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
-        md = self.mut_data
-        model = md.structure[0]
-        d, t, m = md.d, md.t, md.m
-        uniprot_id_1 = md.uniprot_id_1
-        mutation = md.mutation
+        model = mut_data.structure[0]
+        d, t, m = mut_data.d, mut_data.t, mut_data.m
+        uniprot_id_1 = mut_data.uniprot_id_1
+        mutation = mut_data.mutation
         
+        #######################################################################
+        ## 0th: get Provean score for the mutation
         provean_mutation, provean_score = None, None
-        if self.MUT.path_to_provean_supset:
+        if mut_data.path_to_provean_supset:
             provean_mutation, provean_score = \
             self.get_provean_score(
-                md.uniprot_domain_id,
-                md.mutation_domain,
-                md.domain_sequences[0],
-                md.path_to_provean_supset)
+                mut_data.uniprot_domain_id,
+                mut_data.mutation_domain,
+                mut_data.domain_sequences[0],
+                mut_data.path_to_provean_supset)
         
         self.log.debug('provean mutation:')
         self.log.debug(provean_mutation)
@@ -396,18 +378,18 @@ class GetMutation(object):
         #######################################################################
         ## 1st: get a snippet of AAs around the mutation, as well as the mutation residue (no chain)
         # This is required input for FoldX
-        if len(md.domain_sequences) == 1:
-            self.log.debug(md.domain_sequences[0].seq)
+        if len(mut_data.domain_sequences) == 1:
+            self.log.debug(mut_data.domain_sequences[0].seq)
         else:
-            self.log.debug(md.domain_sequences[0].seq)
-            self.log.debug(md.domain_sequences[1].seq)
+            self.log.debug(mut_data.domain_sequences[0].seq)
+            self.log.debug(mut_data.domain_sequences[1].seq)
 #        if not switch_chain:
 #            mutations_foldX = [prepareMutationFoldX(domain_sequences[0], mutation_domain),]
 #        else:
 #            mutations_foldX = [prepareMutationFoldX(domain_sequences[1], mutation_domain),]
         
-        assert(str(md.domain_sequences[0].seq)[int(md.mutation_domain[1:-1])-1] == md.mutation_domain[0])
-        mutations_foldX = [prepareMutationFoldX(md.domain_sequences[0], md.mutation_domain),]
+        assert(str(mut_data.domain_sequences[0].seq)[int(mut_data.mutation_domain[1:-1])-1] == mut_data.mutation_domain[0])
+        mutations_foldX = [prepareMutationFoldX(mut_data.domain_sequences[0], mut_data.mutation_domain),]
         self.log.debug("mutations_foldX:")
         self.log.debug(mutations_foldX)
        
@@ -417,8 +399,8 @@ class GetMutation(object):
         try:
             os.chdir(foldX_path) # from os
             fX = foldX(self.tmpPath + self.unique, 
-                               md.save_path + md.pdbFile_wt, 
-                               md.chains_modeller[0], 
+                               mut_data.save_path + mut_data.pdbFile_wt, 
+                               mut_data.chains_modeller[0], 
                                self.unique, 
                                self.buildModel_runs,
                                self.foldX_WATER,
@@ -439,7 +421,7 @@ class GetMutation(object):
             if mut[0]:
                 mutCodes.append(mut[1])
             else:
-                mutCodes.append(mutation[0] + md.chains_modeller[0] + md.position_modeller[0] + mutation[-1])
+                mutCodes.append(mutation[0] + mut_data.chains_modeller[0] + mut_data.position_modeller[0] + mutation[-1])
         
         self.log.debug('Mutcodes for foldx:')
         self.log.debug(mutCodes)
@@ -447,7 +429,7 @@ class GetMutation(object):
         
         fX_wt = foldX(self.tmpPath + self.unique, 
                       repairedPDB_wt, 
-                      md.chains_modeller[0], 
+                      mut_data.chains_modeller[0], 
                       self.unique, 
                       self.buildModel_runs,
                       self.foldX_WATER,
@@ -463,10 +445,10 @@ class GetMutation(object):
         
         structure = parser.get_structure('ID', repairedPDB_wt_list[0])
         model = structure[0]
-        chain = model[md.chains_modeller[0]]
+        chain = model[mut_data.chains_modeller[0]]
         residue_found = False
         for residue in chain:
-            if (str(residue.id[1]) + residue.id[2].strip()) == md.position_modeller[0]:
+            if (str(residue.id[1]) + residue.id[2].strip()) == mut_data.position_modeller[0]:
                 residue_found = True
                 break
         if not residue_found or not (pdb_template.convert_aa(residue.resname) == mutation[0]):
@@ -474,28 +456,28 @@ class GetMutation(object):
             self.log.error(residue_found)
             self.log.error(residue.resname)
             self.log.error(residue.id)
-            self.log.error(md.position_modeller)
+            self.log.error(mut_data.position_modeller)
             self.log.error(mutation[0])
             raise Exception
         
         structure = parser.get_structure('ID', repairedPDB_mut_list[0])
         model = structure[0]
-        chain = model[md.chains_modeller[0]]
+        chain = model[mut_data.chains_modeller[0]]
         residue_found = False
         for residue in chain:
-            if str(residue.id[1]) + residue.id[2].strip() == md.position_modeller[0]:
+            if str(residue.id[1]) + residue.id[2].strip() == mut_data.position_modeller[0]:
                 residue_found = True
                 break            
         if not residue_found or not (pdb_template.convert_aa(residue.resname) == mutation[-1]):
             self.log.error(residue.resname)
             self.log.error(residue.id)
-            self.log.error(md.position_modeller)
+            self.log.error(mut_data.position_modeller)
             self.log.error(mutation[-1])
             raise Exception            
             
-        subprocess.check_call('mkdir -p ' + md.save_path + uniprot_id_1 + '_' + mutation + '/', shell=True)
-        subprocess.check_call('cp ' + repairedPDB_wt_list[0] + ' ' + md.save_path + model_filename_wt, shell=True)
-        subprocess.check_call('cp ' + repairedPDB_mut_list[0] + ' ' + md.save_path + model_filename_mut, shell=True)
+        subprocess.check_call('mkdir -p ' + mut_data.save_path + uniprot_id_1 + '_' + mutation + '/', shell=True)
+        subprocess.check_call('cp ' + repairedPDB_wt_list[0] + ' ' + mut_data.save_path + model_filename_wt, shell=True)
+        subprocess.check_call('cp ' + repairedPDB_mut_list[0] + ' ' + mut_data.save_path + model_filename_mut, shell=True)
         
         
         #######################################################################
@@ -504,7 +486,7 @@ class GetMutation(object):
         for wPDB in repairedPDB_wt_list:
             fX_wt_list.append(foldX(self.tmpPath + self.unique, 
                                     wPDB, 
-                                    md.chains_modeller[0], 
+                                    mut_data.chains_modeller[0], 
                                     self.unique, 
                                     self.buildModel_runs,
                                     self.foldX_WATER,
@@ -515,7 +497,7 @@ class GetMutation(object):
         for mPDB in repairedPDB_mut_list:
             fX_mut_list.append(foldX(self.tmpPath + self.unique, 
                                      mPDB, 
-                                     md.chains_modeller[0], 
+                                     mut_data.chains_modeller[0], 
                                      self.unique, 
                                      self.buildModel_runs,
                                      self.foldX_WATER,
@@ -529,7 +511,7 @@ class GetMutation(object):
         FoldX_AnalyseComplex_wt  = list()
         for fX_wt in fX_wt_list:
             # stability of the interaction
-            if len([ item for item in md.chains_modeller if item != '' ]) == 1:
+            if len([ item for item in mut_data.chains_modeller if item != '' ]) == 1:
                 AnalyseComplex = [ '0' for i in range(25) ]
             else:
                 AnalyseComplex = fX_wt.run('AnalyseComplex')
@@ -550,7 +532,7 @@ class GetMutation(object):
         FoldX_AnalyseComplex_mut = list()
         for fX_mut in fX_mut_list:
             # stability of the interaction
-            if len([ item for item in md.chains_modeller if item != '' ]) == 1:
+            if len([ item for item in mut_data.chains_modeller if item != '' ]) == 1:
                 AnalyseComplex = [ '0' for i in range(25) ]
             else:
                 AnalyseComplex = fX_mut.run('AnalyseComplex')
@@ -642,7 +624,7 @@ class GetMutation(object):
         # mutations is of the form I_V70A
         # pysiChem need is like I70 (chain that is mutated and the position)
         # self.mutationss is a list which can contain more than one mutations
-        mut_physChem = [ md.chains_modeller[0] + md.mutation_domain[1:-1] ]
+        mut_physChem = [ mut_data.chains_modeller[0] + mut_data.mutation_domain[1:-1] ]
         physChem_mut = list()
         physChem_wt = list()
         physChem_mut_ownChain = list()
@@ -654,12 +636,12 @@ class GetMutation(object):
             res_wt = [0, 0, 0, 0]
             res_wt_ownChain = [0, 0, 0, 0]
             for mut in mut_physChem:
-                chains_complex = [ chain for chain in md.chains_modeller[0] ]
+                chains_complex = [ chain for chain in mut_data.chains_modeller[0] ]
 #                atomicContactVector, atomicContactVector_ownChain, mutpos = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
                 atomicContactVector, atomicContactVector_ownChain = \
                     get_atomicContactVector(item, mut[0], chains_complex, 
-                                            int(md.mutation_domain[1:-1]),
-                                            md.mutation_domain[0])
+                                            int(mut_data.mutation_domain[1:-1]),
+                                            mut_data.mutation_domain[0])
                 for index in range(0,4):
                     res_wt[index] += atomicContactVector[index]
                 for index in range(0,4):
@@ -672,12 +654,12 @@ class GetMutation(object):
             res_mut = [0, 0, 0, 0]
             res_mut_ownChain = [0, 0, 0, 0]
             for mut in mut_physChem:
-                chains_complex = [ chain for chain in md.chains_modeller[0] ]
+                chains_complex = [ chain for chain in mut_data.chains_modeller[0] ]
 #                atomicContactVector, atomicContactVector_ownChain, mutpos = get_atomicContactVector(item, mut[0], chains_complex, mut_snippet_pos, mut_snippet)
                 atomicContactVector, atomicContactVector_ownChain = \
                     get_atomicContactVector(item, mut[0], chains_complex, 
-                                            int(md.mutation_domain[1:-1]),
-                                            md.mutation_domain[-1])
+                                            int(mut_data.mutation_domain[1:-1]),
+                                            mut_data.mutation_domain[-1])
                 # what ever happens here:
                 # atomicContactVector seems not to be a normal list..
                 # thus I convert it to one in this ugly way...
@@ -695,13 +677,13 @@ class GetMutation(object):
             self.unique_temp_folder + 'FoldX/', 
             self.unique_temp_folder + 'analyze_structure/', 
             repairedPDB_wt_list[0].split('/')[-1], # dssp file wildtype
-            md.chains_modeller, None, self.log)
+            mut_data.chains_modeller, None, self.log)
         (seasa_by_chain_together, seasa_by_chain_separately, 
         seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_wt.get_seasa()
         seasa_info_wt = seasa_by_residue_separately[
-            (seasa_by_residue_separately['pdb_chain']==md.chains_modeller[0]) & 
-            (seasa_by_residue_separately['res_num']==md.position_modeller[0])].iloc[0]
-        if pdb_template.convert_aa(seasa_info_wt['res_name']) != md.mutation_domain[0]:
+            (seasa_by_residue_separately['pdb_chain']==mut_data.chains_modeller[0]) & 
+            (seasa_by_residue_separately['res_num']==mut_data.position_modeller[0])].iloc[0]
+        if pdb_template.convert_aa(seasa_info_wt['res_name']) != mut_data.mutation_domain[0]:
             self.log.error('Wrong amino acid for msms wild-type!')
             self.log.error(seasa_info_wt)
             self.log.error(seasa_by_residue_separately)
@@ -709,12 +691,12 @@ class GetMutation(object):
         solvent_accessibility_wt = seasa_info_wt['rel_sasa']
         
         secondary_structure_wt, solvent_accessibility_dssp_wt = analyze_structure_wt.get_dssp()
-        secondary_structure_wt = secondary_structure_wt[md.chains_modeller[0]][int(md.mutation_domain[1:-1])-1]        
+        secondary_structure_wt = secondary_structure_wt[mut_data.chains_modeller[0]][int(mut_data.mutation_domain[1:-1])-1]        
         
         if isinstance(d, sql_db.UniprotDomainPair):
-            contact_distance_wt = analyze_structure_wt.get_interchain_distances(md.chains_modeller[0], md.mutation_modeller)           
+            contact_distance_wt = analyze_structure_wt.get_interchain_distances(mut_data.chains_modeller[0], mut_data.mutation_modeller)           
             try:
-                contact_distance_wt = contact_distance_wt[md.chains_modeller[0]][0] 
+                contact_distance_wt = contact_distance_wt[mut_data.chains_modeller[0]][0] 
             except IndexError:
                 self.log.error(contact_distance_wt)
                 raise
@@ -723,28 +705,28 @@ class GetMutation(object):
             self.unique_temp_folder + 'FoldX/',
             self.unique_temp_folder + 'analyze_structure/',
             repairedPDB_mut_list[0].split('/')[-1], # dssp file mut
-            md.chains_modeller, None, self.log)        
+            mut_data.chains_modeller, None, self.log)        
         (seasa_by_chain_together, seasa_by_chain_separately, 
         seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_mut.get_seasa()
         seasa_info_mut = seasa_by_residue_separately[
-            (seasa_by_residue_separately['pdb_chain']==md.chains_modeller[0]) & 
-            (seasa_by_residue_separately['res_num']==md.position_modeller[0])].iloc[0]
-        if pdb_template.convert_aa(seasa_info_mut['res_name']) != md.mutation_domain[-1]:
+            (seasa_by_residue_separately['pdb_chain']==mut_data.chains_modeller[0]) & 
+            (seasa_by_residue_separately['res_num']==mut_data.position_modeller[0])].iloc[0]
+        if pdb_template.convert_aa(seasa_info_mut['res_name']) != mut_data.mutation_domain[-1]:
             self.log.error('Wrong amino acid for msms mutant!')
             self.log.error(pdb_template.convert_aa(seasa_info_mut['res_name']))
-            self.log.error(md.mutation_domain[-1])
+            self.log.error(mut_data.mutation_domain[-1])
             self.log.error(seasa_info_mut)
             self.log.error(seasa_by_residue_separately)
             raise Exception('surface area calculated for the wrong atom!')
         solvent_accessibility_mut = seasa_info_mut['rel_sasa']
         
         secondary_structure_mut, solvent_accessibility_dssp_mut = analyze_structure_mut.get_dssp()
-        secondary_structure_mut = secondary_structure_mut[md.chains_modeller[0]][int(md.mutation_domain[1:-1])-1]
+        secondary_structure_mut = secondary_structure_mut[mut_data.chains_modeller[0]][int(mut_data.mutation_domain[1:-1])-1]
         
         if isinstance(d, sql_db.UniprotDomainPair):
-            contact_distance_mut = analyze_structure_wt.get_interchain_distances(md.chains_modeller[0], md.mutation_modeller)           
+            contact_distance_mut = analyze_structure_wt.get_interchain_distances(mut_data.chains_modeller[0], mut_data.mutation_modeller)           
             try:
-                contact_distance_mut = contact_distance_mut[md.chains_modeller[0]][0] 
+                contact_distance_mut = contact_distance_mut[mut_data.chains_modeller[0]][0] 
             except IndexError:
                 self.log.error(contact_distance_mut)
                 raise
@@ -778,7 +760,7 @@ class GetMutation(object):
         ## 11th: get the BLOSUM (or what ever matrix is given) score
         # self.mutationss is a list containing the mutations of the form A_H56T
         matrix_score = 0
-        for mut in [md.mutation_domain]:
+        for mut in [mut_data.mutation_domain]:
             fromAA = mut[0]
             toAA   = mut[-1]
             matrix_score += score_pairwise(fromAA, toAA, self.matrix, self.gap_s, self.gap_e)
@@ -802,8 +784,8 @@ class GetMutation(object):
         uniprot_mutation.uniprot_id = uniprot_id_1
         uniprot_mutation.mutation = mutation
         
-        uniprot_mutation.chain_modeller = md.chains_modeller[0]
-        uniprot_mutation.mutation_modeller = md.mutation_modeller
+        uniprot_mutation.chain_modeller = mut_data.chains_modeller[0]
+        uniprot_mutation.mutation_modeller = mut_data.mutation_modeller
 
         uniprot_mutation.model_filename_wt = model_filename_wt
         uniprot_mutation.model_filename_mut = model_filename_mut
@@ -833,7 +815,7 @@ class GetMutation(object):
         
         #######################################################################
         self.log.info('Finished processing template:')
-        self.log.info(md.save_path.split('/')[-2])
+        self.log.info(mut_data.save_path.split('/')[-2])
                 
         return uniprot_mutation
 
@@ -861,16 +843,18 @@ class GetMutation(object):
 #        first_aa = uniprot_sequence_domain[0]        
     #    provean_supset_filename = t.alignment_filename.replace('.aln', '.supset')
 #        provean_supset_filename = t.provean_supset_filename
-        system_command = \
-            'echo ' + domain_mutation + ' > ' + self.tmpPath + self.unique + 'sequence_conservation/decoy.var && ' + \
-            self.tmpPath + self.unique + 'sequence_conservation/provean ' + \
-            ' -q ' + self.tmpPath + self.unique + 'sequence_conservation/sequence.fasta ' + \
-            ' -v ' + self.tmpPath + self.unique + 'sequence_conservation/decoy.var ' + \
-            ' -d ' + self.tmpPath + 'blast/db/nr' + \
-            ' --psiblast `which psiblast` ' + \
-            ' --blastdbcmd `which blastdbcmd` ' + \
-            ' --cdhit `which cd-hit` ' + \
-            ' --supporting_set ' + path_to_provean_supset
+        system_command = (
+            'echo ' + domain_mutation + ' > ' + self.tmpPath + self.unique + 'sequence_conservation/decoy.var && ' + 
+            self.tmpPath + self.unique + 'sequence_conservation/provean ' + 
+            ' -q ' + self.tmpPath + self.unique + 'sequence_conservation/sequence.fasta ' + 
+            ' -v ' + self.tmpPath + self.unique + 'sequence_conservation/decoy.var ' + 
+            ' -d ' + self.global_temp_path + 'blast/db/nr' + 
+            ' --tmp_dir ' + self.tmpPath + self.unique + 
+            ' --num_threads ' + '{}'.format(self.n_cores) + 
+            ' --psiblast `which psiblast` ' + 
+            ' --blastdbcmd `which blastdbcmd` ' + 
+            ' --cdhit `which cd-hit` ' + 
+            ' --supporting_set ' + path_to_provean_supset)
         
         
         childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)

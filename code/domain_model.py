@@ -229,7 +229,8 @@ class GetModel(object):
     """
     """
     
-    def __init__(self, tmpPath, unique, pdbPath, db, log, modeller_runs, buildModel_runs, PWD):
+    def __init__(self, global_temp_path, tmpPath, unique, pdbPath, db, log, 
+                 modeller_runs, buildModel_runs, PWD, n_cores):
         """
         Produces a model of a single uniprot domain or a domain pair
         
@@ -246,6 +247,7 @@ class GetModel(object):
             Object having all the information about the produced model. The model
             itself is stored in a file on disk.
         """
+        self.global_temp_path = global_temp_path
         self.tmpPath = tmpPath
         self.unique = unique 
         self.unique_temp_folder = tmpPath + unique + '/'
@@ -257,6 +259,7 @@ class GetModel(object):
         self.modeller_runs = modeller_runs
         self.buildModel_runs = buildModel_runs
         self.PWD = PWD
+        self.n_cores = n_cores
 
     
     def __call__(self, uniprot_domain, uniprot_template):
