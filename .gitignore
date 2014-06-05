@@ -1,20 +1,24 @@
+# Folders
+code/PDB/
+code_supl/
+db/
+error_logs_to_fix/
+input/
+PDBfam/
+reports/
+results/
+scowlp/
+
+# Hidden files
+.*
+
 # Compiled source code
 *.pyc
 *.o
 
-# Binary and configuration files
-*.dat
-*.ini
-*.spyderproject
-
 # Logs and databases
 *.log
 *.sql
-
-# Folders
-backup/
-input/
-results/
 
 # Documentation
 *.docx

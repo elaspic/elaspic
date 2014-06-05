@@ -1,1 +1,8 @@
 Niklas' ELASPIC pipeline.
+
+
+To dos:
+1) When remaking the uniprot_domain_pair table, include pairs of proteins that match the new domain finding criterion: 'X', 'X_%', 'X+%', '%+X', '%+X_%', '%+X+%', 
+2) Look into the code for parsing pfam domain definitions and remove domains that are inside other domains
+
+Include '-' as a possible wildcard?	

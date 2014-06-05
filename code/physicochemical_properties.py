@@ -193,7 +193,7 @@ class pysiChem():
 ##        mutPosition = self.find_position(chain, mutation_position, mutation)
 #        mutPosition = mutation_position #AS
 #        # get the pdb numbering of the modelled structure
-#        chainNumbering, chain_sequence = analyze_structure.getChainNumberingNOHETATMS(chain, True)
+#        chainNumbering, chain_sequence = analyze_structure.get_chain_numbering(chain, True)
 #        # the mutated residue is determined by getting the numbering of the pdb
 #        # file at the corresponding sequence position
 #        mutatedResidue = chain[chainNumbering[mutPosition-1]]

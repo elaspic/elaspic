@@ -1,13 +1,12 @@
 # Homology modeling by the automodel class
 from modeller import *			# Load standard Modeller classes
 from modeller.automodel import *	# Load the automodel class
-import subprocess, shlex
-
+import helper_functions as hf
 
 class modeller:
     """
     run modeller
-    
+
     input:  alignment                   type: list      list containing filenames with modeller
                                                         input files in PIR format
             seqID                       type: string    name of the sequence (target)
@@ -17,43 +16,30 @@ class modeller:
             modeller_runs               type: int       how many rounds of modelling should be done
             loopRefinement              type: boolean   if True calculate loop refinemnts
     """
-    def __init__(self, 
-                 alignment, 
-                 seqID, 
-                 templateID, 
-                 path_to_pdb_for_modeller,
-                 tmpPath, 
-                 log,
-                 modeller_runs,
-                 loopRefinement=True, 
-                 ):
-        # input
-        # make sure that the alignment is contained in a list
+    def __init__(
+            self, alignment, seqID, templateID, path_to_pdb_for_modeller,
+            tmpPath, log, modeller_runs, subprocess_ids, loopRefinement=True,):
+
         if not isinstance(alignment, list):
             self.alignment = list()
             self.alignment.append(alignment)
         else:
             self.alignment = alignment
-        
         self.seqID = seqID
         self.templateID = templateID
-        
-        # some behaviour
         self.loopRefinement = loopRefinement
-
         self.start = 1                # start model
         self.end = modeller_runs      # end model
         self.loopStart = 1            # start loop refinement model
         self.loopEnd = 4              # end loop refinement model
-        
+
         # some environment settings
         self.filePath = path_to_pdb_for_modeller
         self.tmpPath = tmpPath
         self.modeller_path = tmpPath + 'modeller/'
-        
         self.log = log
-        
-        
+        self.subprocess_ids = subprocess_ids
+
 
     def run(self):
         """
@@ -61,12 +47,11 @@ class modeller:
         ranking = dict() # key: assessment score
                          # values: alignment, pdb of modell, from loop refinement yes or no
         ranking_knotted = dict()
-        
+
         knotted = True
         counter = 0
         while knotted and counter < 10:
             counter += 1
-            
             ## NB: You can actually supply many alignments and modeller will give
             # you the alignment with the best model, and that model
             for aln in self.alignment:
@@ -80,18 +65,17 @@ class modeller:
                     raise
                 except:
                     result, loop, failures = self.__run_modeller(aln, False)
-                
+
                 if not result:
                     raise failures[-1]
-                
+
                 for i in range(len(result)):
                     pdbFile, normDOPE = result[i][0], result[i][1]
                     if self.__call_knot(pdbFile, self.modeller_path):  # i.e. knotted
                         ranking_knotted[normDOPE] = (aln, str(pdbFile), loop,)
-                    else: 
+                    else:
                         ranking[normDOPE] = (aln, str(pdbFile), loop,)
-                        knotted = False                            
-
+                        knotted = False
         if not knotted:
             return min(ranking), ranking[min(ranking)][1], knotted
         else:
@@ -108,26 +92,26 @@ class modeller:
     def __run_modeller(self, alignFile, loopRefinement):
         """
         more or less taken from the modeller website
-        
+
         input:  alignFile   type: string        File containing the input data
                 result      type: list          The successfully calculated models
                                                 are stored in this list
                 loopRefinement  type: boolean   if True: perform loopfeinements
-                
+
         return: result      type: list          successfully calculated models
         """
-        log.none() # instructs Modeller to display no log output. 
+        log.none() # instructs Modeller to display no log output.
         env = environ() # create a new MODELLER environment to build this model in
-        
+
         # directories for input atom files
         env.io.atom_files_directory = [self.filePath]
         env.schedule_scale = physical.values(default=1.0, soft_sphere=0.7)
         # selected atoms do not feel the neighborhood
         #env.edat.nonbonded_sel_atoms = 2
-        
+
         # Read in HETATM records from template PDBs
         env.io.hetatm = True
-        
+
         if loopRefinement == False:
             a = automodel(env,
                           alnfile = alignFile,      # alignment filename
@@ -135,8 +119,8 @@ class modeller:
                           sequence = self.seqID,	            		  # code of the target
                           assess_methods=(assess.DOPE,
                                           assess.normalized_dope)    # wich method for validation should be calculated
-                          ) 			
-        
+                          )
+
         if loopRefinement == True:
             a = dope_loopmodel(env,
                                alnfile = alignFile,      # alignment filename
@@ -146,19 +130,19 @@ class modeller:
                                                assess.normalized_dope),   # wich method for validation should be calculated
                                loop_assess_methods=(assess.DOPE,
                                                     assess.normalized_dope)
-                               ) 
-        
+                               )
+
         a.starting_model = self.start		# index of the first model
         a.ending_model = self.end   		# index of the last model
                 							# (determines how many models to calculate)
         # Very thorough VTFM optimization:
         a.library_schedule = autosched.slow
         a.max_var_iterations = 300
-        
+
         # Thorough MD optimization:
 #        a.md_level = refine.slow
         a.md_level = None
-        
+
         # Repeat the whole cycle 2 times and do not stop unless obj.func. > 1E6
 #        a.repeat_optimization = 2
 
@@ -166,11 +150,11 @@ class modeller:
             a.loop.starting_model = self.loopStart      # index of the first loop model
             a.loop.ending_model   = self.loopEnd        # index of the last loop model
             a.loop.md_level       = refine.slow         # loop refinement method; this yields
-    
-        a.max_molpdf = 1e6
-        
+
+        a.max_molpdf = 2e5
+
         a.make()						# do the actual homology modeling
-        
+
         # the output produced by modeller is stored in a.loop.outputs or a.outputs
         # it is a dictionary
         #
@@ -192,7 +176,7 @@ class modeller:
                     loop = True
                 else:
                     failures.append(a.loop.outputs[i]['failure'])
-        
+
         # add the normal output
         self.log.debug('Modeller outputs:')
         self.log.debug(a.outputs)
@@ -203,7 +187,7 @@ class modeller:
                 result.append((model_filename, model_dope_score))
             else:
                 failures.append(a.outputs[i]['failure'])
-        
+
         # return the successfully calculated models and a loop flag indicating
         # whether the returned models are loop refined or not
         return result, loop, failures
@@ -212,26 +196,23 @@ class modeller:
     def __call_knot(self, pdbFile, modeller_path):
         """
         check a PDB structure for knots using the program KNOTS by Willi Taylor
-        
+
         Make sure to set the command and PDB path!
-        
+
         input:  pdbFile     type: string        Filename of the PDB structure
-        
+
         return: 0 or 1      type: int           0: no knot
                                                 1: knotted
         """
         # for multiprocessing the KNOT program needs to be run from a unique
         # execution folder, this is created in the beginning
 
-        system_command = modeller_path + 'topol ' + modeller_path + pdbFile
+        system_command = './topol ' + pdbFile
+        child_process = hf.RunSubprocessLocally(modeller_path, system_command, self.subprocess_ids)
+        result, error_message, return_code = child_process.communicate()
+#        rc = child_process.returncode
+        line = [ x for x in result.split('\n') ]
 
-        cmd = shlex.split(system_command)
-        childProcess = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        output, error = childProcess.communicate()
-        rc = childProcess.returncode
-    
-        line = [ x for x in output.split('\n') ]
-        
         # I found two different forms in which the output appears,
         # hence two if statements to catch them
         if line[-4].strip().split(' ')[0] == 'len':
@@ -248,7 +229,4 @@ class modeller:
             # in case the output can't be read, the model is classified as
             # knotted and thus disregarded. This could be improved.
             return True
-
-
-
 
