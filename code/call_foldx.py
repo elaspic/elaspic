@@ -5,35 +5,28 @@ Created on Fri Jan 11 09:49:26 2013
 @author: niklas
 """
 
-import subprocess
 import shutil
-from errors import FoldXError
+import errors
+import helper_functions as hf
 
 class foldX():
-    
-    def __init__(self, tmpPath, pdbFile, chainID, unique, buildModel_runs, foldX_WATER, log):
 
+    def __init__(self, tmp_path, pdb_file, chain_id, buildModel_runs, foldX_WATER, log, subprocess_ids):
+        """
+        """
         # In case the pipeline gets extended to handle more than two chains,
         # the chainID becomes relevant for the energy calculation. Otherwise
         # it is OK to simply take the first chain
-        self.chainID = chainID
-#        self.chainID = 'A'
-        
-        self.PATH = tmpPath + 'FoldX/'
-        self.runFile = self.PATH + 'runfile_FoldX.txt'
-        self.executablePath = self.PATH
-        
-        self.pdbFile = pdbFile.split('/')[-1]
-        
+        self.chain_id = chain_id
+#        self.chain_id = 'A'
+        self.foldx_path = tmp_path + 'FoldX/'
+        self.foldx_runfile = self.foldx_path + 'runfile_FoldX.txt'
+        self.pdb_filename = pdb_file.split('/')[-1]
         self.buildModel_runs = buildModel_runs
         self.water = foldX_WATER
         self.log = log
-        try:
-            subprocess.check_call('cp ' + pdbFile + ' ' + self.pdbFile, shell=True)
-        except:
-            pass
-        
-        
+        self.subprocess_ids = subprocess_ids
+
     def run(self, whatToRun, mutCodes=[]):
         """
         Select which action should be performed by FoldX by setting 'whatToRun'
@@ -41,188 +34,103 @@ class foldX():
         See the FoldX manual for an explanation on what they do
         c.f. (http://foldx.crg.es/manual3.jsp)
         """
+        self.log.debug('Running FoldX {}'.format(whatToRun))
+        self.__write_runfile(self.pdb_filename, self.chain_id, whatToRun, mutCodes)
+        self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
-            self.__writeRunfileAnalyseComplex(self.pdbFile, self.chainID)
-            shutil.copy(self.runFile, self.PATH + 'run-analyseComplex.txt')
-        if whatToRun == 'Stability':
-            self.__writeRunfileStability(self.pdbFile)
-            shutil.copy(self.runFile, self.PATH + 'run-stability.txt')
-        if whatToRun == 'RepairPDB':
-            self.__writeRunfileRepairPDB(self.pdbFile)
-            shutil.copy(self.runFile, self.PATH + 'run-repair.txt')
-        if whatToRun == 'BuildModel':
-            self.__writeRunfileBuildModel(self.pdbFile, mutCodes)
-            shutil.copy(self.runFile, self.PATH + 'run-build.txt')
-            
-        
-        rc, error = self.__executeRunfile(self.runFile, whatToRun)
-        if rc == 0:
-            if whatToRun == 'AnalyseComplex':
-                return self.__readResult(self.PATH + 'Interaction_AnalyseComplex_resultFile.txt', self.pdbFile, whatToRun)
-            if whatToRun == 'Stability':
-                return self.__readResult(self.PATH + 'Stability.txt', self.pdbFile, whatToRun)
-            if whatToRun == 'BuildModel':
-                if self.buildModel_runs == str(1):
-                    # see the FoldX manual for the naming of the generated structures
-                    mutants = [self.PATH + self.pdbFile[:-4] + '_1.pdb', ]
-                    wiltype = [self.PATH + 'WT_' + self.pdbFile[:-4] + '_1.pdb', ]
-                    return wiltype, mutants
-                else:
-                    mutants = [ self.PATH + self.pdbFile[:-4] + '_1_' + str(x) + '.pdb' for x in range(0,int(self.buildModel_runs)) ]
-                    wiltype = [ self.PATH + 'WT_' + self.pdbFile[:-4] + '_1_' + str(x) + '.pdb' for x in range(0,int(self.buildModel_runs)) ]
-                    return wiltype, mutants
-            if whatToRun == 'RepairPDB':
-                return self.PATH + 'RepairPDB_' + self.pdbFile
-            return
-        else:
-            print error
-            print rc
-            print 'FoldX error!!!', whatToRun
-            print 'self.pdbFile', self.pdbFile
-            print 'error', error
-            raise FoldXError(error)
-#            return 1, error
-    
-    
-    
-    def __writeRunfileAnalyseComplex(self, pdbFile, chainID):
-        #[C] = [K] - 273.15, i.e. 298K=25C
+            results = self.__readResult(self.foldx_path + 'Interaction_AnalyseComplex_resultFile.txt', self.pdb_filename, whatToRun)
+        elif whatToRun == 'Stability':
+            results = self.__readResult(self.foldx_path + 'Stability.txt', self.pdb_filename, whatToRun)
+        elif whatToRun == 'RepairPDB':
+            results = self.foldx_path + 'RepairPDB_' + self.pdb_filename
+        elif whatToRun == 'BuildModel':
+            # see the FoldX manual for the naming of the generated structures
+            if self.buildModel_runs == '1':
+                mutants = [self.foldx_path + self.pdb_filename[:-4] + '_1.pdb', ]
+                wiltype = [self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1.pdb', ]
+                results = [wiltype, mutants]
+            else:
+                mutants = [ self.foldx_path + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' for x in range(0,int(self.buildModel_runs)) ]
+                wiltype = [ self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' for x in range(0,int(self.buildModel_runs)) ]
+                results = [wiltype, mutants]
+        return results
+
+
+    def __write_runfile(self, pdbFile, chainID, whatToRun, mutCodes):
+
+        if whatToRun == 'AnalyseComplex':
+            copy_filename = 'run-analyseComplex.txt'
+            command_line = '<AnalyseComplex>AnalyseComplex_resultFile.txt,{chainID};'\
+                .format(chainID=chainID)
+            output_pdb = 'false'
+        elif whatToRun == 'Stability':
+            copy_filename = 'run-stability.txt'
+            command_line = '<Stability>Stability.txt;'
+            output_pdb = 'false'
+        elif whatToRun == 'RepairPDB':
+            copy_filename = 'run-repair.txt'
+            command_line = '<RepairPDB>#;'
+            output_pdb = 'true'
+        elif whatToRun == 'BuildModel':
+            copy_filename = 'run-build.txt'
+            # file_with_mutations = 'mutant_file.txt'
+            file_with_mutations = 'individual_list.txt'
+            with open(self.foldx_path + file_with_mutations, 'w') as fh:
+                fh.writelines(','.join(mutCodes) + ';\n')
+            command_line = '<BuildModel>BuildModel,{file_with_mutations};'\
+                .format(file_with_mutations=file_with_mutations)
+            output_pdb = 'true'
+
         foldX_runfile = """\
-<TITLE>FOLDX_runscript;
-<JOBSTART>#;
-<PDBS>""" + pdbFile + """;
-<BATCH>#;
-<COMMANDS>FOLDX_commandfile;
-<AnalyseComplex>AnalyseComplex_resultFile.txt,""" + chainID + """;
-<END>#;
-<OPTIONS>FOLDX_optionfile;
-<Temperature>298;
-<R>#;
-<pH>7;
-<IonStrength>0.050;
-<water>""" + self.water + """;
-<metal>-CRYSTAL;
-<VdWDesign>2;
-<OutPDB>false;
-<pdb_hydrogens>false;
-<END>#;
-<JOBEND>#;
-<ENDFILE>#;"""
-             
-        with open(self.runFile, 'w') as f:
+            <TITLE>FOLDX_runscript;
+            <JOBSTART>#;
+            <PDBS>{pdbFile};
+            <BATCH>#;
+            <COMMANDS>FOLDX_commandfile;
+            {command_line}
+            <END>#;
+            <OPTIONS>FOLDX_optionfile;
+            <Temperature>298;
+            <R>#;
+            <pH>7;
+            <IonStrength>0.050;
+            <numberOfRuns>{buildModel_runs};
+            <water>{water};
+            <metal>-CRYSTAL;
+            <VdWDesign>2;
+            <pdb_waters>false;
+            <OutPDB>{output_pdb};
+            <pdb_hydrogens>false;
+            <END>#;
+            <JOBEND>#;
+            <ENDFILE>#;
+            """.replace(' ', '').format(
+            pdbFile=pdbFile,
+            command_line=command_line,
+            buildModel_runs=self.buildModel_runs,
+            water=self.water,
+            output_pdb=output_pdb)
+
+        # This just makes copies of the runfiles for debugging...
+        with open(self.foldx_runfile, 'w') as f:
             f.write(foldX_runfile)
-    
-    def __writeRunfileStability(self, pdbFile):
-        #[C] = [K] - 273.15, i.e. 298K=25C
-        foldX_runfile = """\
-<TITLE>FOLDX_runscript;
-<JOBSTART>#;
-<PDBS>""" + pdbFile + """;
-<BATCH>#;
-<COMMANDS>FOLDX_commandfile;
-<Stability>Stability.txt;
-<END>#;
-<OPTIONS>FOLDX_optionfile;
-<Temperature>298;
-<R>#;
-<pH>7;
-<IonStrength>0.050;
-<water>""" + self.water + """;
-<metal>-CRYSTAL;
-<VdWDesign>2;
-<OutPDB>false;
-<pdb_hydrogens>false;
-<END>#;
-<JOBEND>#;
-<ENDFILE>#;"""
-             
-        with open(self.runFile, 'w') as f:
-            f.write(foldX_runfile)
-    
-    def __writeRunfileRepairPDB(self, pdbFile):
-        #[C] = [K] - 273.15, i.e. 298K=25C
-        foldX_runfile = """\
-<TITLE>FOLDX_runscript;
-<JOBSTART>#;
-<PDBS>""" + pdbFile + """;
-<BATCH>#;
-<COMMANDS>FOLDX_commandfile;
-<RepairPDB>#;
-<END>#;
-<OPTIONS>FOLDX_optionfile;
-<Temperature>298;
-<R>#;
-<pH>7;
-<IonStrength>0.050;
-<water>""" + self.water + """;
-<metal>-CRYSTAL;
-<VdWDesign>2;
-<pdb_waters>true;
-<OutPDB>true;
-<pdb_hydrogens>false;
-<END>#;
-<JOBEND>#;
-<ENDFILE>#;"""
-             
-        with open(self.runFile, 'w') as f:
-            f.write(foldX_runfile)
+        shutil.copy(self.foldx_runfile, self.foldx_path + copy_filename)
 
 
-    def __writeRunfileBuildModel(self, pdbFile, mutCodes):
-        #[C] = [K] - 273.15, i.e. 298K=25C
-        foldX_runfile = """\
-<TITLE>FOLDX_runscript;
-<JOBSTART>#;
-<PDBS>""" + pdbFile + """;
-<BATCH>#;
-<COMMANDS>FOLDX_commandfile;
-<BuildModel>BuildModel,mutant_file.txt;
-<END>#;
-<OPTIONS>FOLDX_optionfile;
-<Temperature>298;
-<R>#;
-<pH>7;
-<IonStrength>0.050;
-<numberOfRuns>""" + self.buildModel_runs + """;
-<water>""" + self.water + """;
-<metal>-CRYSTAL;
-<VdWDesign>2;
-<pdb_waters>false;
-<OutPDB>true;
-<pdb_hydrogens>false;
-<END>#;
-<JOBEND>#;
-<ENDFILE>#;"""
-             
-        with open(self.runFile, 'w') as f:
-            f.write(foldX_runfile)
-
-        with open(self.PATH + 'mutant_file.txt', 'w') as f:
-            for mut in mutCodes:
-                f.write(mut + '\n')
-            
+    def __run_runfile(self):
+        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
+        self.log.debug('FoldX system command: {}'.format(system_command))
+        childProcess = hf.RunSubprocessLocally(self.foldx_path, system_command, self.subprocess_ids)
+        result, error_message, return_code = childProcess.communicate()
+        if return_code != 0:
+            self.log.debug('FoldX result: %s' % result)
+            self.log.debug('FoldX error: %s' % error_message)
+            if 'Cannot allocate memory' in error_message:
+                raise errors.ResourceError(error_message)
 
 
-    def __executeRunfile(self, runfile, whatToRun):
-
-        system_command = './FoldX.linux64 -runfile ' + runfile
-        cmd = 'cd ' + self.PATH + ' && ' + system_command
-        try:
-            childProcess = subprocess.Popen(cmd, 
-                                            stdout=subprocess.PIPE, 
-                                            stderr=subprocess.PIPE, 
-                                            shell=True, 
-                                            )
-            result, e = childProcess.communicate()
-        except:
-            pass
-#        self.log.debug('FoldX result: %s' % result)
-#        self.log.debug('FoldX error: %s' % e)
-        return childProcess.returncode, e
-
-      
     def __readResult(self, outFile, pdb, whatToRead):
-        with open(outFile, 'r') as f:        
+        with open(outFile, 'r') as f:
             lines = f.readlines()
             line = lines[-1].split('\t')
             if whatToRead == 'AnalyseComplex':
@@ -295,27 +203,37 @@ class foldX():
                 return FoldX_vector
             if whatToRead == 'BuildModel':
                 totalEnergyDifference = line[1]
-                return totalEnergyDifference  
-
-        
-
+                return totalEnergyDifference
 
 
 if __name__ == '__main__':
-    import os
-    os.chdir('/tmp/FoldX/')
-    fX = foldX('/tmp', '1LFD.pdb', 'A', 'unique', '1', '-IGNORE')
-    print '--------'
-#    print fX.run('RepairPDB')
-    print '--------'
-    print fX.run('AnalyseComplex')
-    print '--------'
-#    print fX.run('Stability')
-    
+    import logging
 
-#    print fX.readResult('AnalyseComplex_1ABO.txt', '1ABO.pdb')
+    unique = '6OpXOj'
+    mutCodes = ['GGEALGRLLVVYPWT\nGGEALGTLLVVYPWT']
+    repairedPDB_wt = '/tmp/elaspic/6OpXOj/FoldX/RepairPDB_A0N071_P02042.BL00040001.pdb'
+    chains_modeller = [u'C', u'A']
 
+    tmp_path = '/tmp/elaspic/'
+    pdb_path = '/home/kimlab1/database_data/pdb/data/data/structures/divided/pdb/'
 
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+#    handler = logging.FileHandler(tmp_path + 'templates.log', mode='w', delay=True)
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+
+    foldX_path = tmp_path + unique + 'FoldX/'
+    buildModel_runs = '1'
+    foldX_WATER = '-IGNORE'
+    log = logger
+    fX_wt = foldX(tmp_path + unique + '/', repairedPDB_wt, chains_modeller[0], unique,
+                  buildModel_runs, foldX_WATER, log)
+    # do the mutation with foldX
+    repairedPDB_wt_list, repairedPDB_mut_list = fX_wt.run('BuildModel', mutCodes)
+    log.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
+    log.debug('repairedPDB_mut_list: %s' % str(repairedPDB_mut_list))
 
 
 

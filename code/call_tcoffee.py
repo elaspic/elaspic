@@ -8,12 +8,12 @@ import subprocess
 from os import environ
 from Bio import AlignIO
 import errors
-
+import helper_functions as hf
 
 class tcoffee_alignment:
     """
     Alignes sequences using t_coffee in expresso mode
-    
+
     input:  tmpPath     type: string        set a unique path for t_coffee
                                             (see __call_tcoffee)
             seqFile     type: file          containing two sequences in fasta format
@@ -22,22 +22,27 @@ class tcoffee_alignment:
             seqFile2    type: file          containing two sequences in fasta format
             seqID2      type: string        sequence ID of the target sequence
                                             (in pipeline for modelling with modeller)
-    
+
     return: Biopython alignment object
 
     """
-    def __init__(self, global_temp_path, tmpPath, alnPath, seqFiles, seqIDs, n_cores):
+    def __init__(
+            self, global_temp_path, tmpPath, alnPath, seqFiles, seqIDs, n_cores,
+            pdb_path, mode, log, subprocess_ids):
 
         self.global_temp_path = global_temp_path
         self.tmpPath = tmpPath
-        
         self.seqFiles = seqFiles
         self.seqIDs = seqIDs
-        
         self.alnPath = alnPath
         self.alnFormat = 'clustal'
         self.n_cores = n_cores
-    
+        self.pdb_path = pdb_path
+        self.mode = mode
+        self.log = log
+        self.subprocess_ids = subprocess_ids
+
+
     def align(self):
         """
         start t_coffee in expresso mode and return the alignment
@@ -57,11 +62,7 @@ class tcoffee_alignment:
         try:
             AlignIO.write(alignment, self.alnPath + alignment[0].id + '_' + alignment[1].id + '.aln', self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
         except IndexError as e:
-            print alignment
-            print self.alnPath
-            print alignment[0].id
-            print alignment[1].id
-            raise e
+            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.message)
 
 
     def __call_tcoffee_system_command(self, alignInFile, out, mode):
@@ -75,109 +76,113 @@ class tcoffee_alignment:
         my_env['CACHE_4_TCOFFEE'] = self.tmpPath + 'tcoffee/cache/'
         my_env['LOCKDIR_4_TCOFFEE'] = self.tmpPath + 'tcoffee/lck/'
         my_env['ERRORFILE_4_TCOFFEE'] = self.tmpPath + 't_coffee.ErrorReport'
-        my_env['BLASTDB'] = self.global_temp_path + 'blast/pdbaa_db/'
+        my_env['BLASTDB'] = self.global_temp_path + 'blast/db/'
+        my_env['PDB_DIR'] = '/home/kimlab1/database_data/pdb/'
+#        my_env['NO_REMOTE_PDB_DIR'] = '1'
+#        print (
+#        'export tmp_path=`pwd` && '
+#        'export HOME_4_TCOFFEE=$tmp_path/tcoffee/ && '
+#        'export TMP_4_TCOFFEE=$tmp_path/tcoffee/ && '
+#        'export CACHE_4_TCOFFEE=$tmp_path/tcoffee/ && '
+#        'export LOCKDIR_4_TCOFFEE=$tmp_path/tcoffee/ && '
+#        'export ERRORFILE_4_TCOFFEE=$tmp_path/tcoffee/ && '
+#        'export BLASTDB=$tmp_path/../../blast/db/ && '
+#        'export PDB_DIR=/home/kimlab1/database_data/pdb/data/data/structures/divided/pdb/ && '
+#        'export NO_REMOTE_PDB_DIR=1')
+
+        multi_core_option = '{}'.format(self.n_cores) if self.n_cores and self.n_cores > 1 else 'no'
+        n_core_option = '{}'.format(self.n_cores) if self.n_cores else '1'
         if mode == 'expresso':
             system_command = (
-                'cd ' + self.tmpPath + ' && t_coffee' + 
-                ' -mode expresso' + 
-                ' -seq ' + alignInFile + 
-                ' -blast_server=LOCAL' + 
-                ' -method clustalw_pair slow_pair' + 
-                ' -pdb_db=pdbaa -protein_db=uniprot' + 
-                ' -outorder=input' + 
-                ' -output fasta_aln' + 
-                ' -quiet -no_warning' + 
-                ' -outfile=' + out + 
-#                ' -multi_core no' + 
-                ' -n_core ' + '{}'.format(self.n_cores)) #AS changed !!!
+                't_coffee' +
+                ' -mode expresso' +
+                ' -method sap_pair,mustang_pair' +
+                ' -seq ' + alignInFile +
+                ' -blast_server=LOCAL' +
+                ' -pdb_db=pdbaa -protein_db=nr' +
+                ' -outorder=input' +
+                ' -output fasta_aln' +
+                ' -quiet -no_warning' +
+                ' -outfile=' + out +
+#                ' -multi_core no' +
+                ' -multi_core ' + multi_core_option + #AS changed !!!
+                ' -n_core ' + n_core_option) #AS changed !!!
+#
+#        't_coffee -other_pg extract_from_pdb 32c2A.pdb > template.pdb '
+#        't_coffee -mode 3dcoffee -method sap_pair,mustang_pair,TMalign_pair -blast_server=LOCAL -pdb_db=pdbaa -protein_db=nr -outorder=input -output fasta_aln -outfile tcoffee_output.aln -seq seqfiles.fasta -pdb_min_sim=20 -template_file seqfiles.template '
         if mode == 't_coffee':
             system_command = (
-                'cd ' + self.tmpPath + ' && t_coffee' + 
-                ' -mode expresso' + 
-                ' -method TMalign_pair' + 
-                ' -seq ' + alignInFile + 
-                ' -blast_server=LOCAL' + 
-                ' -method clustalw_pair slow_pair' + 
-                ' -pdb_db=pdbaa -protein_db=pdbaa' + 
-                ' -outorder=input' + 
-                ' -output fasta_aln' + 
-                ' -quiet -no_warning' + 
-                ' -outfile=' + out + 
-#                ' -multi_core no' + 
-                ' -n_core ' + '{}'.format(self.n_cores)) #AS changed !!!
+                't_coffee' +
+                ' -mode expresso' +
+                ' -method clustalw_pair,slow_pair' +
+                ' -seq ' + alignInFile +
+                ' -blast_server=LOCAL' +
+                ' -pdb_db=pdbaa -protein_db=pdbaa' +
+                ' -outorder=input' +
+                ' -output fasta_aln' +
+                ' -quiet -no_warning' +
+                ' -outfile=' + out +
+#                ' -multi_core no')
+                ' -multi_core ' + multi_core_option + #AS changed !!!
+                ' -n_core ' + n_core_option) #AS changed !!!
+
+        if mode == 'quick':
+            system_command = (
+                't_coffee' +
+                ' -mode quickaln' +
+                ' -method clustalw_pair,slow_pair' +
+                ' -seq ' + alignInFile +
+                ' -blast_server=LOCAL' +
+                ' -pdb_db=pdbaa -protein_db=nr' +
+                ' -outorder=input' +
+                ' -output fasta_aln' +
+                ' -quiet -no_warning' +
+                ' -outfile=' + out +
+#                ' -multi_core no' +
+                ' -multi_core ' + multi_core_option + #AS changed !!!
+                ' -n_core ' + n_core_option) #AS changed !!!
         return system_command, my_env
-    
-    
+
+
     def __call_tcoffee(self, alignInFile, GAPOPEN=-0.0, GAPEXTEND=-0.0, recursion_counter=0):
         """
         calls t_coffee in expresso mode (make sure BLAST is installed locally)
-        
+
         input:  alignInFile     type: string        file containing two sequences
                                                     in fasta format
                 tmpPATH         type: string        used to set a unique path
                                                     for the t_coffee tmp, cache,
-                                                    and lock directory (for 
+                                                    and lock directory (for
                                                     paralellization)
                 GAPOPEN         type: int or str    see t_coffee manual
                 GAPEXTEND       type: int or str    see t_coffee manual
-                
-                
+
         return: Biopython multiple sequence alignment object
         """
-
+        # mode should be 'expresso'
         out = self.tmpPath + 'sequenceAlignment.aln'
-        
-        # try the alignment in expresso mode (structure based with sap alignment)
-        system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 'expresso')
-        childProcess = subprocess.Popen(system_command, 
-                                        stdout=subprocess.PIPE, 
-                                        stderr=subprocess.PIPE, 
-                                        shell=True, 
-                                        env=my_env
-                                        )
-        result, error = childProcess.communicate()
-        rc = childProcess.returncode
 
-        # check if tcoffee had an unexpected exit and if not, create and return 
+        # try the alignment in expresso mode (structure based with sap alignment)
+        system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, self.mode)
+        child_process = hf.RunSubprocessLocally(self.tmpPath, system_command, self.subprocess_ids, my_env)
+        result, error_message, return_code = child_process.communicate()
+
+        # check if tcoffee had an unexpected exit and if not, create and return
         # the alignment object
-        if rc == 0:
+        if return_code == 0:
             alignment = AlignIO.read(out, 'fasta')
             return alignment
         else:
-            # if aligning two identical sequences it may happen that for each
-            # sequence the same pdb template is selected. If that happens
-            # sap fails to align and the alignment does not work
-            for line in error.split('\n'):
-                
-                if 'SAP failed to align' in line:
-                    # if it happens because the same PDB was taken by blast
-                    # it means that the sequences are fairly identical and 
-                    # and normal t_coffee mode should be accurate enough
-                    # the line looks like this: pid 5479 -- SAP failed to align: 1KU6A.pdb against 1KU6A.pdb [T-COFFEE:WARNING]
-                    # try running it with tmalign method
-                    system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 't_coffee')
-                    childProcess = subprocess.Popen(system_command, 
-                                    stdout=subprocess.PIPE, 
-                                    stderr=subprocess.PIPE, 
-                                    shell=True, 
-                                    env=my_env)
-                    result, error = childProcess.communicate()
-                    rc = childProcess.returncode
-                    if rc == 0:
-                        alignment = AlignIO.read(out, 'fasta')
-                        if len(alignment) != 2:
-                            print 'Alignment len not 2', out
-                        return alignment
-                
-                if 'Impossible to find EXPRESSO Templates' in line:
-                    # Try a bunch of times, maybe just a temporary thing???
-                    if recursion_counter < 5:
-                        recursion_counter += 1
-                        return self.__call_tcoffee(alignInFile, GAPOPEN, GAPEXTEND, recursion_counter)
-                    else:
-                        raise errors.TcoffeeBlastError(result, error, alignInFile)
-                
-                if 'Could Not Parse PDBID' in line:
-                    raise errors.TcoffeePDBidError(result, error, alignInFile)
-                
-            raise errors.TcoffeeError(result, error, alignInFile)
+            self.log.error('Structural alignment failed with the following error:')
+            self.log.error(error_message)
+            self.log.error('Running quickaln alignment instead...')
+            system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 'quick')
+            child_process = hf.RunSubprocessLocally(self.tmpPath, system_command, self.subprocess_ids, my_env)
+            result, error_message, return_code = child_process.communicate()
+            if return_code == 0:
+                alignment = AlignIO.read(out, 'fasta')
+                if len(alignment) != 2:
+                    self.log.error('Alignment length not 2 for file %s' % out)
+                return alignment
+            self.log.error('Even quickaln didn\'t work. Cannot create an alignment. Giving up.')
+            raise errors.TcoffeeError(result, error_message, alignInFile, system_command)
