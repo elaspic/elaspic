@@ -120,8 +120,9 @@ class foldX():
     def __run_runfile(self):
         system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
         self.log.debug('FoldX system command: {}'.format(system_command))
-        childProcess = hf.RunSubprocessLocally(self.foldx_path, system_command, self.subprocess_ids)
-        result, error_message, return_code = childProcess.communicate()
+        childProcess = hf.run_subprocess_locally(self.foldx_path, system_command)
+        result, error_message = childProcess.communicate()
+        return_code = childProcess.returncode
         if return_code != 0:
             self.log.debug('FoldX result: %s' % result)
             self.log.debug('FoldX error: %s' % error_message)

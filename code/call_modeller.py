@@ -208,8 +208,8 @@ class modeller:
         # execution folder, this is created in the beginning
 
         system_command = './topol ' + pdbFile
-        child_process = hf.RunSubprocessLocally(modeller_path, system_command, self.subprocess_ids)
-        result, error_message, return_code = child_process.communicate()
+        child_process = hf.run_subprocess_locally(modeller_path, system_command)
+        result, error_message = child_process.communicate()
 #        rc = child_process.returncode
         line = [ x for x in result.split('\n') ]
 

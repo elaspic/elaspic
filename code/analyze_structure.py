@@ -225,8 +225,9 @@ class AnalyzeStructure(object):
         assert(os.path.isfile(self.working_path + filename))
         system_command = 'pdb_to_xyzrn {0}.pdb'.format(self.working_path + base_filename)
         self.log.debug('msms system command 1: %s' % system_command)
-        child_process = hf.RunSubprocessLocally(self.working_path, system_command, self.subprocess_ids)
-        result, error_message, return_code = child_process.communicate()
+        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
         if return_code != 0:
             self.log.debug('msms result 1:')
             self.log.debug(result)
@@ -247,8 +248,9 @@ class AnalyzeStructure(object):
             '-if {0}.xyzrn '
             '-af {0}.area'.format(self.working_path + base_filename))
         self.log.debug('msms system command 2: %s' % system_command)
-        child_process = hf.RunSubprocessLocally(self.working_path, system_command, self.subprocess_ids)
-        result, error_message, return_code = child_process.communicate()
+        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
         if return_code != 0:
             self.log.debug('msms result 2:')
             self.log.debug(result)
@@ -297,8 +299,9 @@ class AnalyzeStructure(object):
         system_command = ('./naccess ' + filename)
         self.log.debug('naccess system command: %s' % system_command)
         assert(os.path.isfile(self.working_path + filename))
-        child_process = hf.RunSubprocessLocally(self.working_path, system_command, self.subprocess_ids)
-        result, error_message, return_code = child_process.communicate()
+        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
         self.log.debug('naccess result: {}'.format(result))
         self.log.debug('naccess error: {}'.format(error_message))
         self.log.debug('naccess rc: {}'.format(return_code))
@@ -339,8 +342,9 @@ class AnalyzeStructure(object):
 
     def __run_pops_atom(self, chain_id):
         system_command = ('./pops --noHeaderOut --noTotalOut --atomOut --pdb {0}.pdb --popsOut {0}.out'.format(chain_id))
-        child_process = hf.RunSubprocessLocally(self.working_path, system_command, self.subprocess_ids)
-        result, error_message, return_code = child_process.communicate()
+        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
         # The returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:
@@ -392,8 +396,9 @@ class AnalyzeStructure(object):
                 time.sleep(60)
             system_command = ('./dssp -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
             self.log.debug('dssp system command: %s' % system_command)
-            child_process = hf.RunSubprocessLocally(self.working_path, system_command, self.subprocess_ids)
-            result, error_message, return_code = child_process.communicate()
+            child_process = hf.run_subprocess_locally(self.working_path, system_command)
+            result, error_message = child_process.communicate()
+            return_code = child_process.returncode
             self.log.debug('dssp return code: %i' % return_code)
             self.log.debug('dssp result: %s' % result)
             self.log.debug('dssp error: %s' % error_message)
@@ -577,8 +582,9 @@ class AnalyzeStructure(object):
         system_command = ('./pops --chainOut'
             ' --pdb ' + full_filename +
             ' --popsOut ' + self.working_path + full_filename.split('/')[-1].replace('pdb', 'out'))
-        child_process = hf.RunSubprocessLocally(self.working_path, system_command, self.subprocess_ids)
-        result, error_message, return_code = child_process.communicate()
+        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
         # The returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:

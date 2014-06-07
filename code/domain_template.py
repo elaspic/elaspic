@@ -946,31 +946,14 @@ class GetTemplate():
         SeqIO.write(uniprot_sequence_domain, self.unique_temp_folder + 'sequence_conservation/sequence.fasta', 'fasta')
         provean_supset_filename = t.alignment_filename.replace('.aln', '.supset')
 
-        def monitor_provean(child_process):
-            # Monitor provean disk and memory usage until it completes
-            disk_space_availible = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
-            if disk_space_availible < 5:
-                raise errors.ProveanError('Not enough disk space (%i GB) to run provean' % disk_space_availible)
-            memory_availible = psutil.virtual_memory().available / float(1024)**3
-            while True:
-                if child_process.poll() is not None:
-                    break
-                disk_space_availible_now = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
-                if disk_space_availible_now < 5: # less than 5 GB of free disk space left
-                    os.killpg(child_process.pid, signal.SIGTERM) # Send the signal to all the process groups
-                    raise errors.ProveanError(
-                        'Ran out of disk space and provean had to be terminated ({} GB used)'
-                        .format(disk_space_availible-disk_space_availible_now) )
-                    break
-                memory_availible_now = psutil.virtual_memory().available / float(1024)**3
-                if memory_availible_now < 0.5:
-                    os.killpg(child_process.pid, signal.SIGTERM) # Send the signal to all the process groups
-                    raise errors.ProveanError(
-                        'Ran out of RAM ({} GB left)'
-                        .format(memory_availible - memory_availible_now) )
-                    break
-                time.sleep(60) # Wait for 1 minute before checking again
+        # Get initial measurements of how much virtual memory and disk space is availible
+        disk_space_availible = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
+        self.log.debug('Disk space availible: {}'.format(disk_space_availible))
+        if disk_space_availible < 5:
+            raise errors.ProveanError('Not enough disk space (%i GB) to run provean' % disk_space_availible)
+        memory_availible = psutil.virtual_memory().available / float(1024)**3
 
+        # Run provean
         subprocess.check_call('echo {0}1{0} > {1}sequence_conservation/decoy.var'.format(first_aa, self.unique_temp_folder), shell=True)
         system_command = (
             './provean ' +
@@ -984,10 +967,34 @@ class GetTemplate():
             ' --cdhit ' + hf.get_which('cd-hit') +
             ' --save_supporting_set ' + self.tmpPath + d.path_to_data + provean_supset_filename)
         self.log.debug(system_command)
-        child_process = hf.RunSubprocessLocally(
+        child_process = hf.run_subprocess_locally(
             self.unique_temp_folder + 'sequence_conservation/',
-            system_command, self.subprocess_ids, self.log)
-        result, error_message, return_code = child_process.communicate(monitor_provean)
+            system_command)
+        self.log.debug('Parent group id: {}'.format(os.getpgrp()))
+        child_process_group_id = os.getpgid(child_process.pid)
+        self.log.debug('Child group id: {}'.format(child_process_group_id))
+
+        # Keep an eye on provean to make sure it doesn't do anything crazy
+        while True:
+            if child_process.poll() is not None:
+                break
+            disk_space_availible_now = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
+            if disk_space_availible_now < 5: # less than 5 GB of free disk space left
+                raise errors.ProveanResourceError(
+                    'Ran out of disk space and provean had to be terminated ({} GB used)'
+                    .format(disk_space_availible-disk_space_availible_now),
+                    child_process_group_id)
+            memory_availible_now = psutil.virtual_memory().available / float(1024)**3
+            if memory_availible_now < 0.5:
+                raise errors.ProveanResourceError(
+                    'Ran out of RAM ({} GB left)'
+                    .format(memory_availible - memory_availible_now),
+                    child_process_group_id)
+            time.sleep(60) # Wait for 1 minute before checking again
+
+        # Collect the results and check for errors
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
         if return_code != 0:
             self.log.error(error_message)
             raise errors.ProveanError(error_message)
@@ -1024,7 +1031,7 @@ class GetTemplate():
         Return the pdb file sequence (ATOM)
         """
         domains = [pdb_domain_def, ]
-        pdb = PDBTemplate(self.pdb_path, pdb_code, chain_id, domains, self.unique_temp_folder, self.unique_temp_folder, self.log)
+        pdb = pdb_template.PDBTemplate(self.pdb_path, pdb_code, chain_id, domains, self.unique_temp_folder, self.unique_temp_folder, self.log)
         pdb.extract()
         chain_numbering_extended, chain_sequence = pdb.get_chain_numbering(chain_id, return_sequence=True, return_extended=True)
         chain_seqrecord = SeqRecord(seq=Seq(chain_sequence), id=pdb_code+chain_id)

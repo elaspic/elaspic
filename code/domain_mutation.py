@@ -849,10 +849,10 @@ class GetMutation(object):
             ' --blastdbcmd ' + hf.get_which('blastdbcmd') +
             ' --cdhit ' + hf.get_which('cd-hit') +
             ' --supporting_set ' + path_to_provean_supset)
-        child_process = hf.RunSubprocessLocally(
+        child_process = hf.run_subprocess_locally(
             self.unique_temp_folder + 'sequence_conservation/',
-            system_command, self.subprocess_ids)
-        result, error_message, return_code = child_process.communicate()
+            system_command)
+        result, error_message = child_process.communicate()
         self.log.debug(result)
         if child_process.returncode != 0:
             self.log.error(error_message)

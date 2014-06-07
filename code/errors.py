@@ -56,6 +56,12 @@ class ProveanError(Exception):
         Exception.__init__(self, 'provean exited with an error:\n %s' % message)
 
 
+class ProveanResourceError(Exception):
+    def __init__(self, message, child_process_group_id):
+        Exception.__init__(self, message)
+        self.child_process_group_id = child_process_group_id
+
+
 ###############################################################################
 # Finding templates
 
