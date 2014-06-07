@@ -18,7 +18,7 @@ class modeller:
     """
     def __init__(
             self, alignment, seqID, templateID, path_to_pdb_for_modeller,
-            tmpPath, log, modeller_runs, subprocess_ids, loopRefinement=True,):
+            tmpPath, log, modeller_runs, loopRefinement=True,):
 
         if not isinstance(alignment, list):
             self.alignment = list()
@@ -36,9 +36,7 @@ class modeller:
         # some environment settings
         self.filePath = path_to_pdb_for_modeller
         self.tmpPath = tmpPath
-        self.modeller_path = tmpPath + 'modeller/'
         self.log = log
-        self.subprocess_ids = subprocess_ids
 
 
     def run(self):
@@ -71,7 +69,7 @@ class modeller:
 
                 for i in range(len(result)):
                     pdbFile, normDOPE = result[i][0], result[i][1]
-                    if self.__call_knot(pdbFile, self.modeller_path):  # i.e. knotted
+                    if self.__call_knot(pdbFile):  # i.e. knotted
                         ranking_knotted[normDOPE] = (aln, str(pdbFile), loop,)
                     else:
                         ranking[normDOPE] = (aln, str(pdbFile), loop,)
@@ -193,7 +191,7 @@ class modeller:
         return result, loop, failures
 
 
-    def __call_knot(self, pdbFile, modeller_path):
+    def __call_knot(self, pdbFile):
         """
         check a PDB structure for knots using the program KNOTS by Willi Taylor
 
@@ -208,9 +206,14 @@ class modeller:
         # execution folder, this is created in the beginning
 
         system_command = './topol ' + pdbFile
-        child_process = hf.run_subprocess_locally(modeller_path, system_command)
+        self.log.debug('FoldX system command: {}'.format(system_command))
+        child_process = hf.run_subprocess_locally('./', system_command)
         result, error_message = child_process.communicate()
-#        rc = child_process.returncode
+        return_code = child_process.returncode
+        if not return_code:
+            self.log.error('FoldX result: {}'.format(result))
+            self.log.error('FoldX error message: {}'.format(error_message))
+
         line = [ x for x in result.split('\n') ]
 
         # I found two different forms in which the output appears,

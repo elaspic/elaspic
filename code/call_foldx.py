@@ -11,7 +11,7 @@ import helper_functions as hf
 
 class foldX():
 
-    def __init__(self, tmp_path, pdb_file, chain_id, buildModel_runs, foldX_WATER, log, subprocess_ids):
+    def __init__(self, tmp_path, pdb_file, chain_id, buildModel_runs, foldX_WATER, log):
         """
         """
         # In case the pipeline gets extended to handle more than two chains,
@@ -25,7 +25,7 @@ class foldX():
         self.buildModel_runs = buildModel_runs
         self.water = foldX_WATER
         self.log = log
-        self.subprocess_ids = subprocess_ids
+
 
     def run(self, whatToRun, mutCodes=[]):
         """

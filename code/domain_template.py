@@ -6,7 +6,6 @@ Created on Thu May  2 17:25:45 2013
 """
 import os
 import psutil
-import signal
 import time
 import subprocess
 import random
@@ -32,7 +31,7 @@ class GetTemplate():
     """
     def __init__(
             self, global_temp_path, tmpPath, unique, pdb_path, db, log, n_cores,
-            provean_temp_path, subprocess_ids, refine=False):
+            provean_temp_path, refine=False):
         """
         input:
         tmpPath             type 'str'
@@ -52,7 +51,6 @@ class GetTemplate():
         self.refine = refine
         self.n_cores = n_cores
         self.provean_temp_path = provean_temp_path
-        self.subprocess_ids = subprocess_ids
         self.alignment_identity_cutoff = 0.25
         self.bad_pdbs = ['3C4D', '3LB7', '3NSV', '2NP8', '2WN0']
         self.possible_template_expansion_errors = (
@@ -498,7 +496,7 @@ class GetTemplate():
         """
         # get the uniprot sequence and align it to the pdb sequence
         uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
-        alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, self.saveAlignments, 'expresso')
+        alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, self.saveAlignments, 'quick')
         #----------------------------------------------------------------------
         # Expanding domain boundaries
         uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
@@ -737,8 +735,7 @@ class GetTemplate():
             self.n_cores,
             self.pdb_path,
             mode,
-            self.log,
-            self.subprocess_ids)
+            self.log)
         alignments = tcoffee.align()
 
         return alignments[0], pdb_sequence.id

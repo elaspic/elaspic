@@ -166,14 +166,6 @@ class Pipeline(object):
                 'Couldn\'t copy the blast database on {hostname} as {username}!'
                 .format(hostname=hostname, username=username))
 
-        #######################################################################
-        # Initiate a file to keep all subprocess ids, and an atexit call to kill
-        # all subprocesses before terminating the python script
-        self.subprocess_ids = []
-        atexit.register(self.__kill_all_subprocesses)
-#        process_group_id = os.getpgrp()
-#        atexit.register(os)
-#        os.setpgid(process_id, process_group_id)
 
 
     def __call__(self, uniprot_id, mutations, run_type=1, n_cores=None, number_of_tries=[]):
@@ -231,17 +223,16 @@ class Pipeline(object):
         self.get_template = domain_template.GetTemplate(
             self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
             self.db, self.log, self.n_cores,
-            self.provean_temp_path, self.subprocess_ids)
+            self.provean_temp_path)
 
         self.get_model = domain_model.GetModel(
             self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
-            self.db, self.log, self.n_cores, self.subprocess_ids,
-            self.modeller_runs)
+            self.db, self.log, self.n_cores, self.modeller_runs)
 
         self.get_mutation = domain_mutation.GetMutation(
             self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
-            self.db, self.log, self.n_cores, self.subprocess_ids,
-            self.foldx_water, self.foldx_num_of_runs, self.matrix, self.gap_start, self.gap_extend)
+            self.db, self.log, self.n_cores, self.foldx_water,
+            self.foldx_num_of_runs, self.matrix, self.gap_start, self.gap_extend)
 
         #######################################################################
         # Find all uniprot_domain and uniprot_domain_pairs for a given unirpot,
@@ -446,7 +437,7 @@ class Pipeline(object):
                 # Add an error message to the model, while keeping previous error messages
                 empty_model.model_errors = (
                     '{}'.format(type(e))
-                    if (p.m.model_errors == None)
+                    if (not p.m or not p.m.model_errors)
                     else '{}; {}'.format(p.m.model_errors, type(e)))
                 # Run the pipeline again if the error could be fixed with a better template,
                 # or otherwise move on to the next model while saving the error message
@@ -542,7 +533,7 @@ class Pipeline(object):
                     precalculated_mutation.provean_score = provean_score
                     self.log.debug('Provean mutation: {}'.format(provean_mutation))
                     self.log.debug('Provean score: {}'.format(provean_score))
-                    self.log.info('Adding mutation {}...\n\n\n'.format(mutation))
+                    self.log.info('Adding provean to mutation {}...\n\n\n'.format(mutation))
                     self.db.add_uniprot_mutation(precalculated_mutation, p.d.path_to_data)
         self.log.info(
             'Finished adding provean info to all templates and mutations in: -u {} -m {}'
@@ -612,22 +603,6 @@ class Pipeline(object):
             if isinstance(p.d, sql_db.UniprotDomain)
             else p.d.uniprot_domain_pair_id)
         self.log.info('{}\t{}\t{}'.format(p.d, p.t, p.m,))
-
-
-    def __kill_all_subprocesses(self):
-        self.log.debug('Killing all running subprocesses...')
-        for subprocess_group_id in self.subprocess_ids:
-            try:
-                os.killpg(subprocess_group_id, signal.SIGTERM)
-            except Exception as e:
-                self.log.debug('Could not terminate process group with id: {}.'.format(subprocess_group_id))
-                self.log.error(e.message)
-                try:
-                    os.killpg(subprocess_group_id, signal.SIGKILL)
-                except Exception as e:
-                    self.log.debug('Could not kill process group with id: {}.'.format(subprocess_group_id))
-                    self.log.error(e.message)
-                    self.log.debug('Skipping...')
 
 
     def __clear_provean_temp_files(self):

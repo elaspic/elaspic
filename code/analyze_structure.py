@@ -79,16 +79,13 @@ class AnalyzeStructure(object):
     The interface is then given by the substracting
     """
 
-    def __init__(
-            self, data_path, working_path, pdb_file, chains, domain_defs,
-            log, subprocess_ids):
+    def __init__(self, data_path, working_path, pdb_file, chains, domain_defs, log):
 
         self.data_path = data_path # modeller_path, foldx_path
         self.working_path = working_path # analyze_structure path with all the binaries
         self.pdb_file = pdb_file
         self.chain_ids = chains
         self.domain_defs = domain_defs
-        self.subprocess_ids = subprocess_ids
         self.log = log
         self.structure = self.__split_pdb_into_chains()
 
@@ -389,8 +386,8 @@ class AnalyzeStructure(object):
         """
         """
         n_tries = 0
-        rc = -1
-        while rc != 0 and n_tries < 5:
+        return_code = -1
+        while return_code != 0 and n_tries < 5:
             if n_tries > 0:
                 self.log.debug('Waiting for 1 minute before trying again...')
                 time.sleep(60)
@@ -403,7 +400,7 @@ class AnalyzeStructure(object):
             self.log.debug('dssp result: %s' % result)
             self.log.debug('dssp error: %s' % error_message)
             n_tries += 1
-        if rc != 0:
+        if return_code != 0:
             if 'boost::thread_resource_error' in error_message:
                 raise errors.ResourceError(error_message)
         # collect results
