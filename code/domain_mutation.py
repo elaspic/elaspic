@@ -198,8 +198,7 @@ class GetMutation(object):
 
     def __init__(
             self, global_temp_path, temp_path, unique, pdb_path,
-            db, log, n_cores, subprocess_ids,
-            foldX_WATER, build_model_runs, matrix, gap_s, gap_e):
+            db, log, n_cores, foldX_WATER, build_model_runs, matrix, gap_s, gap_e):
         """
         """
         self.global_temp_path = global_temp_path
@@ -215,7 +214,6 @@ class GetMutation(object):
         self.gap_s = gap_s
         self.gap_e = gap_e
         self.n_cores = n_cores
-        self.subprocess_ids = subprocess_ids
 
 
     def get_mutation_data(self, d, t, m, uniprot_id_1, mutation):
@@ -413,8 +411,7 @@ class GetMutation(object):
                    mut_data.chains_modeller[0],
                    self.build_model_runs,
                    self.foldX_WATER,
-                   self.log,
-                   self.subprocess_ids)
+                   self.log)
         repairedPDB_wt = fX.run('RepairPDB')
 
 
@@ -438,8 +435,7 @@ class GetMutation(object):
                       mut_data.chains_modeller[0],
                       self.build_model_runs,
                       self.foldX_WATER,
-                      self.log,
-                      self.subprocess_ids)
+                      self.log)
 
         # do the mutation with foldX
         repairedPDB_wt_list, repairedPDB_mut_list = fX_wt.run('BuildModel', mutCodes)
@@ -488,8 +484,7 @@ class GetMutation(object):
                                     mut_data.chains_modeller[0],
                                     self.build_model_runs,
                                     self.foldX_WATER,
-                                    self.log,
-                                    self.subprocess_ids))
+                                    self.log))
 
         fX_mut_list = list()
         for mPDB in repairedPDB_mut_list:
@@ -498,8 +493,7 @@ class GetMutation(object):
                                      mut_data.chains_modeller[0],
                                      self.build_model_runs,
                                      self.foldX_WATER,
-                                     self.log,
-                                     self.subprocess_ids))
+                                     self.log))
 
         #######################################################################
         ## 5th: calculate the energy for the wildtype

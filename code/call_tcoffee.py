@@ -4,7 +4,7 @@ Created on Sat Dec 22 19:03:01 2012
 
 @author: niklas
 """
-import subprocess
+
 from os import environ
 from Bio import AlignIO
 import errors
@@ -28,7 +28,7 @@ class tcoffee_alignment:
     """
     def __init__(
             self, global_temp_path, tmpPath, alnPath, seqFiles, seqIDs, n_cores,
-            pdb_path, mode, log, subprocess_ids):
+            pdb_path, mode, log):
 
         self.global_temp_path = global_temp_path
         self.tmpPath = tmpPath
@@ -40,7 +40,6 @@ class tcoffee_alignment:
         self.pdb_path = pdb_path
         self.mode = mode
         self.log = log
-        self.subprocess_ids = subprocess_ids
 
 
     def align(self):
@@ -164,7 +163,7 @@ class tcoffee_alignment:
 
         # try the alignment in expresso mode (structure based with sap alignment)
         system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, self.mode)
-        child_process = hf.run_subprocess_locally(self.tmpPath, system_command, my_env)
+        child_process = hf.run_subprocess_locally(self.tmpPath, system_command, env=my_env)
         result, error_message = child_process.communicate()
         return_code = child_process.returncode
 
@@ -178,7 +177,7 @@ class tcoffee_alignment:
             self.log.error(error_message)
             self.log.error('Running quickaln alignment instead...')
             system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 'quick')
-            child_process = hf.run_subprocess_locally(self.tmpPath, system_command, my_env)
+            child_process = hf.run_subprocess_locally(self.tmpPath, system_command, env=my_env)
             result, error_message = child_process.communicate()
             return_code = child_process.returncode
             if return_code == 0:

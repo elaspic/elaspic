@@ -15,6 +15,7 @@ import analyze_structure
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB import PDBIO
 
+import helper_functions as hf
 
 def get_pdb_structure(path_to_pdb_file):
     parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
@@ -233,8 +234,7 @@ class GetModel(object):
 
     def __init__(
             self, global_temp_path, temp_path, unique, pdb_path,
-            db, log, n_cores, subprocess_ids,
-            modeller_runs):
+            db, log, n_cores, modeller_runs):
         """
         Produces a model of a single uniprot domain or a domain pair
 
@@ -257,7 +257,6 @@ class GetModel(object):
         self.unique_temp_folder = temp_path + unique + '/'
         self.pdb_path = pdb_path
         self.db = db
-        self.subprocess_ids =subprocess_ids
         # get the logger from the parent and add a handler
         self.log = log
         self.modeller_runs = modeller_runs
@@ -581,7 +580,6 @@ class GetModel(object):
                 modeller_template_id = template_ids[0] + template_ids[1][-1]
 
         modeller_path = self.unique_temp_folder + 'modeller/'
-#        os.chdir(modeller_path)
         modeller = call_modeller.modeller(
             [pir_alignment_filename],
             modeller_target_id,
@@ -590,9 +588,9 @@ class GetModel(object):
             self.unique_temp_folder, # path to folders with executables
             self.log,
             self.modeller_runs,
-            self.subprocess_ids,
             loopRefinement=True)
-        normDOPE, pdbFile, knotted = modeller.run()
+        with hf.switch_paths(modeller_path):
+            normDOPE, pdbFile, knotted = modeller.run()
 
         # If there is only one chain in the pdb, label that chain 'A'
         io = PDBIO()
