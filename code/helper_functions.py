@@ -94,43 +94,68 @@ def kill_child_process(child_process):
     print 'OK'
 
 
+
+
+
+###############################################################################
+# The two functions below can be used to set the subproces group id to the same
+# value as the parent process group id. This is a simple way of ensuring that
+# all the child processes are terminated when the parent quits, but it makes
+# it impossible to terminate the child process group while keeping the parent
+# running....
+def set_process_group(parent_process_group_id):
+    """ This function is used to set the group id of the child process to be
+    the same as the group id of the parent process. This way when you delete the
+    parent process you also delete all the children
+    """
+    child_process_id = os.getpid() #
+    os.setpgid(child_process_id, parent_process_group_id)
+
+
 def run_subprocess_locally(working_path, system_command, **popen_argvars):
-        with switch_paths(working_path):
-            if isinstance(system_command, unicode):
-                system_command = system_command.encode('utf8')
-            args = shlex.split(system_command)
-            child_process = subprocess.Popen(args, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, preexec_fn=os.setpgrp, **popen_argvars)
-            atexit(kill_child_process, child_process)
-            return child_process
+    with switch_paths(working_path):
+        if isinstance(system_command, unicode):
+            system_command = system_command.encode('utf8')
+        args = shlex.split(system_command)
+        child_process = subprocess.Popen(
+            args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            preexec_fn=lambda: set_process_group(os.getpgrp()),
+            **popen_argvars)
+        return child_process
 
 
-class RunSubprocessLocally(object):
-
-    def __init__(self, working_path, system_command, subprocess_ids, log=None, **popen_argvars):
-        self.log = log
-        self.subprocess_ids = subprocess_ids
-        with switch_paths(working_path):
-            if isinstance(system_command, unicode):
-                system_command = system_command.encode('utf8')
-            args = shlex.split(system_command)
-            self.child_process = subprocess.Popen(args, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, preexec_fn=os.setpgrp, **popen_argvars)
-        if self.log is not None:
-            self.log.debug(
-                'Adding subprocess {} with pid {} to the subprocess monitoring list...'
-                .format(self.child_process, self.child_process.pid))
-        self.subprocess_ids.append(self.child_process.pid)
-
-    def communicate(self, monitor_function=lambda x: None):
-        monitor_function(self.child_process)
-        result, error_message = self.child_process.communicate()
-        returncode = self.child_process.returncode
-        if self.log is not None:
-            self.log.debug('Removing subprocess {} with pid {} to the subprocess monitoring list...'
-            .format(self.child_process, self.child_process.pid))
-        self.subprocess_ids.remove(self.child_process.pid)
-        return result, error_message, returncode
+###############################################################################
+#def run_subprocess_locally(
+#        working_path, system_command, subprocess_ids, log=None,
+#        monitor_function=lambda x: None, **popen_argvars):
+#    """
+#    """
+#    if isinstance(system_command, unicode):
+#        system_command = system_command.encode('utf8')
+#    args = shlex.split(system_command)
+#    with switch_paths(working_path):
+#        child_process = subprocess.Popen(
+#            args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+#            preexec_fn=os.setpgrp, **popen_argvars)
+#    child_process_group_id = os.getpgid(child_process.pid)
+#    subprocess_ids.append(child_process_group_id)
+#    if log is not None:
+#        log.debug(
+#            'Adding child process group with id {} to the subprocess monitoring list...'
+#            .format(child_process_group_id))
+#    try:
+#        monitor_function(child_process)
+#    except:
+#        raise
+#    finally:
+#        os.killpg(child_process_group_id)
+#    result, error_message = child_process.communicate()
+#    returncode = child_process.returncode
+#    if log is not None:
+#        log.debug('Removing child process group with id {} from the subprocess monitoring list...'
+#        .format(child_process_group_id))
+#    subprocess_ids.remove(child_process.pid)
+#    return result, error_message, returncode
 
 
 

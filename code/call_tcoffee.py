@@ -164,8 +164,9 @@ class tcoffee_alignment:
 
         # try the alignment in expresso mode (structure based with sap alignment)
         system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, self.mode)
-        child_process = hf.RunSubprocessLocally(self.tmpPath, system_command, self.subprocess_ids, my_env)
-        result, error_message, return_code = child_process.communicate()
+        child_process = hf.run_subprocess_locally(self.tmpPath, system_command, my_env)
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
 
         # check if tcoffee had an unexpected exit and if not, create and return
         # the alignment object
@@ -177,8 +178,9 @@ class tcoffee_alignment:
             self.log.error(error_message)
             self.log.error('Running quickaln alignment instead...')
             system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 'quick')
-            child_process = hf.RunSubprocessLocally(self.tmpPath, system_command, self.subprocess_ids, my_env)
-            result, error_message, return_code = child_process.communicate()
+            child_process = hf.run_subprocess_locally(self.tmpPath, system_command, my_env)
+            result, error_message = child_process.communicate()
+            return_code = child_process.returncode
             if return_code == 0:
                 alignment = AlignIO.read(out, 'fasta')
                 if len(alignment) != 2:

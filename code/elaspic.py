@@ -171,6 +171,9 @@ class Pipeline(object):
         # all subprocesses before terminating the python script
         self.subprocess_ids = []
         atexit.register(self.__kill_all_subprocesses)
+#        process_group_id = os.getpgrp()
+#        atexit.register(os)
+#        os.setpgid(process_id, process_group_id)
 
 
     def __call__(self, uniprot_id, mutations, run_type=1, n_cores=None, number_of_tries=[]):
@@ -368,7 +371,7 @@ class Pipeline(object):
                 self.log.error(p.t.template_errors)
             self.log.info('adding template\n\n\n')
             self.db.add_uniprot_template(p.t, p.d.path_to_data)
-        self.log.info('Finished processing all templates for ' + self.uniprot_id + ' ' + self.mutations + '\n')
+        self.log.info('Finished processing all templates for {} {}\n'.format(self.uniprot_id, self.mutations))
 
 
     def _compute_models(self):
@@ -491,6 +494,11 @@ class Pipeline(object):
                 try:
                     p.t.provean_supset_filename, p.t.provean_supset_length \
                         = self.get_template.build_provean_supporting_set(p.d, p.t)
+                except errors.ProveanResourceError as e:
+                    self.log.critical(e.message)
+                    self.__clear_provean_temp_files()
+                    os.killpg(e.child_process_group_id, signal.SIGTERM) # Send the signal to all the process groupss
+                    self.log.critical('You should be dead now...')
                 except errors.ProveanError as e:
                     p.t.template_errors = (
                         '{}'.format(type(e))
@@ -500,8 +508,7 @@ class Pipeline(object):
                     self.log.error('Skipping...')
                     continue
                 finally:
-                    subprocess.check_call('rm -rf ' + self.temp_path + self.unique + '/provean*', shell=True)
-                    subprocess.check_call('rm -rf ' + self.temp_path + self.unique + '/*cdhit*', shell=True)
+                    self.__clear_provean_temp_files()
                 self.log.info('Adding template with provean info...')
                 self.db.add_uniprot_template(p.t, p.d.path_to_data)
 
@@ -513,12 +520,13 @@ class Pipeline(object):
                 self.log.error('No model availible. Skipping...')
                 continue
             for mutation in self.mutations.split(','):
-                precalculated_mutation = self.db.get_uniprot_mutation(p.m, self.uniprot_id, mutation, p.d.path_to_data)
-                self.log.info(precalculated_mutation)
-                if (precalculated_mutation and
-                        precalculated_mutation.provean_score != None):
-                    self.log.info('Mutation already has a provean score. Skipping...')
-                    continue
+                precalculated_mutations = self.db.get_uniprot_mutation(p.m, self.uniprot_id, mutation, p.d.path_to_data)
+                self.log.info(precalculated_mutations)
+                for precalculated_mutation in precalculated_mutations:
+                    if (precalculated_mutation and
+                            precalculated_mutation.provean_score != None):
+                        self.log.info('Mutation already has a provean score. Skipping...')
+                        continue
                     try:
                         mut_data = self.get_mutation.get_mutation_data(p.d, p.t, p.m, self.uniprot_id, mutation)
                     except (errors.MutationOutsideDomain,
@@ -608,13 +616,19 @@ class Pipeline(object):
 
     def __kill_all_subprocesses(self):
         self.log.debug('Killing all running subprocesses...')
-        for subprocess_id in self.subprocess_ids:
+        for subprocess_group_id in self.subprocess_ids:
             try:
-                os.killpg(subprocess_id, signal.SIGTERM)
+                os.killpg(subprocess_group_id, signal.SIGTERM)
             except Exception as e:
-                self.log.debug('Could not kill subprocess with id: {}.'.format(subprocess_id))
+                self.log.debug('Could not terminate process group with id: {}.'.format(subprocess_group_id))
                 self.log.error(e.message)
-                continue
+                try:
+                    os.killpg(subprocess_group_id, signal.SIGKILL)
+                except Exception as e:
+                    self.log.debug('Could not kill process group with id: {}.'.format(subprocess_group_id))
+                    self.log.error(e.message)
+                    self.log.debug('Skipping...')
+
 
     def __clear_provean_temp_files(self):
         subprocess.check_call('rm -rf ' + self.provean_temp_path + '/provean*', shell=True)
