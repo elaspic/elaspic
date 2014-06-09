@@ -270,7 +270,7 @@ class Pipeline(object):
                         envelope_def_2 = d.uniprot_domain_2.envelope_def.replace(':','-'),
                         uniprot_id_2 = d.uniprot_domain_2.uniprot_id,))
                 self.db.add_domain(d)
-            subprocess.check_call('mkdir -p ' + self.temp_path + d.path_to_data, shell=True)
+                subprocess.check_call('mkdir -p ' + self.temp_path + d.path_to_data, shell=True)
             # Protein domains have to come before protein domain pairs in order for Provean to work correctly
             protein_domain_template_model = protein_domains + protein_domain_pairs
         # Number of tries that we attempted to make a homology model
