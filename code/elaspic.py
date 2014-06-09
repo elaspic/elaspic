@@ -293,12 +293,12 @@ class Pipeline(object):
             self._compute_templates()
             self.log.info("Building models...")
             self._compute_models()
-        if run_type in [2, 5]:
-            self.log.info("Computing provean...")
-            self._compute_provean()
         if run_type in [3, 4, 5]:
             self.log.info("Analyzing mutations...")
             self._compute_mutations()
+        if run_type in [2, 5]:
+            self.log.info("Computing provean...")
+            self._compute_provean()
 
         return self.protein_definitions
 
