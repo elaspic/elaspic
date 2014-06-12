@@ -28,7 +28,7 @@ if test $# -ge 1 ;then
 	shift
 	fi
 fi
-gawk 'BEGIN{
+awk 'BEGIN{
 	# read radius table and patterns from supplied file
 	npats=0
 	numfile = "./atmtypenumbers"

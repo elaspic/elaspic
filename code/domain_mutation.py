@@ -832,6 +832,8 @@ class GetMutation(object):
 #        provean_supset_filename = t.provean_supset_filename
 
         subprocess.check_call('echo ' + domain_mutation + ' > ' + self.unique_temp_folder + 'sequence_conservation/decoy.var', shell=True)
+        path_to_provean_supset_local = self.unique_temp_folder + 'sequence_conservation/' + path_to_provean_supset.split('/')[-1]
+        subprocess.check_call('cp -f ' + path_to_provean_supset + ' ' + path_to_provean_supset_local, shell=True)
         system_command = (
             './provean' +
             ' -q ' + './sequence.fasta' +
@@ -842,12 +844,29 @@ class GetMutation(object):
             ' --psiblast ' + hf.get_which('psiblast') +
             ' --blastdbcmd ' + hf.get_which('blastdbcmd') +
             ' --cdhit ' + hf.get_which('cd-hit') +
-            ' --supporting_set ' + path_to_provean_supset)
+            ' --supporting_set ' + path_to_provean_supset_local)
         child_process = hf.run_subprocess_locally(
             self.unique_temp_folder + 'sequence_conservation/',
             system_command)
         result, error_message = child_process.communicate()
         self.log.debug(result)
+        while (child_process.returncode != 0
+                and 'IDs are not matched' in error_message):
+            self.log.error(error_message)
+            line_to_remove = error_message.split(':')[1].split(',')[0]
+            self.log.error('Removing line with id: {} from the supporting set...'.format())
+            with open(path_to_provean_supset_local, 'r') as ifh, \
+                    open(path_to_provean_supset_local + '.mod', 'w') as ofh:
+                for line in ifh:
+                    if line_to_remove not in line:
+                        ofh.write(line)
+            subprocess.check_call('mv -f ' + path_to_provean_supset_local + '.mod ' + path_to_provean_supset_local, shell=True)
+            child_process = hf.run_subprocess_locally(
+                self.unique_temp_folder + 'sequence_conservation/',
+                system_command)
+            result, error_message = child_process.communicate()
+            self.log.debug(result)
+
         if child_process.returncode != 0:
             self.log.error(error_message)
             self.log.error(system_command)

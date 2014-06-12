@@ -1,0 +1,13 @@
+argparse
+Cython
+numpy
+scipy
+scikit-learn
+Biopython
+MySQL-python
+psycopg2
+SQLAlchemy
+django
+psutil
+pandas
+

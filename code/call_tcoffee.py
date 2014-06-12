@@ -27,14 +27,13 @@ class tcoffee_alignment:
 
     """
     def __init__(
-            self, global_temp_path, tmpPath, alnPath, seqFiles, seqIDs, n_cores,
+            self, global_temp_path, tmpPath, seqFiles, seqIDs, n_cores,
             pdb_path, mode, log):
 
         self.global_temp_path = global_temp_path
         self.tmpPath = tmpPath
         self.seqFiles = seqFiles
         self.seqIDs = seqIDs
-        self.alnPath = alnPath
         self.alnFormat = 'clustal'
         self.n_cores = n_cores
         self.pdb_path = pdb_path
@@ -49,19 +48,22 @@ class tcoffee_alignment:
         alignments = list()
         for seq in self.seqFiles:
             alignments.append(self.__call_tcoffee(seq))
-            self.__writeAlignment(alignments[-1], self.seqIDs[ self.seqFiles.index(seq) ])
+            # Commented out the line below because alignments are now saved by
+            # the function that calls align. This is to allow for some post-
+            # processing of the alginments (remove overhangs, etc.)
+            # self.__writeAlignment(alignments[-1], self.seqIDs[ self.seqFiles.index(seq) ])
         return alignments
 
 
-    def __writeAlignment(self, alignment, seqID):
-        """
-        write the alignment in clustal format to the folder specified for the class instance
-        """
-#        AlignIO.write(alignment, self.alnPath + seqID, self.alnFormat)
-        try:
-            AlignIO.write(alignment, self.alnPath + alignment[0].id + '_' + alignment[1].id + '.aln', self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
-        except IndexError as e:
-            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.message)
+#    def __writeAlignment(self, alignment, seqID):
+#        """
+#        write the alignment in clustal format to the folder specified for the class instance
+#        """
+##        AlignIO.write(alignment, self.alnPath + seqID, self.alnFormat)
+#        try:
+#            AlignIO.write(alignment, self.alnPath + alignment[0].id + '_' + alignment[1].id + '.aln', self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
+#        except IndexError as e:
+#            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.message)
 
 
     def __call_tcoffee_system_command(self, alignInFile, out, mode):

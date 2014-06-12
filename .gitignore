@@ -1,14 +1,11 @@
 # Folders
-code/PDB/
+bin_centos/
+bin_ubuntu/
 code_supl/
 db/
 error_logs_to_fix/
 input/
-PDBfam/
 reports/
-results/
-scowlp/
-pyenv/
 
 # Hidden files
 .*
