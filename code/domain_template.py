@@ -14,6 +14,7 @@ import numpy as np
 
 import Bio
 from Bio import SeqIO
+from Bio import AlignIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
@@ -44,7 +45,6 @@ class GetTemplate():
         self.tmpPath = tmpPath
         self.unique = unique + '/'
         self.unique_temp_folder = tmpPath + unique + '/'
-        self.saveAlignments = self.unique_temp_folder + 'tcoffee/'
         self.pdb_path = pdb_path
         self.db = db
         self.log = log
@@ -90,7 +90,7 @@ class GetTemplate():
             # Save one copy of the allignment for immediate usage in the tmp folder
             tmp_save_path = self.tmpPath + d.path_to_data
             subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-            subprocess.check_call('cp ' + self.saveAlignments + best_template.alignment_filename +
+            subprocess.check_call('cp ' + self.unique_temp_folder + 'tcoffee/' + best_template.alignment_filename +
                                     ' ' + tmp_save_path + best_template.alignment_filename, shell=True)
 #            (best_template.provean_supset_filename,
 #            best_template.provean_supset_length) = self.build_provean_supporting_set(d, best_template)
@@ -99,9 +99,9 @@ class GetTemplate():
             # Save one copy of the allignment for immediate usage in the tmp folder
             tmp_save_path = self.tmpPath + d.path_to_data
             subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-            subprocess.check_call('cp ' + self.saveAlignments + best_template.alignment_filename_1 +
+            subprocess.check_call('cp ' + self.unique_temp_folder + 'tcoffee/' + best_template.alignment_filename_1 +
                                     ' ' + tmp_save_path + best_template.alignment_filename_1, shell=True)
-            subprocess.check_call('cp ' + self.saveAlignments + best_template.alignment_filename_2 +
+            subprocess.check_call('cp ' + self.unique_temp_folder + 'tcoffee/' + best_template.alignment_filename_2 +
                                     ' ' + tmp_save_path + best_template.alignment_filename_2, shell=True)
         return best_template
 
@@ -277,6 +277,12 @@ class GetTemplate():
                 template.uniprot_domain_id = d.uniprot_domain_id
                 score_align = lambda alignment: self.score_align(alignment, max_domain_length, None, None)
 
+                if not chain_sequence:
+                    self.log.error('PB chain is empty!')
+                    self.log.error('PDB chain 1: {}'.format(chain_sequence.seq))
+                    self.log.debug('Skipping...')
+                    continue
+
                 try: # Do iterative alignments and catch errors
                     self.log.debug(
                         'Aligning: {}/{}*{}:{}{}'
@@ -367,6 +373,13 @@ class GetTemplate():
                     if resid in chain_numbering_2]
                 score_align_1 = lambda alignment: self.score_align(alignment, max_domain_length_1, contact_residue_idxs_1, max_contact_length_1)
                 score_align_2 = lambda alignment: self.score_align(alignment, max_domain_length_2, contact_residue_idxs_2, max_contact_length_2)
+
+                if not chain_sequence_1 or not chain_sequence_2:
+                    self.log.error('At least one of the pdb chains is empty!')
+                    self.log.error('PDB chain 1: {}'.format(chain_sequence_1.seq))
+                    self.log.error('PDB chain 2: {}'.format(chain_sequence_2.seseq))
+                    self.log.debug('Skipping...')
+                    continue
 
                 try: # Do iterative alignments and catch errors
                     self.log.debug(
@@ -496,7 +509,7 @@ class GetTemplate():
         """
         # get the uniprot sequence and align it to the pdb sequence
         uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
-        alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, self.saveAlignments, 'quick')
+        alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, 'quick')
         #----------------------------------------------------------------------
         # Expanding domain boundaries
         uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
@@ -537,7 +550,7 @@ class GetTemplate():
             #------------------------------------------------------------------
             # get the uniprot sequence and align it to the pdb sequence
             uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
-            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, self.saveAlignments, 'expresso')
+            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, 'expresso')
             uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
             self.log.debug(uniprot_alignment_sequence.seq)
             self.log.debug(pdb_alignment_sequence.seq)
@@ -551,7 +564,7 @@ class GetTemplate():
             #------------------------------------------------------------------
             # get the uniprot sequence and align it to the pdb sequence
             uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
-            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, self.saveAlignments, 'expresso')
+            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, 'expresso')
             uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
             self.log.debug(uniprot_alignment_sequence.seq)
             self.log.debug(pdb_alignment_sequence.seq)
@@ -582,7 +595,7 @@ class GetTemplate():
 #            #------------------------------------------------------------------
 #            # get the uniprot sequence and align it to the pdb sequence
 #            uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
-#            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, self.saveAlignments)
+#            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence)
 #            uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
 #            self.log.debug(uniprot_alignment_sequence.seq)
 #            self.log.debug(pdb_alignment_sequence.seq)
@@ -604,7 +617,7 @@ class GetTemplate():
         alignment_score, alignment_identity, interface_score, global_coverage, local_coverage = score_align(alignment)
 #        if (alignment_identity < 0.95) and (local_coverage < 0.95):
 #            self.log.debug('Performing the final, structural alignment...')
-#            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, self.saveAlignments, 'expresso')
+#            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, 'expresso')
 #            uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
 #            self.log.debug(uniprot_alignment_sequence.seq)
 #            self.log.debug(pdb_alignment_sequence.seq)
@@ -635,7 +648,10 @@ class GetTemplate():
         domain_def = sql_db.encode_domain(domain_def) # turn it into a string object to be saved in the database
         alignment_score, alignment_identity, interface_score, global_coverage, local_coverage = score_align(alignment)
         alignment_filename = alignment[0].id + '_' + alignment[1].id + '.aln'
-
+        try:
+            AlignIO.write(alignment, self.unique_temp_folder + 'tcoffee/' + alignment_filename, 'clustal')
+        except IndexError as e:
+            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.message)
         return domain_def, alignment_id, alignment_score, alignment_identity, alignment_filename
 
 
@@ -703,14 +719,13 @@ class GetTemplate():
         return (extend_length[0], extend_length[1])
 
 
-    def do_align(self, uniprot_sequence, pdb_sequence, saveAlignments, mode):
+    def do_align(self, uniprot_sequence, pdb_sequence, mode):
         """
         Align the sequences in the seqFile.fasta file and return the alignment
         and the percentage identity
 
         input
         seqIDs              type 'list'     ;look like ['P01112', '1FOEB']
-        saveAlignments      type 'str'
 
 
         alignments[0]       type class 'Bio.Align.MultipleSeqAlignment'
@@ -725,11 +740,9 @@ class GetTemplate():
 #        self.log.debug('Calling tcoffee with parameters:')
 #        self.log.debug('global_temp_path: {}'.format(self.global_temp_path))
 #        self.log.debug('unique_temp_path: {}'.format(self.unique_temp_folder))
-#        self.log.debug('path_to_save_alignments: {}'.format(saveAlignments))
         tcoffee = call_tcoffee.tcoffee_alignment(
             self.global_temp_path,
             self.unique_temp_folder,
-            saveAlignments,
             [self.unique_temp_folder + 'seqfiles.fasta', ],
             seqIDs,
             self.n_cores,

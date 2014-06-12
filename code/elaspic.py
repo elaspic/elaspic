@@ -194,7 +194,7 @@ class Pipeline(object):
         self.unique = tempfile.mkdtemp(prefix='', dir=self.temp_path).split('/')[-1]
         self.log.info(self.uniprot_id)
         self.log.info(self.unique)
-
+        self.unique_temp_folder = self.temp_path + self.unique + '/'
         # Have to make a temporary folder for provean in my home directory because
         # there usually is not enough space on these nodes in the cluster
         username  = hf.get_username()
@@ -204,7 +204,7 @@ class Pipeline(object):
             self.provean_temp_path = '/home/kimlab1/strokach/tmp/elaspic/' + self.unique
             subprocess.check_call('mkdir -p ' + self.provean_temp_path, shell=True)
         else:
-            self.provean_temp_path = self.temp_path + self.unique + '/'
+            self.provean_temp_path = self.unique_temp_folder
         atexit.register(self.__clear_provean_temp_files)
 
         # Create temporary folders
@@ -217,7 +217,7 @@ class Pipeline(object):
             is_immutable=False, log=self.log)
 
         # Switch to the root of the unique tmp directory
-        os.chdir(self.temp_path + self.unique + '/')
+        os.chdir(self.unique_temp_folder)
 
         # Initialize classes used for calculating templates, models and mutations
         self.get_template = domain_template.GetTemplate(
@@ -442,8 +442,8 @@ class Pipeline(object):
                 # Run the pipeline again if the error could be fixed with a better template,
                 # or otherwise move on to the next model while saving the error message
                 if (self.number_of_tries[p_idx] < 3 and
-                        (isinstance(e, ModellerError) and 'exceeded max_molpdf' in e.message) or
-                        (isinstance(e, errors.ChainsNotInteracting))):
+                        ((isinstance(e, ModellerError) and 'exceeded max_molpdf' in e.message) or
+                        (isinstance(e, errors.ChainsNotInteracting)))):
                     self.db._update_rows(bad_domains)
                     self.db.add_uniprot_model(empty_model, p.d.path_to_data)
                     self.log.error(error_handling_message)
@@ -616,72 +616,72 @@ class Pipeline(object):
         if not os.path.isdir(self.temp_path):
             subprocess.check_call('mkdir -p ' + self.temp_path, shell=True)
 
-        # unique_temp_path
-        if not os.path.isdir(self.temp_path + self.unique):
-            subprocess.check_call('mkdir -p ' + self.temp_path + self.unique, shell=True)
+        # unique_temp_folder
+        if not os.path.isdir(self.unique_temp_folder):
+            subprocess.check_call('mkdir -p ' + self.unique_temp_folder, shell=True)
 
         # tcoffee
-        if not os.path.isdir(self.temp_path + self.unique + '/tcoffee'):
+        if not os.path.isdir(self.unique_temp_folder + '/tcoffee'):
             # create tmp for tcoffee
-            mkdir_command = 'mkdir -p ' + self.temp_path + self.unique + '/tcoffee && ' + \
-                            'mkdir -p ' + self.temp_path + self.unique + '/tcoffee/tmp && ' + \
-                            'mkdir -p ' + self.temp_path + self.unique + '/tcoffee/lck && ' + \
-                            'mkdir -p ' + self.temp_path + self.unique + '/tcoffee/cache'
+            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/tcoffee && ' + \
+                            'mkdir -p ' + self.unique_temp_folder + '/tcoffee/tmp && ' + \
+                            'mkdir -p ' + self.unique_temp_folder + '/tcoffee/lck && ' + \
+                            'mkdir -p ' + self.unique_temp_folder + '/tcoffee/cache'
             subprocess.check_call(mkdir_command, shell=True)
 
         # FoldX
-        if not os.path.isdir(self.temp_path + self.unique + '/FoldX'):
+        if not os.path.isdir(self.unique_temp_folder + '/FoldX'):
             # make the directories
-            mkdir_command = 'mkdir -p ' + self.temp_path + self.unique + '/FoldX'
+            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/FoldX'
             # copy the executables
-            cp_command = 'cp ' + self.bin_path + 'FoldX.linux64 ' + self.temp_path + self.unique + '/FoldX/ && ' + \
-                       'cp ' + self.bin_path + 'rotabase.txt ' + self.temp_path + self.unique + '/FoldX/'
+            cp_command = 'cp ' + self.bin_path + 'FoldX.linux64 ' + self.unique_temp_folder + '/FoldX/ && ' + \
+                       'cp ' + self.bin_path + 'rotabase.txt ' + self.unique_temp_folder + '/FoldX/'
             subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
             # Copy dssp into the folder for modelling
-            cp_command = 'cp ' + self.bin_path + 'dssp-2.0.4-linux-amd64 ' + self.temp_path + self.unique + '/FoldX/'
+            cp_command = 'cp ' + self.bin_path + 'dssp-2.0.4-linux-amd64 ' + self.unique_temp_folder + '/FoldX/'
             subprocess.check_call(cp_command, shell=True)
 
         # modeller
-        if not os.path.isdir(self.temp_path + self.unique + '/modeller'):
+        if not os.path.isdir(self.unique_temp_folder + '/modeller'):
             # create workingfolder for modeller
-            mkdir_command = 'mkdir -p ' + self.temp_path + self.unique + '/modeller'
+            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/modeller'
             subprocess.check_call(mkdir_command, shell=True)
             # Copy knot into the same folder as modeller
-            cp_command = 'cp ' + self.bin_path + 'topol ' + self.temp_path + self.unique + '/modeller'
+            cp_command = 'cp ' + self.bin_path + 'topol ' + self.unique_temp_folder + '/modeller'
             subprocess.check_call(cp_command, shell=True)
 
         # sequence conservation
-        if not os.path.isdir(self.temp_path + self.unique + '/sequence_conservation'):
-            mkdir_command = 'mkdir -p ' + self.temp_path + self.unique + '/sequence_conservation'
+        if not os.path.isdir(self.unique_temp_folder + '/sequence_conservation'):
+            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/sequence_conservation'
             subprocess.check_call(mkdir_command, shell=True)
             # provean
-            cp_command = 'cp ' + self.bin_path + 'provean ' + self.temp_path + self.unique + '/sequence_conservation/'
+            cp_command = 'cp ' + self.bin_path + 'provean ' + self.unique_temp_folder + '/sequence_conservation/'
             subprocess.check_call(cp_command, shell=True)
 
         # analyze_structure
-        if not os.path.isdir(self.temp_path + self.unique + '/analyze_structure'):
+        if not os.path.isdir(self.unique_temp_folder + '/analyze_structure'):
             # create workingfolder for analyzing structure sasa and secondary structure
-            mkdir_command = 'mkdir -p ' + self.temp_path + self.unique + '/analyze_structure'
+            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/analyze_structure'
             subprocess.check_call(mkdir_command, shell=True)
             # Pops
-            cp_command = 'cp ' + self.bin_path + 'pops ' + self.temp_path + self.unique + '/analyze_structure'
+            cp_command = 'cp ' + self.bin_path + 'pops ' + self.unique_temp_folder + '/analyze_structure'
             subprocess.check_call(cp_command, shell=True)
             # Dssp
-            cp_command = 'cp ' + self.bin_path + 'dssp-2.0.4-linux-amd64 ' + self.temp_path + self.unique + '/analyze_structure/dssp'
+            cp_command = 'cp ' + self.bin_path + 'dssp-2.0.4-linux-amd64 ' + self.unique_temp_folder + '/analyze_structure/dssp'
             subprocess.check_call(cp_command, shell=True)
 #                # Naccess
 #                cp_command = (
-#                    'cp ' + self.bin_path + 'naccess ' + self.temp_path + self.unique + '/analyze_structure/ && '
-#                    'cp ' + self.bin_path + 'accall ' + self.temp_path + self.unique + '/analyze_structure/ && '
-#                    'cp ' + self.bin_path + 'standard.data ' + self.temp_path + self.unique + '/analyze_structure/ && '
-#                    'cp ' + self.bin_path + 'vdw.radii ' + self.temp_path + self.unique + '/analyze_structure/')
+#                    'cp ' + self.bin_path + 'naccess ' + self.unique_temp_folder + '/analyze_structure/ && '
+#                    'cp ' + self.bin_path + 'accall ' + self.unique_temp_folder + '/analyze_structure/ && '
+#                    'cp ' + self.bin_path + 'standard.data ' + self.unique_temp_folder + '/analyze_structure/ && '
+#                    'cp ' + self.bin_path + 'vdw.radii ' + self.unique_temp_folder + '/analyze_structure/')
 #                subprocess.check_call(cp_command, shell=True)
             #MSMS
             cp_command = (
-                'cp ' + self.bin_path + 'pdb_to_xyzrn ' + self.temp_path + self.unique + '/analyze_structure/ && '
-                'cp ' + self.bin_path + 'standard.data ' + self.temp_path + self.unique + '/analyze_structure/ && '
-                'cp ' + self.bin_path + 'atmtypenumbers ' + self.temp_path + self.unique + '/analyze_structure/ && '
-                'cp ' + self.bin_path + 'msms.x86_64Linux2.2.6.1 ' + self.temp_path + self.unique + '/analyze_structure/')
+                'cp ' + self.bin_path +  'pdb_to_xyzrn ' +  self.unique_temp_folder + '/analyze_structure/ && '
+                'cp ' + self.bin_path + 'standard.data ' +  self.unique_temp_folder + '/analyze_structure/ && '
+                'cp ' + self.bin_path + 'atmtypenumbers ' +  self.unique_temp_folder + '/analyze_structure/ && '
+                'cp ' + self.bin_path + 'msms.x86_64Linux2.2.6.1 ' + self.unique_temp_folder + '/analyze_structure/')
             subprocess.check_call(cp_command, shell=True)
 
 

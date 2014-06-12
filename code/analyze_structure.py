@@ -220,7 +220,7 @@ class AnalyzeStructure(object):
 
         # Convert pdb to xyz coordiates
         assert(os.path.isfile(self.working_path + filename))
-        system_command = 'pdb_to_xyzrn {0}.pdb'.format(self.working_path + base_filename)
+        system_command = './pdb_to_xyzrn {0}.pdb'.format(self.working_path + base_filename)
         self.log.debug('msms system command 1: %s' % system_command)
         child_process = hf.run_subprocess_locally(self.working_path, system_command)
         result, error_message = child_process.communicate()
