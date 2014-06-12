@@ -177,9 +177,12 @@ class GetTemplate():
                 raise errors.NoStructuralTemplates('No templates found')
 
             # In the second list, domains are in opposite order relative to the query uniprots
-            for idx, domain_contact in enumerate(domain_list_2):
+            for idx in range(len(domain_list_2)):
+                domain_contact = domain_list_2[idx]
                 domain_contact.cath_id_1, domain_contact.cath_id_2 = \
                     domain_contact.cath_id_2, domain_contact.cath_id_1
+                domain_contact.atom_count_1, domain_contact.atom_count_2 = \
+                    domain_contact.atom_count_2, domain_contact.atom_count_1
                 domain_contact.contact_residues_1, domain_contact.contact_residues_2 = \
                     domain_contact.contact_residues_2, domain_contact.contact_residues_1
                 domain_contact.domain_1, domain_contact.domain_2 = \
@@ -277,7 +280,7 @@ class GetTemplate():
                 template.uniprot_domain_id = d.uniprot_domain_id
                 score_align = lambda alignment: self.score_align(alignment, max_domain_length, None, None)
 
-                if not chain_sequence:
+                if not len(chain_sequence.seq):
                     self.log.error('PB chain is empty!')
                     self.log.error('PDB chain 1: {}'.format(chain_sequence.seq))
                     self.log.debug('Skipping...')
@@ -374,10 +377,10 @@ class GetTemplate():
                 score_align_1 = lambda alignment: self.score_align(alignment, max_domain_length_1, contact_residue_idxs_1, max_contact_length_1)
                 score_align_2 = lambda alignment: self.score_align(alignment, max_domain_length_2, contact_residue_idxs_2, max_contact_length_2)
 
-                if not chain_sequence_1 or not chain_sequence_2:
+                if not len(chain_sequence_1.seq) or not len(chain_sequence_2.seq):
                     self.log.error('At least one of the pdb chains is empty!')
                     self.log.error('PDB chain 1: {}'.format(chain_sequence_1.seq))
-                    self.log.error('PDB chain 2: {}'.format(chain_sequence_2.seseq))
+                    self.log.error('PDB chain 2: {}'.format(chain_sequence_2.seq))
                     self.log.debug('Skipping...')
                     continue
 

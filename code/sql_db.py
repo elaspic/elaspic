@@ -824,7 +824,16 @@ class MyDatabase(object):
     ###########################################################################
     def add_domain(self, d):
         with session_scope() as session:
-            session.merge(d)
+            if isinstance(d, Domain):
+                session\
+                    .query(Domain)\
+                    .filter(Domain.cath_id == d.cath_id)\
+                    .update({Domain.domain_errors: d.domain_errors})
+            elif isinstance(d, DomainContact):
+                session\
+                    .query(DomainContact)\
+                    .filter(DomainContact.domain_contact_id == d.domain_contact_id)\
+                    .update({DomainContact.domain_contact_errors: d.domain_contact_errors})
 
 
     def add_domain_errors(self, t, error_string):
