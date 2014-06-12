@@ -358,8 +358,8 @@ class GetTemplate():
                 pdb.extract()
                 chain_numbering_1, chain_sequence_1 = pdb.get_chain_numbering(domain.domain_1.pdb_chain, return_sequence=True, return_extended=True)
                 chain_sequence_1 = SeqRecord(seq=Seq(chain_sequence_1), id=domain.domain_1.pdb_id+domain.domain_1.pdb_chain)
-                chain_numbering_2, chain_sequence_2 = pdb.get_chain_numbering(domain.domain_1.pdb_chain, return_sequence=True, return_extended=True)
-                chain_sequence_2 = SeqRecord(seq=Seq(chain_sequence_2), id=domain.domain_1.pdb_id+domain.domain_2.pdb_chain)
+                chain_numbering_2, chain_sequence_2 = pdb.get_chain_numbering(domain.domain_2.pdb_chain, return_sequence=True, return_extended=True)
+                chain_sequence_2 = SeqRecord(seq=Seq(chain_sequence_2), id=domain.domain_2.pdb_id+domain.domain_2.pdb_chain)
                 domain_def_1 = sql_db.decode_domain(d.uniprot_domain_1.envelope_def)
                 domain_def_2 = sql_db.decode_domain(d.uniprot_domain_2.envelope_def)
                 template = sql_db.UniprotDomainPairTemplate()
@@ -758,34 +758,43 @@ class GetTemplate():
 
 
     def score_align(self, alignment, max_domain_length, contact_residue_idxs, max_contact_length):
-
+        """
+        """
+        multiplier = 10000
         seq_identity = self.get_identity(alignment)
         global_coverage, local_coverage = self.get_coverage(alignment, max_domain_length)
-
-        interface_score = None
-        if contact_residue_idxs:
-            interface_score = self.get_interacting_identity(alignment, contact_residue_idxs, max_contact_length) # percent -> decimal
 
         # New way to discourage seq identity < 40%
         a = 0.95
         if seq_identity < 0.40:
-            score = a * (seq_identity)**2 / 0.40 * (global_coverage) + (1.0 - a) * (global_coverage)
+            score = a * (seq_identity)**2/0.40 * (global_coverage) + (1.0 - a) * (global_coverage)
         else:
             score = a * (seq_identity) * (global_coverage) + (1.0 - a) * (global_coverage)
-        score = int(score*10000)
+        score = int(score * multiplier)
 
+        # Below are the scoring metrics that were used previously. I left
+        # them here for comparison.
         # see http://www.nature.com/nmeth/journal/v10/n1/full/nmeth.2289.html#methods
         # getting the score like Aloy did, based on sequence identity and coverage
         a = 0.95
-        score2 = a * seq_identity * global_coverage + (1.0-a)*global_coverage
-        score2 = int(score2*10000)
+        score2 = a * seq_identity * global_coverage + (1.0 - a) * global_coverage
+        score2 = int(score2 * multiplier)
 
-        # another posibility...
-        score3 = seq_identity**2*global_coverage
-        score3 = int(score3*10000)
+        # Another posibility...
+        score3 = seq_identity**2 * global_coverage
+        score3 = int(score3 * multiplier)
 
-        self.log.debug('Identity: %.3f, coverage: %.3f, score: %i, score2: %i, score3: %i, interface score: %s' \
-            % (seq_identity, global_coverage, score, score2, score3, interface_score))
+        self.log.debug(
+            'Identity: {:.3f}; coverage: {:.3f}; score: {:n}; score2: {:n}; score3: {:n}'
+            .format(seq_identity, global_coverage, score, score2, score3))
+
+        if contact_residue_idxs:
+            interface_identity = self.get_interacting_identity(alignment, contact_residue_idxs, max_contact_length)
+            interface_score = interface_identity * multiplier
+            score = (score + interface_score) / 2
+            self.log.debug(
+                'Interface identity: {:.3f}; interface score: {:n}; final score: {:n}'
+                .format(interface_identity, interface_score, score))
 
         return score, seq_identity, interface_score, global_coverage, local_coverage
 
