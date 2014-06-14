@@ -249,7 +249,6 @@ class GetTemplate():
         self.log.debug('Found {} structural templates.'.format(len(domain_list)))
         for domain in domain_list:
             self.log.debug('-' * 80)
-
             if isinstance(d, sql_db.UniprotDomain):
                 # Check if we need to evaluate this template
                 pfam_cluster_id = (domain.pfam_name, domain.cdhit_cluster,)
@@ -267,9 +266,14 @@ class GetTemplate():
                 # Get the parameters required to make alignments
                 uniprot_sequence = self.db.get_uniprot_sequence(d.uniprot_id)
                 pdb_domain_def = sql_db.decode_domain(domain.pdb_domain_def, return_string=True)
-                pdb = pdb_template.PDBTemplate(
-                    self.pdb_path, domain.pdb_id, [domain.pdb_chain], [pdb_domain_def, ],
-                    self.unique_temp_folder, self.unique_temp_folder, self.log)
+                try:
+                    pdb = pdb_template.PDBTemplate(
+                        self.pdb_path, domain.pdb_id, [domain.pdb_chain], [pdb_domain_def, ],
+                        self.unique_temp_folder, self.unique_temp_folder, self.log)
+                except errors.NoPDBFoundError as e:
+                    self.log.error(type(e) + ': ' + e.message)
+                    self.log.error("Didn't find the pdb file? Check if it is correct. Skipping...")
+                    continue
                 pdb.extract()
                 __, chain_sequence = pdb.get_chain_numbering(domain.pdb_chain, return_sequence=True, return_extended=True)
                 chain_sequence = SeqRecord(seq=Seq(chain_sequence), id=domain.pdb_id+domain.pdb_chain)
@@ -350,11 +354,16 @@ class GetTemplate():
                 uniprot_sequence_2 = self.db.get_uniprot_sequence(d.uniprot_domain_2.uniprot_id)
                 pdb_domain_def_1 = sql_db.decode_domain(domain.domain_1.pdb_domain_def, return_string=True)
                 pdb_domain_def_2 = sql_db.decode_domain(domain.domain_2.pdb_domain_def, return_string=True)
-                pdb = pdb_template.PDBTemplate(
-                    self.pdb_path,  domain.domain_1.pdb_id,
-                    [domain.domain_1.pdb_chain, domain.domain_2.pdb_chain],
-                    [pdb_domain_def_1, pdb_domain_def_2],
-                    self.unique_temp_folder, self.unique_temp_folder, self.log)
+                try:
+                    pdb = pdb_template.PDBTemplate(
+                        self.pdb_path,  domain.domain_1.pdb_id,
+                        [domain.domain_1.pdb_chain, domain.domain_2.pdb_chain],
+                        [pdb_domain_def_1, pdb_domain_def_2],
+                        self.unique_temp_folder, self.unique_temp_folder, self.log)
+                except errors.NoPDBFoundError as e:
+                    self.log.error(type(e) + ': ' + e.message)
+                    self.log.error("Didn't find the pdb file? Check if it is correct. Skipping...")
+                    continue
                 pdb.extract()
                 chain_numbering_1, chain_sequence_1 = pdb.get_chain_numbering(domain.domain_1.pdb_chain, return_sequence=True, return_extended=True)
                 chain_sequence_1 = SeqRecord(seq=Seq(chain_sequence_1), id=domain.domain_1.pdb_id+domain.domain_1.pdb_chain)
