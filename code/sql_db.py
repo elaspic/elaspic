@@ -628,20 +628,18 @@ class MyDatabase(object):
         Note that the produced dataframe may not have the same order as the keys
         """
         with session_scope() as session:
-            domain_contact_1 = self._get_domain_contact(pfam_names_1, pfam_names_2, session, subdomains, reverse=False)
-            domain_contact_2 = self._get_domain_contact(pfam_names_1, pfam_names_2, session, subdomains, reverse=True)
+            domain_contact_1 = self._get_domain_contact(pfam_names_1, pfam_names_2, session, subdomains)
+            domain_contact_2 = self._get_domain_contact(pfam_names_2, pfam_names_1, session, subdomains)
 
-        if len(domain_contact_1)==0 and len(domain_contact_2)==0:
+        if not len(domain_contact_1) and not len(domain_contact_2):
             self.log.debug('No domain contact template found for domains %s, %s' % (str(pfam_names_1), str(pfam_names_2),))
 
         return [domain_contact_1, domain_contact_2]
 
 
-    def _get_domain_contact(self, pfam_names_1, pfam_names_2, session, subdomains, reverse=False):
+    def _get_domain_contact(self, pfam_names_1, pfam_names_2, session, subdomains):
         """
         """
-        if reverse:
-            pfam_names_1, pfam_names_2 = pfam_names_2, pfam_names_1
         domain_1 = aliased(Domain)
         domain_2 = aliased(Domain)
         domain_contact_set = set()

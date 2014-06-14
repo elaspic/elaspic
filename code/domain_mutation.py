@@ -386,25 +386,6 @@ class GetMutation(object):
 
 
         #######################################################################
-        ## 1st: get a snippet of AAs around the mutation, as well as the mutation residue (no chain)
-        # This is required input for FoldX
-        if len(mut_data.domain_sequences) == 1:
-            self.log.debug(mut_data.domain_sequences[0].seq)
-        else:
-            self.log.debug(mut_data.domain_sequences[0].seq)
-            self.log.debug(mut_data.domain_sequences[1].seq)
-#        if not switch_chain:
-#            mutations_foldX = [prepareMutationFoldX(domain_sequences[0], mutation_domain),]
-#        else:
-#            mutations_foldX = [prepareMutationFoldX(domain_sequences[1], mutation_domain),]
-
-        assert(str(mut_data.domain_sequences[0].seq)[int(mut_data.mutation_domain[1:-1])-1] == mut_data.mutation_domain[0])
-        mutations_foldX = [prepareMutationFoldX(mut_data.domain_sequences[0], mut_data.mutation_domain),]
-        self.log.debug("mutations_foldX:")
-        self.log.debug(mutations_foldX)
-
-
-        #######################################################################
         ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
         fX = foldX(self.unique_temp_folder,
                    mut_data.save_path + mut_data.pdbFile_wt,
@@ -418,14 +399,19 @@ class GetMutation(object):
         #######################################################################
         ## 3rd: introduce the mutation using FoldX
 
+        ## 1st: get a snippet of AAs around the mutation, as well as the mutation residue (no chain)
+        # This is required input for FoldX
+        if len(mut_data.domain_sequences) == 1:
+            self.log.debug(mut_data.domain_sequences[0].seq)
+        else:
+            self.log.debug(mut_data.domain_sequences[0].seq)
+            self.log.debug(mut_data.domain_sequences[1].seq)
+        mutations_foldX = [prepareMutationFoldX(mut_data.domain_sequences[0], mut_data.mutation_domain),]
+        self.log.debug("mutations_foldX:")
+        self.log.debug(mutations_foldX)       
+        
         # compile a list of mutations
-        mutCodes = list()
-        for mut in mutations_foldX:
-            if mut[0]:
-                mutCodes.append(mut[1])
-            else:
-                mutCodes.append(mutation[0] + mut_data.chains_modeller[0] + mut_data.position_modeller[0] + mutation[-1])
-
+        assert(str(mut_data.domain_sequences[0].seq)[int(mut_data.mutation_domain[1:-1])-1] == mut_data.mutation_domain[0])
         mutCodes = [mutation[0] + mut_data.chains_modeller[0] + mut_data.position_modeller[0] + mutation[-1], ]
         self.log.debug('Mutcodes for foldx:')
         self.log.debug(mutCodes)

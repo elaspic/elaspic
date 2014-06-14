@@ -127,8 +127,8 @@ def convert_position_to_resid(model, chain_id, positions):
     """
 
     chain = model[chain_id]
-    chainNumbering = get_chain_numbering(chain, return_extended=True)
-    return [chainNumbering[p-1] for p in positions]
+    chain_numbering = get_chain_numbering(chain, return_extended=True)
+    return [chain_numbering[p-1] for p in positions]
 
 
 def convert_resid_to_position(model, pdb_chain, resids, pdb_domain_start, pdb_domain_end):
