@@ -75,6 +75,11 @@ class PDBError(Exception):
         Exception.__init__(self, message)
 
 
+class NoPDBFoundError(Exception):
+    def __init__(self, message):
+        Exception.__init__(self, message)
+
+
 class EmptyPDBSequenceError(Exception):
     """
     One of the sequences is missing from the alignment. The most likely cause

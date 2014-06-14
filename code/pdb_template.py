@@ -64,8 +64,7 @@ def get_pdb(pdb_code, pdb_path, tmp_path='/tmp/'):
         open(tmp_path + pdb_code + suffix.replace('.gz',''), 'w') as ofh:
             ofh.write(ifh.read())
     except IOError as e:
-        raise e
-        raise errors.NoPDBFound(pdb_file)
+        raise errors.NoPDBFoundError(e.message)
 #    # Convert methylated lysines to lysines directly in the pdb file
 #    with open(tmp_path + pdb_code + suffix.replace('.gz',''), 'r') as ifh:
 #        pdb_file = ifh.readlines()
