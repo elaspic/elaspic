@@ -211,6 +211,7 @@ class Pipeline(object):
         self.__prepare_temp_folder()
 
         # Initialise the sql database for accessing all information
+        self.log.debug('Initializing the database...')
         self.db = sql_db.MyDatabase(
             path_to_sqlite_db=self.temp_path+'pipeline.db', sql_flavor=self.db_type,
             path_to_temp=self.temp_path, path_to_archive=self.path_to_archive,
@@ -237,6 +238,7 @@ class Pipeline(object):
         #######################################################################
         # Find all uniprot_domain and uniprot_domain_pairs for a given unirpot,
         # and add path_to_data variable to the domain if it does not exist
+        self.log.debug('Obtaining protein domain information...')
         protein_domains = self.db.get_uniprot_domain(self.uniprot_id)
         for d, t, m in protein_domains:
             if not d.path_to_data:
@@ -252,6 +254,7 @@ class Pipeline(object):
                 self.db.add_domain(d)
             subprocess.check_call('mkdir -p ' + self.temp_path + d.path_to_data, shell=True)
         protein_domain_template_model = protein_domains
+        self.log.debug('Obtaining protein domain pair information...')
         if self.look_for_interactions:
             protein_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id)
             for d, t, m in protein_domain_pairs:
@@ -523,6 +526,11 @@ class Pipeline(object):
                     except (errors.MutationOutsideDomain,
                             errors.MutationOutsideInterface) as e:
                         self.log.debug('{}: {}; OK'.format(type(e), e.message))
+                        continue
+                    if mut_data.path_to_provean_supset == None:
+                        self.log.error(
+                            'No provean supset pre-calculated! Skipping... '
+                            'But normally this should not happen! Check the log for provean errors.')
                         continue
                     provean_mutation, provean_score = \
                         self.get_mutation.get_provean_score(

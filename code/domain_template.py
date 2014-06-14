@@ -625,29 +625,41 @@ class GetTemplate():
 #            self.log.debug(uniprot_alignment_sequence.seq)
 #            self.log.debug(pdb_alignment_sequence.seq)
 
+
+        def get_overhangs(seqrec_1, seqrec_2, do_reversed=False):
+            top_overhang = 0
+            bottom_overhang = 0
+            if do_reversed:
+                custom_iterator = reversed(zip(str(seqrec_1.seq), str(seqrec_2.seq)))
+            else:
+                custom_iterator = zip(str(seqrec_1.seq), str(seqrec_2.seq))
+            for aa_1, aa_2 in custom_iterator:
+                if (aa_1 != '-') and (aa_2 != '-'):
+                    break
+                elif (aa_1 == '-') and (aa_2 == '-'):
+                    bottom_overhang += 1
+                elif (aa_1 == '-') and (aa_2 != '-'):
+                    bottom_overhang += 1
+                elif (aa_1 != '-') and (aa_2 == '-'):
+                    top_overhang += 1
+                else:
+                    raise Exception("Didn't take something into account!")
+            return top_overhang, bottom_overhang
+        
+            
         # Remove overhangs in the alignment
-        left_overhang = 0
-        right_overhang = 0
         seqrec_1, seqrec_2 = alignment
-        for aa_1, aa_2 in zip(str(seqrec_1.seq), str(seqrec_2.seq)):
-            if (aa_1 != '-') and (aa_2 != '-'):
-                break
-            left_overhang += 1
-        for aa_1, aa_2 in reversed(zip(str(seqrec_1.seq), str(seqrec_2.seq))):
-            if (aa_1 != '-') and (aa_2 != '-'):
-                break
-            right_overhang += 1
-
-        seqrec_1.seq = seqrec_1.seq[
-            left_overhang:
-            -right_overhang if right_overhang else None]
-        seqrec_2.seq = seqrec_2.seq[
-            left_overhang:
-            -right_overhang if right_overhang else None]
-
-        # Was there before the edit
-        domain_def[0] += left_overhang
-        domain_def[1] -= right_overhang
+        left_uniprot_overhang, left_pdb_overhang = get_overhangs(seqrec_1, seqrec_2, False)
+        right_uniprot_overhang, right_pdb_overhang = get_overhangs(seqrec_1, seqrec_2, True)
+        left_overhang = left_uniprot_overhang + left_pdb_overhang
+        right_overhang = (
+            -(right_uniprot_overhang + right_pdb_overhang)
+            if (right_uniprot_overhang + right_pdb_overhang) > 0
+            else None)
+        seqrec_1.seq = seqrec_1.seq[left_overhang:right_overhang]
+        seqrec_2.seq = seqrec_2.seq[left_overhang:right_overhang]
+        domain_def[0] += left_uniprot_overhang
+        domain_def[1] -= right_uniprot_overhang
         domain_def = sql_db.encode_domain(domain_def) # turn it into a string object to be saved in the database
         alignment_score, alignment_identity, interface_score, global_coverage, local_coverage = score_align(alignment)
         alignment_filename = alignment[0].id + '_' + alignment[1].id + '.aln'
@@ -788,6 +800,8 @@ class GetTemplate():
             'Identity: {:.3f}; coverage: {:.3f}; score: {:n}; score2: {:n}; score3: {:n}'
             .format(seq_identity, global_coverage, score, score2, score3))
 
+        interface_identity = None
+        interface_score = None
         if contact_residue_idxs:
             interface_identity = self.get_interacting_identity(alignment, contact_residue_idxs, max_contact_length)
             interface_score = interface_identity * multiplier
