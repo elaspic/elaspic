@@ -296,12 +296,12 @@ class Pipeline(object):
             self._compute_templates()
             self.log.info("Building models...")
             self._compute_models()
-        if run_type in [3, 4, 5]:
-            self.log.info("Analyzing mutations...")
-            self._compute_mutations()
         if run_type in [2, 5]:
             self.log.info("Computing provean...")
             self._compute_provean()
+        if run_type in [3, 4, 5]:
+            self.log.info("Analyzing mutations...")
+            self._compute_mutations()
 
         return self.protein_definitions
 
@@ -365,7 +365,7 @@ class Pipeline(object):
                 self.log.error(p.t.template_errors)
             self.log.info('adding template\n\n\n')
             self.db.add_uniprot_template(p.t, p.d.path_to_data)
-        self.log.info('Finished processing all templates for {} {}\n'.format(self.uniprot_id, self.mutations))
+        self.log.info('Finished processing all templates for {} {}\n\n\n'.format(self.uniprot_id, self.mutations))
 
 
     def _compute_models(self):
@@ -464,7 +464,7 @@ class Pipeline(object):
             # Add either the empty model or the calculated model to the database
             self.log.info('Adding model.\n\n\n')
             self.db.add_uniprot_model(p.m, p.d.path_to_data)
-        self.log.info('Finished processing all models for {} {}\n'.format(self.uniprot_id, self.mutations))
+        self.log.info('Finished processing all models for {} {}\n\n\n'.format(self.uniprot_id, self.mutations))
 
 
     def _compute_provean(self):
@@ -491,7 +491,8 @@ class Pipeline(object):
                 except errors.ProveanResourceError as e:
                     self.log.critical(e.message)
                     self.__clear_provean_temp_files()
-                    os.killpg(e.child_process_group_id, signal.SIGTERM) # Send the signal to all the process groupss
+                    # Send the kill signal to the main process group, killing everything
+                    os.killpg(e.child_process_group_id, signal.SIGTERM) 
                     self.log.critical('You should be dead now...')
                 except errors.ProveanError as e:
                     p.t.template_errors = (
@@ -505,47 +506,6 @@ class Pipeline(object):
                     self.__clear_provean_temp_files()
                 self.log.info('Adding template with provean info...')
                 self.db.add_uniprot_template(p.t, p.d.path_to_data)
-
-            # Get a provean score for each mutation
-            if not self.mutations:
-                self.log.info('No mutations specified.')
-                continue
-            if not p.m:
-                self.log.error('No model availible. Skipping...')
-                continue
-            for mutation in self.mutations.split(','):
-                precalculated_mutations = self.db.get_uniprot_mutation(p.m, self.uniprot_id, mutation, p.d.path_to_data)
-                self.log.info(precalculated_mutations)
-                for precalculated_mutation in precalculated_mutations:
-                    if (precalculated_mutation and
-                            precalculated_mutation.provean_score != None):
-                        self.log.info('Mutation already has a provean score. Skipping...')
-                        continue
-                    try:
-                        mut_data = self.get_mutation.get_mutation_data(p.d, p.t, p.m, self.uniprot_id, mutation)
-                    except (errors.MutationOutsideDomain,
-                            errors.MutationOutsideInterface) as e:
-                        self.log.debug('{}: {}; OK'.format(type(e), e.message))
-                        continue
-                    if mut_data.path_to_provean_supset == None:
-                        self.log.error(
-                            'No provean supset pre-calculated! Skipping... '
-                            'But normally this should not happen! Check the log for provean errors.')
-                        continue
-                    provean_mutation, provean_score = \
-                        self.get_mutation.get_provean_score(
-                            mut_data.uniprot_domain_id,
-                            mut_data.mutation_domain,
-                            mut_data.domain_sequences[0],
-                            mut_data.path_to_provean_supset)
-                    precalculated_mutation.provean_score = provean_score
-                    self.log.debug('Provean mutation: {}'.format(provean_mutation))
-                    self.log.debug('Provean score: {}'.format(provean_score))
-                    self.log.info('Adding provean to mutation {}...\n\n\n'.format(mutation))
-                    self.db.add_uniprot_mutation(precalculated_mutation, p.d.path_to_data)
-        self.log.info(
-            'Finished adding provean info to all templates and mutations in: -u {} -m {}'
-            .format(self.uniprot_id, self.mutations))
 
 
     def _compute_mutations(self):
@@ -561,29 +521,45 @@ class Pipeline(object):
             if not self.mutations:
                 self.log.debug('Not evaluating mutations because no mutations specified...')
                 continue
-            if p.m == None or p.m.model_filename == None:
+            if ((isinstance(p.d, sql_db.UniprotDomain) and not p.t.domain_def) or
+                    (isinstance(p.d, sql_db.UniprotDomainPair) and not (p.t.domain_def_1 and p.t.domain_def_2))):
+                self.log.debug('Skipping because the template is missing domain definitions...')
+                continue
+            if not p.m or not p.m.model_filename:
                 self.log.debug('Skipping because no model...')
                 continue
             self.log.debug(self.mutations)
             for mutation in self.mutations.split(','):
                 self.log.debug(mutation)
                 self.log.debug('-' * 80)
-                precalculated_mutation = self.db.get_uniprot_mutation(p.m, self.uniprot_id, mutation, p.d.path_to_data)
-                self.log.info(precalculated_mutation)
-                if precalculated_mutation:
-                    p.mut.append(precalculated_mutation)
-                    self.log.info('Mutation already calculated. Skipping...')
+                precalculated_mutations = self.db.get_uniprot_mutation(p.m, self.uniprot_id, mutation, p.d.path_to_data)
+                self.log.info(precalculated_mutations)
+                if len(precalculated_mutations) == 0:
+                    precalculated_mutation = None
+                elif len(precalculated_mutations) == 1:
+                    precalculated_mutation = precalculated_mutations[0]
+                else:
+                    raise Exception('Supposed to get only one precalculated mutation!')
+                
+                # Check to see if we have a precalculated mutation. Skip if all 
+                # parameters have been calculated; otherwise analyse the remaining 
+                # parameters. Create an empty mutation if the mutation has not 
+                # been precalculated.
+                if (precalculated_mutation and 
+                        (precalculated_mutation.provean_score and 
+                        precalculated_mutation.Stability_energy_wt)):
+                    p.mut.append(precalculated_mutations[0])
+                    self.log.info('Mutation has already been completely evaluated. Skipping...')
                     continue
-
+                elif precalculated_mutation:
+                    uniprot_mutation = precalculated_mutation
                 # Construct empty models that will be used if we have errors
-                if (isinstance(p.d, sql_db.UniprotDomain) and
-                        p.t.domain_def == None):
+                elif isinstance(p.d, sql_db.UniprotDomain):
                     uniprot_mutation = sql_db.UniprotDomainMutation()
                     uniprot_mutation.uniprot_domain_id = p.d.uniprot_domain_id
                     uniprot_mutation.uniprot_id = self.uniprot_id
                     uniprot_mutation.mutation = mutation
-                elif (isinstance(p.d, sql_db.UniprotDomainPair) and
-                        (p.t.domain_def_1 == None or p.t.domain_def_2 == None)):
+                elif isinstance(p.d, sql_db.UniprotDomainPair):
                     uniprot_mutation = sql_db.UniprotDomainPairMutation()
                     uniprot_mutation.uniprot_domain_pair_id = p.d.uniprot_domain_pair_id
                     uniprot_mutation.uniprot_id = self.uniprot_id
@@ -591,7 +567,7 @@ class Pipeline(object):
 
                 try:
                     mut_data = self.get_mutation.get_mutation_data(p.d, p.t, p.m, self.uniprot_id, mutation)
-                    uniprot_mutation = self.get_mutation.evaluate_mutation(mut_data)
+                    uniprot_mutation = self.get_mutation.evaluate_mutation(mut_data, uniprot_mutation)
                 except (errors.MutationOutsideDomain,
                         errors.MutationOutsideInterface) as e:
                     self.log.debug('{}: {}; OK'.format(type(e), e.message))
