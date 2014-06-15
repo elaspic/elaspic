@@ -271,7 +271,7 @@ class GetTemplate():
                         self.pdb_path, domain.pdb_id, [domain.pdb_chain], [pdb_domain_def, ],
                         self.unique_temp_folder, self.unique_temp_folder, self.log)
                 except errors.NoPDBFoundError as e:
-                    self.log.error(type(e) + ': ' + e.message)
+                    self.log.error(str(type(e)) + ': ' + e.message)
                     self.log.error("Didn't find the pdb file? Check if it is correct. Skipping...")
                     continue
                 pdb.extract()
@@ -361,7 +361,7 @@ class GetTemplate():
                         [pdb_domain_def_1, pdb_domain_def_2],
                         self.unique_temp_folder, self.unique_temp_folder, self.log)
                 except errors.NoPDBFoundError as e:
-                    self.log.error(type(e) + ': ' + e.message)
+                    self.log.error(str(type(e)) + ': ' + e.message)
                     self.log.error("Didn't find the pdb file? Check if it is correct. Skipping...")
                     continue
                 pdb.extract()
