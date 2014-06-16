@@ -143,9 +143,10 @@ class Pipeline(object):
                 'ln -sf ' + self.blast_db_path + 'db ' +  self.global_temp_path + 'blast/')
         elif username == 'witvliet':
             system_command = (
-                'mkdir -p ' + self.temp_path + 'blast && ' +
-                'cd ' + self.temp_path + 'blast && ' +
-                'ln -sf /home/witvliet/working/bin/ncbi-blast-2.2.28+/pdbaa_db')
+                'rm -rf ' + self.global_temp_path + 'blast/ && ' +
+                'mkdir -p ' + self.global_temp_path + 'blast/ && ' +
+                'ln -sf ' + self.blast_db_path + 'pdbaa_db ' + self.global_temp_path + 'blast/ && ' +
+                'ln -sf ' + self.blast_db_path + 'db ' +  self.global_temp_path + 'blast/')
         elif username == 'joan':
             # For scinet, blast is already installed, but the database needs to be copied
             system_command = (
