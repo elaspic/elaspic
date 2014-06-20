@@ -12,6 +12,7 @@ import json
 from string import uppercase
 import datetime
 import logging
+import tarfile
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
@@ -33,6 +34,11 @@ database table names to lowercase.
 """
 ###############################################################################
 # Helper functions for dealing with sql objects
+
+def make_tarfile(output_filename, source_dir):
+    with tarfile.open(output_filename, "w:bz2") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
 
 def decode_domain(domains, merge=True, return_string=False):
     """ Unlike split_domain(), this function returns a tuple of tuples of strings,

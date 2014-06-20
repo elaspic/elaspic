@@ -4,12 +4,53 @@ Created on Fri Jan 11 09:49:26 2013
 
 @author: niklas
 """
-
 import shutil
 import errors
 import helper_functions as hf
 
-class foldX():
+names_rows_stability = [
+    ['dG', 1], # totalEnergy
+    ['Backbone_Hbond', 2],
+    ['Sidechain_Hbond', 3],
+    ['Van_der_Waals', 4],
+    ['Electrostatics', 5],
+    ['Solvation_Polar', 6],
+    ['Solvation_Hydrophobic', 7],
+    ['Van_der_Waals_clashes', 8],
+    ['entropy_sidechain', 9],
+    ['entropy_mainchain', 10],
+    ['sloop_entropy', 11],
+    ['mloop_entropy', 12],
+    ['cis_bond', 13],
+    ['torsional_clash', 14],
+    ['backbone_clash', 15],
+    ['helix_dipole', 16],
+    ['water_bridge', 17],
+    ['disulfide', 18],
+    ['electrostatic_kon', 19],
+    ['partial_covalent_bonds', 20],
+    ['energy_Ionisation', 21],
+    ['Entropy_Complex', 22],
+    ['Number_of_Residues', 23],]
+names_stability_wt = (
+    [name + '_wt' for name in zip(*names_rows_stability)[0][:-1]] +
+    ['Number_of_Residues'])
+names_stability_mut = (
+    [name + '_mut' for name in zip(*names_rows_stability)[0][:-1]] +
+    ['Number_of_Residues'])
+
+names_rows_stability_complex = (
+    [ ['intraclashesEnergy1', 3], ['intraclashesEnergy2', 4], ] +
+    [ [x[0], x[1] + 4] for x in names_rows_stability ])
+names_stability_complex_wt = (
+    [name + '_wt' for name in zip(*names_rows_stability_complex)[0][:-1]] +
+    ['Number_of_Residues'])
+names_stability_complex_mut = (
+    [name + '_mut' for name in zip(*names_rows_stability_complex)[0][:-1]] +
+    ['Number_of_Residues'])
+
+
+class FoldX():
 
     def __init__(self, tmp_path, pdb_file, chain_id, buildModel_runs, foldX_WATER, log):
         """
@@ -27,7 +68,9 @@ class foldX():
         self.log = log
 
 
-    def run(self, whatToRun, mutCodes=[]):
+
+
+    def __call__(self, whatToRun, mutCodes=[]):
         """
         Select which action should be performed by FoldX by setting 'whatToRun'
         Possible values are: 'AnalyseComplex', 'Stability', 'RepairPDB', 'BuildModel'
@@ -38,11 +81,11 @@ class foldX():
         self.__write_runfile(self.pdb_filename, self.chain_id, whatToRun, mutCodes)
         self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
-            results = self.__readResult(self.foldx_path + 'Interaction_AnalyseComplex_resultFile.txt', self.pdb_filename, whatToRun)
+            return self.__read_result(self.foldx_path + 'Interaction_AnalyseComplex_resultFile.txt', self.pdb_filename, whatToRun)
         elif whatToRun == 'Stability':
-            results = self.__readResult(self.foldx_path + 'Stability.txt', self.pdb_filename, whatToRun)
+            return self.__read_result(self.foldx_path + 'Stability.txt', self.pdb_filename, whatToRun)
         elif whatToRun == 'RepairPDB':
-            results = self.foldx_path + 'RepairPDB_' + self.pdb_filename
+            return self.foldx_path + 'RepairPDB_' + self.pdb_filename
         elif whatToRun == 'BuildModel':
             # see the FoldX manual for the naming of the generated structures
             if self.buildModel_runs == '1':
@@ -53,11 +96,10 @@ class foldX():
                 mutants = [ self.foldx_path + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' for x in range(0,int(self.buildModel_runs)) ]
                 wiltype = [ self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' for x in range(0,int(self.buildModel_runs)) ]
                 results = [wiltype, mutants]
-        return results
+            return results
 
 
     def __write_runfile(self, pdbFile, chainID, whatToRun, mutCodes):
-
         if whatToRun == 'AnalyseComplex':
             copy_filename = 'run-analyseComplex.txt'
             command_line = '<AnalyseComplex>AnalyseComplex_resultFile.txt,{chainID};'\
@@ -81,35 +123,34 @@ class foldX():
                 .format(file_with_mutations=file_with_mutations)
             output_pdb = 'true'
 
-        foldX_runfile = """\
-            <TITLE>FOLDX_runscript;
-            <JOBSTART>#;
-            <PDBS>{pdbFile};
-            <BATCH>#;
-            <COMMANDS>FOLDX_commandfile;
-            {command_line}
-            <END>#;
-            <OPTIONS>FOLDX_optionfile;
-            <Temperature>298;
-            <R>#;
-            <pH>7;
-            <IonStrength>0.050;
-            <numberOfRuns>{buildModel_runs};
-            <water>{water};
-            <metal>-CRYSTAL;
-            <VdWDesign>2;
-            <pdb_waters>false;
-            <OutPDB>{output_pdb};
-            <pdb_hydrogens>false;
-            <END>#;
-            <JOBEND>#;
-            <ENDFILE>#;
-            """.replace(' ', '').format(
-            pdbFile=pdbFile,
-            command_line=command_line,
-            buildModel_runs=self.buildModel_runs,
-            water=self.water,
-            output_pdb=output_pdb)
+        foldX_runfile = (
+            '<TITLE>FOLDX_runscript;\n'
+            '<JOBSTART>#;\n'
+            '<PDBS>{pdbFile};\n'
+            '<BATCH>#;\n'
+            '<COMMANDS>FOLDX_commandfile;\n'
+            '{command_line}\n'
+            '<END>#;\n'
+            '<OPTIONS>FOLDX_optionfile;\n'
+            '<Temperature>298;\n'
+            '<R>#;\n'
+            '<pH>7;\n'
+            '<IonStrength>0.050;\n'
+            '<numberOfRuns>{buildModel_runs};\n'
+            '<water>{water};\n'
+            '<metal>-CRYSTAL;\n'
+            '<VdWDesign>2;\n'
+            '<pdb_waters>false;\n'
+            '<OutPDB>{output_pdb};\n'
+            '<pdb_hydrogens>false;\n'
+            '<END>#;\n'
+            '<JOBEND>#;\n'
+            '<ENDFILE>#;\n').replace(' ', '').format(
+                pdbFile=pdbFile,
+                command_line=command_line,
+                buildModel_runs=self.buildModel_runs,
+                water=self.water,
+                output_pdb=output_pdb)
 
         # This just makes copies of the runfiles for debugging...
         with open(self.foldx_runfile, 'w') as f:
@@ -130,81 +171,19 @@ class foldX():
                 raise errors.ResourceError(error_message)
 
 
-    def __readResult(self, outFile, pdb, whatToRead):
+    def __read_result(self, outFile, pdb, whatToRead):
         with open(outFile, 'r') as f:
             lines = f.readlines()
             line = lines[-1].split('\t')
-            if whatToRead == 'AnalyseComplex':
-                intraclashesEnergy1 = line[3]
-                intraclashesEnergy2 = line[4]
-                interactionEnergy = line[5]
-                Backbone_Hbond = line[6]
-                Sidechain_Hbond = line[7]
-                Van_der_Waals = line[8]
-                Electrostatics = line[9]
-                Solvation_Polar = line[10]
-                Solvation_Hydrophobic = line[11]
-                Van_der_Waals_clashes = line[12]
-                entropy_sidechain = line[13]
-                entropy_mainchain = line[14]
-                sloop_entropy = line[15]
-                mloop_entropy = line[16]
-                cis_bond = line[17]
-                torsional_clash = line[18]
-                backbone_clash = line[19]
-                helix_dipole = line[20]
-                water_bridge = line[21]
-                disulfide = line[22]
-                electrostatic_kon = line[23]
-                partial_covalent_bonds = line[24]
-                energy_Ionisation = line[25]
-                Entropy_Complex = line[26]
-                Number_of_Residues = line[27].strip()
-                FoldX_vector = intraclashesEnergy1, intraclashesEnergy2, interactionEnergy,\
-                               Backbone_Hbond, Sidechain_Hbond, Van_der_Waals, Electrostatics,\
-                               Solvation_Polar, Solvation_Hydrophobic, Van_der_Waals_clashes,\
-                               entropy_sidechain, entropy_mainchain, sloop_entropy,\
-                               mloop_entropy, cis_bond, torsional_clash, backbone_clash,\
-                               helix_dipole, water_bridge, disulfide, electrostatic_kon,\
-                               partial_covalent_bonds, energy_Ionisation,\
-                               Entropy_Complex, Number_of_Residues
-                return FoldX_vector
-            if whatToRead == 'Stability':
-                totalEnergy = line[1]
-                Backbone_Hbond = line[2]
-                Sidechain_Hbond = line[3]
-                Van_der_Waals = line[4]
-                Electrostatics = line[5]
-                Solvation_Polar = line[6]
-                Solvation_Hydrophobic = line[7]
-                Van_der_Waals_clashes = line[8]
-                entropy_sidechain = line[9]
-                entropy_mainchain = line[10]
-                sloop_entropy = line[11]
-                mloop_entropy = line[12]
-                cis_bond = line[13]
-                torsional_clash = line[14]
-                backbone_clash = line[15]
-                helix_dipole = line[16]
-                water_bridge = line[17]
-                disulfide = line[18]
-                electrostatic_kon = line[19]
-                partial_covalent_bonds = line[20]
-                energy_Ionisation = line[21]
-                Entropy_Complex = line[22]
-                Number_of_Residues = line[23].strip()
-                FoldX_vector = totalEnergy,\
-                               Backbone_Hbond, Sidechain_Hbond, Van_der_Waals, Electrostatics,\
-                               Solvation_Polar, Solvation_Hydrophobic, Van_der_Waals_clashes,\
-                               entropy_sidechain, entropy_mainchain, sloop_entropy,\
-                               mloop_entropy, cis_bond, torsional_clash, backbone_clash,\
-                               helix_dipole, water_bridge, disulfide, electrostatic_kon,\
-                               partial_covalent_bonds, energy_Ionisation,\
-                               Entropy_Complex, Number_of_Residues
-                return FoldX_vector
             if whatToRead == 'BuildModel':
-                totalEnergyDifference = line[1]
-                return totalEnergyDifference
+                total_energy_difference = line[1]
+                return total_energy_difference
+            if whatToRead == 'Stability':
+                stability_values = [ line[x[1]].strip() for x in self.names_rows_stability ]
+                return stability_values
+            if whatToRead == 'AnalyseComplex':
+                complex_stability_values = [ line[x[1]].strip() for x in self.names_rows_stability_complex ]
+                return complex_stability_values
 
 
 if __name__ == '__main__':

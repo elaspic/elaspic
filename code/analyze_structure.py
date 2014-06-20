@@ -6,7 +6,6 @@ Created on Fri Mar  8 10:29:13 2013
 """
 import os
 import time
-import subprocess
 from math import sqrt
 import pandas as pd
 import helper_functions as hf
@@ -21,20 +20,24 @@ import pdb_template
 from collections import OrderedDict, deque
 
 
+def calculate_distance(atom1, atom2):
+    """
+    Returns the distance of two points in three dimensional space
+    input: atom instance of biopython: class 'Bio.PDB.Atom.Atom
+    return: type 'float'
+    """
+    a = atom1.coord
+    b = atom2.coord
+    assert(len(a) == 3 and len(b) == 3)
+    return sqrt(sum( (a - b)**2 for a, b in zip(a, b) ))
+
+
 def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
     """
     Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
     interaction is defines as a pair of residues where at least one pair of atom
     is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
     """
-    # model = structure[0]
-
-    def calculate_distance(atom1, atom2):
-        a = atom1.coord
-        b = atom2.coord
-        assert(len(a) == 3 and len(b) == 3)
-        return sqrt(sum( (a - b)**2 for a, b in zip(a, b) ))
-
     # Extract the chains of interest from the model
     chain_1 = None
     chain_2 = None
@@ -72,6 +75,163 @@ def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5)
     return interactions_between_chains
 
 
+
+class PhysiChem():
+
+    def __init__(self, vdW, d, unique, log):
+        self.vdW_distance = float(vdW)
+        self.contact_distance = float(d)
+        self.log = log
+
+
+    def __call__(self, pdb_filename, mutated_chain_id, mutation):
+        """
+        Return the atomic contact vector, that is, counting how many interactions
+        between charged, polar or "carbon" residues there are. The "carbon"
+        interactions give you information about the Van der Waals packing of
+        the residues. Comparing the wildtype vs. the mutant values is used in
+        the machine learning algorithm.
+
+        'mutation' is of the form: 'A16' where A is the chain identifier and 16
+        the residue number (in pdb numbering) of the mutation
+        chainIDs is a list of strings with the chain identifiers to be used
+        if more than two chains are given, the chains not containing the mutation
+        are considered as "opposing" chain
+        """
+        parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
+        structure = parser.get_structure('ID', pdb_filename)
+        model = structure[0]
+        mutated_chain = model[mutated_chain_id]
+        opposite_chains = [ chain for chain in model.child_list if chain.id != mutated_chain_id ]
+        main_chain_atoms = ['CA', 'C', 'N', 'O']
+
+        # Find the mutated residue
+        mutation_position = int(mutation[1:-1])
+        residue_counter = 0
+        for residue in mutated_chain:
+            if residue.resname in pdb_template.amino_acids and residue.id[0] == ' ':
+                residue_counter += 1
+                if residue_counter == mutation_position:
+                    if (pdb_template.AAA_DICT[residue.resname] not in
+                            [mutation[0].upper(), mutation[-1].upper()]):
+                        self.log.error(residue)
+                        self.log.error(pdb_template.AAA_DICT[residue.resname])
+                        self.log.error(mutation.upper())
+                        self.log.error(mutation_position)
+                        raise Exception('PhysiChem detected mutated amino acid position mismatch!')
+                    mutated_residue = residue
+                    break
+        mutated_atoms = [atom for atom in mutated_residue if atom.name not in main_chain_atoms]
+
+        # Go through each atom in each residue in each partner chain...
+        opposite_chain_contacts = {
+            'equal_charge': [],
+            'opposite_charge': [],
+            'h_bond': [],
+            'carbon_contact': []}
+        for opposite_chain in opposite_chains:
+            for partner_residue in opposite_chain:
+                self._increment_vector(
+                    mutated_residue, mutated_atoms, partner_residue, opposite_chain_contacts)
+
+        # Go through each atom in each residue in the mutated chain...
+        same_chain_contacts = {
+            'equal_charge': [],
+            'opposite_charge': [],
+            'h_bond': [],
+            'carbon_contact': []}
+        for partner_residue in mutated_chain:
+            # Skipping the mutated residue...
+            if partner_residue == mutated_residue:
+                continue
+            self._increment_vector(
+                mutated_residue, mutated_atoms, partner_residue, same_chain_contacts)
+
+        opposite_chain_contact_vector = [
+            len(opposite_chain_contacts['equal_charge']),
+            len(opposite_chain_contacts['opposite_charge']),
+            len(opposite_chain_contacts['h_bond']),
+            len(set(opposite_chain_contacts['carbon_contact']))]
+
+        same_chain_contact_vector = [
+            len(same_chain_contacts['equal_charge']),
+            len(same_chain_contacts['opposite_charge']),
+            len(same_chain_contacts['h_bond']),
+            len(set(same_chain_contacts['carbon_contact']))]
+
+        return opposite_chain_contact_vector, same_chain_contact_vector
+
+
+    def _increment_vector(
+            self, mutated_residue, mutated_atoms, partner_residue, contact_features_dict):
+        # For each residue each atom of the mutated residue has to be checked
+        for mutated_atom in mutated_atoms:
+            mutated_atom_type = self._get_atom_type(mutated_residue.resname, mutated_atom)
+            # And each partner residue and partner atom
+            for partner_atom in partner_residue:
+                r = calculate_distance(mutated_atom, partner_atom)
+                if r <= self.vdW_distance:
+                    partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
+                    if partner_atom_type == 'ignore':
+                        continue
+                    if mutated_atom_type == 'carbon' and partner_atom_type == 'carbon':
+                        # The Van der Waals packing should be determined
+                        # nonredundant. Thus, the atomic coordinates are
+                        # used to keep track of which interactions where
+                        # already counted. Does not matter as much for others.
+                        contact_features_dict['carbon_contact'].append(tuple(partner_atom.coord))
+                    if r <= self.contact_distance:
+                        if mutated_atom_type == 'charged_plus' and partner_atom_type == 'charged_plus':
+                            contact_features_dict['equal_charge'].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == 'charged_minus' and partner_atom_type == 'charged_plus':
+                            contact_features_dict['opposite_charge'].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == 'charged_plus' and partner_atom_type == 'charged_minus':
+                            contact_features_dict['opposite_charge'].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == 'charged_minus' and partner_atom_type == 'charged_minus':
+                            contact_features_dict['equal_charge'].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == 'charged' and partner_atom_type == 'polar':
+                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == 'polar' and partner_atom_type == 'charged':
+                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == 'polar' and partner_atom_type == 'polar':
+                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
+
+
+    def _get_atom_type(self, residue, atom):
+        """
+        Checks what type of atom it is (i.e. charged, polar, carbon)
+
+        In order to see what "interaction" type two atoms are forming, check the
+        individual label which every atom in every residue has (see pdb file
+        convention for an explanation of the labels).
+        With this label, one can determine which atom of the residue one is looking
+        at, and hence, one can determine which "interaction" two atoms are forming.
+        """
+        # This is based on the naming convention for the atoms in crystalography
+        charged_plus  = ['NH1', 'NH2', 'NZ']
+        # Label of negatively charged atoms
+        charged_minus = ['OD1', 'OD2', 'OE1', 'OE2']
+        # Label of polar atoms
+        polar = ['OG', 'OG1', 'OD1', 'OD2', 'ND1', 'OE1', 'NE', 'NE1', 'NE2', 'ND1', 'ND2', 'SG', 'OH', 'O', 'N']
+
+        if residue.upper() in ['ARG', 'R', 'LYS', 'K']:
+            if atom.name in charged_plus:
+                return 'charged_plus'
+
+        if residue.upper() in ['ASP', 'D', 'GLU', 'E']:
+            if atom.name in charged_minus:
+                return 'charged_minus'
+
+        if atom.name in polar:
+            return 'polar'
+
+        if atom.name[0] == 'C' or atom.name == 'SD':
+            return 'carbon'
+
+        return 'ignore'
+
+
+
 class AnalyzeStructure(object):
     """
     Runs the program pops to calculate the interface size of the complexes
@@ -80,7 +240,6 @@ class AnalyzeStructure(object):
     """
 
     def __init__(self, data_path, working_path, pdb_file, chains, domain_defs, log):
-
         self.data_path = data_path # modeller_path, foldx_path
         self.working_path = working_path # analyze_structure path with all the binaries
         self.pdb_file = pdb_file
@@ -91,7 +250,6 @@ class AnalyzeStructure(object):
 
 
     def __split_pdb_into_chains(self):
-
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         io = PDBIO()
         self.log.debug('Saving parsed pdbs into the following working path:')
@@ -151,28 +309,10 @@ class AnalyzeStructure(object):
         structure = parser.get_structure('ID', self.working_path + ''.join(self.chain_ids) + '.pdb')
         return structure
 
+
     ###########################################################################
-
-    def get_sasa(self, program_to_use='naccess'):
-
-        if program_to_use == 'naccess':
-            run_sasa_atom = self._run_naccess_atom
-        elif program_to_use == 'pops':
-            run_sasa_atom = self._run_pops_atom
-        else:
-            raise Exception('Unknown program specified!')
-
-        sasa_score_splitchains = {}
-        for chain_id in self.chain_ids:
-            sasa_score_splitchains.update(run_sasa_atom(chain_id + '.pdb'))
-        sasa_score_allchains = run_sasa_atom(''.join(self.chain_ids) + '.pdb')
-        return [sasa_score_splitchains, sasa_score_allchains]
-
-
     def get_seasa(self):
-
         seasa_by_chain_together, seasa_by_residue_together = self._run_msms(''.join(self.chain_ids) + '.pdb')
-
         if len(self.chain_ids) > 1:
             seasa_by_chain_separately = []
             seasa_by_residue_separately = []
@@ -185,6 +325,7 @@ class AnalyzeStructure(object):
             return [seasa_by_chain_together, seasa_by_chain_separately, seasa_by_residue_together, seasa_by_residue_separately]
         else:
             return [seasa_by_chain_together, seasa_by_chain_together, seasa_by_residue_together, seasa_by_residue_together]
+
 
     def _run_msms(self, filename):
         """ In the future, could add an option to measure residue depth
@@ -199,24 +340,6 @@ class AnalyzeStructure(object):
         standard_sasa_all = [ [l.strip() for l in line.split()] for line in standard_data ][1:]
         standard_sasa = {}
         deque((standard_sasa.update({x[3]: float(x[4])}) for x in standard_sasa_all), maxlen=0)
-
-#        # Get a dictionary to map from atom serial numbers to pdb chain and residue name
-#        atom_to_chain = {}
-#        atom_to_res_name = {}
-#        atom_to_res_num = {}
-#        atom_to_atom_id = {}
-#        parser = PDBParser(QUIET=True)
-#        structure = parser.get_structure('ID', self.data_path + self.pdb_file)
-#        model = structure[0]
-#        for chain in model:
-#            for residue in chain:
-#                if residue.resname in pdb_template.amino_acids \
-#                and residue.id[0] == ' ':
-#                    for atom in residue:
-#                            atom_to_chain[atom.serial_number] = chain.id.strip()
-#                            atom_to_res_name[atom.serial_number] = residue.resname.strip()
-#                            atom_to_res_num[atom.serial_number] = str(residue.id[1]) + residue.id[2].strip()
-#                            atom_to_atom_id[atom.serial_number] = atom.id
 
         # Convert pdb to xyz coordiates
         assert(os.path.isfile(self.working_path + filename))
@@ -289,6 +412,21 @@ class AnalyzeStructure(object):
         seasa_by_residue = seasa_gp_by_residue.sum().reset_index()
 
         return seasa_by_chain, seasa_by_residue
+
+
+    ###########################################################################
+    def get_sasa(self, program_to_use='naccess'):
+        if program_to_use == 'naccess':
+            run_sasa_atom = self._run_naccess_atom
+        elif program_to_use == 'pops':
+            run_sasa_atom = self._run_pops_atom
+        else:
+            raise Exception('Unknown program specified!')
+        sasa_score_splitchains = {}
+        for chain_id in self.chain_ids:
+            sasa_score_splitchains.update(run_sasa_atom(chain_id + '.pdb'))
+        sasa_score_allchains = run_sasa_atom(''.join(self.chain_ids) + '.pdb')
+        return [sasa_score_splitchains, sasa_score_allchains]
 
 
     def _run_naccess_atom(self, filename):
@@ -381,7 +519,6 @@ class AnalyzeStructure(object):
 
 
 ###############################################################################
-
     def get_dssp(self):
         """
         """
@@ -413,22 +550,20 @@ class AnalyzeStructure(object):
                 if not row or len(row) < 2:
                     continue
                 if row[1] == "RESIDUE":
-                    # Start parsing from here
-                    start = True
+                    start = True # Start parsing from here
                     continue
                 if not start:
                     continue
                 if l[9] == ' ':
-                    # Skip -- missing residue
-                    continue
+                    continue # Skip -- missing residue
                 resseq, icode, chainid, aa, ss = int(l[5:10]), l[10], l[11], l[13], l[16]
                 if ss == ' ':
                     ss = '-'
                 try:
                     acc = int(l[34:38])
-#                    phi = float(l[103:109])
-#                    psi = float(l[109:115])
-                except ValueError, exc:
+                    phi = float(l[103:109])
+                    psi = float(l[109:115])
+                except ValueError as e:
                     # DSSP output breaks its own format when there are >9999
                     # residues, since only 4 digits are allocated to the seq num
                     # field.  See 3kic chain T res 321, 1vsy chain T res 6077.
@@ -437,10 +572,10 @@ class AnalyzeStructure(object):
                     if l[34] != ' ':
                         shift = l[34:].find(' ')
                         acc = int((l[34+shift:38+shift]))
-#                        phi = float(l[103+shift:109+shift])
-#                        psi = float(l[109+shift:115+shift])
+                        phi = float(l[103+shift:109+shift])
+                        psi = float(l[109+shift:115+shift])
                     else:
-                        raise ValueError(exc)
+                        raise e
                 dssp_ss.setdefault(chainid, []).append(ss) # percent sasa on sidechain
                 dssp_acc.setdefault(chainid, []).append(acc)
         for key in dssp_ss.keys():
@@ -448,12 +583,10 @@ class AnalyzeStructure(object):
         return dssp_ss, dssp_acc
 
 
-###############################################################################
-
+    ###########################################################################
     def get_interchain_distances(self, pdb_chain=None, pdb_mutation=None, cutoff=5):
         """
         """
-
         model = self.structure[0]
         chains = [ chain for chain in model ]
 
@@ -482,7 +615,7 @@ class AnalyzeStructure(object):
 
                             for atom_1 in residue_1:
                                 for atom_2 in residue_2:
-                                    r = self.calculate_distance(atom_1, atom_2)
+                                    r = calculate_distance(atom_1, atom_2)
                                     if not min_r or min_r > r:
                                         min_r = r
                     shortest_interchain_distances[chain_1.id].append(min_r)
@@ -493,20 +626,7 @@ class AnalyzeStructure(object):
         return shortest_interchain_distances
 
 
-    def calculate_distance(self, atom1, atom2):
-        """
-        returns the distance of two points in three dimensional space
-        input: atom instance of biopython: class 'Bio.PDB.Atom.Atom
-        return: type 'float'
-        """
-        a = atom1.coord
-        b = atom2.coord
-        assert(len(a) == 3 and len(b) == 3)
-        return sqrt(sum( (a - b)**2 for a, b in zip(a, b) ))
-
-
-###############################################################################
-
+    ###########################################################################
     def get_interface_area(self):
 
         termination, rc, e = self.__run_pops_area(self.working_path + ''.join(self.chain_ids) + '.pdb')
@@ -606,70 +726,6 @@ class AnalyzeStructure(object):
 
 
 ###############################################################################
-# Old code used to deal with single-point mutations
-# We now calculate dssp and interface amino acids for the entire model
-    def __check_structure(self, pdbCode, chainID, mutation):
-        """ checks if the mutation falls into the interface, i.e. is in contact with
-        another chain
-        'mutation' has to be of the form A_T70H, mutation in chain A, from Tyr at
-        position 70 to His
-        NOTE: takes the mutation as numbered ins sequence! The conversion is done
-        within this function!
-
-        input
-        pdbCode     type 'str'
-        chainID     type 'str'
-        mutation    type 'str'      ; B_Q61L
-
-        return:
-        contacts    type 'dict'     ; {'C': False, 'B': True}
-                                      key:   chainID                type 'str'
-                                      value: contact to chainID     type boolean
-        """
-        structure = pdb_template.get_pdb(pdbCode, self.pdbPath, self.working_path)
-        model = structure[0]
-
-        chains   = [ chain for chain in model]
-        chainIDs = [ chain.id for chain in model]
-
-        positions = pdb_template.convert_position_to_resid(model, mutation[0], [int(mutation[3:-1])]) # convert the position numbering
-        position = mutation[:3] + str(positions[0]) + mutation[-1]
-        contacts = { chainID: False for chainID in chainIDs if not chainID == mutation[0] }
-
-        for i in range(len(chains)):
-            if chains[i].id == mutation[0]:
-                chain = chains[i]
-                # use list expansion to select only the 'opposing chains'
-                oppositeChains = [ x for x in chains if x != chains[i] ]
-
-        # If the residues do not match, issue a warning.
-        # To obtain a better model one could restrict to templates that have
-        # the same amino acid as the uniprot sequence at the position of the mutation.
-#        if chain[position].resname != self.convert_aa(fromAA):
-#            print 'Residue missmatch while checking the structure!'
-#            print 'pdbCode', pdbCode
-#            print 'mutation', mutation
-#            print chain[position].resname, self.convert_aa(fromAA)
-#            print 'position', position
-
-
-        for oppositeChain in oppositeChains:
-            # check each residue
-            for residue in oppositeChain:
-                # for each residue each atom of the mutated residue has to be checked
-                for atom1 in chain[position]: # chain[position] is the residue that should be mutated
-                    # and each atom
-                    for atom2 in residue:
-                        r = self.distance(atom1, atom2)
-                        if r <= 5.0:
-                            contacts[oppositeChain.id] = True
-        return contacts
-
-    ###########################################################################
-
-
-
-
 
 if __name__ == '__main__':
     logger = logging.getLogger(__name__)
