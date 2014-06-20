@@ -233,8 +233,8 @@ class Pipeline(object):
 
         self.get_mutation = domain_mutation.GetMutation(
             self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
-            self.db, self.log, self.n_cores, self.foldx_water,
-            self.foldx_num_of_runs, self.matrix, self.gap_start, self.gap_extend)
+            self.db, self.log, self.n_cores, self.bin_path, self.foldx_water,
+            self.foldx_num_of_runs, self.matrix, self.gap_start, self.gap_extend,)
 
         #######################################################################
         # Find all uniprot_domain and uniprot_domain_pairs for a given unirpot,
@@ -493,7 +493,7 @@ class Pipeline(object):
                     self.log.critical(e.message)
                     self.__clear_provean_temp_files()
                     # Send the kill signal to the main process group, killing everything
-                    os.killpg(e.child_process_group_id, signal.SIGTERM) 
+                    os.killpg(e.child_process_group_id, signal.SIGTERM)
                     self.log.critical('You should be dead now...')
                 except errors.ProveanError as e:
                     p.t.template_errors = (
@@ -522,8 +522,8 @@ class Pipeline(object):
             if not self.mutations:
                 self.log.debug('Not evaluating mutations because no mutations specified...')
                 continue
-            if ((isinstance(p.d, sql_db.UniprotDomain) and not p.t.domain_def) or
-                    (isinstance(p.d, sql_db.UniprotDomainPair) and not (p.t.domain_def_1 and p.t.domain_def_2))):
+            if ((isinstance(p.d, sql_db.UniprotDomain) and not (p.t and p.t.domain_def)) or
+                    (isinstance(p.d, sql_db.UniprotDomainPair) and not (p.t and p.t.domain_def_1 and p.t.domain_def_2))):
                 self.log.debug('Skipping because the template is missing domain definitions...')
                 continue
             if not p.m or not p.m.model_filename:
@@ -541,13 +541,13 @@ class Pipeline(object):
                     precalculated_mutation = precalculated_mutations[0]
                 else:
                     raise Exception('Supposed to get only one precalculated mutation!')
-                
-                # Check to see if we have a precalculated mutation. Skip if all 
-                # parameters have been calculated; otherwise analyse the remaining 
-                # parameters. Create an empty mutation if the mutation has not 
+
+                # Check to see if we have a precalculated mutation. Skip if all
+                # parameters have been calculated; otherwise analyse the remaining
+                # parameters. Create an empty mutation if the mutation has not
                 # been precalculated.
-                if (precalculated_mutation and 
-                        (precalculated_mutation.provean_score and 
+                if (precalculated_mutation and
+                        (precalculated_mutation.provean_score and
                         precalculated_mutation.Stability_energy_wt)):
                     p.mut.append(precalculated_mutations[0])
                     self.log.info('Mutation has already been completely evaluated. Skipping...')

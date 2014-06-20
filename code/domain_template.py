@@ -654,8 +654,8 @@ class GetTemplate():
                 else:
                     raise Exception("Didn't take something into account!")
             return top_overhang, bottom_overhang
-        
-            
+
+
         # Remove overhangs in the alignment
         seqrec_1, seqrec_2 = alignment
         left_uniprot_overhang, left_pdb_overhang = get_overhangs(seqrec_1, seqrec_2, False)

@@ -97,7 +97,7 @@ class tcoffee_alignment:
             system_command = (
                 't_coffee' +
                 ' -mode expresso' +
-                ' -method sap_pair,mustang_pair' +
+                ' -method sap_pair' +
                 ' -seq ' + alignInFile +
                 ' -blast_server=LOCAL' +
                 ' -pdb_db=pdbaa -protein_db=nr' +
