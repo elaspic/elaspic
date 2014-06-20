@@ -507,6 +507,7 @@ class Pipeline(object):
                     self.__clear_provean_temp_files()
                 self.log.info('Adding template with provean info...')
                 self.db.add_uniprot_template(p.t, p.d.path_to_data)
+        self.log.info('Finished computing provean for {} {}\n\n\n'.format(self.uniprot_id, self.mutations))
 
 
     def _compute_mutations(self):
@@ -523,7 +524,8 @@ class Pipeline(object):
                 self.log.debug('Not evaluating mutations because no mutations specified...')
                 continue
             if ((isinstance(p.d, sql_db.UniprotDomain) and not (p.t and p.t.domain_def)) or
-                    (isinstance(p.d, sql_db.UniprotDomainPair) and not (p.t and p.t.domain_def_1 and p.t.domain_def_2))):
+                    (isinstance(p.d, sql_db.UniprotDomainPair) and not (p.t and p.t.domain_def_1 and p.t.domain_def_2))
+                    ):
                 self.log.debug('Skipping because the template is missing domain definitions...')
                 continue
             if not p.m or not p.m.model_filename:
@@ -548,7 +550,8 @@ class Pipeline(object):
                 # been precalculated.
                 if (precalculated_mutation and
                         (precalculated_mutation.provean_score and
-                        precalculated_mutation.Stability_energy_wt)):
+                        precalculated_mutation.Stability_energy_wt and
+                        precalculated_mutation.ddG)):
                     p.mut.append(precalculated_mutations[0])
                     self.log.info('Mutation has already been completely evaluated. Skipping...')
                     continue
@@ -579,7 +582,7 @@ class Pipeline(object):
                 self.log.info('Adding mutation {}\n\n\n'.format(mutation))
                 p.mut.append(uniprot_mutation)
                 self.db.add_uniprot_mutation(uniprot_mutation, p.d.path_to_data)
-        self.log.info('Finished processing all mutations for {} {}\n'.format(self.uniprot_id, self.mutations))
+        self.log.info('Finished processing all mutations for {} {}\n\n\n'.format(self.uniprot_id, self.mutations))
 
 
     def __print_header(self, p):

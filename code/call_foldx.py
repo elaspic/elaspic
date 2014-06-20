@@ -208,7 +208,7 @@ if __name__ == '__main__':
     buildModel_runs = '1'
     foldX_WATER = '-IGNORE'
     log = logger
-    fX_wt = foldX(tmp_path + unique + '/', repairedPDB_wt, chains_modeller[0], unique,
+    fX_wt = FoldX(tmp_path + unique + '/', repairedPDB_wt, chains_modeller[0], unique,
                   buildModel_runs, foldX_WATER, log)
     # do the mutation with foldX
     repairedPDB_wt_list, repairedPDB_mut_list = fX_wt.run('BuildModel', mutCodes)
