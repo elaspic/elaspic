@@ -179,10 +179,10 @@ class FoldX():
                 total_energy_difference = line[1]
                 return total_energy_difference
             if whatToRead == 'Stability':
-                stability_values = [ line[x[1]].strip() for x in self.names_rows_stability ]
+                stability_values = [ line[x[1]].strip() for x in names_rows_stability ]
                 return stability_values
             if whatToRead == 'AnalyseComplex':
-                complex_stability_values = [ line[x[1]].strip() for x in self.names_rows_stability_complex ]
+                complex_stability_values = [ line[x[1]].strip() for x in names_rows_stability_complex ]
                 return complex_stability_values
 
 
