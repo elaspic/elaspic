@@ -446,7 +446,7 @@ class Pipeline(object):
                 # Run the pipeline again if the error could be fixed with a better template,
                 # or otherwise move on to the next model while saving the error message
                 if (self.number_of_tries[p_idx] < 3 and
-                        ((isinstance(e, ModellerError) and 'exceeded max_molpdf' in e.message) or
+                        ((isinstance(e, ModellerError) and 'exceeded max_molpdf' in e.__str__()) or
                         (isinstance(e, errors.ChainsNotInteracting)))):
                     self.db._update_rows(bad_domains)
                     self.db.add_uniprot_model(empty_model, p.d.path_to_data)
@@ -490,7 +490,7 @@ class Pipeline(object):
                     p.t.provean_supset_filename, p.t.provean_supset_length \
                         = self.get_template.build_provean_supporting_set(p.d, p.t)
                 except errors.ProveanResourceError as e:
-                    self.log.critical(e.message)
+                    self.log.critical(e.__str__())
                     self.__clear_provean_temp_files()
                     # Send the kill signal to the main process group, killing everything
                     os.killpg(e.child_process_group_id, signal.SIGTERM)
@@ -574,10 +574,10 @@ class Pipeline(object):
                     uniprot_mutation = self.get_mutation.evaluate_mutation(mut_data, uniprot_mutation)
                 except (errors.MutationOutsideDomain,
                         errors.MutationOutsideInterface) as e:
-                    self.log.debug('{}: {}; OK'.format(type(e), e.message))
+                    self.log.debug('{}: {}; OK'.format(type(e), e.__str__()))
                     continue
                 except possible_mutation_errors as e:
-                    uniprot_mutation.mutation_errors = '{}: {}'.format(type(e), e.message)
+                    uniprot_mutation.mutation_errors = '{}: {}'.format(type(e), e.__str__())
                     self.log.debug(uniprot_mutation.mutation_errors)
                 self.log.info('Adding mutation {}\n\n\n'.format(mutation))
                 p.mut.append(uniprot_mutation)

@@ -398,7 +398,7 @@ class GetMutation(object):
                     mut_data.uniprot_domain_id, mut_data.mutation_domain,
                     mut_data.domain_sequences[0], mut_data.path_to_provean_supset)
             except errors.ProveanError as e:
-                self.log.error(str(type(e)) + ': ' + e.message)
+                self.log.error(str(type(e)) + ': ' + e.__str__())
                 provean_mutation, provean_score = None, None
             self.log.debug('provean mutation:')
             self.log.debug(provean_mutation)

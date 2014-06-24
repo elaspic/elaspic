@@ -271,7 +271,7 @@ class GetTemplate():
                         self.pdb_path, domain.pdb_id, [domain.pdb_chain], [pdb_domain_def, ],
                         self.unique_temp_folder, self.unique_temp_folder, self.log)
                 except errors.NoPDBFoundError as e:
-                    self.log.error(str(type(e)) + ': ' + e.message)
+                    self.log.error(str(type(e)) + ': ' + e.__str__())
                     self.log.error("Didn't find the pdb file? Check if it is correct. Skipping...")
                     continue
                 pdb.extract()
@@ -307,12 +307,12 @@ class GetTemplate():
                         .format(d.uniprot_id, template.alignment_id))
                 except (errors.LowIdentity,
                             errors.EmptyPDBSequenceError) as e:
-                        self.log.error(e.message)
+                        self.log.error(e.__str__())
                         self.log.debug('Skipping...')
                         continue
                 except self.possible_template_expansion_errors as e:
                     raise e
-                    domain.domain_errors = str(type(e)) + ': ' + e.message
+                    domain.domain_errors = str(type(e)) + ': ' + e.__str__()
                     self.log.error(domain.domain_errors)
                     if 'result' in dir(e):
                         self.log.error(e.result)
@@ -361,7 +361,7 @@ class GetTemplate():
                         [pdb_domain_def_1, pdb_domain_def_2],
                         self.unique_temp_folder, self.unique_temp_folder, self.log)
                 except errors.NoPDBFoundError as e:
-                    self.log.error(str(type(e)) + ': ' + e.message)
+                    self.log.error(str(type(e)) + ': ' + e.__str__())
                     self.log.error("Didn't find the pdb file? Check if it is correct. Skipping...")
                     continue
                 pdb.extract()
@@ -428,12 +428,12 @@ class GetTemplate():
                             d.uniprot_domain_2.uniprot_id, template.alignment_id_2))
                 except (errors.LowIdentity,
                             errors.EmptyPDBSequenceError) as e:
-                        self.log.error(e.message)
+                        self.log.error(e.__str__())
                         self.log.debug('Skipping...')
                         continue
                 except self.possible_template_expansion_errors as e:
                     raise e
-                    domain.domain_contact_errors = str(type(e)) + ': ' + e.message
+                    domain.domain_contact_errors = str(type(e)) + ': ' + e.__str__()
                     self.log.error(domain.domain_contact_errors)
                     if 'result' in dir(e):
                         self.log.error(e.result)
@@ -675,7 +675,7 @@ class GetTemplate():
         try:
             AlignIO.write(alignment, self.unique_temp_folder + 'tcoffee/' + alignment_filename, 'clustal')
         except IndexError as e:
-            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.message)
+            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.__str__())
         return domain_def, alignment_id, alignment_score, alignment_identity, alignment_filename
 
 
