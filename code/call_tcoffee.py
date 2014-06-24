@@ -63,7 +63,7 @@ class tcoffee_alignment:
 #        try:
 #            AlignIO.write(alignment, self.alnPath + alignment[0].id + '_' + alignment[1].id + '.aln', self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
 #        except IndexError as e:
-#            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.message)
+#            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.__str__())
 
 
     def __call_tcoffee_system_command(self, alignInFile, out, mode):

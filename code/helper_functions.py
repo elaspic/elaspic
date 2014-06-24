@@ -82,13 +82,13 @@ def kill_child_process(child_process):
         os.killpg(child_process.pid, signal.SIGTERM)
 #        child_process.terminate()
     except Exception as e:
-        print "Didn't work because of error: {}".format(e.message)
+        print "Didn't work because of error: {}".format(e.__str__())
         try:
             print 'Trying to kill child process...'
             os.killpg(child_process.pid, signal.SIGKILL)
 #            child_process.kill()
         except:
-            print "Didn't work because of error: {}".format(e.message)
+            print "Didn't work because of error: {}".format(e.__str__())
             print "Letting it go..."
             pass
     print 'OK'
