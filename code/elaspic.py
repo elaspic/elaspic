@@ -141,7 +141,7 @@ class Pipeline(object):
                 'mkdir -p ' + self.global_temp_path + 'blast/ && ' +
                 'ln -sf ' + self.blast_db_path + 'pdbaa_db ' + self.global_temp_path + 'blast/ && ' +
                 'ln -sf ' + self.blast_db_path + 'db ' +  self.global_temp_path + 'blast/')
-        elif username == 'witvliet' or username == 'kimadmin':
+        elif username == 'witvliet' or username == 'kimadmin' or username == 'www-data':
             system_command = (
                 'rm -rf ' + self.global_temp_path + 'blast/ && ' +
                 'mkdir -p ' + self.global_temp_path + 'blast/ && ' +
