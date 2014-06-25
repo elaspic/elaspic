@@ -25,11 +25,6 @@ from Bio.SubsMat import MatrixInfo
 from ConfigParser import SafeConfigParser
 import helper_functions as hf
 
-try:
-    from celery.utils.log import get_task_logger
-except ImportError:
-    pass
-
 blacklisted_uniprots = [
     'Q8WZ42', # Titin has a large number of domains that are joined in messed up ways
 ]
@@ -158,7 +153,7 @@ class Pipeline(object):
                 'mkdir -p ' + self.global_temp_path + 'blast && ' +
                 'cp -ru $HOME/niklas-pipeline/blastdb/pdbaa_db ' +
                 self.global_temp_path + 'blast/')
-        print system_command
+        
         rc = 1
         n_tries = 0
         while rc != 0 and n_tries < 10:
@@ -174,23 +169,23 @@ class Pipeline(object):
 
 
 
-    def __call__(self, uniprot_id, mutations, run_type=1, n_cores=None, number_of_tries=[]):
+    def __call__(self, uniprot_id, mutations, run_type=1, n_cores=None, number_of_tries=[], logger=None):
         """ Run the main function of the program and parse errors
         """
         # Initialize the logger
-        logger = logging.getLogger(__name__)
-        if self.debug:
-            logger.setLevel(logging.DEBUG)
-        else:
-            logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        logger.handlers = []
-        logger.addHandler(handler)
+        if not logger:
+            logger = logging.getLogger(__name__)
+            if self.debug:
+                logger.setLevel(logging.DEBUG)
+            else:
+                logger.setLevel(logging.INFO)
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            logger.handlers = []
+            logger.addHandler(handler)
         self.log = logger
-        if self.web_server: # Webserver logging is handled by Celery
-            self.log = get_task_logger('web_pipeline.tasks')
+
 
         #
         self.uniprot_id = uniprot_id
