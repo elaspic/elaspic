@@ -25,6 +25,11 @@ from Bio.SubsMat import MatrixInfo
 from ConfigParser import SafeConfigParser
 import helper_functions as hf
 
+try:
+    from celery.utils.log import get_task_logger
+except ImportError:
+    pass
+
 blacklisted_uniprots = [
     'Q8WZ42', # Titin has a large number of domains that are joined in messed up ways
 ]
@@ -184,6 +189,8 @@ class Pipeline(object):
         logger.handlers = []
         logger.addHandler(handler)
         self.log = logger
+        if self.web_server: # Webserver logging is handled by Celery
+            self.log = get_task_logger('web_pipeline.tasks')
 
         #
         self.uniprot_id = uniprot_id
