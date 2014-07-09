@@ -22,7 +22,9 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship, backref, aliased, scoped_session, joinedload
 from sqlalchemy.ext.declarative import declarative_base
 
-import Bio
+from Bio import Seq
+from Bio import SeqIO
+from Bio import AlignIO
 
 #import parse_pfamscan
 import errors as error
@@ -166,6 +168,21 @@ class DomainContact(Base):
 
 class UniprotSequence(Base):
     __tablename__ = 'uniprot_sequence'
+    __table_args__ = ({'schema': 'elaspic'},)
+
+    db = Column(String(12, collation=string_collation), nullable=False)
+    uniprot_id = Column(String(50, collation=string_collation), primary_key=True, nullable=False)
+    uniprot_name = Column(String(255, collation=string_collation), nullable=False)
+    protein_name = Column(String(255, collation=string_collation))
+    organism_name = Column(String(255, collation=string_collation))
+    gene_name = Column(String(255, collation=string_collation))
+    protein_existence = Column(Integer)
+    sequence_version = Column(Integer)
+    uniprot_sequence = Column(Text, nullable=False)
+
+
+class NewUniprotSequence(Base):
+    __tablename__ = 'new_uniprot_sequence'
     __table_args__ = ({'schema': 'elaspic'},)
 
     db = Column(String(12, collation=string_collation), nullable=False)
@@ -483,7 +500,7 @@ class MyDatabase(object):
 
         if log is None:
             logger = logging.getLogger(__name__)
-            logger.setLevel(logging.DEBUG)
+#            logger.setLevel(logging.DEBUG)
         #    handler = logging.FileHandler(tmp_path + 'templates.log', mode='w', delay=True)
             handler = logging.StreamHandler()
             handler.setLevel(logging.DEBUG)
@@ -504,14 +521,6 @@ class MyDatabase(object):
     def get_uniprot_sequence(self, uniprot_id):
         """
         """
-        if uniprot_id in ['A6NF79', 'C9JUS1', 'Q6N045', 'A6NMD1']:
-            # these uniprotKBs made problems
-            return []
-        elif uniprot_id == 'P02735':
-            # this sequence got replaced. I don't know right now if I can take
-            # replaced sequence so I rather dismiss it.
-            return []
-
         with session_scope() as session:
             uniprot_sequence = session.query(UniprotSequence)\
                                 .filter(UniprotSequence.uniprot_id==uniprot_id)\
@@ -520,6 +529,11 @@ class MyDatabase(object):
         if len(uniprot_sequence) == 1:
             uniprot_sequence = uniprot_sequence[0]
 
+        elif len(uniprot_sequence) > 1:
+            self.log.error('Type(uniprot_sequence): {}'.format(type(uniprot_sequence)))
+            self.log.error('uniprot_sequence: {}'.format(type(uniprot_sequence)))
+            raise Exception('Several uniprot sequences returned!? This should never happen!')
+        
         elif len(uniprot_sequence) == 0:
             # the True/False value is used to add new sequences to the database in
             # end. Only usefull if you run one instance at a time otherwise you will
@@ -528,26 +542,41 @@ class MyDatabase(object):
             if username.strip() == 'joan':
                 self.log.debug('uniprot sequence not found')
             else:
-                self.log.debug('Fetching uniprot sequence', uniprot_id, 'from online server')
-                address = 'http://www.uniprot.org/uniprot/' + uniprot_id + '.fasta'
-                handle = urllib2.urlopen(address)
-                sequence = next(Bio.SeqIO.parse(handle, "fasta"))
-
-                uniprot_sequence = UniprotSequence()
+#                print (
+#                    "Couldn't find a sequence for uniprot {}, and not bothering to look for it online"
+#                    .format(uniprot_id))
+#                return None
+                self.log.debug('Fetching sequence for uniprot {} from an online server'.format(uniprot_id))
+                print 'Fetching sequence for uniprot {} from an online server'.format(uniprot_id)
+                address = 'http://www.uniprot.org/uniprot/{}.fasta'.format(uniprot_id)
+                try:
+                    handle = urllib2.urlopen(address)
+                    sequence = next(SeqIO.parse(handle, "fasta"))
+                except (StopIteration, urllib2.HTTPError) as e:
+                    self.log.debug('{}: {}'.format(type(e), str(e)))
+                    print '{}: {}'.format(type(e), str(e))
+                    return None
+                uniprot_sequence = NewUniprotSequence()
                 uniprot_sequence.uniprot_id = uniprot_id
-                uniprot_sequence.uniprot_name = sequence.name
+                sp_or_trembl, uniprot_id_2, uniprot_name = sequence.name.split('|')
+                if uniprot_id != uniprot_id_2:
+                    print (
+                        'Uniprot id of the fasta file ({}) does not match the '
+                        'uniprot id of the query ({}). Skipping...'
+                        .format(uniprot_id_2, uniprot_id))
+                    return None
+                uniprot_sequence.db = sp_or_trembl
+                uniprot_sequence.uniprot_name = uniprot_name
                 uniprot_sequence.uniprot_description = sequence.description
                 uniprot_sequence.uniprot_sequence = str(sequence.seq)
-#                self.session.add(uniprot_sequence)
+                with session_scope() as session:
+                    session.add(uniprot_sequence)
 
-        if uniprot_sequence == []:
-            raise error.NoSequenceFound('No sequence found for ' + uniprot_id)
-
-        uniprot_seqio_object = Bio.SeqIO.SeqRecord(seq=Bio.Seq.Seq(str(uniprot_sequence.uniprot_sequence)),
+        uniprot_seqrecord = SeqIO.SeqRecord(seq=Seq.Seq(str(uniprot_sequence.uniprot_sequence)),
                                id=uniprot_sequence.uniprot_id,
                                name=uniprot_sequence.uniprot_name)
 
-        return uniprot_seqio_object
+        return uniprot_seqrecord
 
 
     def add_uniprot_sequence(self, uniprot_sequence):
@@ -1018,9 +1047,9 @@ class MyDatabase(object):
 
             # Load previously-calculated alignments
             if os.path.isfile(tmp_save_path + uniprot_template.alignment_filename):
-                alignment = Bio.AlignIO.read(tmp_save_path + uniprot_template.alignment_filename, 'clustal')
+                alignment = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename, 'clustal')
             elif os.path.isfile(archive_save_path + uniprot_template.alignment_filename):
-                alignment = Bio.AlignIO.read(archive_save_path + uniprot_template.alignment_filename, 'clustal')
+                alignment = AlignIO.read(archive_save_path + uniprot_template.alignment_filename, 'clustal')
             else:
                 raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename)
 
@@ -1031,13 +1060,13 @@ class MyDatabase(object):
             # Read alignment from the temporary folder
             if (os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_1)
             and os.path.isfile(tmp_save_path + uniprot_template.alignment_filename_2)):
-                alignment_1 = Bio.AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_1, 'clustal')
-                alignment_2 = Bio.AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_2, 'clustal')
+                alignment_1 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_1, 'clustal')
+                alignment_2 = AlignIO.read(tmp_save_path + uniprot_template.alignment_filename_2, 'clustal')
             # Read alignment from the export database
             elif (os.path.isfile(archive_save_path + uniprot_template.alignment_filename_1)
             and os.path.isfile(archive_save_path + uniprot_template.alignment_filename_2)):
-                alignment_1 = Bio.AlignIO.read(archive_save_path + uniprot_template.alignment_filename_1, 'clustal')
-                alignment_2 = Bio.AlignIO.read(archive_save_path + uniprot_template.alignment_filename_2, 'clustal')
+                alignment_1 = AlignIO.read(archive_save_path + uniprot_template.alignment_filename_1, 'clustal')
+                alignment_2 = AlignIO.read(archive_save_path + uniprot_template.alignment_filename_2, 'clustal')
             else:
                 raise error.NoPrecalculatedAlignmentFound(archive_save_path, uniprot_template.alignment_filename_1)
 

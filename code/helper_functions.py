@@ -11,7 +11,6 @@ import subprocess
 from os import chdir
 from time import strftime
 from contextlib import contextmanager
-import atexit
 import signal
 
 ###############################################################################
