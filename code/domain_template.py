@@ -308,7 +308,7 @@ class GetTemplate():
                 except (errors.LowIdentity,
                             errors.EmptyPDBSequenceError) as e:
                         self.log.error(e.__str__())
-                        self.log.debug('Skipping...')
+                        self.log.debug('Skipping...\n\n')
                         continue
                 except self.possible_template_expansion_errors as e:
                     raise e
@@ -317,14 +317,17 @@ class GetTemplate():
                     if 'result' in dir(e):
                         self.log.error(e.result)
                     self.db.add_domain(domain)
+                    self.log.debug('Skipping...\n\n')
                     continue
                 if template.alignment_identity < self.alignment_identity_cutoff:
+                    self.log.debug('Skipping...\n\n')
                     continue
 
                 # Save alignment results
                 list_of_templates.append(template)
                 pfam_cluster_ids_visited[pfam_cluster_id] = (domain.cdhit_cluster_idx,)
-                self.log.debug('cdhit cluster: %i, cdhit cluster idx: %i' % (domain.cdhit_cluster, domain.cdhit_cluster_idx) )
+                list_of_templates.append(template)
+                self.log.debug('Adding alignmnet to list...\n\n')
 
 
             elif isinstance(d, sql_db.UniprotDomainPair):
@@ -429,7 +432,7 @@ class GetTemplate():
                 except (errors.LowIdentity,
                             errors.EmptyPDBSequenceError) as e:
                         self.log.error(e.__str__())
-                        self.log.debug('Skipping...')
+                        self.log.debug('Skipping...\n\n')
                         continue
                 except self.possible_template_expansion_errors as e:
                     raise e
