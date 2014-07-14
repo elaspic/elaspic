@@ -4,57 +4,44 @@ Created on Sun Feb  3 15:07:51 2013
 
 @author: niklas
 """
-import os
-import sys
-
-###############################################################################
-# Used to find the location of the files being executed
-def we_are_frozen():
-    # All of the modules are built-in to the interpreter, e.g., by py2exe
-    return hasattr(sys, "frozen")
-
-
-def path_to_pipeline_code():
-    encoding = sys.getfilesystemencoding()
-    if we_are_frozen():
-        return os.path.dirname(unicode(sys.executable, encoding))
-    return os.path.dirname(unicode(__file__, encoding))
 
 
 ###############################################################################
-# Keep track of and raise different kinds of errors
+# Tcoffee
 
 class TcoffeeError(Exception):
     def __init__(self, result, error, alignInFile, system_command):
-        message = ('tcoffee blast error for file: {0}, with error message: {1}, '
-        'when trying to run command: {2}'.format(alignInFile, error, system_command))
+        message = (
+            'tcoffee blast error for file: {0}, with error message: {1}, '
+            'when trying to run command: {2}'
+            .format(alignInFile, error, system_command))
         Exception.__init__(self, message)
         self.result = result
-
 
 class TcoffeeBlastError(Exception):
     def __init__(self, result, error, alignInFile, system_command):
-        message = ('tcoffee blast error for file: {0}, with error message: {1}, '
-        'when trying to run command: {2}'.format(alignInFile, error, system_command))
+        message = (
+            'tcoffee blast error for file: {0}, with error message: {1}, '
+            'when trying to run command: {2}'
+            .format(alignInFile, error, system_command))
         Exception.__init__(self, message)
         self.result = result
 
-
 class TcoffeePDBidError(Exception):
     def __init__(self, result, error, alignInFile, system_command):
-        message = ('tcoffee blast error for file: {0}, with error message: {1}, '
-        'when trying to run command: {2}'.format(alignInFile, error, system_command))
+        message = (
+            'tcoffee blast error for file: {0}, with error message: {1}, '
+            'when trying to run command: {2}'
+            .format(alignInFile, error, system_command))
         Exception.__init__(self, message)
         self.result = result
 
 
 ###############################################################################
-# Common
+# Provean
 
 class ProveanError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, 'provean exited with an error:\n %s' % message)
-
+    pass
 
 class ProveanResourceError(Exception):
     def __init__(self, message, child_process_group_id):
@@ -63,113 +50,76 @@ class ProveanResourceError(Exception):
 
 
 ###############################################################################
-# Finding templates
+# Finding templates (PDB in uppercase to be consistent with Biopython)
 
 class LowIdentity(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
+    pass
 
 class PDBError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
+    pass
 
+class PDBNotFoundError(Exception):
+    pass
 
-class NoPDBFoundError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
-
-class EmptyPDBSequenceError(Exception):
+class PDBEmptySequenceError(Exception):
+    """ One of the sequences is missing from the alignment. The most likely cause
+    is that the alignment domain definitions were incorrect. 
     """
-    One of the sequences is missing from the alignment. The most likely cause
-    is that the alignment domain definitions were incorrect.
-    """
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
+    pass
 
 class PDBDomainDefsError(Exception):
-    # domain.pdb_domain_defs not found in pdb file
-    def __init__(self, message):
-        Exception.__init__(self, message)
+    """ PDB domain definitions not found in the pdb file
+    """
+    pass
 
+class PDBChainError(Exception):
+    pass
+        
 
 ###############################################################################
 # Making models
 
-class MSMSError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
+class MsmsError(Exception):
+    pass
 
+class ModellerError(Exception):
+    pass
 
-class ModellerFailure(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
-
-class FoldXError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
+class FoldxError(Exception):
+    pass
 
 class DataError(Exception):
-    def __init__(self, inputFile):
-        Exception.__init__(self)
-        self.inputFile = inputFile
-
+    pass
 
 class TemplateCoreError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
+    pass
 
 class TemplateInterfaceError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
+    pass
 
 class ResourceError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
+    pass
 
 
 ###############################################################################
 # Computing mutations
 
-class PDBChainError(Exception):
-    def __init__(self, pdb_code, chains):
-        message = 'PDBChainError in pdb: %s and chain: %s' % (pdb_code, chains,)
-        Exception.__init__(self, message)
-
-
-class NoStructuralTemplates(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
 
 
 class NoSequenceFound(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
+    pass
 
 class ProteinDefinitionError(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
+    pass
 
+class NoTemplatesFoundError(Exception):
+    pass
 
-class NoTemplatesFound(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
-
-class NoPrecalculatedAlignmentFound(Exception):
+class AlignmentNotFoundError(Exception):
     def __init__(self, save_path, alignment_filename):
         Exception.__init__(self)
         self.save_path = save_path
         self.alignment_filename = alignment_filename
-
 
 class PopsError(Exception):
     def __init__(self, message, pdb, chains):
@@ -178,24 +128,14 @@ class PopsError(Exception):
         self.chains = chains
 
 
-class NoPDBFound(Exception):
-    def __init__(self, pdb_filename):
-        message = 'PDB with filename %s not found!' % pdb_filename
-        Exception.__init__(self, message)
-
 ###############################################################################
 
-class ChainsNotInteracting(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
+class ChainsNotInteractingError(Exception):
+    pass
 
+class MutationOutsideDomainError(Exception):
+    pass
 
-class MutationOutsideDomain(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
-
-
-class MutationOutsideInterface(Exception):
-    def __init__(self, message):
-        Exception.__init__(self, message)
+class MutationOutsideInterfaceError(Exception):
+    pass
 

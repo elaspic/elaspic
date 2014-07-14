@@ -22,10 +22,10 @@ import errors
 from collections import defaultdict
 
 A_DICT = {
-    'A':'ALA', 'R':'ARG', 'N':'ASN', 'D':'ASP', 'C':'CYS', 'E':'GLU', 
-    'Q':'GLN', 'G':'GLY', 'H':'HIS', 'I':'ILE', 'L':'LEU', 'K':'LYS', 
-    'M':'MET', 'F':'PHE', 'P':'PRO', 'S':'SER', 'T':'THR', 'W':'TRP', 
-    'Y':'TYR', 'V':'VAL', 'U':'SEC', 'O':'PYL', 
+    'A':'ALA', 'R':'ARG', 'N':'ASN', 'D':'ASP', 'C':'CYS', 'E':'GLU',
+    'Q':'GLN', 'G':'GLY', 'H':'HIS', 'I':'ILE', 'L':'LEU', 'K':'LYS',
+    'M':'MET', 'F':'PHE', 'P':'PRO', 'S':'SER', 'T':'THR', 'W':'TRP',
+    'Y':'TYR', 'V':'VAL', 'U':'SEC', 'O':'PYL',
     'B':'ASX', 'Z':'GLX', 'J':'XLE', 'X':'XAA', '*':'TER'
 }
 AAA_DICT = dict([(value,key) for key,value in A_DICT.items()])
@@ -36,67 +36,40 @@ methylated_lysines = ['MLZ', 'MLY', 'M3L']
 lysine_atoms = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
 
 
-def get_pdb(pdb_code, pdb_path, tmp_path='/tmp/'):
+def get_pdb(pdb_code, pdb_path, tmp_path='/tmp/', pdb_type='ent'):
+    """ Parse a pdb file with biopythons PDBParser() and return the structure
+    :param pdb_code:  type String     four letter code of the PDB file
+    :rtype: Biopython pdb structure
     """
-    parse a pdb file with biopythons PDBParser() and return the structure
-
-    input: pdb_code  type String     four letter code of the PDB file
-
-    return: Biopython pdb structure
-    """
-    if False:
+    if pdb_type == 'pdb':
         pdb_path = pdb_path + '../../../biounit/coordinates/divided/'
         parser = PDBParser(QUIET=True)
         prefix = ''
         suffix = '.pdb1.gz'
-    if False:
+    elif pdb_type == 'cif':
         pdb_path = pdb_path + '../mmCIF/'
         parser = MMCIFParser()
         prefix = ''
         suffix = '.cif.gz'
-    if True:
+    elif pdb_type == 'ent':
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         prefix = 'pdb'
         suffix = '.ent.gz'
     pdb_file = pdb_path + pdb_code[1:3].lower() + '/' + prefix + pdb_code.lower() + suffix
+
     try:
         with gzip.open(pdb_file, 'r') as ifh, \
         open(tmp_path + pdb_code + suffix.replace('.gz',''), 'w') as ofh:
             ofh.write(ifh.read())
     except IOError as e:
         raise errors.NoPDBFoundError(e.message)
-#    # Convert methylated lysines to lysines directly in the pdb file
-#    with open(tmp_path + pdb_code + suffix.replace('.gz',''), 'r') as ifh:
-#        pdb_file = ifh.readlines()
-#    line_idx = 0
-#    while line_idx < len(pdb_file):
-#        increment = True
-#        for resname in methylated_lysines:
-#            if ' '+resname+' ' not in pdb_file[line_idx]:
-#                continue # check the next residue
-#            elif (pdb_file[line_idx][:6] == 'HETATM' 
-#                    and pdb_file[line_idx][17:20] == resname
-#                    and pdb_file[line_idx][13:16] in ['N  ', 'CA ', 'CB ', 'CG ', 'CD ', 'CE ', 'NZ ', 'C  ', 'O  ']):
-#                pdb_file[line_idx] = pdb_file[line_idx].replace('HETATM', 'ATOM  ').replace(resname, 'LYS')
-#            elif pdb_file[line_idx][:6] == 'SEQRES':
-#                pdb_file[line_idx] = pdb_file[line_idx].replace(resname, 'LYS')
-#            else:
-#                print 'Removing line: {}'.format(pdb_file[line_idx])
-#                del pdb_file[line_idx]
-#                increment = False
-#                break
-#        if increment:
-#            line_idx += 1
-#    with open(tmp_path + pdb_code + suffix.replace('.gz','.corrected'), 'w') as ofh:
-#        ofh.writelines(pdb_file)
-#    result = parser.get_structure('ID', tmp_path + pdb_code + suffix.replace('.gz','.corrected'))
+
     result = parser.get_structure('ID', tmp_path + pdb_code + suffix.replace('.gz',''))
     return result
 
 
 def convert_aa(aa):
-    """
-    Convert amino acids from three letter code to one letter code or vice versa
+    """ Convert amino acids from three letter code to one letter code or vice versa
     """
     if len(aa) == 3:
         try:
@@ -114,34 +87,16 @@ def convert_aa(aa):
 
 
 def convert_position_to_resid(model, chain_id, positions):
-    """ 
-    Maps the mutation sequence position of the pdb to pdb numbering
-
-    input
-    model       class 'Bio.PDB.Model.Model'
-    mutation    type 'str'                      ; B_Q61L
-
-    return:
-    chainNumbering[position-1]      type 'int'
     """
-
+    """
     chain = model[chain_id]
     chain_numbering = get_chain_numbering(chain, return_extended=True)
     return [chain_numbering[p-1] for p in positions]
 
 
 def convert_resid_to_position(model, pdb_chain, resids, pdb_domain_start, pdb_domain_end):
-    """ 
-    Maps the mutation sequence position of the pdb to pdb numbering
-
-    input
-    model       class 'Bio.PDB.Model.Model'
-    mutation    type 'str'                      ; B_Q61L
-
-    return:
-    chainNumbering[position-1]      type 'int'
     """
-
+    """
     chain = model[pdb_chain]
     chain_numbering = get_chain_numbering(chain, return_extended=True)
 #    try:
@@ -179,10 +134,8 @@ def get_chain_numbering(chain, return_sequence=False, return_extended=False, inc
 
 
 def get_seqres_sequence(chain):
-    """
-    Extracts a sequence from a PDB file.
-    Usefull when interested in the sequence that was used for crystallization
-    and not the ATOM sequence
+    """ Extracts a sequence from a PDB file. Usefull when interested in the
+    sequence that was used for crystallization and not the ATOM sequence.
     """
     # setting aa_only to False Selenomethionines are reported in the
     # sequence as well
@@ -208,7 +161,7 @@ def get_chain_sequences(file_or_structure, seqres_sequence=False):
         model = file_or_structure
     elif isinstance(file_or_structure, Bio.PDB.Chain.Chain):
         model = [file_or_structure]
-        
+
     chain_sequences = defaultdict(list)
     for chain in model:
         if seqres_sequence:
@@ -218,8 +171,11 @@ def get_chain_sequences(file_or_structure, seqres_sequence=False):
         chain_sequences[chain.id] = chain_sequence
     return chain_sequences
 
-    
+
 def convert_resnum_alphanumeric_to_numeric(resnum):
+    """ Convert residue numbering that has letters (i.e. 1A, 1B, 1C...) to
+    residue numbering without letters (i.e. 1, 2, 3...).
+    """
     idx_increment = 0
     while string.letters.find(resnum[-1]) != -1:
         idx_increment += string.letters.find(resnum[-1])
@@ -230,35 +186,37 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 
 class PDBTemplate():
 
-    def __init__(self, pdbPath, pdb_id, chain_ids, domain_boundaries, outputPath, tmp_path, log):
+    def __init__(self, pdb_path, pdb_id, chain_ids, domain_boundaries, outputPath, tmp_path, log):
         """
-        Fetches the pdb file from the local database, extracts the desired chains
-        and exports the amino acid sequence of the chains
-
-        input:  pdbPath:    type string     path of the locally installed pdb database
-                pdbCode:    type string     four letter code of the pdb structure
-                chains:     type list       list containing the chain names
-                                            as strings, i.e. chains = ['A', 'B']
-                domainBoundaries
-                outputPath  type string     path where the extracted pdb structure
-                                            and sequence are saved
+        Parameters
+        ----------
+        domain_boundaries : list of lists of lists
+            Elements in the outer list correspond to domains in each chain of the
+            pdb. Elements of the inner list contain the start and end of each
+            fragment of each domain. For example, if there is only one chain
+            with pdb domain boundaries 1-10:20-45, this would correspond to
+            domain_boundaries [[[1,10],[20,45]]].
         """
-        self.pdbPath = pdbPath
+        self.pdb_path = pdb_path
         self.pdb_id = pdb_id
         self.outputPath = outputPath
-        self.structure = get_pdb(self.pdb_id, self.pdbPath, tmp_path)
+        self.structure = get_pdb(self.pdb_id, self.pdb_path, tmp_path)
         if chain_ids:
             self.chain_ids = chain_ids
         else: # If [], extract all chains
             self.chain_ids = [chain.id for chain in self.structure[0].child_list]
-        self.domain_boundaries = domain_boundaries # If [], extract the entire domain
+        self.domain_boundaries = domain_boundaries # If [[[1,10],[20,45],]], extract the entire domain
+        self.domain_boundaries_extended = [
+            [convert_resnum_alphanumeric_to_numeric(domain_fragment_start),
+            convert_resnum_alphanumeric_to_numeric(domain_fragment_end)]
+            for domain in self.domain_boundaries
+            for (domain_fragment_start, domain_fragment_end) in domain]
         self.log = log
 
 
     def extract(self):
-        """
-        Extract the wanted chains out of the PDB file
-        Removes water atoms and selects the domain regions
+        """ Extract the wanted chains out of the PDB file. Removes water atoms
+        and selects the domain regions.
         """
         io = PDBIO()
         model = self.structure[0] # assuming that model 0 is always the desired one
@@ -267,22 +225,20 @@ class PDBTemplate():
         chain_for_hetatms = Bio.PDB.Chain.Chain('Z')
         for i, chain_id in enumerate(self.chain_ids):
             chain = model[chain_id]
-            BEGIN = False
-            END = False
             res_idx = 0
             while res_idx < len(chain):
                 res = chain.child_list[res_idx]
                 old_res_id = res.id
                 # Remove water
                 if res.id[0] == 'W':
-#                    self.log.debug('Removing water molecule {}'.format(res.id))
+#                    self.logger.debug('Removing water molecule {}'.format(res.id))
                     chain.detach_child(res.id)
                     continue
                 # Convert methylated lysines to regular lysines
                 if res.resname in methylated_lysines:
                     new_resname = 'LYS'
                     new_resid = (' ', res.id[1], res.id[2])
-                    self.log.debug(
+                    self.logger.debug(
                         'Renaming residue {} {} to {} {}'
                         .format(res.resname, res.id, new_resname, new_resid))
                     res.resname = new_resname
@@ -291,28 +247,28 @@ class PDBTemplate():
                     while atom_idx < len(res):
                         atom_id = res.child_list[atom_idx].id
                         if atom_id not in lysine_atoms:
-                            self.log.debug('Removing atom {} from residue {} {}.'.format(atom_id, res.resname, res.id))
+                            self.logger.debug('Removing atom {} from residue {} {}.'.format(atom_id, res.resname, res.id))
                             res.detach_child(atom_id)
                         else:
                             atom_idx += 1
                 # Move hetatms to the hetatm chain
                 if res.resname not in amino_acids:
-                    self.log.debug('Moving hetatm residue {} {} to the hetatm chain'.format(res.resname, res.id))
+                    self.logger.debug('Moving hetatm residue {} {} to the hetatm chain'.format(res.resname, res.id))
                     chain.detach_child(res.id)
                     hetatm_res = res
                     hetatm_res.id = (hetatm_res.id[0], len(chain_for_hetatms)+1, hetatm_res.id[2],)
                     chain_for_hetatms.add(hetatm_res)
                     continue
                 # Cut each chain to domain boundaries
-                if self.domain_boundaries and self.domain_boundaries[i]:                   
+                if len(self.domain_boundaries_extended[i]) == 1 and self.domain_boundaries_extended[i][0] == []:
+                    pass # If a chain does not have any domain boundaries, use the entire chain
+                else:
+                    keep_residue = False
                     resnum_extended = convert_resnum_alphanumeric_to_numeric(str(res.id[1]) + res.id[2].strip())
-                    domain_start_extended = convert_resnum_alphanumeric_to_numeric(self.domain_boundaries[i][0])
-                    domain_end_extended = convert_resnum_alphanumeric_to_numeric(self.domain_boundaries[i][1]) + 1
-                    if resnum_extended >= domain_start_extended:
-                        BEGIN = True # From now on, keep the residues
-                    if resnum_extended >= domain_end_extended:
-                        END = True # From now on, detach them again
-                    if not BEGIN or END: # We are before the beginning or past the end
+                    for domain_fragment_start, domain_fragment_end in self.domain_boundaries_extended[i]:
+                        if resnum_extended >= domain_fragment_start and resnum_extended > domain_fragment_end:
+                            keep_residue = True
+                    if not keep_residue:
                         chain.detach_child(old_res_id)
                         continue
                 res_idx += 1
@@ -333,7 +289,7 @@ class PDBTemplate():
             if not in_contact:
                 chain_for_hetatms.detach_child(res_1.id)
         if chain_for_hetatms:
-            self.log.debug('Adding hetatm chain of length {}'.format(len(chain_for_hetatms)))
+            self.logger.debug('Adding hetatm chain of length {}'.format(len(chain_for_hetatms)))
             new_model.add(chain_for_hetatms)
         # If the hetatm chain is not empty, add it to the model
         new_structure.add(new_model)
@@ -342,9 +298,14 @@ class PDBTemplate():
         io.set_structure(self.structure)
         outFile = self.outputPath + self.pdb_id + ''.join(self.chain_ids) + '.pdb'
         io.save(outFile)
+
         # Save the sequence of each chain to a fasta file
+        self.chain_numbering_extended_dict = {}
+        self.chain_sequence_dict = {}
         for chain_id in self.chain_ids:
-            chain_numbering_extended, chain_sequence = self.get_chain_numbering(chain_id, return_sequence=True, return_extended=True)        
+            chain_numbering_extended, chain_sequence = self.get_chain_numbering(chain_id, return_sequence=True, return_extended=True)
+            self.chain_numbering_extended_dict[chain_id] = chain_numbering_extended
+            self.chain_sequence_dict[chain_id] = chain_sequence
             with open(self.outputPath + self.pdb_id + chain_id + '.seq.txt', 'w') as f:
                 f.write('>' + self.pdb_id + chain_id + '\n')
                 f.write(chain_sequence + '\n')
@@ -359,10 +320,8 @@ class PDBTemplate():
 
 
     def get_seqres_sequence(self, chain_id):
-        """
-        Extracts a sequence from a PDB file.
-        Usefull when interested in the sequence that was used for crystallization
-        and not the ATOM sequence
+        """ Extracts a sequence from a PDB file. Usefull when interested in the
+        sequence that was used for crystallization and not the ATOM sequence.
         """
         if not chain_id.strip():
             raise Exception('chain_id must not be empty!')
