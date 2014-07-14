@@ -8,26 +8,162 @@ import os
 import sys
 import shlex
 import subprocess
-from os import chdir
-from time import strftime
-from contextlib import contextmanager
 import signal
+import tarfile
+import datetime
+import logging
+import time
+
+from contextlib import contextmanager
+
+from Bio.PDB.PDBParser import PDBParser
+
+import sql_db
+
 
 ###############################################################################
-# Used to find the location of the files being executed
-def we_are_frozen():
-    # All of the modules are built-in to the interpreter, e.g., by py2exe
-    return hasattr(sys, "frozen")
+#
+
+def get_pdb_structure(path_to_pdb_file):
+    parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
+    structure = parser.get_structure('ID', path_to_pdb_file)
+    return structure
 
 
-def path_to_pipeline_code():
+def get_uniprot_base_path(d):
+    if isinstance(d, sql_db.UniprotDomain):
+        uniprot_id = d.uniprot_id
+        uniprot_name = d.uniprot_name
+    elif isinstance(d, sql_db.UniprotDomainPair):
+        uniprot_id = d.uniprot_domain_1.uniprot_id
+        uniprot_name = d.uniprot_domain_1.uniprot_name
+    elif isinstance(d, dict):
+        uniprot_id = d['uniprot_id']
+        uniprot_name = d['uniprot_name']
+    else:
+        raise Exception('Input parameter type is not supported!')
+
+    uniprot_base_path = (
+        '{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/'
+        .format(
+            organism_name=uniprot_name.split('_')[-1].lower(),
+            uniprot_id_part_1=uniprot_id[:3],
+            uniprot_id_part_2=uniprot_id[3:5],
+            uniprot_id_part_3=uniprot_id,))
+    return uniprot_base_path
+
+
+def get_uniprot_domain_path(d):
+    """
+    """
+    if isinstance(d, sql_db.UniprotDomain):
+        uniprot_domain_path = (
+            '{pdbfam_name}*{alignment_def}/'
+            .format(
+                pdbfam_name=d.pdbfam_name,
+                alignment_def=d.alignment_def.replace(':','-'),))
+    elif isinstance(d, sql_db.UniprotDomainPair):
+        uniprot_domain_path = (
+            '{pdbfam_name_1}*{alignment_def_1}/{pdbfam_name_2}*{alignment_def_2}/{uniprot_id_2}/'
+            .format(
+                pdbfam_name_1 = d.uniprot_domain_1.pdbfam_name,
+                alignment_def_1 = d.uniprot_domain_1.alignment_def.replace(':','-'),
+                pdbfam_name_2 = d.uniprot_domain_2.pdbfam_name,
+                alignment_def_2 = d.uniprot_domain_2.alignment_def.replace(':','-'),
+                uniprot_id_2 = d.uniprot_domain_2.uniprot_id,))
+    return uniprot_domain_path
+
+
+def get_path_to_current_file():
+    """ Find the location of the files being executed
+    """
     encoding = sys.getfilesystemencoding()
-    if we_are_frozen():
+    if hasattr(sys, "frozen"):
+        # All of the modules are built-in to the interpreter, e.g., by py2exe
         return os.path.dirname(unicode(sys.executable, encoding))
-    return os.path.dirname(unicode(__file__, encoding))
+    else:
+        return os.path.dirname(unicode(__file__, encoding))
+
+
+def get_logger(do_debug=False):
+    logger = logging.getLogger(__name__)
+    if do_debug:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.handlers = []
+    logger.addHandler(handler)
+    return logger
+
+
+def make_tarfile(output_filename, source_dir):
+    with tarfile.open(output_filename, "w:bz2") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
 
 ###############################################################################
+# Helper functions for sql objects
 
+def decode_domain_def(domains, merge=True, return_string=False):
+    """ Unlike split_domain(), this function returns a tuple of tuples of strings,
+    preserving letter numbering (e.g. 10B)
+    """
+    if not domains:
+        return None
+
+    if domains[-1] == ',':
+        domains = domains[:-1]
+    x = domains
+    if return_string:
+        domain_fragments = [ [r.strip() for r in ro.split(':')] for ro in x.split(',') ]
+    else:
+        domain_fragments = [ [int(r.strip()) for r in ro.split(':')] for ro in x.split(',') ]
+    domain_merged = [ domain_fragments[0][0], domain_fragments[-1][-1] ]
+    if merge:
+        return domain_merged
+    else:
+        return domain_fragments
+
+
+def encode_domain(domains, merged=True):
+    x = domains
+    if merged:
+        return ':'.join([str(r) for r in x])
+    else:
+        return ','.join([':'.join([str(r) for r in ro]) for ro in x])
+
+
+def decode_aa_list(interface_aa):
+    """
+    """
+    if interface_aa and (interface_aa != '') and (interface_aa != 'NULL'):
+        if interface_aa[-1] == ',':
+            interface_aa = interface_aa[:-1]
+
+        x  = interface_aa
+        return_tuple = tuple([int(r.strip()) for r in x.split(',')])
+
+    else:
+        return_tuple = []
+
+    return return_tuple
+
+
+def row2dict(row):
+    d = {}
+    for column in row.__table__.columns:
+        d[column.name] = getattr(row, column.name)
+        if type(d[column.name]) == datetime.datetime:
+            d[column.name] = d[column.name].strftime('%Y-%m-%d %H-%M-%S-%f')
+
+    return d
+
+
+###############################################################################
+# Helper functions for different subprocess commands
 
 def get_username():
     child_process = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
@@ -55,6 +191,21 @@ def get_which(bin_name):
     bin_filename, __ = child_process.communicate()
     bin_filename = bin_filename.strip()
     return bin_filename
+
+
+def get_temp_path(global_temp_path, temp_path_suffix):
+    #######################################################################
+    # If a TMPDIR is given as an environment variable, the tmp directory
+    # is created relative to that. This is useful when running on banting
+    # (the cluster in the ccbr) and also on Scinet. Make sure that it
+    # points to '/dev/shm/' on Scinet.
+    tmpdir_cluster = get_echo('$TMPDIR')
+    if tmpdir_cluster:
+        temp_path = os.path.join(tmpdir_cluster, temp_path_suffix)
+    else:
+        temp_path = os.path.join(global_temp_path, temp_path_suffix)
+    subprocess.check_call('mkdir -p ' + temp_path, shell=True)
+    return temp_path
 
 
 @contextmanager
@@ -91,8 +242,6 @@ def kill_child_process(child_process):
             print "Letting it go..."
             pass
     print 'OK'
-
-
 
 
 
@@ -163,11 +312,11 @@ def scinetCleanup(folder, destination, name=None):
     zip and copy the results from the ramdisk to /scratch
     """
     print 'saving the result in', folder
-    chdir(folder)
+    os.chdir(folder)
     if name == None:
-        output_name = 'result_' + strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
+        output_name = 'result_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
     else:
-        output_name = name + '_' + strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
+        output_name = name + '_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
     copy = 'cp ' + output_name + ' ' + destination + output_name
 #    copy = 'cp ' + output_name + ' $SCRATCH/niklas-pipeline/' + output_name
 #    copy = 'cp ' + output_name + ' /home/niklas/tmp/' + output_name

@@ -164,8 +164,8 @@ class modeller:
         failures = []
         # add the loop output
         if loopRefinement == True:
-            self.log.debug('Modeller loop outputs:')
-            self.log.debug(a.loop.outputs)
+            self.logger.debug('Modeller loop outputs:')
+            self.logger.debug(a.loop.outputs)
             for i in range(len(a.loop.outputs)):
                 if not a.loop.outputs[i]['failure']:
                     model_filename = a.loop.outputs[i]['name']
@@ -176,8 +176,8 @@ class modeller:
                     failures.append(a.loop.outputs[i]['failure'])
 
         # add the normal output
-        self.log.debug('Modeller outputs:')
-        self.log.debug(a.outputs)
+        self.logger.debug('Modeller outputs:')
+        self.logger.debug(a.outputs)
         for i in range(len(a.outputs)):
             if not a.outputs[i]['failure']:
                 model_filename = a.outputs[i]['name']
@@ -206,13 +206,13 @@ class modeller:
         # execution folder, this is created in the beginning
 
         system_command = './topol ' + pdbFile
-        self.log.debug('FoldX system command: {}'.format(system_command))
+        self.logger.debug('FoldX system command: {}'.format(system_command))
         child_process = hf.run_subprocess_locally('./', system_command)
         result, error_message = child_process.communicate()
         return_code = child_process.returncode
         if not return_code:
-            self.log.error('FoldX result: {}'.format(result))
-            self.log.error('FoldX error message: {}'.format(error_message))
+            self.logger.error('FoldX result: {}'.format(result))
+            self.logger.error('FoldX error message: {}'.format(error_message))
 
         line = [ x for x in result.split('\n') ]
 

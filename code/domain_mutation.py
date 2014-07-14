@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import tarfile
 import cPickle as pickle
 import datetime
 
@@ -274,7 +273,7 @@ class GetMutation(object):
         #######################################################################
         # Core
         if isinstance(d, sql_db.UniprotDomain):
-            self.log.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
+            self.logger.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
             pfam_name = d.pfam_name
             domain_start, domain_end = sql_db.decode_domain(t.domain_def)
             alignment, __ = self.db.get_alignment(t, d.path_to_data)
@@ -302,7 +301,7 @@ class GetMutation(object):
                 chains_modeller = [m.chain_1, m.chain_2]
 
             elif uniprot_id_1 == d.uniprot_domain_2.uniprot_id:
-                self.log.debug('Mutated uniprot is uniprot 2. Rearranging...')
+                self.logger.debug('Mutated uniprot is uniprot 2. Rearranging...')
                 uniprot_id_2 = d.uniprot_domain_1.uniprot_id
                 d_1, d_2 = d.uniprot_domain_2, d.uniprot_domain_1
                 domain_start, domain_end = sql_db.decode_domain(t.domain_def_2)
@@ -313,7 +312,7 @@ class GetMutation(object):
                 interacting_aa = [int(uniprot_num) for uniprot_num in m.interacting_aa_2.split(',') if uniprot_num]
                 chains_modeller = [m.chain_2, m.chain_1]
 
-            self.log.debug('Analysing interface mutation between uniprots %s and %s' % (uniprot_id_1, uniprot_id_2,) )
+            self.logger.debug('Analysing interface mutation between uniprots %s and %s' % (uniprot_id_1, uniprot_id_2,) )
             pfam_name = d_1.pfam_name
             uniprot_sequences = [self.db.get_uniprot_sequence(d_1.uniprot_id),
                                  self.db.get_uniprot_sequence(d_2.uniprot_id)]
@@ -330,7 +329,7 @@ class GetMutation(object):
                 if os.path.isfile(self.temp_path + d_1.path_to_data + d_1.template.provean_supset_filename):
                     path_to_provean_supset = self.temp_path + d_1.path_to_data + d_1.template.provean_supset_filename
                 else:
-                    self.log.error('Provean supporting set does not exist even though it should!!!')
+                    self.logger.error('Provean supporting set does not exist even though it should!!!')
 
         #######################################################################
         # Common
@@ -348,7 +347,7 @@ class GetMutation(object):
 #        mutation_structure = map_mutation_to_structure(alignment, alignment_id, mutation_domain, uniprot_id_1)
 #        chain_mutation_structure = chains_pdb[0] + '_' + mutation_structure
 
-        self.log.debug(save_path + pdbFile_wt)
+        self.logger.debug(save_path + pdbFile_wt)
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         structure = parser.get_structure('ID', save_path + pdbFile_wt)
         position_modeller = pdb_template.convert_position_to_resid(structure[0], chains_modeller[0], [position_domain])
@@ -382,8 +381,8 @@ class GetMutation(object):
         mut_data.mutation_modeller = mutation_modeller
 
         for key, value in mut_data.__dict__.iteritems():
-            self.log.debug(key + ':')
-            self.log.debug(value)
+            self.logger.debug(key + ':')
+            self.logger.debug(value)
 
         return mut_data
 
@@ -392,28 +391,28 @@ class GetMutation(object):
         """
         """
         if (mut_data.path_to_provean_supset and not uniprot_mutation.provean_score):
-            self.log.debug('Calculating the provean score for the mutation...')
+            self.logger.debug('Calculating the provean score for the mutation...')
             try:
                 provean_mutation, provean_score = self.get_provean_score(
                     mut_data.uniprot_domain_id, mut_data.mutation_domain,
                     mut_data.domain_sequences[0], mut_data.path_to_provean_supset)
             except errors.ProveanError as e:
-                self.log.error(str(type(e)) + ': ' + e.__str__())
+                self.logger.error(str(type(e)) + ': ' + e.__str__())
                 provean_mutation, provean_score = None, None
-            self.log.debug('provean mutation:')
-            self.log.debug(provean_mutation)
-            self.log.debug('provean score:')
-            self.log.debug(provean_score)
+            self.logger.debug('provean mutation:')
+            self.logger.debug(provean_mutation)
+            self.logger.debug('provean score:')
+            self.logger.debug(provean_score)
             uniprot_mutation.provean_score = provean_score
 
         if not uniprot_mutation.Stability_energy_wt:
-            self.log.debug('Evaluating the structural impact of the mutation...')
+            self.logger.debug('Evaluating the structural impact of the mutation...')
             uniprot_mutation = self.evaluate_structural_impact(mut_data, uniprot_mutation)
 
         if (not uniprot_mutation.ddG and
                 (uniprot_mutation.provean_score and
                 uniprot_mutation.Stability_energy_wt)):
-            self.log.debug('Predicting the thermodynamic effect of the mutation...')
+            self.logger.debug('Predicting the thermodynamic effect of the mutation...')
             uniprot_mutation = self.predict_thermodynamic_effect(mut_data.d, mut_data.t, mut_data.m, uniprot_mutation)
 
         return uniprot_mutation
@@ -458,12 +457,12 @@ class GetMutation(object):
             self.unique_temp_folder + 'sequence_conservation/',
             system_command)
         result, error_message = child_process.communicate()
-        self.log.debug(result)
+        self.logger.debug(result)
         while (child_process.returncode != 0
                 and 'IDs are not matched' in error_message):
-            self.log.error(error_message)
+            self.logger.error(error_message)
             line_to_remove = error_message.split(':')[1].split(',')[0]
-            self.log.error('Removing line with id: {} from the supporting set...'.format())
+            self.logger.error('Removing line with id: {} from the supporting set...'.format())
             with open(path_to_provean_supset_local, 'r') as ifh, \
                     open(path_to_provean_supset_local + '.mod', 'w') as ofh:
                 for line in ifh:
@@ -474,11 +473,11 @@ class GetMutation(object):
                 self.unique_temp_folder + 'sequence_conservation/',
                 system_command)
             result, error_message = child_process.communicate()
-            self.log.debug(result)
+            self.logger.debug(result)
 
         if child_process.returncode != 0:
-            self.log.error(error_message)
-            self.log.error(system_command)
+            self.logger.error(error_message)
+            self.logger.error(system_command)
             raise errors.ProveanError(error_message)
 
         ### Results look something like this:
@@ -525,8 +524,8 @@ class GetMutation(object):
                             stderr=subprocess.PIPE, shell=True)
         result, e = childProcess.communicate()
         if childProcess.returncode != 0:
-            self.log.error('cp result: {}'.format(result))
-            self.log.error('cp error: {}'.format(e))
+            self.logger.error('cp result: {}'.format(result))
+            self.logger.error('cp error: {}'.format(e))
 
         #######################################################################
         ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
@@ -541,19 +540,19 @@ class GetMutation(object):
         #######################################################################
         ## 3rd: introduce the mutation using FoldX
         if len(mut_data.domain_sequences) == 1:
-            self.log.debug(mut_data.domain_sequences[0].seq)
+            self.logger.debug(mut_data.domain_sequences[0].seq)
         else:
-            self.log.debug(mut_data.domain_sequences[0].seq)
-            self.log.debug(mut_data.domain_sequences[1].seq)
+            self.logger.debug(mut_data.domain_sequences[0].seq)
+            self.logger.debug(mut_data.domain_sequences[1].seq)
 #        mutations_foldX = [prepareMutationFoldX(mut_data.domain_sequences[0], mut_data.mutation_domain),]
-#        self.log.debug("mutations_foldX:")
-#        self.log.debug(mutations_foldX)
+#        self.logger.debug("mutations_foldX:")
+#        self.logger.debug(mutations_foldX)
 
         # compile a list of mutations
         assert(str(mut_data.domain_sequences[0].seq)[int(mut_data.mutation_domain[1:-1])-1] == mut_data.mutation_domain[0])
         mutCodes = [mutation[0] + mut_data.chains_modeller[0] + mut_data.position_modeller[0] + mutation[-1], ]
-        self.log.debug('Mutcodes for foldx:')
-        self.log.debug(mutCodes)
+        self.logger.debug('Mutcodes for foldx:')
+        self.logger.debug(mutCodes)
 
         # Introduce the mutation using foldX
         fX_wt = call_foldx.FoldX(self.unique_temp_folder,
@@ -566,10 +565,10 @@ class GetMutation(object):
 
         wt_chain_sequences = pdb_template.get_chain_sequences(repairedPDB_wt_list[0])
         mut_chain_sequences = pdb_template.get_chain_sequences(repairedPDB_mut_list[0])
-        self.log.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
-        self.log.debug('wt_chain_sequences: %s' % str(wt_chain_sequences))
-        self.log.debug('repairedPDB_mut_list: %s' % str(repairedPDB_mut_list))
-        self.log.debug('mut_chain_sequences: %s' % str(mut_chain_sequences))
+        self.logger.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
+        self.logger.debug('wt_chain_sequences: %s' % str(wt_chain_sequences))
+        self.logger.debug('repairedPDB_mut_list: %s' % str(repairedPDB_mut_list))
+        self.logger.debug('mut_chain_sequences: %s' % str(mut_chain_sequences))
         self.__check_structure_match(repairedPDB_wt_list[0], mut_data, mutation[0])
         self.__check_structure_match(repairedPDB_mut_list[0], mut_data, mutation[-1])
 
@@ -641,9 +640,9 @@ class GetMutation(object):
             (seasa_by_residue_separately['pdb_chain']==mut_data.chains_modeller[0]) &
             (seasa_by_residue_separately['res_num']==mut_data.position_modeller[0])].iloc[0]
         if pdb_template.convert_aa(seasa_info_wt['res_name']) != mut_data.mutation_domain[0]:
-            self.log.error('Wrong amino acid for msms wild-type!')
-            self.log.error(seasa_info_wt)
-            self.log.error(seasa_by_residue_separately)
+            self.logger.error('Wrong amino acid for msms wild-type!')
+            self.logger.error(seasa_info_wt)
+            self.logger.error(seasa_by_residue_separately)
             raise Exception('surface area calculated for the wrong atom!')
         solvent_accessibility_wt = seasa_info_wt['rel_sasa']
 
@@ -655,7 +654,7 @@ class GetMutation(object):
             try:
                 contact_distance_wt = contact_distance_wt[mut_data.chains_modeller[0]][0]
             except IndexError:
-                self.log.error(contact_distance_wt)
+                self.logger.error(contact_distance_wt)
                 raise
 
         analyze_structure_mut = analyze_structure.AnalyzeStructure(
@@ -669,11 +668,11 @@ class GetMutation(object):
             (seasa_by_residue_separately['pdb_chain']==mut_data.chains_modeller[0]) &
             (seasa_by_residue_separately['res_num']==mut_data.position_modeller[0])].iloc[0]
         if pdb_template.convert_aa(seasa_info_mut['res_name']) != mut_data.mutation_domain[-1]:
-            self.log.error('Wrong amino acid for msms mutant!')
-            self.log.error(pdb_template.convert_aa(seasa_info_mut['res_name']))
-            self.log.error(mut_data.mutation_domain[-1])
-            self.log.error(seasa_info_mut)
-            self.log.error(seasa_by_residue_separately)
+            self.logger.error('Wrong amino acid for msms mutant!')
+            self.logger.error(pdb_template.convert_aa(seasa_info_mut['res_name']))
+            self.logger.error(mut_data.mutation_domain[-1])
+            self.logger.error(seasa_info_mut)
+            self.logger.error(seasa_by_residue_separately)
             raise Exception('surface area calculated for the wrong atom!')
         solvent_accessibility_mut = seasa_info_mut['rel_sasa']
 
@@ -685,7 +684,7 @@ class GetMutation(object):
             try:
                 contact_distance_mut = contact_distance_mut[mut_data.chains_modeller[0]][0]
             except IndexError:
-                self.log.error(contact_distance_mut)
+                self.logger.error(contact_distance_mut)
                 raise
 
         #######################################################################
@@ -735,8 +734,8 @@ class GetMutation(object):
 #                          save_path[:-1])
 
         #######################################################################
-        self.log.info('Finished processing template:')
-        self.log.info(mut_data.save_path.split('/')[-2])
+        self.logger.info('Finished processing template:')
+        self.logger.info(mut_data.save_path.split('/')[-2])
 
         return uniprot_mutation
 
@@ -752,11 +751,11 @@ class GetMutation(object):
                 residue_found = True
                 break
         if not residue_found or not (pdb_template.convert_aa(residue.resname) == expecte_aa):
-            self.log.error('residue_found? %s' % residue_found)
-            self.log.error(residue.resname)
-            self.log.error(residue.id)
-            self.log.error(mut_data.position_modeller)
-            self.log.error(expecte_aa)
+            self.logger.error('residue_found? %s' % residue_found)
+            self.logger.error(residue.resname)
+            self.logger.error(residue.id)
+            self.logger.error(mut_data.position_modeller)
+            self.logger.error(expecte_aa)
             raise Exception('Expected and actual FoldX amino acids do not match!')
 
 

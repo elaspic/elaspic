@@ -77,7 +77,7 @@ class FoldX():
         See the FoldX manual for an explanation on what they do
         c.f. (http://foldx.crg.es/manual3.jsp)
         """
-        self.log.debug('Running FoldX {}'.format(whatToRun))
+        self.logger.debug('Running FoldX {}'.format(whatToRun))
         self.__write_runfile(self.pdb_filename, self.chain_id, whatToRun, mutCodes)
         self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
@@ -160,13 +160,13 @@ class FoldX():
 
     def __run_runfile(self):
         system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
-        self.log.debug('FoldX system command: {}'.format(system_command))
+        self.logger.debug('FoldX system command: {}'.format(system_command))
         childProcess = hf.run_subprocess_locally(self.foldx_path, system_command)
         result, error_message = childProcess.communicate()
         return_code = childProcess.returncode
         if return_code != 0:
-            self.log.debug('FoldX result: %s' % result)
-            self.log.debug('FoldX error: %s' % error_message)
+            self.logger.debug('FoldX result: %s' % result)
+            self.logger.debug('FoldX error: %s' % error_message)
             if 'Cannot allocate memory' in error_message:
                 raise errors.ResourceError(error_message)
 

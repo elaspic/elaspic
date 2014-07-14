@@ -175,9 +175,9 @@ class tcoffee_alignment:
             alignment = AlignIO.read(out, 'fasta')
             return alignment
         else:
-            self.log.error('Structural alignment failed with the following error:')
-            self.log.error(error_message)
-            self.log.error('Running quickaln alignment instead...')
+            self.logger.error('Structural alignment failed with the following error:')
+            self.logger.error(error_message)
+            self.logger.error('Running quickaln alignment instead...')
             system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 'quick')
             child_process = hf.run_subprocess_locally(self.tmpPath, system_command, env=my_env)
             result, error_message = child_process.communicate()
@@ -185,7 +185,7 @@ class tcoffee_alignment:
             if return_code == 0:
                 alignment = AlignIO.read(out, 'fasta')
                 if len(alignment) != 2:
-                    self.log.error('Alignment length not 2 for file %s' % out)
+                    self.logger.error('Alignment length not 2 for file %s' % out)
                 return alignment
-            self.log.error('Even quickaln didn\'t work. Cannot create an alignment. Giving up.')
+            self.logger.error('Even quickaln didn\'t work. Cannot create an alignment. Giving up.')
             raise errors.TcoffeeError(result, error_message, alignInFile, system_command)

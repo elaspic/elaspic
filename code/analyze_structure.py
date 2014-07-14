@@ -114,10 +114,10 @@ class PhysiChem():
                 if residue_counter == mutation_position:
                     if (pdb_template.AAA_DICT[residue.resname] not in
                             [mutation[0].upper(), mutation[-1].upper()]):
-                        self.log.error(residue)
-                        self.log.error(pdb_template.AAA_DICT[residue.resname])
-                        self.log.error(mutation.upper())
-                        self.log.error(mutation_position)
+                        self.logger.error(residue)
+                        self.logger.error(pdb_template.AAA_DICT[residue.resname])
+                        self.logger.error(mutation.upper())
+                        self.logger.error(mutation_position)
                         raise Exception('PhysiChem detected mutated amino acid position mismatch!')
                     mutated_residue = residue
                     break
@@ -252,11 +252,11 @@ class AnalyzeStructure(object):
     def __split_pdb_into_chains(self):
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         io = PDBIO()
-        self.log.debug('Saving parsed pdbs into the following working path:')
-        self.log.debug(self.data_path + self.pdb_file)
+        self.logger.debug('Saving parsed pdbs into the following working path:')
+        self.logger.debug(self.data_path + self.pdb_file)
 
         # Save all chains together with correct chain letters
-        self.log.debug('Saving all chains together')
+        self.logger.debug('Saving all chains together')
         structure = parser.get_structure('ID', self.data_path + self.pdb_file)
         if len(structure) > 1:
             # Delete all models except for the first (otherwise get errors with naccess)
@@ -264,9 +264,9 @@ class AnalyzeStructure(object):
         model = structure[0]
         children = model.get_list()
 #        for child in children:
-#            self.log.debug('child id before:' + child.id)
+#            self.logger.debug('child id before:' + child.id)
 #            if child.id not in self.chain_ids:
-#            self.log.debug('child id after:' + child.id)
+#            self.logger.debug('child id after:' + child.id)
         if len(children) == 1 and (children[0].id == '' or children[0].id == ' ' or children[0].id == '0'):
             children[0].id = self.chain_ids[0]
         if len(children) == 2 and children[0].id == '0' and children[1].id == '0':
@@ -278,13 +278,13 @@ class AnalyzeStructure(object):
 
         if len(self.chain_ids) > 1:
             # Save a structure with only the chains of interest
-            self.log.debug('Saving only the chains of interest: %s' % ','.join(self.chain_ids))
+            self.logger.debug('Saving only the chains of interest: %s' % ','.join(self.chain_ids))
             structure = parser.get_structure('ID', self.data_path + self.pdb_file)
             model = structure[0]
             for child in model.get_list():
-                self.log.debug('child id:' + child.id)
+                self.logger.debug('child id:' + child.id)
                 if child.id not in self.chain_ids:
-                    self.log.debug('detaching chain')
+                    self.logger.debug('detaching chain')
                     model.detach_child(child.id)
             io.set_structure(structure)
             outFile = self.working_path + ''.join(self.chain_ids) + '.pdb'
@@ -292,14 +292,14 @@ class AnalyzeStructure(object):
 
         # Save a structure for each chain
         for chain_id in self.chain_ids:
-            self.log.debug('Saving chain %s separately' % chain_id)
+            self.logger.debug('Saving chain %s separately' % chain_id)
             # save chain, i.e. part one of the complex:
             structure = parser.get_structure('ID', self.data_path + self.pdb_file)
             model = structure[0]
             for child in model.get_list():
-                self.log.debug('child id:' + child.id)
+                self.logger.debug('child id:' + child.id)
                 if child.id != chain_id:
-                    self.log.debug('detaching chain %s' % child.id)
+                    self.logger.debug('detaching chain %s' % child.id)
                     model.detach_child(child.id)
             io.set_structure(structure)
             outFile = self.working_path + chain_id + '.pdb'
@@ -344,17 +344,17 @@ class AnalyzeStructure(object):
         # Convert pdb to xyz coordiates
         assert(os.path.isfile(self.working_path + filename))
         system_command = './pdb_to_xyzrn {0}.pdb'.format(self.working_path + base_filename)
-        self.log.debug('msms system command 1: %s' % system_command)
+        self.logger.debug('msms system command 1: %s' % system_command)
         child_process = hf.run_subprocess_locally(self.working_path, system_command)
         result, error_message = child_process.communicate()
         return_code = child_process.returncode
         if return_code != 0:
-            self.log.debug('msms result 1:')
-            self.log.debug(result)
-            self.log.debug('msms error message 1:')
-            self.log.debug(error_message)
-            self.log.debug('naccess rc 1:')
-            self.log.debug(child_process.returncode)
+            self.logger.debug('msms result 1:')
+            self.logger.debug(result)
+            self.logger.debug('msms error message 1:')
+            self.logger.debug(error_message)
+            self.logger.debug('naccess rc 1:')
+            self.logger.debug(child_process.returncode)
             raise errors.MSMSError(error_message)
         else:
             with open(self.working_path + base_filename + '.xyzrn', 'w') as ofh:
@@ -367,17 +367,17 @@ class AnalyzeStructure(object):
             '-surface ases '
             '-if {0}.xyzrn '
             '-af {0}.area'.format(self.working_path + base_filename))
-        self.log.debug('msms system command 2: %s' % system_command)
+        self.logger.debug('msms system command 2: %s' % system_command)
         child_process = hf.run_subprocess_locally(self.working_path, system_command)
         result, error_message = child_process.communicate()
         return_code = child_process.returncode
         if return_code != 0:
-            self.log.debug('msms result 2:')
-            self.log.debug(result)
-            self.log.debug('msms error message 2:')
-            self.log.debug(error_message)
-            self.log.debug('naccess rc 2:')
-            self.log.debug(child_process.returncode)
+            self.logger.debug('msms result 2:')
+            self.logger.debug(result)
+            self.logger.debug('msms error message 2:')
+            self.logger.debug(error_message)
+            self.logger.debug('naccess rc 2:')
+            self.logger.debug(child_process.returncode)
             raise errors.MSMSError(error_message)
 
         # Read and parse the output
@@ -399,8 +399,8 @@ class AnalyzeStructure(object):
 #            [x for x in zip(seasa_df['res_name'], seasa_df['res_name_msms']) if x[0]!=x[1]] + \
 #            [x for x in zip(seasa_df['atom_id'], seasa_df['atom_id_msms']) if x[0]!=x[1]]
 #        if len(incorrect_assignments) > 5:
-#            self.log.error('Could not correctly assign msms output to chains!')
-#            self.log.error(incorrect_assignments)
+#            self.logger.error('Could not correctly assign msms output to chains!')
+#            self.logger.error(incorrect_assignments)
 #            raise errors.MSMSError('Could not correctly assign msms output to chains: ' + str(incorrect_assignments))
 #        del seasa_df['atom_id_msms']
 #        del seasa_df['res_name_msms']
@@ -432,14 +432,14 @@ class AnalyzeStructure(object):
     def _run_naccess_atom(self, filename):
         # run naccess
         system_command = ('./naccess ' + filename)
-        self.log.debug('naccess system command: %s' % system_command)
+        self.logger.debug('naccess system command: %s' % system_command)
         assert(os.path.isfile(self.working_path + filename))
         child_process = hf.run_subprocess_locally(self.working_path, system_command)
         result, error_message = child_process.communicate()
         return_code = child_process.returncode
-        self.log.debug('naccess result: {}'.format(result))
-        self.log.debug('naccess error: {}'.format(error_message))
-        self.log.debug('naccess rc: {}'.format(return_code))
+        self.logger.debug('naccess result: {}'.format(result))
+        self.logger.debug('naccess error: {}'.format(error_message))
+        self.logger.debug('naccess rc: {}'.format(return_code))
         # Collect results
         sasa_scores = {}
         with open(self.working_path + filename.split('.')[0] + '.rsa') as fh:
@@ -463,12 +463,12 @@ class AnalyzeStructure(object):
         # Use pops to calculate sasa score for the given chain
         termination, rc, e = self.__run_pops_atom(chain_id)
         if termination != 'Clean termination':
-            self.log.error('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
-            self.log.error(e)
+            self.logger.error('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
+            self.logger.error(e)
             raise errors.PopsError(e, self.data_path + self.pdb_file, self.chain_ids)
         else:
-            self.log.warning('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
-            self.log.warning(e)
+            self.logger.warning('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
+            self.logger.warning(e)
 
         # Read the sasa scores from a text file
         sasa_scores = self.__read_pops_atom(chain_id)
@@ -484,7 +484,7 @@ class AnalyzeStructure(object):
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:
         # if output[-1] == 'Clean termination' the run should be OK
-        self.log.debug('result: %s' % result)
+        self.logger.debug('result: %s' % result)
         output = [ line for line in result.split('\n') if line != '' ]
         return output[-1], return_code, error_message
 
@@ -526,16 +526,16 @@ class AnalyzeStructure(object):
         return_code = -1
         while return_code != 0 and n_tries < 5:
             if n_tries > 0:
-                self.log.debug('Waiting for 1 minute before trying again...')
+                self.logger.debug('Waiting for 1 minute before trying again...')
                 time.sleep(60)
             system_command = ('./dssp -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
-            self.log.debug('dssp system command: %s' % system_command)
+            self.logger.debug('dssp system command: %s' % system_command)
             child_process = hf.run_subprocess_locally(self.working_path, system_command)
             result, error_message = child_process.communicate()
             return_code = child_process.returncode
-            self.log.debug('dssp return code: %i' % return_code)
-            self.log.debug('dssp result: %s' % result)
-            self.log.debug('dssp error: %s' % error_message)
+            self.logger.debug('dssp return code: %i' % return_code)
+            self.logger.debug('dssp result: %s' % result)
+            self.logger.debug('dssp error: %s' % error_message)
             n_tries += 1
         if return_code != 0:
             if 'boost::thread_resource_error' in error_message:
@@ -602,9 +602,9 @@ class AnalyzeStructure(object):
                             continue # skip all residues that we are not interested in
                         if pdb_template.convert_aa(residue_1.resname) != pdb_mutation[0] \
                         and pdb_template.convert_aa(residue_1.resname) != pdb_mutation[-1]:
-                            self.log.debug(pdb_mutation)
-                            self.log.debug(pdb_template.convert_aa(residue_1.resname))
-                            self.log.debug(residue_1.id)
+                            self.logger.debug(pdb_mutation)
+                            self.logger.debug(pdb_template.convert_aa(residue_1.resname))
+                            self.logger.debug(residue_1.id)
                             raise Exception
                     min_r = None
                     for chain_2 in [c for c in chains if c != chain_1]:
@@ -620,8 +620,8 @@ class AnalyzeStructure(object):
                                         min_r = r
                     shortest_interchain_distances[chain_1.id].append(min_r)
 
-        self.log.debug('interacting_aa_keys:')
-        self.log.debug(shortest_interchain_distances.keys())
+        self.logger.debug('interacting_aa_keys:')
+        self.logger.debug(shortest_interchain_distances.keys())
 
         return shortest_interchain_distances
 
@@ -632,8 +632,8 @@ class AnalyzeStructure(object):
         termination, rc, e = self.__run_pops_area(self.working_path + ''.join(self.chain_ids) + '.pdb')
         if rc != 0:
             if termination != 'Clean termination':
-                self.log.error('Pops error for pdb: %s:' % self.pdb_file)
-                self.log.error(e)
+                self.logger.error('Pops error for pdb: %s:' % self.pdb_file)
+                self.logger.error(e)
                 return '0', '0', '0'
         result = self.__read_pops_area(self.working_path + ''.join(self.chain_ids) + '.out')
 
@@ -651,8 +651,8 @@ class AnalyzeStructure(object):
         termination, rc, e = self.__run_pops_area(self.working_path + self.chain_ids[0] + '.pdb')
         if rc != 0:
             if termination != 'Clean termination':
-                self.log.error('Error in pops for pdb: %s:' % self.pdb_file)
-                self.log.error(e)
+                self.logger.error('Error in pops for pdb: %s:' % self.pdb_file)
+                self.logger.error(e)
                 return '0', '0', '0'
         result = self.__read_pops_area(self.working_path + self.chain_ids[0] + '.out')
 
@@ -670,8 +670,8 @@ class AnalyzeStructure(object):
         termination, rc, e = self.__run_pops_area(self.working_path + self.chain_ids[1] + '.pdb')
         if rc != 0:
             if termination != 'Clean termination':
-                self.log.error('Error in pops for pdb: %s:' % self.pdb_file)
-                self.log.error(e)
+                self.logger.error('Error in pops for pdb: %s:' % self.pdb_file)
+                self.logger.error(e)
                 return '0', '0', '0'
         result = self.__read_pops_area(self.working_path + self.chain_ids[1] + '.out')
 
@@ -707,13 +707,13 @@ class AnalyzeStructure(object):
         # to the output. Hence this check:
         # if output[-1] == 'Clean termination' the run should be OK
         output = [ line for line in result.split('\n') if line != '' ]
-        self.log.debug(system_command)
-#        self.log.debug('pops result: %s' % result) # Prints the entire POPs output
-#        self.log.debug('pops error: %s' % e)
+        self.logger.debug(system_command)
+#        self.logger.debug('pops result: %s' % result) # Prints the entire POPs output
+#        self.logger.debug('pops error: %s' % e)
         error_message_1 = 'Warning: Atom distance too short! Probably incorrect POPS results!'
         if error_message_1 in error_message:
-            self.log.error(error_message_1)
-        self.log.debug('pops rc: %s' % return_code)
+            self.logger.error(error_message_1)
+        self.logger.debug('pops rc: %s' % return_code)
         return output[-1], return_code, error_message
 
 
