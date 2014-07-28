@@ -20,16 +20,31 @@ import pdb_template
 from collections import OrderedDict, deque
 
 
-def calculate_distance(atom1, atom2):
+
+def euclidean_distance(a, b):
+    """ Return euclidean distance between two lists or tuples of arbitrary length.
+    """
+    return sqrt(sum((a - b)**2 for a, b in zip(a, b)))
+
+
+def calculate_distance(atom_1, atom_2, cutoff=None):
     """
     Returns the distance of two points in three dimensional space
     input: atom instance of biopython: class 'Bio.PDB.Atom.Atom
     return: type 'float'
     """
-    a = atom1.coord
-    b = atom2.coord
+    a = atom_1.coord
+    b = atom_2.coord
     assert(len(a) == 3 and len(b) == 3)
-    return sqrt(sum( (a - b)**2 for a, b in zip(a, b) ))
+    if ( cutoff is not None and
+            (a[0] - b[0])**2 <= cutoff**2 and
+            (a[1] - b[1])**2 <= cutoff**2 and
+            (a[2] - b[2])**2 <= cutoff**2 ):
+        return euclidean_distance(a, b)
+    elif cutoff is not None:
+        return None
+    elif cutoff is None:
+        return euclidean_distance(a, b)
 
 
 def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
@@ -62,8 +77,8 @@ def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5)
                 if residue_2.resname in pdb_template.amino_acids and residue_2.id[0] == ' ':
                     for atom_1 in residue_1:
                         for atom_2 in residue_2:
-                            r = calculate_distance(atom_1, atom_2)
-                            if r < r_cutoff:
+                            r = calculate_distance(atom_1, atom_2, r_cutoff)
+                            if r is not None:
                                 if r_min and r < r_min:
                                     r_min = r
                                 elif not r_min:
@@ -78,10 +93,10 @@ def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5)
 
 class PhysiChem():
 
-    def __init__(self, vdW, d, unique, log):
+    def __init__(self, vdW, d, unique, logger):
         self.vdW_distance = float(vdW)
         self.contact_distance = float(d)
-        self.log = log
+        self.logger = logger
 
 
     def __call__(self, pdb_filename, mutated_chain_id, mutation):
@@ -169,8 +184,8 @@ class PhysiChem():
             mutated_atom_type = self._get_atom_type(mutated_residue.resname, mutated_atom)
             # And each partner residue and partner atom
             for partner_atom in partner_residue:
-                r = calculate_distance(mutated_atom, partner_atom)
-                if r <= self.vdW_distance:
+                r = calculate_distance(mutated_atom, partner_atom, self.vdW_distance)
+                if r is not None:
                     partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
                     if partner_atom_type == 'ignore':
                         continue
@@ -239,13 +254,13 @@ class AnalyzeStructure(object):
     The interface is then given by the substracting
     """
 
-    def __init__(self, data_path, working_path, pdb_file, chains, domain_defs, log):
+    def __init__(self, data_path, working_path, pdb_file, chains, domain_defs, logger):
         self.data_path = data_path # modeller_path, foldx_path
         self.working_path = working_path # analyze_structure path with all the binaries
         self.pdb_file = pdb_file
         self.chain_ids = chains
         self.domain_defs = domain_defs
-        self.log = log
+        self.logger = logger
         self.structure = self.__split_pdb_into_chains()
 
 
@@ -615,7 +630,7 @@ class AnalyzeStructure(object):
 
                             for atom_1 in residue_1:
                                 for atom_2 in residue_2:
-                                    r = calculate_distance(atom_1, atom_2)
+                                    r = calculate_distance(atom_1, atom_2, min_r)
                                     if not min_r or min_r > r:
                                         min_r = r
                     shortest_interchain_distances[chain_1.id].append(min_r)

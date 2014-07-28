@@ -33,10 +33,10 @@ def get_pdb_structure(path_to_pdb_file):
 def get_uniprot_base_path(d):
     if isinstance(d, sql_db.UniprotDomain):
         uniprot_id = d.uniprot_id
-        uniprot_name = d.uniprot_name
+        uniprot_name = d.uniprot_sequence.uniprot_name
     elif isinstance(d, sql_db.UniprotDomainPair):
         uniprot_id = d.uniprot_domain_1.uniprot_id
-        uniprot_name = d.uniprot_domain_1.uniprot_name
+        uniprot_name = d.uniprot_domain_1.uniprot_sequence.uniprot_name
     elif isinstance(d, dict):
         uniprot_id = d['uniprot_id']
         uniprot_name = d['uniprot_name']
@@ -58,17 +58,17 @@ def get_uniprot_domain_path(d):
     """
     if isinstance(d, sql_db.UniprotDomain):
         uniprot_domain_path = (
-            '{pdbfam_name}*{alignment_def}/'
+            '{pfam_clan}*{alignment_def}/'
             .format(
-                pdbfam_name=d.pdbfam_name,
+                pfam_clan=d.pfam_clan,
                 alignment_def=d.alignment_def.replace(':','-'),))
     elif isinstance(d, sql_db.UniprotDomainPair):
         uniprot_domain_path = (
-            '{pdbfam_name_1}*{alignment_def_1}/{pdbfam_name_2}*{alignment_def_2}/{uniprot_id_2}/'
+            '{pfam_clan_1}*{alignment_def_1}/{pfam_clan_2}*{alignment_def_2}/{uniprot_id_2}/'
             .format(
-                pdbfam_name_1 = d.uniprot_domain_1.pdbfam_name,
+                pfam_clan_1 = d.uniprot_domain_1.pfam_clan,
                 alignment_def_1 = d.uniprot_domain_1.alignment_def.replace(':','-'),
-                pdbfam_name_2 = d.uniprot_domain_2.pdbfam_name,
+                pfam_clan_2 = d.uniprot_domain_2.pfam_clan,
                 alignment_def_2 = d.uniprot_domain_2.alignment_def.replace(':','-'),
                 uniprot_id_2 = d.uniprot_domain_2.uniprot_id,))
     return uniprot_domain_path
@@ -193,7 +193,7 @@ def get_which(bin_name):
     return bin_filename
 
 
-def get_temp_path(global_temp_path, temp_path_suffix):
+def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
     #######################################################################
     # If a TMPDIR is given as an environment variable, the tmp directory
     # is created relative to that. This is useful when running on banting

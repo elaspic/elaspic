@@ -39,7 +39,7 @@ class GetModel(object):
         self.n_cores = n_cores
 
 
-    def get_model(self, d):
+    def __call__(self, d):
         """
         """
         if isinstance(d, sql_db.UniprotDomain):
@@ -54,15 +54,13 @@ class GetModel(object):
         """
         """
         self.logger.debug(
-            'Aligning: {}/{}*{}:{}{}*{}'
-            .format(d.uniprot_id, d.pdbfam_name, d.domain_def, d.pdb_id, d.pdb_chain, d.pdb_domain_def))
+            'Aligning: {}/{}*{}:{}'
+            .format(d.uniprot_id, d.pdbfam_name, d.template.domain_def.replace(':', '-'), d.template.cath_id))
 
         alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors = \
             self.perform_alignments_and_modelling(
-                [d.uniprot_id], [d.uniprot_sequence.seq], [d.domain_def],
-                d.pdb_id, [d.pdb_chain], [d.pdb_domain_def], d.path_to_data)
-
-        d.alignment_filename = alignment_filenames[0]
+                [d.uniprot_id], [d.uniprot_sequence.uniprot_sequence], [d.template.domain_def],
+                d.template.domain.pdb_id, [d.template.domain.pdb_chain], [d.template.domain.pdb_domain_def], d.path_to_data)
 
         structure = hf.get_pdb_structure(self.unique_temp_folder + 'modeller/' + pdb_filename_wt)
         model = structure[0]
@@ -73,12 +71,13 @@ class GetModel(object):
         uniprot_model.model_filename = pdb_filename_wt
         uniprot_model.norm_dope = norm_dope_wt
         uniprot_model.chain = 'A'
+        uniprot_model.alignment_filename = alignment_filenames[0]
         # Run the homology model through msms and get dataframes with all the
         # per atom and per residue SASA values
         analyze_structure_object = analyze_structure.AnalyzeStructure(
             self.unique_temp_folder + 'modeller/',
             self.unique_temp_folder + 'analyze_structure/',
-            pdb_filename_wt, [uniprot_model.chain], None, self.log)
+            pdb_filename_wt, [uniprot_model.chain], None, self.logger)
         (seasa_by_chain_together, seasa_by_chain_separately,
         seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_object.get_seasa()
         # Get SASA only for amino acids in the chain of interest
@@ -102,29 +101,35 @@ class GetModel(object):
         model_errors =', '.join(model_errors)
         if model_errors != '':
             uniprot_model.model_errors = model_errors
+        return uniprot_model
 
 
     def get_domain_pair_model(self, d):
         """
         """
         self.logger.debug(
-            'Aligning: {}/{}*{}:{}{}*{}/{}*{}:{}{}*{}/{}'
+            'Aligning: {}/{}*{}:{}/{}*{}:{}/{}'
             .format(
-                d.uniprot_id_1, d.pdbfam_name_1, d.domain_def_1, d.pdb_id, d.pdb_chain_1, d.pdb_domain_def_1,
-                d.pdb_domain_def_2, d.pdb_chain_2, d.pdb_id, d.domain_def_2, d.pdbfam_name_2, d.uniprot_id_2,))
+                d.uniprot_domain_1.uniprot_id,
+                d.uniprot_domain_1.pdbfam_name,
+                d.uniprot_domain_1.template.domain_def.replace(':', '-'),
+                d.template.cath_id_1,
+                d.uniprot_domain_2.pdbfam_name,
+                d.uniprot_domain_2.template.domain_def.replace(':', '-'),
+                d.template.cath_id_2,
+                d.uniprot_domain_2.uniprot_id))
 
         alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors = \
             self.perform_alignments_and_modelling(
                 [d.uniprot_domain_1.uniprot_id, d.uniprot_domain_2.uniprot_id],
-                [d.uniprot_domain_1.uniprot_sequence.seq, d.uniprot_domain_2.uniprot_sequence.seq],
-                [d.domain_def_1, d.domain_def_2],
-                d.pdb_id,
-                [d.pdb_chain_1, d.pdb_chain_2],
-                [d.pdb_domain_def_1, d.pdb_domain_def_2],
+                [d.uniprot_domain_1.uniprot_sequence.uniprot_sequence,
+                 d.uniprot_domain_2.uniprot_sequence.uniprot_sequence],
+                [d.uniprot_domain_1.template.domain_def,
+                 d.uniprot_domain_2.template.domain_def],
+                d.template.domain_1.pdb_id,
+                [d.template.domain_1.pdb_chain, d.template.domain_2.pdb_chain],
+                [d.template.domain_1.pdb_domain_def, d.template.domain_2.pdb_domain_def],
                 d.path_to_data)
-
-        d.alignment_filename_1 = alignment_filenames[0]
-        d.alignment_filename_2 = alignment_filenames[1]
 
         structure = hf.get_pdb_structure(self.unique_temp_folder + 'modeller/' + pdb_filename_wt)
         model = structure[0]
@@ -136,8 +141,12 @@ class GetModel(object):
         uniprot_model.norm_dope = norm_dope_wt
         uniprot_model.chain_1 = 'A'
         uniprot_model.chain_2 = 'B'
+        uniprot_model.alignment_filename_1 = alignment_filenames[0]
+        uniprot_model.alignment_filename_2 = alignment_filenames[1]
 
-        interactions_between_chains = analyze_structure.get_interactions_between_chains(model, uniprot_model.chain_1, uniprot_model.chain_2, 5)
+        interactions_between_chains = (
+            analyze_structure.get_interactions_between_chains(
+                model, uniprot_model.chain_1, uniprot_model.chain_2, 5) )
         chain_1_interactions = list(set([key[:2] for key in interactions_between_chains.keys()]))
         chain_2_interactions = list(set([value[:2] for values in interactions_between_chains.values() for value in values]))
         if not chain_1_interactions and not chain_2_interactions:
@@ -172,10 +181,10 @@ class GetModel(object):
 #            self.logger.debug(chain_2_numbering)
 
         chain_1_interacting_uninum = [
-            sql_db.decode_domain(d.domain_def_1)[0] + chain_1_numbering.index(resnum)
+            hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)[0] + chain_1_numbering.index(resnum)
             for resnum in chain_1_interacting_resnum]
         chain_2_interacting_uninum = [
-            sql_db.decode_domain(d.domain_def_2)[0] + chain_2_numbering.index(resnum)
+            hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)[0] + chain_2_numbering.index(resnum)
             for resnum in chain_2_interacting_resnum]
 
         chain_1_interactions_uniprot = zip(chain_1_interacting_uninum, chain_1_interacting_aa)
@@ -185,7 +194,7 @@ class GetModel(object):
         chain_1_interacting_aa_from_uniprot = ''
         for uninum, aa in chain_1_interactions_uniprot:
             uniprot_idx = uninum - 1
-            chain_1_interacting_aa_from_uniprot += d.uniprot_domain_1.uniprot_sequence.seq[uniprot_idx]
+            chain_1_interacting_aa_from_uniprot += d.uniprot_domain_1.uniprot_sequence.uniprot_sequence[uniprot_idx]
 
         chain_2_interactions_uniprot = zip(chain_2_interacting_uninum, chain_2_interacting_aa)
         chain_2_interactions_uniprot.sort(key=lambda x: x[0])
@@ -194,17 +203,17 @@ class GetModel(object):
         chain_2_interacting_aa_from_uniprot = ''
         for uninum, aa in chain_2_interactions_uniprot:
             uniprot_idx = uninum - 1
-            chain_2_interacting_aa_from_uniprot += d.uniprot_domain_2.uniprot_sequence.seq[uniprot_idx]
+            chain_2_interacting_aa_from_uniprot += d.uniprot_domain_2.uniprot_sequence.uniprot_sequence[uniprot_idx]
 
-        self.logger.debug('domain_def_1: {}'.format(d.domain_def_1))
+        self.logger.debug('domain_def_1: {}'.format(d.uniprot_domain_1.template.domain_def))
         self.logger.debug('chain_1_interactions_uniprot: {}'.format(chain_1_interactions_uniprot))
-        self.logger.debug('uniprot_sequence_1: {}'.format(d.uniprot_domain_1.uniprot_sequence.seq))
+        self.logger.debug('uniprot_sequence_1: {}'.format(d.uniprot_domain_1.uniprot_sequence.uniprot_sequence))
         self.logger.debug('chain_1_interacting_aa: {}'.format(chain_1_interacting_aa))
         self.logger.debug('chain_1_interacting_aa_from_uniprot: {}'.format(chain_1_interacting_aa_from_uniprot))
 
-        self.logger.debug('domain_def_2: {}'.format(d.domain_def_2))
+        self.logger.debug('domain_def_2: {}'.format(d.uniprot_domain_2.template.domain_def))
         self.logger.debug('chain_2_interactions_uniprot: {}'.format(chain_2_interactions_uniprot))
-        self.logger.debug('uniprot_sequence_2: {}'.format(d.uniprot_domain_2.uniprot_sequence.seq))
+        self.logger.debug('uniprot_sequence_2: {}'.format(d.uniprot_domain_2.uniprot_sequence.uniprot_sequence))
         self.logger.debug('chain_2_interacting_aa: {}'.format(chain_2_interacting_aa))
         self.logger.debug('chain_2_interacting_aa_from_uniprot: {}'.format(chain_2_interacting_aa_from_uniprot))
 
@@ -225,7 +234,7 @@ class GetModel(object):
         analyze_structure_object = analyze_structure.AnalyzeStructure(
             self.unique_temp_folder + 'modeller/',
             self.unique_temp_folder + 'analyze_structure/',
-            pdb_filename_wt, [uniprot_model.chain_1, uniprot_model.chain_2], None, self.log)
+            pdb_filename_wt, [uniprot_model.chain_1, uniprot_model.chain_2], None, self.logger)
         interface_area = analyze_structure_object.get_interface_area()
         uniprot_model.interface_area_hydrophobic = interface_area[0]
         uniprot_model.interface_area_hydrophilic = interface_area[1]
@@ -253,7 +262,6 @@ class GetModel(object):
         return interacting_resnum, interacting_aa
 
 
-
     def perform_alignments_and_modelling(
             self, uniprot_ids, uniprot_sequences, uniprot_domain_defs,
             pdb_id, pdb_chains, pdb_domain_defs, path_to_data):
@@ -262,9 +270,9 @@ class GetModel(object):
         model_errors = []
         # Folder for storing files for export to output
         save_path = self.temp_path + path_to_data
-        self.logger.debug('Template pdb: {}'.pdb_id)
+        self.logger.debug('Template pdb: {}'.format(pdb_id))
         self.logger.debug('save path: {}'.format(save_path))
-        uniprot_domain_seqrecs = self.get_uniprot_domain_seqrec(uniprot_ids, uniprot_sequences, uniprot_domain_defs)
+        uniprot_domain_seqrecs = self.get_uniprot_domain_seqrecs(uniprot_ids, uniprot_sequences, uniprot_domain_defs)
         pdb, pdb_domain_seqrecs = self.get_pdb_domain_seqrecs(pdb_id, pdb_chains, pdb_domain_defs)
 
         # Perform the alignments
@@ -278,11 +286,11 @@ class GetModel(object):
         # Join alignments for different chains
         target_ids = [al[0].id for al in alignmnets]
         target_id = '_'.join(target_ids)
-        target_seq = '/'.join(al[0].seq for al in alignmnets)
+        target_seq = '/'.join([str(alignmnet[0].seq) for alignmnet in alignmnets])
 
         template_ids = [al[1].id for al in alignmnets]
         template_id = pdb_id + ''.join(pdb_chains)
-        template_seq = '/'.join(al[1].seq for al in alignmnets)
+        template_seq = '/'.join([str(alignmnet[1].seq) for alignmnet in alignmnets])
 
         # Add '.' in place of every heteroatom in the pdb
         hetatm_chains = []
@@ -303,7 +311,7 @@ class GetModel(object):
             self._write_to_pir_alignment(pir_alignment_filehandle, 'structure', template_id, template_seq)
 
         # Make the homology model and check if it is knotted
-        norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(pir_alignment_filename, target_ids, template_ids, save_path)
+        norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder)
         self.logger.debug('model pdb file: %s, knotted: %s' % (pdb_filename_wt, knotted,))
         if knotted:
             model_errors.append('knotted')
@@ -314,12 +322,16 @@ class GetModel(object):
         return alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors
 
 
-    def get_uniprot_domain_seqrec(self, uniprot_id, uniprot_sequence, domain_def):
+    def get_uniprot_domain_seqrecs(self, uniprot_ids, uniprot_sequences, uniprot_domain_defs):
         """
         """
-        uniprot_seqrecord = SeqRecord(seq=Seq(uniprot_sequence), id=uniprot_id)
-        domain_def = hf.decode_domain_def(domain_def, merge=True, return_string=False)
-        return uniprot_seqrecord[domain_def[0]-1:domain_def[1]]
+        uniprot_domain_seqrecs = []
+        for uniprot_id, uniprot_sequence, uniprot_domain_def in zip(
+                uniprot_ids, uniprot_sequences, uniprot_domain_defs):
+            uniprot_seqrec = SeqRecord(seq=Seq(uniprot_sequence), id=uniprot_id)
+            domain_def = hf.decode_domain_def(uniprot_domain_def, merge=True, return_string=False)
+            uniprot_domain_seqrecs.append( uniprot_seqrec[domain_def[0]-1:domain_def[1]] )
+        return uniprot_domain_seqrecs
 
 
     def get_pdb_domain_seqrecs(self, pdb_id, pdb_chains, pdb_domain_defs):
@@ -355,9 +367,9 @@ class GetModel(object):
             self.n_cores,
             self.pdb_path,
             mode,
-            self.log)
+            self.logger)
         alignments = tcoffee.align()
-        assert len(alignments) == 0
+        assert len(alignments) == 1
         alignment = alignments[0]
         # Save the alignment
         alignment_filename = alignment[0].id + '_' + alignment[1].id + '.aln'

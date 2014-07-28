@@ -186,7 +186,7 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 
 class PDBTemplate():
 
-    def __init__(self, pdb_path, pdb_id, chain_ids, domain_boundaries, outputPath, tmp_path, log):
+    def __init__(self, pdb_path, pdb_id, chain_ids, domain_boundaries, outputPath, tmp_path, logger):
         """
         Parameters
         ----------
@@ -206,12 +206,12 @@ class PDBTemplate():
         else: # If [], extract all chains
             self.chain_ids = [chain.id for chain in self.structure[0].child_list]
         self.domain_boundaries = domain_boundaries # If [[[1,10],[20,45],]], extract the entire domain
-        self.domain_boundaries_extended = [
+        self.domain_boundaries_extended = [[
             [convert_resnum_alphanumeric_to_numeric(domain_fragment_start),
-            convert_resnum_alphanumeric_to_numeric(domain_fragment_end)]
-            for domain in self.domain_boundaries
+             convert_resnum_alphanumeric_to_numeric(domain_fragment_end)]
             for (domain_fragment_start, domain_fragment_end) in domain]
-        self.log = log
+            for domain in self.domain_boundaries]
+        self.logger = logger
 
 
     def extract(self):
@@ -266,7 +266,7 @@ class PDBTemplate():
                     keep_residue = False
                     resnum_extended = convert_resnum_alphanumeric_to_numeric(str(res.id[1]) + res.id[2].strip())
                     for domain_fragment_start, domain_fragment_end in self.domain_boundaries_extended[i]:
-                        if resnum_extended >= domain_fragment_start and resnum_extended > domain_fragment_end:
+                        if resnum_extended >= domain_fragment_start and resnum_extended <= domain_fragment_end:
                             keep_residue = True
                     if not keep_residue:
                         chain.detach_child(old_res_id)
@@ -350,5 +350,5 @@ if __name__ == '__main__':
     logger.addHandler(handler)
     log = logger
 
-    p = PDBTemplate(pdbPath, pdbCode, chains, domainBoundaries, outputPath, log)
+    p = PDBTemplate(pdbPath, pdbCode, chains, domainBoundaries, outputPath, logger)
     print p.extract()

@@ -52,7 +52,7 @@ names_stability_complex_mut = (
 
 class FoldX():
 
-    def __init__(self, tmp_path, pdb_file, chain_id, buildModel_runs, foldX_WATER, log):
+    def __init__(self, tmp_path, pdb_file, chain_id, buildModel_runs, foldX_WATER, logger):
         """
         """
         # In case the pipeline gets extended to handle more than two chains,
@@ -65,7 +65,7 @@ class FoldX():
         self.pdb_filename = pdb_file.split('/')[-1]
         self.buildModel_runs = buildModel_runs
         self.water = foldX_WATER
-        self.log = log
+        self.logger = logger
 
 
 
@@ -207,13 +207,11 @@ if __name__ == '__main__':
     foldX_path = tmp_path + unique + 'FoldX/'
     buildModel_runs = '1'
     foldX_WATER = '-IGNORE'
-    log = logger
     fX_wt = FoldX(tmp_path + unique + '/', repairedPDB_wt, chains_modeller[0], unique,
-                  buildModel_runs, foldX_WATER, log)
+                  buildModel_runs, foldX_WATER, logger)
     # do the mutation with foldX
     repairedPDB_wt_list, repairedPDB_mut_list = fX_wt.run('BuildModel', mutCodes)
-    log.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
-    log.debug('repairedPDB_mut_list: %s' % str(repairedPDB_mut_list))
+    logger.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
 
 
 

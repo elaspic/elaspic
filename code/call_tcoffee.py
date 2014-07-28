@@ -28,7 +28,7 @@ class tcoffee_alignment:
     """
     def __init__(
             self, global_temp_path, tmpPath, seqFiles, seqIDs, n_cores,
-            pdb_path, mode, log):
+            pdb_path, mode, logger):
 
         self.global_temp_path = global_temp_path
         self.tmpPath = tmpPath
@@ -38,7 +38,7 @@ class tcoffee_alignment:
         self.n_cores = n_cores
         self.pdb_path = pdb_path
         self.mode = mode
-        self.log = log
+        self.logger = logger
 
 
     def align(self):

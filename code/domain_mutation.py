@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import cPickle as pickle
 import datetime
 
 import pandas as pd
@@ -243,7 +242,7 @@ class GetMutation(object):
 
     def __init__(
             self, global_temp_path, temp_path, unique, pdb_path,
-            db, log, n_cores, bin_path, foldX_WATER, build_model_runs, matrix, gap_s, gap_e):
+            db, logger, n_cores, bin_path, foldX_WATER, build_model_runs, matrix, gap_s, gap_e):
         """
         """
         self.global_temp_path = global_temp_path
@@ -252,7 +251,7 @@ class GetMutation(object):
         self.unique_temp_folder = temp_path + unique + '/'
         self.pdb_path = pdb_path
         self.db = db # sql database
-        self.log = log
+        self.logger = logger
         self.bin_path = bin_path
         self.foldX_WATER = foldX_WATER
         self.build_model_runs = build_model_runs
@@ -260,13 +259,13 @@ class GetMutation(object):
         self.gap_s = gap_s
         self.gap_e = gap_e
         self.n_cores = n_cores
-        with open(bin_path + 'clf_domain.pickle', 'rb') as ifh:
-            self.clf_domain, self.clf_domain_features = pickle.load(ifh)
-        with open(bin_path + 'clf_interface.pickle', 'rb') as ifh:
-            self.clf_interface, self.clf_interface_features = pickle.load(ifh)
+#        with open(bin_path + 'clf_domain.pickle', 'rb') as ifh:
+#            self.clf_domain, self.clf_domain_features = pickle.load(ifh)
+#        with open(bin_path + 'clf_interface.pickle', 'rb') as ifh:
+#            self.clf_interface, self.clf_interface_features = pickle.load(ifh)
 
 
-    def get_mutation_data(self, d, t, m, uniprot_id_1, mutation):
+    def get_mutation_data(self, d, uniprot_id_1, mutation):
         """
         """
         path_to_provean_supset = None
@@ -274,17 +273,20 @@ class GetMutation(object):
         # Core
         if isinstance(d, sql_db.UniprotDomain):
             self.logger.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
-            pfam_name = d.pfam_name
-            domain_start, domain_end = sql_db.decode_domain(t.domain_def)
-            alignment, __ = self.db.get_alignment(t, d.path_to_data)
-            alignment_id = t.alignment_id
-            chains_pdb = [t.domain.pdb_chain, ]
+            pdbfam_name = d.pdbfam_name
+            domain_start, domain_end = hf.decode_domain_def(d.template.domain_def)
+            alignment, __ = self.db.get_alignment(d.template.model, d.path_to_data)
+#            alignment_id = d.template.model.alignment_id
+            chains_pdb = [d.template.domain.pdb_chain, ]
             uniprot_sequences = [self.db.get_uniprot_sequence(uniprot_id_1), ]
             domain_sequences = [uniprot_sequences[0][domain_start-1:domain_end],]
-            chains_modeller = [m.chain, ]
+            chains_modeller = [d.template.model.chain, ]
             uniprot_domain_id = d.uniprot_domain_id
-            if t.provean_supset_filename:
-                path_to_provean_supset = self.temp_path + d.path_to_data + t.provean_supset_filename
+            if (d.uniprot_sequence.provean and
+                    d.uniprot_sequence.provean.provean_supset_filename ):
+                path_to_provean_supset = (
+                    self.temp_path + hf.get_uniprot_base_path(d) +
+                    d.uniprot_sequence.provean.provean_supset_filename )
 
         #######################################################################
         # Interface
@@ -292,28 +294,28 @@ class GetMutation(object):
             if uniprot_id_1 == d.uniprot_domain_1.uniprot_id:
                 uniprot_id_2 = d.uniprot_domain_2.uniprot_id
                 d_1, d_2 = d.uniprot_domain_1, d.uniprot_domain_2
-                domain_start, domain_end = sql_db.decode_domain(t.domain_def_1)
-                domain_2_start, domain_2_end = sql_db.decode_domain(t.domain_def_2)
-                alignment, __ = self.db.get_alignment(t, d.path_to_data)
-                alignment_id = t.alignment_id_1
-                chains_pdb = [t.domain_1.pdb_chain, t.domain_2.pdb_chain]
-                interacting_aa = [int(uniprot_num) for uniprot_num in m.interacting_aa_1.split(',') if uniprot_num]
-                chains_modeller = [m.chain_1, m.chain_2]
+                domain_start, domain_end = hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)
+                domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)
+                alignment, __ = self.db.get_alignment(d.template.model, d.path_to_data)
+#                alignment_id = d.alignment_id_1
+                chains_pdb = [d.template.domain_1.pdb_chain, d.template.domain_2.pdb_chain]
+                interacting_aa = [int(uniprot_num) for uniprot_num in d.template.model.interacting_aa_1.split(',') if uniprot_num]
+                chains_modeller = [d.template.model.chain_1, d.template.model.chain_2]
 
             elif uniprot_id_1 == d.uniprot_domain_2.uniprot_id:
                 self.logger.debug('Mutated uniprot is uniprot 2. Rearranging...')
                 uniprot_id_2 = d.uniprot_domain_1.uniprot_id
                 d_1, d_2 = d.uniprot_domain_2, d.uniprot_domain_1
-                domain_start, domain_end = sql_db.decode_domain(t.domain_def_2)
-                domain_2_start, domain_2_end = sql_db.decode_domain(t.domain_def_1)
-                __, alignment = self.db.get_alignment(t, d.path_to_data)
-                alignment_id = t.alignment_id_2
-                chains_pdb = [t.domain_2.pdb_chain, t.domain_1.pdb_chain]
-                interacting_aa = [int(uniprot_num) for uniprot_num in m.interacting_aa_2.split(',') if uniprot_num]
-                chains_modeller = [m.chain_2, m.chain_1]
+                domain_start, domain_end = hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)
+                domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)
+                __, alignment = self.db.get_alignment(d.template.model, d.path_to_data)
+#                alignment_id = d.alignment_id_2
+                chains_pdb = [d.template.domain_2.pdb_chain, d.template.domain_1.pdb_chain]
+                interacting_aa = [int(uniprot_num) for uniprot_num in d.template.model.interacting_aa_2.split(',') if uniprot_num]
+                chains_modeller = [d.template.model.chain_2, d.template.model.chain_1]
 
-            self.logger.debug('Analysing interface mutation between uniprots %s and %s' % (uniprot_id_1, uniprot_id_2,) )
-            pfam_name = d_1.pfam_name
+            self.logger.debug('Analysing interface mutation between uniprots %s and %s' % (uniprot_id_1, uniprot_id_2,))
+            pdbfam_name = d_1.pdbfam_name
             uniprot_sequences = [self.db.get_uniprot_sequence(d_1.uniprot_id),
                                  self.db.get_uniprot_sequence(d_2.uniprot_id)]
             domain_sequences = [uniprot_sequences[0][domain_start-1:domain_end],
@@ -323,11 +325,15 @@ class GetMutation(object):
             uniprot_domain_id = d_1.uniprot_domain_id
 
             if int(mutation[1:-1]) not in interacting_aa:
-                raise errors.MutationOutsideInterface('mutated residue not involved in the interaction')
-            if d_1.template != None and d_1.template.provean_supset_filename != None:
+                raise errors.MutationOutsideInterfaceError('mutated residue not involved in the interaction')
+            if (d_1.template
+                    and d_1.uniprot_sequence.provean
+                    and d_1.uniprot_sequence.provean.provean_supset_filename ):
                 # This will only work if the core mutations are evaluated at the same time as interface mutations
-                if os.path.isfile(self.temp_path + d_1.path_to_data + d_1.template.provean_supset_filename):
-                    path_to_provean_supset = self.temp_path + d_1.path_to_data + d_1.template.provean_supset_filename
+                if os.path.isfile(self.temp_path + d_1.path_to_data + d_1.uniprot_sequence.provean.provean_supset_filename):
+                    path_to_provean_supset = (
+                        self.temp_path + hf.get_uniprot_base_path(d_1) +
+                        d_1.uniprot_sequence.provean.provean_supset_filename )
                 else:
                     self.logger.error('Provean supporting set does not exist even though it should!!!')
 
@@ -336,10 +342,10 @@ class GetMutation(object):
         if int(mutation[1:-1]) < domain_start or int(mutation[1:-1]) > domain_end:
 #            raise error.MutationOutsideDomain('Mutation %s outside of domain %s with boundaries %i:%i' \
 #            % (mutation, pfam_name, domain_start, domain_end))
-            raise errors.MutationOutsideDomain('Mutation falls outside domain')
+            raise errors.MutationOutsideDomainError('Mutation falls outside domain')
 
         save_path = self.temp_path + d.path_to_data
-        pdbFile_wt = m.model_filename
+        pdbFile_wt = d.template.model.model_filename
 
         # Convert mutation from uniprot domain numbering to pdb domain numbering
         position_domain = int(mutation[1:-1]) - domain_start + 1 # +1 to have the numbering staring with 1
@@ -347,7 +353,7 @@ class GetMutation(object):
 #        mutation_structure = map_mutation_to_structure(alignment, alignment_id, mutation_domain, uniprot_id_1)
 #        chain_mutation_structure = chains_pdb[0] + '_' + mutation_structure
 
-        self.logger.debug(save_path + pdbFile_wt)
+        self.logger.debug('Modeller pdb file: {}'.format(save_path + pdbFile_wt))
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         structure = parser.get_structure('ID', save_path + pdbFile_wt)
         position_modeller = pdb_template.convert_position_to_resid(structure[0], chains_modeller[0], [position_domain])
@@ -356,16 +362,13 @@ class GetMutation(object):
         # Save the results
         mut_data = MutationData()
 
-        mut_data.d = d
-        mut_data.t = t
-        mut_data.m = m
         mut_data.uniprot_id_1 = uniprot_id_1
         mut_data.mutation = mutation
-        mut_data.pfam_name = pfam_name
+        mut_data.pdbfam_name = pdbfam_name
         mut_data.domain_start = domain_start
         mut_data.domain_end = domain_end
         mut_data.alignment = alignment
-        mut_data.alignment_id = alignment_id
+#        mut_data.alignment_id = alignment_id
         mut_data.chains_pdb = chains_pdb
         mut_data.uniprot_sequences = uniprot_sequences
         mut_data.domain_sequences = domain_sequences
@@ -405,15 +408,15 @@ class GetMutation(object):
             self.logger.debug(provean_score)
             uniprot_mutation.provean_score = provean_score
 
-        if not uniprot_mutation.Stability_energy_wt:
+        if not uniprot_mutation.stability_energy_wt:
             self.logger.debug('Evaluating the structural impact of the mutation...')
             uniprot_mutation = self.evaluate_structural_impact(mut_data, uniprot_mutation)
 
-        if (not uniprot_mutation.ddG and
-                (uniprot_mutation.provean_score and
-                uniprot_mutation.Stability_energy_wt)):
-            self.logger.debug('Predicting the thermodynamic effect of the mutation...')
-            uniprot_mutation = self.predict_thermodynamic_effect(mut_data.d, mut_data.t, mut_data.m, uniprot_mutation)
+#        if (not uniprot_mutation.ddG and
+#                (uniprot_mutation.provean_score and
+#                uniprot_mutation.Stability_energy_wt)):
+#            self.logger.debug('Predicting the thermodynamic effect of the mutation...')
+#            uniprot_mutation = self.predict_thermodynamic_effect(mut_data.d, mut_data.t, mut_data.m, uniprot_mutation)
 
         return uniprot_mutation
 
@@ -422,7 +425,7 @@ class GetMutation(object):
         """
         """
 #        uniprot_sequence = self.db.get_uniprot_sequence(d.uniprot_id).seq.tostring()
-#        domain_def = sql_db.decode_domain(t.domain_def)
+#        domain_def = sql_db.decode_domain_def(t.domain_def)
 #        uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
         if isinstance(domain_sequence, str):
             pass
@@ -442,6 +445,7 @@ class GetMutation(object):
         subprocess.check_call('echo ' + domain_mutation + ' > ' + self.unique_temp_folder + 'sequence_conservation/decoy.var', shell=True)
         path_to_provean_supset_local = self.unique_temp_folder + 'sequence_conservation/' + path_to_provean_supset.split('/')[-1]
         subprocess.check_call('cp -f ' + path_to_provean_supset + ' ' + path_to_provean_supset_local, shell=True)
+        subprocess.check_call('cp -f ' + path_to_provean_supset + '.fasta ' + path_to_provean_supset_local + '.fasta', shell=True)
         system_command = (
             './provean' +
             ' -q ' + './sequence.fasta' +
@@ -534,7 +538,7 @@ class GetMutation(object):
                    mut_data.chains_modeller[0],
                    self.build_model_runs,
                    self.foldX_WATER,
-                   self.log)
+                   self.logger)
         repairedPDB_wt = fX('RepairPDB')
 
         #######################################################################
@@ -560,7 +564,7 @@ class GetMutation(object):
                       mut_data.chains_modeller[0],
                       self.build_model_runs,
                       self.foldX_WATER,
-                      self.log)
+                      self.logger)
         repairedPDB_wt_list, repairedPDB_mut_list = fX_wt('BuildModel', mutCodes)
 
         wt_chain_sequences = pdb_template.get_chain_sequences(repairedPDB_wt_list[0])
@@ -588,7 +592,7 @@ class GetMutation(object):
                                     mut_data.chains_modeller[0],
                                     self.build_model_runs,
                                     self.foldX_WATER,
-                                    self.log))
+                                    self.logger))
 
         fX_mut_list = list()
         for mPDB in repairedPDB_mut_list:
@@ -597,7 +601,7 @@ class GetMutation(object):
                                      mut_data.chains_modeller[0],
                                      self.build_model_runs,
                                      self.foldX_WATER,
-                                     self.log))
+                                     self.logger))
 
         #######################################################################
         ## 5th: calculate the energy for the wildtype
@@ -621,7 +625,7 @@ class GetMutation(object):
             return [encode_list_as_text(opposite_chain_contact_vector_all),
                     encode_list_as_text(same_chain_contact_vector_all)]
 
-        physi_chem = analyze_structure.PhysiChem(5.0, 4.0, self.unique_temp_folder, self.log)
+        physi_chem = analyze_structure.PhysiChem(5.0, 4.0, self.unique_temp_folder, self.logger)
         opposite_chain_contact_vector_all_wt, same_chain_contact_vector_all_wt = get_contact_vectors(
             physi_chem, repairedPDB_wt_list, mut_data.chains_modeller[0], mut_data.mutation_domain)
         opposite_chain_contact_vector_all_mut, same_chain_contact_vector_all_mut = get_contact_vectors(
@@ -633,7 +637,7 @@ class GetMutation(object):
             self.unique_temp_folder + 'FoldX/',
             self.unique_temp_folder + 'analyze_structure/',
             repairedPDB_wt_list[0].split('/')[-1], # dssp file wildtype
-            mut_data.chains_modeller, None, self.log)
+            mut_data.chains_modeller, None, self.logger)
         (seasa_by_chain_together, seasa_by_chain_separately,
         seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_wt.get_seasa()
         seasa_info_wt = seasa_by_residue_separately[
@@ -661,7 +665,7 @@ class GetMutation(object):
             self.unique_temp_folder + 'FoldX/',
             self.unique_temp_folder + 'analyze_structure/',
             repairedPDB_mut_list[0].split('/')[-1], # dssp file mut
-            mut_data.chains_modeller, None, self.log)
+            mut_data.chains_modeller, None, self.logger)
         (seasa_by_chain_together, seasa_by_chain_separately,
         seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_mut.get_seasa()
         seasa_info_mut = seasa_by_residue_separately[
@@ -707,13 +711,13 @@ class GetMutation(object):
         uniprot_mutation.model_filename_wt = model_filename_wt
         uniprot_mutation.model_filename_mut = model_filename_mut
 
-        uniprot_mutation.Stability_energy_wt = stability_values_wt
-        uniprot_mutation.Stability_energy_mut = stability_values_mut
+        uniprot_mutation.stability_energy_wt = stability_values_wt
+        uniprot_mutation.stability_energy_mut = stability_values_mut
 
-        uniprot_mutation.physChem_wt = opposite_chain_contact_vector_all_wt
-        uniprot_mutation.physChem_wt_ownChain = same_chain_contact_vector_all_wt
-        uniprot_mutation.physChem_mut = opposite_chain_contact_vector_all_mut
-        uniprot_mutation.physChem_mut_ownChain = same_chain_contact_vector_all_mut
+        uniprot_mutation.physchem_wt = opposite_chain_contact_vector_all_wt
+        uniprot_mutation.physchem_wt_ownchain = same_chain_contact_vector_all_wt
+        uniprot_mutation.physchem_mut = opposite_chain_contact_vector_all_mut
+        uniprot_mutation.physchem_mut_ownchain = same_chain_contact_vector_all_mut
 
         uniprot_mutation.matrix_score = matrix_score
 
@@ -848,7 +852,7 @@ class GetMutation(object):
         """
         domains = [['Null', 'Null'], ] # extract the full sequence
 
-        pdb = PDBTemplate(self.pdb_path, pdbCode, chain, domains, self.unique_temp_folder, self.unique_temp_folder, self.log)
+        pdb = PDBTemplate(self.pdb_path, pdbCode, chain, domains, self.unique_temp_folder, self.unique_temp_folder, self.logger)
 
         HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
         chainNumberingDomain = pdb.get_chain_numbering(chain)
@@ -861,7 +865,7 @@ class GetMutation(object):
 
     def _getCrystalStructure(self, pdbCode, chains, savePDB, FULL_PATH=False):
         domains = [['Null', 'Null'] for i in range(len(chains)) ]
-        pdb = PDBTemplate(self.pdb_path, pdbCode, chains, domains, savePDB, self.unique_temp_folder, self.log)
+        pdb = PDBTemplate(self.pdb_path, pdbCode, chains, domains, savePDB, self.unique_temp_folder, self.logger)
         HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
 
         SWITCH_CHAIN = False
