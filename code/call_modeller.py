@@ -18,7 +18,7 @@ class modeller:
     """
     def __init__(
             self, alignment, seqID, templateID, path_to_pdb_for_modeller,
-            tmpPath, log, modeller_runs, loopRefinement=True,):
+            tmpPath, logger, modeller_runs, loopRefinement=True,):
 
         if not isinstance(alignment, list):
             self.alignment = list()
@@ -36,7 +36,7 @@ class modeller:
         # some environment settings
         self.filePath = path_to_pdb_for_modeller
         self.tmpPath = tmpPath
-        self.log = log
+        self.logger = logger
 
 
     def run(self):
@@ -102,7 +102,8 @@ class modeller:
         env = environ() # create a new MODELLER environment to build this model in
 
         # directories for input atom files
-        env.io.atom_files_directory = [self.filePath]
+        print 'atom_files_directory: {}: {}'.format(type(self.filePath), self.filePath)
+        env.io.atom_files_directory = [str(self.filePath.rstrip('/'))]
         env.schedule_scale = physical.values(default=1.0, soft_sphere=0.7)
         # selected atoms do not feel the neighborhood
         #env.edat.nonbonded_sel_atoms = 2

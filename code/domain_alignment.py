@@ -112,7 +112,7 @@ def build_provean_supporting_set(self, uniprot_id, uniprot_name, uniprot_sequenc
     result, error_message = child_process.communicate()
     return_code = child_process.returncode
     if return_code != 0:
-        logger.error(error_message)
+        self.logger.error(error_message)
         raise errors.ProveanError(error_message)
 
     for line in result.split('\n'):
@@ -120,6 +120,110 @@ def build_provean_supporting_set(self, uniprot_id, uniprot_name, uniprot_sequenc
             provean_supset_length = int(line.split()[-1])
 
     return provean_supset_filename, provean_supset_length
+
+
+
+
+class DomainPairTemplate():
+    """
+    R CODE PROTOTYPE:
+
+    aligment.domains <-
+      function(x,chain,dir_db,dir_query,dir_blastp,definition,libraries){
+
+        BE = definition[,x,drop=FALSE]
+        family = gsub(pattern="\\|([[:digit:]])*$",replacement="",x=colnames(BE))
+        B = BE["Begin",]
+        E = BE["End",]
+
+        if( family%in%libraries ){
+
+          query = paste(dir_query,chain,".fasta",sep = "")
+          db = paste(dir_db,family,"/",family,sep = "")
+          cmd = paste("blastp -db",db,"-query",query,"-outfmt 10 -evalue 0.001")
+          aligment = system(cmd,intern=TRUE)
+
+          if( length(aligment) == 0 ){
+
+            templete = unique(x,chain,B,E,type=2)
+
+          } else{
+
+            aligment = lapply(aligment,formating)
+            aligment = do.call(rbind,aligment)
+
+            B2 = as.vector(aligment[,"q_start"])
+            E2 = as.vector(aligment[,"q_end"])
+
+            overlapings = mapply(overlap.internal,B1 = B,B2 = B2,E1 = E,E2 = E2,
+                                 MoreArgs=list(type="percentage_1"),SIMPLIFY=TRUE)
+
+            t_score = mapply( FUN = T_score,
+                              identity = as.vector(aligment[,"identity"]),
+                              coverage = overlapings,
+                              SIMPLIFY = TRUE )
+
+            type = 1
+            aligment = cbind(aligment,overlapings,t_score,type)
+
+            dir_blastp_domain = paste(dir_blastp,x,".csv",sep="")
+            write.csv(aligment,file=dir_blastp_domain)
+
+            ind_templete = which.max(aligment[,"t_score"])                          # criterion see t_score function
+            templete = aligment[ind_templete,,drop=FALSE]
+
+          }
+
+        } else{
+
+          templete = unique(x,chain,B,E,type=3)
+
+        }
+
+        return(templete)
+
+      }
+    """
+
+    def __init__(
+            self, global_temp_path, temp_path, unique, pdb_path, db, logger,
+            n_cores, provean_temp_path, refine=False):
+        """
+        """
+        self.global_temp_path = global_temp_path
+        self.temp_path = temp_path
+        self.unique_temp_folder = temp_path + unique + '/'
+        self.pdb_path = pdb_path
+        self.db = db
+        self.logger = logger
+        self.refine = refine
+        self.n_cores = n_cores
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -142,7 +246,7 @@ class GetTemplate():
         """
         self.global_temp_path = global_temp_path
         self.temp_path = tmpPath
-        self.unique = unique + '/'
+        self.unique = unique
         self.unique_temp_folder = tmpPath + unique + '/'
         self.pdb_path = pdb_path
         self.db = db
@@ -356,7 +460,7 @@ class GetTemplate():
                 try:
                     pdb = pdb_template.PDBTemplate(
                         self.pdb_path, domain.pdb_id, [domain.pdb_chain], [pdb_domain_def, ],
-                        self.unique_temp_folder, self.unique_temp_folder, self.log)
+                        self.unique_temp_folder, self.unique_temp_folder, self.logger)
                 except errors.NoPDBFoundError as e:
                     self.logger.error(str(type(e)) + ': ' + e.__str__())
                     self.logger.error("Didn't find the pdb file? Check if it is correct. Skipping...")
@@ -449,7 +553,7 @@ class GetTemplate():
                         self.pdb_path,  domain.domain_1.pdb_id,
                         [domain.domain_1.pdb_chain, domain.domain_2.pdb_chain],
                         [pdb_domain_def_1, pdb_domain_def_2],
-                        self.unique_temp_folder, self.unique_temp_folder, self.log)
+                        self.unique_temp_folder, self.unique_temp_folder, self.logger)
                 except errors.NoPDBFoundError as e:
                     self.logger.error(str(type(e)) + ': ' + e.__str__())
                     self.logger.error("Didn't find the pdb file? Check if it is correct. Skipping...")
@@ -862,7 +966,7 @@ class GetTemplate():
             self.n_cores,
             self.pdb_path,
             mode,
-            self.log)
+            self.logger)
         alignments = tcoffee.align()
 
         return alignments[0], pdb_sequence.id
@@ -961,7 +1065,8 @@ class GetTemplate():
         Return the pdb file sequence (ATOM)
         """
         domains = [pdb_domain_def, ]
-        pdb = pdb_template.PDBTemplate(self.pdb_path, pdb_code, chain_id, domains, self.unique_temp_folder, self.unique_temp_folder, self.log)
+        pdb = pdb_template.PDBTemplate(self.pdb_path, pdb_code, chain_id, domains,
+                                       self.unique_temp_folder, self.unique_temp_folder, self.logger)
         pdb.extract()
         chain_numbering_extended, chain_sequence = pdb.get_chain_numbering(chain_id, return_sequence=True, return_extended=True)
         chain_seqrecord = SeqRecord(seq=Seq(chain_sequence), id=pdb_code+chain_id)

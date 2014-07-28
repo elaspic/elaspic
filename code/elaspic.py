@@ -43,7 +43,7 @@ class Pipeline(object):
         # Read the configuration file and set the variables
         configParser = SafeConfigParser(
             defaults={
-                'db_type': sql_db.sql_flavor,
+                'db_type': sql_db.SQL_FLAVOUR,
                 'db_path': hf.get_path_to_current_file() + '/../db/pipeline.db',
                 'web_server': False,
             })
@@ -116,6 +116,11 @@ class Pipeline(object):
         username  = hf.get_username()
         hostname = hf.get_hostname()
         if username == 'strokach' and (('beagle' in hostname) or ('grendel' in hostname)):
+            if not (os.path.isdir(self.global_temp_path + 'blast/pdbaa_db/')
+                    and os.path.isdir(self.global_temp_path + 'blast/db/') ):
+                raise Exception(
+                    'Could not find a blast database even though it should be '
+                    'present on these nodes.')
             # Copy the blast database if running on beagle or Grendel
             system_command = (
                 'mkdir -p ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
@@ -166,9 +171,11 @@ class Pipeline(object):
         """
         print uniprot_id
         print mutation
+        print run_type
 
         self.uniprot_id = uniprot_id
         self.mutations = mutations
+        self.calculated_mutations = []
         self.run_type = run_type
         if n_cores is not None:
             self.n_cores = n_cores
@@ -179,6 +186,7 @@ class Pipeline(object):
         self.unique_temp_folder = self.temp_path + self.unique + '/'
         if self.web_server: # Webserver logging is handled by Celery
             self.logger = get_task_logger('web_pipeline.tasks')
+        self.logger.info(self.unique_temp_folder)
 
         # Switch to the root of the unique tmp directory
         os.chdir(self.unique_temp_folder)
@@ -193,8 +201,8 @@ class Pipeline(object):
         # Initialise the sql database for accessing all information
         self.logger.info('Initializing the database...')
         self.db = sql_db.MyDatabase(
-            path_to_sqlite_db=self.temp_path+'pipeline.db', sql_flavor=self.db_type,
-            path_to_temp=self.temp_path, path_to_archive=self.path_to_archive,
+            path_to_sqlite_db=self.temp_path+'pipeline.db', sql_flavour=self.db_type,
+            temp_path=self.temp_path, path_to_archive=self.path_to_archive,
             is_immutable=False, logger=self.logger)
 
         # Initialize external class objects
@@ -215,31 +223,56 @@ class Pipeline(object):
         # Obtain all domains and interactions for a given uniprot
         self.logger.info('Obtaining protein domain information...')
         self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
-
         if not self.uniprot_domains:
             self.logger.error('Uniprot {} has no pfam domains'.format(self.uniprot_id))
             sys.exit('Uniprot {} has no pfam domains'.format(self.uniprot_id))
+        self._update_path_to_data(self.uniprot_domains)
 
+        # Mutations
+        self.uniprot_mutations = []
+
+        # Find provean
+        if run_type in [1, 5]:
+            self.logger.info('\n\n\n' + '*' * 80)
+            self.logger.info("Computing provean...")
+            if self._compute_provean():
+                if run_type == 1:
+                    sys.exit('Finished run_type {}'.format(run_type))
+                # If provean was updated, we need to reload uniprot domain data
+                # for all the other domains
+                self.logger.info('\n\n\n')
+                self.logger.info('Obtaining protein domain information...')
+                self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
+
+        # Get interactions
         if self.look_for_interactions:
             self.logger.info('Obtaining protein domain pair information...')
             self.uniprot_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id, True)
+            self._update_path_to_data(self.uniprot_domain_pairs)
 
-        # Set the path_to_data variable
-        for d in self.uniprot_domains + self.uniprot_domain_pairs:
-            if not d.path_to_data:
-                d.path_to_data = hf.get_uniprot_base_path(d) + hf.get_uniprot_domain_path(d)
-                self.db.merge_row(d)
-
-        if run_type in [1, 5]:
-            self.logger.info('-' * 80)
-            self.logger.info("Computing provean...")
-            self._compute_provean()
         if run_type in [2, 4, 5]:
+            self.logger.info('\n\n\n' + '*' * 80)
             self.logger.info("Building models...")
             self._compute_models()
         if run_type in [3, 4, 5]:
+            self.logger.info('\n\n\n' + '*' * 80)
             self.logger.info("Analyzing mutations...")
             self._compute_mutations()
+
+
+    def _update_path_to_data(self, d_list):
+        if not isinstance(d_list, list):
+            d_list = [d_list]
+        for d in d_list:
+            if not d.path_to_data:
+                d.path_to_data = hf.get_uniprot_base_path(d) + hf.get_uniprot_domain_path(d)
+                self.db.merge_row(d)
+            try:
+                subprocess.check_call('mkdir -p {}'.format(self.temp_path + d.path_to_data), shell=True)
+            except Exception:
+                d.path_to_data = hf.get_uniprot_base_path(d) + hf.get_uniprot_domain_path(d)
+                self.db.merge_row(d)
+                subprocess.check_call('mkdir -p {}'.format(self.temp_path + d.path_to_data), shell=True)
 
 
     def _compute_provean(self):
@@ -248,23 +281,32 @@ class Pipeline(object):
         d = self.uniprot_domains[0] # All uniprot domains will have the same uniprot_sequence info
         self.__print_header(d)
 
-        if d.uniprot_provean and d.uniprot_provean.provean_supset_filename:
+        if (d.uniprot_sequence.provean and
+                d.uniprot_sequence.provean.provean_supset_filename and
+                os.path.isfile(
+                    self.path_to_archive + hf.get_uniprot_base_path(d) +
+                    d.uniprot_sequence.provean.provean_supset_filename) ):
             self.logger.debug('The provean supset has already been calculated. Done!')
-            return
-
-        if d.uniprot_provean:
-            uniprot_provean = d.uniprot_provean
+            return None
+        elif (d.uniprot_sequence.provean and
+                d.uniprot_sequence.provean.provean_supset_filename):
+            self.logger.debug('Provean has been calculated but the file is missing!!!!!!! Recalculating...')
+            provean = d.uniprot_sequence.provean
+        elif d.uniprot_sequence.provean:
+            provean = d.uniprot_sequence.provean
         else:
-            uniprot_provean = sql_db.UniprotProvean()
-            uniprot_provean.uniprot_id = d.uniprot_id
+            provean = sql_db.Provean()
+            provean.uniprot_id = d.uniprot_id
 
         try:
-            uniprot_provean.provean_supset_filename, uniprot_provean.provean_supset_length = \
-                domain_alignment.build_provean_supporting_set(self, d.uniprot_id, d.uniprot_name, d.uniprot_sequence.seq)
+            provean.provean_supset_filename, provean.provean_supset_length = \
+                domain_alignment.build_provean_supporting_set(
+                    self, d.uniprot_id, d.uniprot_sequence.uniprot_name,
+                    d.uniprot_sequence.uniprot_sequence)
 
         except (errors.ProveanError, errors.ProveanResourceError) as e:
-            uniprot_provean.provean_errors = self.__add_new_error(uniprot_provean.provean_errors, e)
-            self.logger.error(uniprot_provean.provean_errors)
+            provean.provean_errors = self.__add_new_error(provean.provean_errors, e)
+            self.logger.error(provean.provean_errors)
             self.logger.error(e.__str__())
             if isinstance(e, errors.ProveanResourceError):
                 # Send the kill signal to the main process group, killing everything
@@ -276,17 +318,9 @@ class Pipeline(object):
                     'The user will probably not see this message...')
 
         self.__clear_provean_temp_files()
-        self.db.merge_row(uniprot_provean)
-        # Propagate the provean supporting set to all the other domains and domain pairs
-        for d_2 in self.uniprot_domains:
-            d_2.uniprot_provean = uniprot_provean
-        for d_2 in self.uniprot_domain_pairs:
-            if d_2.uniprot_domain_1.uniprot_id == d.uniprot_id:
-                d_2.uniprot_domain_1.uniprot_provean = uniprot_provean
-            if d_2.uniprot_domain_2.uniprot_id == d.uniprot_id:
-                d_2.uniprot_domain_2.uniprot_provean = uniprot_provean
-        self.logger.info('Finished computing provean for {}\n\n\n'.format(d.uniprot_id))
-
+        self.db.merge_provean(provean, hf.get_uniprot_base_path(d))
+        self.logger.info('Finished computing provean for {}'.format(d.uniprot_id))
+        return provean
 
 
     def _compute_models(self):
@@ -297,37 +331,40 @@ class Pipeline(object):
         possible_model_errors = (
             ModellerError,
             errors.ModellerError,
-            errors.PdbChainError,
+            errors.PDBChainError,
             errors.ChainsNotInteractingError,
             errors.MutationOutsideDomainError,
             errors.MutationOutsideInterfaceError,
             errors.NoSequenceFound,
             errors.TcoffeeError,
-            errors.PdbNotFoundError)
+            errors.PDBNotFoundError)
 
         # Go over all domains and domain pairs for a given protein
-        for d in self.uniprot_domains:
+        for d in self.uniprot_domains + self.uniprot_domain_pairs:
             self.__print_header(d)
 
             # Check if we should skip the model
-            if (isinstance(d, sql_db.UniprotDomain) and not d.pdb_id):
+            if (isinstance(d, sql_db.UniprotDomain) and
+                    not (d.template and d.template.cath_id) ):
                 self.logger.error('No structural template availible for this domain. Skipping...')
                 continue
-            elif (isinstance(d, sql_db.UniprotDomainPair) and not d.pdb_id):
+            elif (isinstance(d, sql_db.UniprotDomainPair) and
+                    not (d.template and d.template.cath_id_1 and d.template.cath_id_2) ):
                 self.logger.error('No structural template availible for this domain pair. Skipping...')
                 continue
-            elif d.model and d.model.model_filename:
+            elif d.template.model and d.template.model.model_filename:
                 self.logger.info('Model already calculated. Skipping...')
                 continue
-            elif d.model and ('Giving up' in d.model.model_errors):
+            elif (d.template.model and d.template.model.model_errors and
+                    'Giving up' in d.template.model.model_errors ):
                 self.logger.info(
                     'Previous model had unfixable errors: {}. Skipping...'
-                    .format(d.model.model_errors))
+                    .format(d.template.model.model_errors))
                 continue
 
             # Make a homology model using the domain and template information
             try:
-                self.get_model(d)
+                d.template.model = self.get_model(d)
 
             except possible_model_errors as e:
                 # Find domains that were used as a template and eventually led to
@@ -337,44 +374,42 @@ class Pipeline(object):
                     empty_model = sql_db.UniprotDomainModel()
                     empty_model.uniprot_domain_id = d.uniprot_domain_id
                     bad_domains = self.db.get_rows_by_ids(
-                        sql_db.Domain, [sql_db.Domain.cath_id], [d.cath_id])
+                        sql_db.Domain, [sql_db.Domain.cath_id], [d.template.cath_id])
                     assert len(bad_domains) == 1
                     bad_domain = bad_domains[0]
                     bad_domain.domain_errors = str(d.uniprot_domain_id) + ': ' + str(type(e))
                     self.logger.error(
                         'Adding error to the domain with cath_id {cath_id}...'
-                        .format(cath_id=d.cath_id))
+                        .format(cath_id=d.template.cath_id))
                 elif isinstance(d, sql_db.UniprotDomainPair):
                     empty_model = sql_db.UniprotDomainPairModel()
                     empty_model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
                     bad_domains = self.db.get_rows_by_ids(
                         sql_db.DomainContact,
                         [sql_db.DomainContact.cath_id_1, sql_db.DomainContact.cath_id_2],
-                        [d.cath_id_1, d.cath_id_2])
+                        [d.template.cath_id_1, d.template.cath_id_2])
                     if len(bad_domains) == 0:
                         bad_domains = self.db.get_rows_by_ids(
                             sql_db.DomainContact,
                             [sql_db.DomainContact.cath_id_1, sql_db.DomainContact.cath_id_2],
-                            [d.cath_id_2, d.cath_id_1])
+                            [d.template.cath_id_2, d.template.cath_id_1])
                     assert len(bad_domains) == 1
                     bad_domain = bad_domains[0]
                     bad_domain.domain_contact_errors = str(d.uniprot_domain_pair_id) + ': ' + str(type(e))
                     self.logger.error(
                         'Adding error to the domain pair with cath_id_1 {cath_id_1} '
                         'and cath_id_2 {cath_id_2}...'
-                        .format(cath_id_1=d.cath_id_1, cath_id_2=d.cath_id_2))
+                        .format(cath_id_1=d.template.cath_id_1, cath_id_2=d.template.cath_id_2))
                 # Add the error type to the model_errors column
                 empty_model.model_errors = self.__add_new_error(empty_model.model_errors, e)
                 self.logger.error(empty_model.model_errors)
                 self.db.merge_row(bad_domain)
-                d.model = empty_model
+                d.template.model = empty_model
 
             # Add either the empty model or the calculated model to the database
-            self.logger.info('Adding model...\n\n\n')
-            self.db.merge_domain(d) # To save the alignments
-            self.db.merge_model(d.model)
-        self.logger.info('Finished processing all models for {} {}\n\n\n'.format(self.uniprot_id, self.mutations))
-
+            self.logger.info('Adding model...')
+            self.db.merge_model(d, d.path_to_data)
+        self.logger.info('Finished processing all models for {} {}'.format(self.uniprot_id, self.mutations))
 
 
     def _compute_mutations(self):
@@ -382,80 +417,78 @@ class Pipeline(object):
         """
         possible_mutation_errors = (
             errors.PDBError,
-            errors.FoldXError,
+            errors.FoldxError,
             errors.ResourceError,)
 
-        for p in self.protein_definitions:
-            self.__print_header(p)
+        for d in self.uniprot_domains + self.uniprot_domain_pairs:
+            self.__print_header(d)
+
             if not self.mutations:
                 self.logger.debug('Not evaluating mutations because no mutations specified...')
                 continue
-            if ((isinstance(p.d, sql_db.UniprotDomain) and not (p.t and p.t.domain_def)) or
-                    (isinstance(p.d, sql_db.UniprotDomainPair) and not (p.t and p.t.domain_def_1 and p.t.domain_def_2))
-                    ):
-                self.logger.debug('Skipping because the template is missing domain definitions...')
+            elif ( (isinstance(d, sql_db.UniprotDomain) and
+                    not d.template.domain) or
+                    (isinstance(d, sql_db.UniprotDomainPair) and
+                    not (d.template.domain_1 and d.template.domain_2)) ):
+                self.logger.debug('Skipping because no structural template is availible...')
                 continue
-            if not p.m or not p.m.model_filename:
+            elif not d.template.model or not d.template.model.model_filename:
                 self.logger.debug('Skipping because no model...')
                 continue
-            self.logger.debug(self.mutations)
+
+            self.logger.debug('Going over all mutations: {}'.format(self.mutations))
             for mutation in self.mutations.split(','):
-                self.logger.debug(mutation)
                 self.logger.debug('-' * 80)
-                precalculated_mutations = self.db.get_uniprot_mutation(p.m, self.uniprot_id, mutation, p.d.path_to_data)
-                self.logger.info(precalculated_mutations)
-                if len(precalculated_mutations) == 0:
-                    precalculated_mutation = None
-                elif len(precalculated_mutations) == 1:
-                    precalculated_mutation = precalculated_mutations[0]
-                else:
-                    raise Exception('Supposed to get only one precalculated mutation!')
+                self.logger.debug('Mutation: {}'.format(mutation))
 
                 # Check to see if we have a precalculated mutation. Skip if all
                 # parameters have been calculated; otherwise analyse the remaining
                 # parameters. Create an empty mutation if the mutation has not
                 # been precalculated.
+                precalculated_mutation = self.db.get_uniprot_mutation(d, mutation, self.uniprot_id, True)
+                self.logger.info('Have the following precalculated mutation: {}'.format(precalculated_mutation))
                 if (precalculated_mutation and
                         (precalculated_mutation.provean_score and
-                        precalculated_mutation.Stability_energy_wt and
-                        precalculated_mutation.ddG)):
-                    p.mut.append(precalculated_mutations[0])
+                        precalculated_mutation.stability_energy_wt and
+                        precalculated_mutation.ddg)):
+                    self.calculated_mutations.append(precalculated_mutation)
                     self.logger.info('Mutation has already been completely evaluated. Skipping...')
                     continue
                 elif precalculated_mutation:
                     uniprot_mutation = precalculated_mutation
                 # Construct empty models that will be used if we have errors
-                elif isinstance(p.d, sql_db.UniprotDomain):
+                elif isinstance(d, sql_db.UniprotDomain):
                     uniprot_mutation = sql_db.UniprotDomainMutation()
-                    uniprot_mutation.uniprot_domain_id = p.d.uniprot_domain_id
+                    uniprot_mutation.uniprot_domain_id = d.uniprot_domain_id
                     uniprot_mutation.uniprot_id = self.uniprot_id
                     uniprot_mutation.mutation = mutation
-                elif isinstance(p.d, sql_db.UniprotDomainPair):
+                elif isinstance(d, sql_db.UniprotDomainPair):
                     uniprot_mutation = sql_db.UniprotDomainPairMutation()
-                    uniprot_mutation.uniprot_domain_pair_id = p.d.uniprot_domain_pair_id
+                    uniprot_mutation.uniprot_domain_pair_id = d.uniprot_domain_pair_id
                     uniprot_mutation.uniprot_id = self.uniprot_id
                     uniprot_mutation.mutation = mutation
 
                 try:
-                    mut_data = self.get_mutation.get_mutation_data(p.d, p.t, p.m, self.uniprot_id, mutation)
+                    mut_data = self.get_mutation.get_mutation_data(d, self.uniprot_id, mutation)
                     uniprot_mutation = self.get_mutation.evaluate_mutation(mut_data, uniprot_mutation)
-                except (errors.MutationOutsideDomain,
-                        errors.MutationOutsideInterface) as e:
-                    self.logger.debug('{}: {}; OK'.format(type(e), e.__str__()))
+                except (errors.MutationOutsideDomainError,
+                        errors.MutationOutsideInterfaceError) as e:
+                    self.logger.debug('{}: {}; OK'.format(type(e), e))
                     continue
                 except possible_mutation_errors as e:
-                    uniprot_mutation.mutation_errors = '{}: {}'.format(type(e), e.__str__())
+                    uniprot_mutation.mutation_errors = '{}: {}'.format(type(e), e)
                     self.logger.debug(uniprot_mutation.mutation_errors)
-                self.logger.info('Adding mutation {}\n\n\n'.format(mutation))
-                p.mut.append(uniprot_mutation)
-                self.db.add_uniprot_mutation(uniprot_mutation, p.d.path_to_data)
-        self.logger.info('Finished processing all mutations for {} {}\n\n\n'.format(self.uniprot_id, self.mutations))
 
-
+                self.logger.info('Adding mutation {}'.format(mutation))
+                self.calculated_mutations.append(uniprot_mutation)
+                self.db.merge_mutation(uniprot_mutation, d.path_to_data)
+                self.uniprot_mutations.append(uniprot_mutation)
+        self.logger.info('Finished processing all mutations for {} {}'.format(self.uniprot_id, self.mutations))
 
 
     def __print_header(self, d):
         # self.logger.info('Domain or domain pair number: {}'.format(d_idx))
+        self.logger.debug('=' * 80)
         if isinstance(d, sql_db.UniprotDomain):
             self.logger.debug('uniprot_domain_id: {}'.format(d.uniprot_domain_id))
         else:
@@ -551,10 +584,10 @@ class Pipeline(object):
             # Can't use /tmp for temporary storage on banting because I run out
             # of space and crash the node
             self.logger.debug('Using a temp folder on kimstg for provean temp files. This may lead to poor performace...')
-            provean_temp_path = '/home/kimlab1/strokach/tmp/elaspic/' + self.unique
-            subprocess.check_call('mkdir -p ' + self.provean_temp_path, shell=True)
+            provean_temp_path = '/home/kimlab1/strokach/tmp/elaspic/' + self.unique + '/provean_temp/'
         else:
-            provean_temp_path = self.unique_temp_folder
+            provean_temp_path = self.unique_temp_folder + 'provean_temp/'
+        subprocess.check_call('mkdir -p ' + provean_temp_path, shell=True)
         return provean_temp_path
 
 
@@ -605,20 +638,17 @@ if __name__ == '__main__':
         mutations = [args.mutations,] if args.mutations is not None else ['',]
 
     else:
-        raise Exception('Need to supply either a list of uniprot_mutation combos '
+        raise Exception(
+            'Need to supply either a list of uniprot_mutation combos '
             'or a flatfile with the same!')
 
     run_type = args.run_type
     n_cores = args.n_cores
     # Run jobs
-    print uniprot_ids
-    print mutations
-    print run_type
     for uniprot_id, mutation in zip(uniprot_ids, mutations):
-        print uniprot_id
-        print mutation
         uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
         temp = sqlalchemy.ext.serializer.dumps(uniprot_domains_and_domain_pairs)
+        subprocess.check_call('mkdir -p /tmp/elaspic/sa_pickles/', shell=True)
         with open('/tmp/elaspic/sa_pickles/{}_{}.pickle'.format(uniprot_id, mutation), 'wb') as ofh:
             pickle.dump(temp, ofh, pickle.HIGHEST_PROTOCOL)
 
