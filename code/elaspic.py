@@ -153,7 +153,7 @@ class Pipeline(object):
                 'mkdir -p ' + self.global_temp_path + 'blast && ' +
                 'cp -ru $HOME/niklas-pipeline/blastdb/pdbaa_db ' +
                 self.global_temp_path + 'blast/')
-        
+
         rc = 1
         n_tries = 0
         while rc != 0 and n_tries < 10:
