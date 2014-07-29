@@ -28,11 +28,6 @@ import helper_functions as hf
 import errors
 import sql_db
 
-try:
-    from celery.utils.log import get_task_logger
-except ImportError:
-    pass
-
 
 
 class Pipeline(object):
@@ -166,7 +161,7 @@ class Pipeline(object):
                 .format(hostname=hostname, username=username))
 
 
-    def __call__(self, uniprot_id, mutations, run_type=1, n_cores=None, number_of_tries=[]):
+    def __call__(self, uniprot_id, mutations, run_type=1, n_cores=None, number_of_tries=[], logger=None):
         """ Run the main function of the program and parse errors
         """
         print uniprot_id
@@ -181,11 +176,13 @@ class Pipeline(object):
             self.n_cores = n_cores
         self.number_of_tries = number_of_tries
 
-        self.logger = hf.get_logger(self.debug)
         self.unique = tempfile.mkdtemp(prefix='', dir=self.temp_path).split('/')[-1]
         self.unique_temp_folder = self.temp_path + self.unique + '/'
-        if self.web_server: # Webserver logging is handled by Celery
-            self.logger = get_task_logger('web_pipeline.tasks')
+
+        if logger is None:
+            self.logger = hf.get_logger(self.debug)
+        else:
+            self.logger = logger
         self.logger.info(self.unique_temp_folder)
 
         # Switch to the root of the unique tmp directory
