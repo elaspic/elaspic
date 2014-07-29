@@ -29,7 +29,6 @@ import errors
 import sql_db
 
 
-
 class Pipeline(object):
 
     def __init__(self, configFile):
@@ -164,10 +163,6 @@ class Pipeline(object):
     def __call__(self, uniprot_id, mutations, run_type=1, n_cores=None, number_of_tries=[], logger=None):
         """ Run the main function of the program and parse errors
         """
-        print uniprot_id
-        print mutation
-        print run_type
-
         self.uniprot_id = uniprot_id
         self.mutations = mutations
         self.calculated_mutations = []
@@ -180,9 +175,8 @@ class Pipeline(object):
         self.unique_temp_folder = self.temp_path + self.unique + '/'
 
         if logger is None:
-            self.logger = hf.get_logger(self.debug)
-        else:
-            self.logger = logger
+            logger = hf.get_logger(self.debug)
+        self.logger = logger
         self.logger.info(self.unique_temp_folder)
 
         # Switch to the root of the unique tmp directory
@@ -643,6 +637,10 @@ if __name__ == '__main__':
     n_cores = args.n_cores
     # Run jobs
     for uniprot_id, mutation in zip(uniprot_ids, mutations):
+        print uniprot_id
+        print mutation
+        print run_type
+
         uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
         temp = sqlalchemy.ext.serializer.dumps(uniprot_domains_and_domain_pairs)
         subprocess.check_call('mkdir -p /tmp/elaspic/sa_pickles/', shell=True)
