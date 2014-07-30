@@ -859,7 +859,7 @@ class MyDatabase(object):
                 os.path.isfile(self.temp_path + uniprot_base_path +
                     provean.provean_supset_filename + '.fasta') ):
             self.logger.debug('Moving provean supset to the output folder: {}'.format(self.path_to_archive + uniprot_base_path))
-            subprocess.check_call('mkdir -p ' + self.path_to_archive + uniprot_base_path, shell=True)
+            subprocess.check_call('mkdir -m 775 -p ' + self.path_to_archive + uniprot_base_path, shell=True)
             subprocess.check_call(
                 'cp -f ' + self.temp_path + uniprot_base_path + provean.provean_supset_filename +
                 ' ' + self.path_to_archive + uniprot_base_path + provean.provean_supset_filename, shell=True)
@@ -877,7 +877,7 @@ class MyDatabase(object):
             tmp_save_path = self.temp_path + path_to_data
             archive_save_path = self.path_to_archive + path_to_data
             # Save the row corresponding to the model as a serialized sqlalchemy object
-            subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
+            subprocess.check_call('mkdir -m 775 -p ' + archive_save_path, shell=True)
             pickle.dump(dumps(d.template), open(archive_save_path + 'template.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
             pickle.dump(dumps(d.template.model), open(archive_save_path + 'model.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
             # Save the modelled structure
@@ -892,7 +892,7 @@ class MyDatabase(object):
                     subprocess.check_call('cp -f ' + tmp_save_path + d.template.model.alignment_filename_2 +
                         ' ' + archive_save_path + d.template.model.alignment_filename_2, shell=True)
                 # Save the model
-                subprocess.check_call('mkdir -p ' + archive_save_path, shell=True)
+                subprocess.check_call('mkdir -m 775 -p ' + archive_save_path, shell=True)
                 subprocess.check_call('cp -f ' + tmp_save_path + d.template.model.model_filename +
                     ' ' + archive_save_path + d.template.model.model_filename, shell=True)
         self.merge_row([d.template, d.template.model])
@@ -907,7 +907,7 @@ class MyDatabase(object):
             archive_save_path = self.path_to_archive + path_to_data
             archive_save_subpath = mut.model_filename_wt.split('/')[0] + '/'
             # Save the row corresponding to the mutation as a serialized sqlalchemy object
-            subprocess.check_call('mkdir -p ' + archive_save_path + archive_save_subpath, shell=True)
+            subprocess.check_call('mkdir -m 775 -p ' + archive_save_path + archive_save_subpath, shell=True)
             pickle.dump(dumps(mut), open(archive_save_path + archive_save_subpath + 'mutation.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
             if mut.model_filename_wt and mut.model_filename_mut:
                 # Save Foldx structures
