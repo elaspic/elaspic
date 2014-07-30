@@ -3,6 +3,7 @@
 import os
 import subprocess
 import datetime
+import cPickle as pickle
 
 import pandas as pd
 
@@ -52,7 +53,7 @@ def score_pairwise(seq1, seq2, matrix, gap_s, gap_e):
 
 
 ###############################################################################
-def get_mutation_feature_vector(d, t, m, mut):
+def get_mutation_feature_vector(d, mut):
     """
     Return two dataframes for a supplied mutation (sql_db.UniprotDomainMutation
     or sql_db.UniprotDomainPairMutation object). The first dataframe contains the
@@ -96,46 +97,46 @@ def get_mutation_feature_vector(d, t, m, mut):
     header_common = [
         ['uniprot_id', mut.uniprot_id],
         ['mutation', mut.mutation],
-        ['t_date_modified', t.t_date_modified],
-        ['m_date_modified', m.m_date_modified],
+        ['t_date_modified', d.template.t_date_modified],
+        ['m_date_modified', d.template.model.m_date_modified],
         ['mut_date_modified', mut.mut_date_modified]]
     append_to_header_df(zip(*header_common))
 
     if isinstance(d, sql_db.UniprotDomain):
         header_domain = [
-            ['cath_id_1', t.domain.cath_id],
-            ['pfam_name_1', d.pfam_name],
-            ['clan_name_1', d.clan_name],
+            ['cath_id_1', d.template.cath_id],
+            ['pfam_name_1', d.pdbfam_name],
+            ['clan_name_1', d.pfam_clan],
             ['uniprot_domain_id', d.uniprot_domain_id],]
         append_to_header_df(zip(*header_domain))
 
     elif isinstance(d, sql_db.UniprotDomainPair):
         header_domain_contact = [
-            ['cath_id_1', t.domain_1.cath_id],
-            ['cath_id_2', t.domain_2.cath_id],
-            ['pfam_name_1', d.uniprot_domain_1.pfam_name],
-            ['pfam_name_2', d.uniprot_domain_2.pfam_name],
-            ['clan_name_1', d.uniprot_domain_1.clan_name],
-            ['clan_name_2', d.uniprot_domain_2.clan_name],
+            ['cath_id_1', d.template.cath_id_1],
+            ['cath_id_2', d.template.cath_id_2],
+            ['pfam_name_1', d.uniprot_domain_1.pdbfam_name],
+            ['pfam_name_2', d.uniprot_domain_2.pdbfam_name],
+            ['clan_name_1', d.uniprot_domain_1.pfam_clan],
+            ['clan_name_2', d.uniprot_domain_2.pfam_clan],
             ['uniprot_domain_pair_id', d.uniprot_domain_pair_id],]
         append_to_header_df(zip(*header_domain_contact))
 
     ### Feature information ---------------------------------------------------
     # FoldX output
     if isinstance(d, sql_db.UniprotDomain):
-        append_to_feature_df([call_foldx.names_stability_wt, mut.Stability_energy_wt])
-        append_to_feature_df([call_foldx.names_stability_mut, mut.Stability_energy_mut])
+        append_to_feature_df([call_foldx.names_stability_wt, mut.stability_energy_wt])
+        append_to_feature_df([call_foldx.names_stability_mut, mut.stability_energy_mut])
 
     elif isinstance(d, sql_db.UniprotDomainPair):
-        append_to_feature_df([call_foldx.names_stability_complex_wt, mut.AnalyseComplex_energy_wt])
-        append_to_feature_df([call_foldx.names_stability_complex_mut, mut.AnalyseComplex_energy_mut])
+        append_to_feature_df([call_foldx.names_stability_complex_wt, mut.analyse_complex_energy_wt])
+        append_to_feature_df([call_foldx.names_stability_complex_mut, mut.analyse_complex_energy_mut])
 
     # PhysicoChemical properties
     names_phys_chem = ['pcv_salt_equal', 'pcv_salt_opposite', 'pcv_hbond', 'pcv_vdW']
-    append_to_feature_df([[name + '_wt' for name in names_phys_chem], mut.physChem_wt])
-    append_to_feature_df([[name + '_self_wt' for name in names_phys_chem], mut.physChem_wt_ownChain])
-    append_to_feature_df([[name + '_mut' for name in names_phys_chem], mut.physChem_mut])
-    append_to_feature_df([[name + '_self_mut' for name in names_phys_chem], mut.physChem_mut_ownChain])
+    append_to_feature_df([[name + '_wt' for name in names_phys_chem], mut.physchem_wt])
+    append_to_feature_df([[name + '_self_wt' for name in names_phys_chem], mut.physchem_wt_ownchain])
+    append_to_feature_df([[name + '_mut' for name in names_phys_chem], mut.physchem_mut])
+    append_to_feature_df([[name + '_self_mut' for name in names_phys_chem], mut.physchem_mut_ownchain])
 
     # Other features
     other_features_common = [
@@ -144,23 +145,23 @@ def get_mutation_feature_vector(d, t, m, mut):
         ['secondary_structure_mut', mut.secondary_structure_mut],
         ['solvent_accessibility_mut', mut.solvent_accessibility_mut],
         ['sift_score', mut.provean_score],
-        ['normDOPE', m.norm_dope],
+        ['normDOPE', d.template.model.norm_dope],
         ['matrix_score', mut.matrix_score],]
     append_to_feature_df(zip(*other_features_common))
 
     if isinstance(d, sql_db.UniprotDomain):
         other_features_domain = [
-            ['seq_id_avg', t.alignment_identity],]
+            ['seq_id_avg', d.template.alignment_identity],]
         append_to_feature_df(zip(*other_features_domain))
 
     if isinstance(d, sql_db.UniprotDomainPair):
         other_features_domain_pair = [
-            ['seq_id_avg', t.alignment_identity_1 + t.alignment_identity_2],
-            ['seq_id_chain1', t.alignment_identity_1],
-            ['seq_id_chain2', t.alignment_identity_2],
-            ['if_hydrophobic', m.interface_area_hydrophobic],
-            ['if_hydrophilic', m.interface_area_hydrophilic],
-            ['if_total', m.interface_area_total],
+            ['seq_id_avg', d.template.alignment_identity_1 + d.template.alignment_identity_2],
+            ['seq_id_chain1', d.template.alignment_identity_1],
+            ['seq_id_chain2', d.template.alignment_identity_2],
+            ['if_hydrophobic', d.template.model.interface_area_hydrophobic],
+            ['if_hydrophilic', d.template.model.interface_area_hydrophilic],
+            ['if_total', d.template.model.interface_area_total],
             ['contact_distance_wt', mut.contact_distance_wt],
             ['contact_distance_mut', mut.contact_distance_mut],]
         append_to_feature_df(zip(*other_features_domain_pair))
@@ -212,9 +213,6 @@ def decode_text_as_list(list_string):
 class MutationData(object):
 
     def __init__(self):
-        self.d = None
-        self.t = None
-        self.m = None
         self.uniprot_id_1 = None
         self.mutation = None
         self.pfam_name = None
@@ -259,10 +257,10 @@ class GetMutation(object):
         self.gap_s = gap_s
         self.gap_e = gap_e
         self.n_cores = n_cores
-#        with open(bin_path + 'clf_domain.pickle', 'rb') as ifh:
-#            self.clf_domain, self.clf_domain_features = pickle.load(ifh)
-#        with open(bin_path + 'clf_interface.pickle', 'rb') as ifh:
-#            self.clf_interface, self.clf_interface_features = pickle.load(ifh)
+        with open(bin_path + 'clf_domain.pickle', 'rb') as ifh:
+            self.clf_domain, self.clf_domain_features = pickle.load(ifh)
+        with open(bin_path + 'clf_interface.pickle', 'rb') as ifh:
+            self.clf_interface, self.clf_interface_features = pickle.load(ifh)
 
 
     def get_mutation_data(self, d, uniprot_id_1, mutation):
@@ -390,7 +388,7 @@ class GetMutation(object):
         return mut_data
 
 
-    def evaluate_mutation(self, mut_data, uniprot_mutation):
+    def evaluate_mutation(self, d, mut_data, uniprot_mutation):
         """
         """
         if (mut_data.path_to_provean_supset and not uniprot_mutation.provean_score):
@@ -410,13 +408,13 @@ class GetMutation(object):
 
         if not uniprot_mutation.stability_energy_wt:
             self.logger.debug('Evaluating the structural impact of the mutation...')
-            uniprot_mutation = self.evaluate_structural_impact(mut_data, uniprot_mutation)
+            uniprot_mutation = self.evaluate_structural_impact(d, mut_data, uniprot_mutation)
 
-#        if (not uniprot_mutation.ddG and
-#                (uniprot_mutation.provean_score and
-#                uniprot_mutation.Stability_energy_wt)):
-#            self.logger.debug('Predicting the thermodynamic effect of the mutation...')
-#            uniprot_mutation = self.predict_thermodynamic_effect(mut_data.d, mut_data.t, mut_data.m, uniprot_mutation)
+        if (uniprot_mutation.provean_score and
+                uniprot_mutation.stability_energy_wt and
+                uniprot_mutation.ddg == None):
+            self.logger.debug('Predicting the thermodynamic effect of the mutation...')
+            uniprot_mutation = self.predict_thermodynamic_effect(d, uniprot_mutation)
 
         return uniprot_mutation
 
@@ -512,10 +510,8 @@ class GetMutation(object):
         return provean_mutation, provean_score
 
 
-    def evaluate_structural_impact(self, mut_data, uniprot_mutation):
-        d = mut_data.d
-#        t = mut_data.t
-#        model = mut_data.structure[0]
+    def evaluate_structural_impact(self, d, mut_data, uniprot_mutation):
+
         uniprot_id_1 = mut_data.uniprot_id_1
         mutation = mut_data.mutation
 
@@ -763,7 +759,7 @@ class GetMutation(object):
             raise Exception('Expected and actual FoldX amino acids do not match!')
 
 
-    def predict_thermodynamic_effect(self, d, t, m, mut):
+    def predict_thermodynamic_effect(self, d, uniprot_mutation):
         """
         """
         if isinstance(d, sql_db.UniprotDomain):
@@ -772,13 +768,13 @@ class GetMutation(object):
         elif isinstance(d, sql_db.UniprotDomainPair):
             clf = self.clf_interface
             clf_features = self.clf_interface_features
-        header_df, feature_df = get_mutation_feature_vector(d, t, m, mut)
+        header_df, feature_df = get_mutation_feature_vector(d, uniprot_mutation)
         feature_df = convert_features_to_differences(feature_df, True) # keep mut, remove it in next step
         for column_name in feature_df.columns:
             if column_name not in clf_features:
                 feature_df.drop(column_name, axis=1, inplace=True)
-        mut.ddG = clf.predict(feature_df)[0]
-        return mut
+        uniprot_mutation.ddg = clf.predict(feature_df)[0]
+        return uniprot_mutation
 
 
 ###############################################################################

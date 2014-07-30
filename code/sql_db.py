@@ -820,22 +820,23 @@ class MyDatabase(object):
         else:
             raise Exception('Not enough arguments, or the argument types are incorrect!')
 
-        if uniprot_mutation:
+        if copy_data:
             self._copy_mutation_data(uniprot_mutation, d.path_to_data)
         return uniprot_mutation
 
 
     def _copy_mutation_data(self, mutation, path_to_data):
-        tmp_save_path = self.temp_path + path_to_data
-        archive_save_path = self.path_to_archive + path_to_data
-        path_to_mutation = tmp_save_path + '/'.join(mutation.model_filename_wt.split('/')[:-1]) + '/'
-        subprocess.check_call('mkdir -p {}'.format(path_to_mutation), shell=True)
-        subprocess.check_call('cp -f {} {}'.format(
-            archive_save_path + mutation.model_filename_wt,
-            tmp_save_path + mutation.model_filename_wt), shell=True)
-        subprocess.check_call('cp -f {} {}'.format(
-            archive_save_path + mutation.model_filename_mut,
-            tmp_save_path + mutation.model_filename_mut), shell=True)
+        if mutation and mutation.model_filename_wt:
+            tmp_save_path = self.temp_path + path_to_data
+            archive_save_path = self.path_to_archive + path_to_data
+            path_to_mutation = tmp_save_path + '/'.join(mutation.model_filename_wt.split('/')[:-1]) + '/'
+            subprocess.check_call('mkdir -p {}'.format(path_to_mutation), shell=True)
+            subprocess.check_call('cp -f {} {}'.format(
+                archive_save_path + mutation.model_filename_wt,
+                tmp_save_path + mutation.model_filename_wt), shell=True)
+            subprocess.check_call('cp -f {} {}'.format(
+                archive_save_path + mutation.model_filename_mut,
+                tmp_save_path + mutation.model_filename_mut), shell=True)
 
 
     ###########################################################################

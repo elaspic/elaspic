@@ -39,6 +39,7 @@ class Pipeline(object):
             defaults={
                 'db_type': sql_db.SQL_FLAVOUR,
                 'db_path': hf.get_path_to_current_file() + '/../db/pipeline.db',
+                'path_to_archive': '/home/kimlab1/database_data/elaspic_v2/',
                 'web_server': False,
             })
         configParser.read(configFile)
@@ -80,7 +81,7 @@ class Pipeline(object):
             self.__copy_sqlite_database()
 
         # Copy the blast databaes
-        self.__copy_blast_database()
+        # self.__copy_blast_database()
 
 
     def __copy_sqlite_database(self):
@@ -117,9 +118,9 @@ class Pipeline(object):
                     'present on these nodes.')
             # Copy the blast database if running on beagle or Grendel
             system_command = (
-                'mkdir -p ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
+                # 'mkdir -p ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
                 'mkdir -p ' + self.global_temp_path + 'blast/db/ && ' +
-                'rsync -rzu ' + self.blast_db_path + 'pdbaa_db/ ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
+                # 'rsync -rzu ' + self.blast_db_path + 'pdbaa_db/ ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
                 'rsync -rzu ' + self.blast_db_path + 'db/ ' + self.global_temp_path + 'blast/db/')
         elif username == 'strokach' or username == 'alexey':
             # Use a symbolic link to the blast database and use the home folder for temporary storage
@@ -441,7 +442,7 @@ class Pipeline(object):
                 if (precalculated_mutation and
                         (precalculated_mutation.provean_score and
                         precalculated_mutation.stability_energy_wt and
-                        precalculated_mutation.ddg)):
+                        precalculated_mutation.ddg != None)):
                     self.calculated_mutations.append(precalculated_mutation)
                     self.logger.info('Mutation has already been completely evaluated. Skipping...')
                     continue
@@ -461,7 +462,7 @@ class Pipeline(object):
 
                 try:
                     mut_data = self.get_mutation.get_mutation_data(d, self.uniprot_id, mutation)
-                    uniprot_mutation = self.get_mutation.evaluate_mutation(mut_data, uniprot_mutation)
+                    uniprot_mutation = self.get_mutation.evaluate_mutation(d, mut_data, uniprot_mutation)
                 except (errors.MutationOutsideDomainError,
                         errors.MutationOutsideInterfaceError) as e:
                     self.logger.debug('{}: {}; OK'.format(type(e), e))
