@@ -10,8 +10,9 @@ from math import sqrt
 import pandas as pd
 import helper_functions as hf
 
-from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB import PDBIO
+from Bio.PDB.Atom import Atom
+from Bio.PDB.PDBParser import PDBParser
 
 import logging
 import errors
@@ -33,18 +34,22 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
     input: atom instance of biopython: class 'Bio.PDB.Atom.Atom
     return: type 'float'
     """
-    a = atom_1.coord
-    b = atom_2.coord
+
+    if ((type(atom_1) == type(atom_2) == list) or
+        (type(atom_1) == type(atom_2) == tuple)):
+            a = atom_1
+            b = atom_2
+    elif type(atom_1) == type(atom_2) == Atom:
+        a = atom_1.coord
+        b = atom_2.coord
+    else:
+        raise Exception('Unsupported format!')
+
     assert(len(a) == 3 and len(b) == 3)
-    if ( cutoff is not None and
-            (a[0] - b[0])**2 <= cutoff**2 and
-            (a[1] - b[1])**2 <= cutoff**2 and
-            (a[2] - b[2])**2 <= cutoff**2 ):
-        return euclidean_distance(a, b)
-    elif cutoff is not None:
-        return None
-    elif cutoff is None:
-        return euclidean_distance(a, b)
+    if (cutoff is None or
+        all([ abs(p - q) <= cutoff for p, q in zip(a, b) ])):
+            return euclidean_distance(a, b)
+
 
 
 def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
@@ -543,7 +548,7 @@ class AnalyzeStructure(object):
             if n_tries > 0:
                 self.logger.debug('Waiting for 1 minute before trying again...')
                 time.sleep(60)
-            system_command = ('./dssp -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
+            system_command = ('./dssp -v -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
             self.logger.debug('dssp system command: %s' % system_command)
             child_process = hf.run_subprocess_locally(self.working_path, system_command)
             result, error_message = child_process.communicate()
@@ -599,44 +604,50 @@ class AnalyzeStructure(object):
 
 
     ###########################################################################
-    def get_interchain_distances(self, pdb_chain=None, pdb_mutation=None, cutoff=5):
+    def get_interchain_distances(self, pdb_chain=None, pdb_mutation=None, cutoff=None):
         """
         """
         model = self.structure[0]
-        chains = [ chain for chain in model ]
-
         shortest_interchain_distances = {}
-        for chain_1 in chains:
+        for chain_1 in [chain for chain in model]:
             if pdb_chain and chain_1.id != pdb_chain:
                 continue # skip chains that we are not interested in
-            shortest_interchain_distances[chain_1.id] = list()
+            shortest_interchain_distances[chain_1.id] = {}
             for idx, residue_1 in enumerate(chain_1):
                 if residue_1.resname in pdb_template.amino_acids and residue_1.id[0] == ' ':
                     if pdb_mutation:
-                        if (str(residue_1.id[1]) + residue_1.id[2].strip()) != pdb_mutation[1:-1]:
+                        if str(residue_1.id[1]) != pdb_mutation[1:-1]:
                             continue # skip all residues that we are not interested in
-                        if pdb_template.convert_aa(residue_1.resname) != pdb_mutation[0] \
-                        and pdb_template.convert_aa(residue_1.resname) != pdb_mutation[-1]:
-                            self.logger.debug(pdb_mutation)
-                            self.logger.debug(pdb_template.convert_aa(residue_1.resname))
-                            self.logger.debug(residue_1.id)
-                            raise Exception
-                    min_r = None
-                    for chain_2 in [c for c in chains if c != chain_1]:
+                        if (pdb_template.convert_aa(residue_1.resname) != pdb_mutation[0] and
+                            pdb_template.convert_aa(residue_1.resname) != pdb_mutation[-1]):
+                                self.logger.debug(pdb_mutation)
+                                self.logger.debug(pdb_template.convert_aa(residue_1.resname))
+                                self.logger.debug(residue_1.id)
+                                raise Exception
+                    for chain_2 in [chain for chain in model if chain != chain_1]:
+                        min_r = cutoff
                         for residue_2 in chain_2:
-                            if residue_1.resname not in pdb_template.amino_acids \
-                            or residue_2.resname not in pdb_template.amino_acids:
-                                continue
-
+                            if (residue_1.resname not in pdb_template.amino_acids or
+                                residue_2.resname not in pdb_template.amino_acids):
+                                    continue
                             for atom_1 in residue_1:
                                 for atom_2 in residue_2:
                                     r = calculate_distance(atom_1, atom_2, min_r)
-                                    if not min_r or min_r > r:
+                                    if r and (not min_r or min_r > r):
                                         min_r = r
-                    shortest_interchain_distances[chain_1.id].append(min_r)
+                        shortest_interchain_distances[chain_1.id][chain_2.id] = min_r
 
-        self.logger.debug('interacting_aa_keys:')
-        self.logger.debug(shortest_interchain_distances.keys())
+        if (not shortest_interchain_distances or
+            (pdb_chain and not shortest_interchain_distances[pdb_chain])):
+                self.logger.error(
+                    'Could not calculate the shortest interchain distance for chain {} residue {}'
+                    .format(pdb_chain, pdb_mutation))
+                raise Exception()
+
+        for key_1, value_1 in shortest_interchain_distances.iteritems():
+            self.logger.debug(
+                'Calculated interchain distances between chain {} and chains {}'
+                .format(key_1, ', '.join(value_1.keys())))
 
         return shortest_interchain_distances
 

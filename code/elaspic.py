@@ -81,7 +81,7 @@ class Pipeline(object):
             self.__copy_sqlite_database()
 
         # Copy the blast databaes
-        # self.__copy_blast_database()
+        self.__copy_blast_database()
 
 
     def __copy_sqlite_database(self):
@@ -111,23 +111,30 @@ class Pipeline(object):
         username  = hf.get_username()
         hostname = hf.get_hostname()
         if username == 'strokach' and (('beagle' in hostname) or ('grendel' in hostname)):
-            if not (os.path.isdir(self.global_temp_path + 'blast/pdbaa_db/')
-                    and os.path.isdir(self.global_temp_path + 'blast/db/') ):
-                raise Exception(
-                    'Could not find a blast database even though it should be '
-                    'present on these nodes.')
-            # Copy the blast database if running on beagle or Grendel
-            system_command = (
-                # 'mkdir -p ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
-                'mkdir -p ' + self.global_temp_path + 'blast/db/ && ' +
-                # 'rsync -rzu ' + self.blast_db_path + 'pdbaa_db/ ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
-                'rsync -rzu ' + self.blast_db_path + 'db/ ' + self.global_temp_path + 'blast/db/')
+            # The blast database should already have been copied to the local temp folder
+            if not os.path.isdir(self.global_temp_path + 'blast/db/'):
+#                raise Exception(
+#                    'Could not find a blast database even though it should be '
+#                    'present on these nodes.')
+                print ('Creating a simlink to the blast folder even though the '
+                    'blast database should be copied on these nodes')
+                system_command = (
+                    'mkdir -p ' + self.global_temp_path + 'blast/ && ' +
+                    'ln -sf ' + self.blast_db_path + 'db ' +  self.global_temp_path + 'blast/')
+            else:
+                return
+#            # Copy the blast database if running on beagle or Grendel
+#            system_command = (
+#                # 'mkdir -p ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
+#                'mkdir -p ' + self.global_temp_path + 'blast/db/ && ' +
+#                # 'rsync -rzu ' + self.blast_db_path + 'pdbaa_db/ ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
+#                'rsync -rzu ' + self.blast_db_path + 'db/ ' + self.global_temp_path + 'blast/db/')
         elif username == 'strokach' or username == 'alexey':
             # Use a symbolic link to the blast database and use the home folder for temporary storage
             system_command = (
-                'rm -rf ' + self.global_temp_path + 'blast/ && ' +
+                #'rm -rf ' + self.global_temp_path + 'blast/ && ' +
                 'mkdir -p ' + self.global_temp_path + 'blast/ && ' +
-                'ln -sf ' + self.blast_db_path + 'pdbaa_db ' + self.global_temp_path + 'blast/ && ' +
+                #'ln -sf ' + self.blast_db_path + 'pdbaa_db ' + self.global_temp_path + 'blast/ && ' +
                 'ln -sf ' + self.blast_db_path + 'db ' +  self.global_temp_path + 'blast/')
         elif username == 'witvliet' or username == 'kimadmin' or username == 'www-data':
             system_command = (
@@ -522,8 +529,8 @@ class Pipeline(object):
                        'cp ' + self.bin_path + 'rotabase.txt ' + self.unique_temp_folder + '/FoldX/'
             subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
             # Copy dssp into the folder for modelling
-            cp_command = 'cp ' + self.bin_path + 'dssp-2.0.4-linux-amd64 ' + self.unique_temp_folder + '/FoldX/'
-            subprocess.check_call(cp_command, shell=True)
+#            cp_command = 'cp ' + self.bin_path + 'mkdssp ' + self.unique_temp_folder + '/FoldX/'
+#            subprocess.check_call(cp_command, shell=True)
 
         # modeller
         if not os.path.isdir(self.unique_temp_folder + '/modeller'):
@@ -551,7 +558,8 @@ class Pipeline(object):
             cp_command = 'cp ' + self.bin_path + 'pops ' + self.unique_temp_folder + '/analyze_structure'
             subprocess.check_call(cp_command, shell=True)
             # Dssp
-            cp_command = 'cp ' + self.bin_path + 'dssp-2.0.4-linux-amd64 ' + self.unique_temp_folder + '/analyze_structure/dssp'
+            # cp_command = 'cp ' + self.bin_path + 'dssp-2.0.4-linux-amd64 ' + self.unique_temp_folder + '/analyze_structure/dssp'
+            cp_command = 'cp ' + self.bin_path + 'mkdssp ' + self.unique_temp_folder + '/analyze_structure/dssp'
             subprocess.check_call(cp_command, shell=True)
 #                # Naccess
 #                cp_command = (
