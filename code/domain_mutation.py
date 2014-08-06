@@ -64,7 +64,7 @@ def get_mutation_feature_vector(d, mut):
         '-': 0, 'B': 1, 'E': 2, 'G': 3, 'H': 4, 'I': 5, 'S': 6, 'T': 7}
 
     def append_to_df(name_list_value_list, dfs, existing_columns=None):
-        name_list, value_list = name_list_value_list[:]
+        name_list, value_list = name_list_value_list
         if isinstance(value_list, basestring):
             value_list = decode_text_as_list(value_list)[0]
         name_list = list(name_list)
@@ -72,6 +72,7 @@ def get_mutation_feature_vector(d, mut):
         for i in range(len(value_list)):
             if isinstance(value_list[i], datetime.datetime):
                 value_list[i] = value_list[i].strftime('%Y-%m-%d %H-%M-%S-%f')
+        # Remove duplicates if a set of existing columns exists
         if existing_columns is not None:
             column_idx = 0
             while column_idx < len(name_list):
@@ -127,7 +128,7 @@ def get_mutation_feature_vector(d, mut):
         append_to_feature_df([call_foldx.names_stability_wt, mut.stability_energy_wt])
         append_to_feature_df([call_foldx.names_stability_mut, mut.stability_energy_mut])
 
-    elif isinstance(d, sql_db.UniprotDomainPair):
+    if isinstance(d, sql_db.UniprotDomainPair):
         append_to_feature_df([call_foldx.names_stability_complex_wt, mut.analyse_complex_energy_wt])
         append_to_feature_df([call_foldx.names_stability_complex_mut, mut.analyse_complex_energy_mut])
 
@@ -156,9 +157,9 @@ def get_mutation_feature_vector(d, mut):
 
     if isinstance(d, sql_db.UniprotDomainPair):
         other_features_domain_pair = [
-            ['seq_id_avg', d.template.alignment_identity_1 + d.template.alignment_identity_2],
-            ['seq_id_chain1', d.template.alignment_identity_1],
-            ['seq_id_chain2', d.template.alignment_identity_2],
+            ['seq_id_avg', d.template.identical_1 + d.template.identical_2],
+            ['seq_id_chain1', d.template.identical_1],
+            ['seq_id_chain2', d.template.identical_2],
             ['if_hydrophobic', d.template.model.interface_area_hydrophobic],
             ['if_hydrophilic', d.template.model.interface_area_hydrophilic],
             ['if_total', d.template.model.interface_area_total],
@@ -241,8 +242,6 @@ class GetMutation(object):
     def __init__(
             self, global_temp_path, temp_path, unique, pdb_path,
             db, logger, n_cores, bin_path, foldX_WATER, build_model_runs, matrix, gap_s, gap_e):
-        """
-        """
         self.global_temp_path = global_temp_path
         self.temp_path = temp_path
         self.unique = unique
@@ -270,6 +269,7 @@ class GetMutation(object):
         #######################################################################
         # Core
         if isinstance(d, sql_db.UniprotDomain):
+            d_1 = d
             self.logger.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
             pdbfam_name = d.pdbfam_name
             domain_start, domain_end = hf.decode_domain_def(d.template.domain_def)
@@ -280,11 +280,6 @@ class GetMutation(object):
             domain_sequences = [uniprot_sequences[0][domain_start-1:domain_end],]
             chains_modeller = [d.template.model.chain, ]
             uniprot_domain_id = d.uniprot_domain_id
-            if (d.uniprot_sequence.provean and
-                    d.uniprot_sequence.provean.provean_supset_filename ):
-                path_to_provean_supset = (
-                    self.temp_path + hf.get_uniprot_base_path(d) +
-                    d.uniprot_sequence.provean.provean_supset_filename )
 
         #######################################################################
         # Interface
@@ -312,38 +307,37 @@ class GetMutation(object):
                 interacting_aa = [int(uniprot_num) for uniprot_num in d.template.model.interacting_aa_2.split(',') if uniprot_num]
                 chains_modeller = [d.template.model.chain_2, d.template.model.chain_1]
 
+
             self.logger.debug('Analysing interface mutation between uniprots %s and %s' % (uniprot_id_1, uniprot_id_2,))
-            pdbfam_name = d_1.pdbfam_name
             uniprot_sequences = [self.db.get_uniprot_sequence(d_1.uniprot_id),
                                  self.db.get_uniprot_sequence(d_2.uniprot_id)]
             domain_sequences = [uniprot_sequences[0][domain_start-1:domain_end],
                                 uniprot_sequences[1][domain_2_start-1:domain_2_end]]
 
-            # HETflag is a dictionary, doesn't matter the order. But key-value should match
-            uniprot_domain_id = d_1.uniprot_domain_id
-
             if int(mutation[1:-1]) not in interacting_aa:
                 raise errors.MutationOutsideInterfaceError('mutated residue not involved in the interaction')
-            if (d_1.template
-                    and d_1.uniprot_sequence.provean
-                    and d_1.uniprot_sequence.provean.provean_supset_filename ):
-                # This will only work if the core mutations are evaluated at the same time as interface mutations
-                if os.path.isfile(self.temp_path + d_1.path_to_data + d_1.uniprot_sequence.provean.provean_supset_filename):
-                    path_to_provean_supset = (
-                        self.temp_path + hf.get_uniprot_base_path(d_1) +
-                        d_1.uniprot_sequence.provean.provean_supset_filename )
-                else:
-                    self.logger.error('Provean supporting set does not exist even though it should!!!')
+
 
         #######################################################################
         # Common
         if int(mutation[1:-1]) < domain_start or int(mutation[1:-1]) > domain_end:
-#            raise error.MutationOutsideDomain('Mutation %s outside of domain %s with boundaries %i:%i' \
-#            % (mutation, pfam_name, domain_start, domain_end))
             raise errors.MutationOutsideDomainError('Mutation falls outside domain')
 
         save_path = self.temp_path + d.path_to_data
         pdbFile_wt = d.template.model.model_filename
+        pdbfam_name = d_1.pdbfam_name
+        uniprot_domain_id = d_1.uniprot_domain_id
+
+        # Provean
+        if (d_1.uniprot_sequence.provean and
+            d_1.uniprot_sequence.provean.provean_supset_filename ):
+                path_to_provean_supset = (
+                    self.temp_path + hf.get_uniprot_base_path(d_1) +
+                    d_1.uniprot_sequence.provean.provean_supset_filename )
+                if not os.path.isfile(path_to_provean_supset):
+                    raise Exception(
+                        'Provean supporting set sequence does not exist even '
+                        'though it should!\n' + path_to_provean_supset)
 
         # Convert mutation from uniprot domain numbering to pdb domain numbering
         position_domain = int(mutation[1:-1]) - domain_start + 1 # +1 to have the numbering staring with 1
@@ -601,6 +595,7 @@ class GetMutation(object):
 
         #######################################################################
         ## 5th: calculate the energy for the wildtype
+        #if isinstance(d, sql_db.UniprotDomain):
         stability_values_wt = encode_list_as_text([foldx('Stability') for foldx in fX_wt_list])
         stability_values_mut = encode_list_as_text([foldx('Stability') for foldx in fX_mut_list])
 
@@ -627,65 +622,59 @@ class GetMutation(object):
         opposite_chain_contact_vector_all_mut, same_chain_contact_vector_all_mut = get_contact_vectors(
             physi_chem, repairedPDB_wt_list, mut_data.chains_modeller[0], mut_data.mutation_domain)
 
+
         #######################################################################
         # Calculate secondary structure, sasa, and interchain distance
-        analyze_structure_wt = analyze_structure.AnalyzeStructure(
-            self.unique_temp_folder + 'FoldX/',
-            self.unique_temp_folder + 'analyze_structure/',
-            repairedPDB_wt_list[0].split('/')[-1], # dssp file wildtype
-            mut_data.chains_modeller, None, self.logger)
-        (seasa_by_chain_together, seasa_by_chain_separately,
-        seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_wt.get_seasa()
-        seasa_info_wt = seasa_by_residue_separately[
-            (seasa_by_residue_separately['pdb_chain']==mut_data.chains_modeller[0]) &
-            (seasa_by_residue_separately['res_num']==mut_data.position_modeller[0])].iloc[0]
-        if pdb_template.convert_aa(seasa_info_wt['res_name']) != mut_data.mutation_domain[0]:
-            self.logger.error('Wrong amino acid for msms wild-type!')
-            self.logger.error(seasa_info_wt)
-            self.logger.error(seasa_by_residue_separately)
-            raise Exception('surface area calculated for the wrong atom!')
-        solvent_accessibility_wt = seasa_info_wt['rel_sasa']
+        def obtain_additional_mutation_properties(repaired_pdb_list, is_domain_pair=False):
+            analyze_structure_instance = analyze_structure.AnalyzeStructure(
+                self.unique_temp_folder + 'FoldX/',
+                self.unique_temp_folder + 'analyze_structure/',
+                repaired_pdb_list[0].split('/')[-1], # dssp file wildtype
+                mut_data.chains_modeller, None, self.logger)
 
-        secondary_structure_wt, solvent_accessibility_dssp_wt = analyze_structure_wt.get_dssp()
-        secondary_structure_wt = secondary_structure_wt[mut_data.chains_modeller[0]][int(mut_data.mutation_domain[1:-1])-1]
+            (seasa_by_chain_together, seasa_by_chain_separately,
+            seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_instance.get_seasa()
+            seasa_info = seasa_by_residue_separately[
+                (seasa_by_residue_separately['pdb_chain']==mut_data.chains_modeller[0]) &
+                (seasa_by_residue_separately['res_num']==mut_data.position_modeller[0])].iloc[0]
+            if (pdb_template.convert_aa(seasa_info['res_name']) != mut_data.mutation_domain[0] and
+                pdb_template.convert_aa(seasa_info['res_name']) != mut_data.mutation_domain[-1]):
+                    self.logger.error('Wrong amino acid for msms mutant!')
+                    self.logger.error(pdb_template.convert_aa(seasa_info['res_name']))
+                    self.logger.error(mut_data.mutation_domain)
+                    self.logger.error(seasa_info)
+                    self.logger.error(seasa_by_residue_separately)
+                    raise Exception('surface area calculated for the wrong atom!')
+            solvent_accessibility = seasa_info['rel_sasa']
 
-        if isinstance(d, sql_db.UniprotDomainPair):
-            contact_distance_wt = analyze_structure_wt.get_interchain_distances(mut_data.chains_modeller[0], mut_data.mutation_modeller)
             try:
-                contact_distance_wt = contact_distance_wt[mut_data.chains_modeller[0]][0]
-            except IndexError:
-                self.logger.error(contact_distance_wt)
-                raise
+                secondary_structure, solvent_accessibility_dssp = analyze_structure_instance.get_dssp()
+                secondary_structure = secondary_structure[mut_data.chains_modeller[0]][int(mut_data.mutation_domain[1:-1])-1]
+            except errors.ResourceError as e:
+                secondary_structure = '-'
 
-        analyze_structure_mut = analyze_structure.AnalyzeStructure(
-            self.unique_temp_folder + 'FoldX/',
-            self.unique_temp_folder + 'analyze_structure/',
-            repairedPDB_mut_list[0].split('/')[-1], # dssp file mut
-            mut_data.chains_modeller, None, self.logger)
-        (seasa_by_chain_together, seasa_by_chain_separately,
-        seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_mut.get_seasa()
-        seasa_info_mut = seasa_by_residue_separately[
-            (seasa_by_residue_separately['pdb_chain']==mut_data.chains_modeller[0]) &
-            (seasa_by_residue_separately['res_num']==mut_data.position_modeller[0])].iloc[0]
-        if pdb_template.convert_aa(seasa_info_mut['res_name']) != mut_data.mutation_domain[-1]:
-            self.logger.error('Wrong amino acid for msms mutant!')
-            self.logger.error(pdb_template.convert_aa(seasa_info_mut['res_name']))
-            self.logger.error(mut_data.mutation_domain[-1])
-            self.logger.error(seasa_info_mut)
-            self.logger.error(seasa_by_residue_separately)
-            raise Exception('surface area calculated for the wrong atom!')
-        solvent_accessibility_mut = seasa_info_mut['rel_sasa']
+            contact_distance = None
+            if is_domain_pair:
+                try:
+                    contact_distance = analyze_structure_instance.get_interchain_distances(mut_data.chains_modeller[0], mut_data.mutation_modeller)
+                    contact_distance = contact_distance[mut_data.chains_modeller[0]][mut_data.chains_modeller[1]]
+                    self.logger.debug(
+                        'The shortest interchain distance between chain {} and chain {} is {}'
+                        .format(mut_data.chains_modeller[0], mut_data.chains_modeller[1], contact_distance))
+                    if not contact_distance:
+                        raise ValueError
+                except (IndexError, KeyError, ValueError) as e:
+                    self.logger.error('Could not calculate the shortest contact distance between two chains!')
+                    self.logger.error(str(e))
+                    self.logger.error(contact_distance)
+                    raise e
+            return solvent_accessibility, secondary_structure, contact_distance
 
-        secondary_structure_mut, solvent_accessibility_dssp_mut = analyze_structure_mut.get_dssp()
-        secondary_structure_mut = secondary_structure_mut[mut_data.chains_modeller[0]][int(mut_data.mutation_domain[1:-1])-1]
 
-        if isinstance(d, sql_db.UniprotDomainPair):
-            contact_distance_mut = analyze_structure_wt.get_interchain_distances(mut_data.chains_modeller[0], mut_data.mutation_modeller)
-            try:
-                contact_distance_mut = contact_distance_mut[mut_data.chains_modeller[0]][0]
-            except IndexError:
-                self.logger.error(contact_distance_mut)
-                raise
+        solvent_accessibility_wt, secondary_structure_wt, contact_distance_wt = \
+            obtain_additional_mutation_properties(repairedPDB_wt_list, isinstance(d, sql_db.UniprotDomainPair))
+        solvent_accessibility_mut, secondary_structure_mut, contact_distance_mut = \
+            obtain_additional_mutation_properties(repairedPDB_mut_list, isinstance(d, sql_db.UniprotDomainPair))
 
         #######################################################################
         ## 11th: get the BLOSUM (or what ever matrix is given) score
@@ -723,8 +712,8 @@ class GetMutation(object):
         uniprot_mutation.solvent_accessibility_mut = solvent_accessibility_mut
 
         if isinstance(d, sql_db.UniprotDomainPair):
-            uniprot_mutation.AnalyseComplex_energy_wt = complex_stability_values_wt
-            uniprot_mutation.AnalyseComplex_energy_mut = complex_stability_values_mut
+            uniprot_mutation.analyse_complex_energy_wt = complex_stability_values_wt
+            uniprot_mutation.analyse_complex_energy_mut = complex_stability_values_mut
             uniprot_mutation.contact_distance_wt = contact_distance_wt
             uniprot_mutation.contact_distance_mut = contact_distance_mut
         #######################################################################
@@ -741,6 +730,8 @@ class GetMutation(object):
 
 
     def __check_structure_match(self, pdb_filename, mut_data, expecte_aa):
+        """
+        """
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         structure = parser.get_structure('ID', pdb_filename)
         model = structure[0]

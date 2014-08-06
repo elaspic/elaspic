@@ -535,7 +535,7 @@ class MyDatabase(object):
         if clear_schema:
             Base.metadata.drop_all(engine, metadata_tables.values())
         Base.metadata.create_all(engine, metadata_tables.values())
-#        engine.execute(irefindex_materialized_view_command)
+        engine.execute(irefindex_materialized_view_command)
 
 
     @contextmanager
