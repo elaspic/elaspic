@@ -60,8 +60,15 @@ def get_mutation_feature_vector(d, mut):
     header information for that mutation. The second dataframe contains all
     the features to be used in machine learning.
     """
+    # H    Alpha helix
+    # G    3-10 helix
+    # I    PI-helix
+    # E    Extended conformation
+    # B|b Isolated bridge
+    # T    Turn
+    # C    Coil (none of the above) ()
     secondary_structure_to_int = {
-        '-': 0, 'B': 1, 'E': 2, 'G': 3, 'H': 4, 'I': 5, 'S': 6, 'T': 7}
+        '-': 0, 'C': 0, 'B': 1, 'b': 1, 'E': 2, 'G': 3, 'H': 4, 'I': 5, 'S': 6, 'T': 7}
 
     def append_to_df(name_list_value_list, dfs, existing_columns=None):
         name_list, value_list = name_list_value_list
@@ -307,7 +314,6 @@ class GetMutation(object):
                 interacting_aa = [int(uniprot_num) for uniprot_num in d.template.model.interacting_aa_2.split(',') if uniprot_num]
                 chains_modeller = [d.template.model.chain_2, d.template.model.chain_1]
 
-
             self.logger.debug('Analysing interface mutation between uniprots %s and %s' % (uniprot_id_1, uniprot_id_2,))
             uniprot_sequences = [self.db.get_uniprot_sequence(d_1.uniprot_id),
                                  self.db.get_uniprot_sequence(d_2.uniprot_id)]
@@ -316,7 +322,6 @@ class GetMutation(object):
 
             if int(mutation[1:-1]) not in interacting_aa:
                 raise errors.MutationOutsideInterfaceError('mutated residue not involved in the interaction')
-
 
         #######################################################################
         # Common
@@ -647,11 +652,20 @@ class GetMutation(object):
                     raise Exception('surface area calculated for the wrong atom!')
             solvent_accessibility = seasa_info['rel_sasa']
 
-            try:
-                secondary_structure, solvent_accessibility_dssp = analyze_structure_instance.get_dssp()
-                secondary_structure = secondary_structure[mut_data.chains_modeller[0]][int(mut_data.mutation_domain[1:-1])-1]
-            except errors.ResourceError as e:
-                secondary_structure = '-'
+            # Secondary structure
+            secondary_structure_df = analyze_structure_instance.get_secondary_structure()
+            secondary_structure_df = secondary_structure_df[
+                (secondary_structure_df.chain == mut_data.chains_modeller[0]) &
+                (secondary_structure_df.idx == int(mut_data.mutation_domain[1:-1]))]
+            assert len(secondary_structure_df) == 1
+            secondary_structure_df = secondary_structure_df.iloc[0]
+            if (secondary_structure_df.amino_acid != mut_data.mutation_domain[0] and
+                secondary_structure_df.amino_acid != mut_data.mutation_domain[-1]):
+                    self.logger.error('Wrong amino acid for stride output!')
+                    self.logger.error(secondary_structure_df.amino_acid)
+                    self.logger.error(mut_data.mutation_domain)
+                    raise Exception('surface area calculated for the wrong atom!')
+            secondary_structure = secondary_structure_df.ss_code
 
             contact_distance = None
             if is_domain_pair:
@@ -670,11 +684,14 @@ class GetMutation(object):
                     raise e
             return solvent_accessibility, secondary_structure, contact_distance
 
-
         solvent_accessibility_wt, secondary_structure_wt, contact_distance_wt = \
             obtain_additional_mutation_properties(repairedPDB_wt_list, isinstance(d, sql_db.UniprotDomainPair))
         solvent_accessibility_mut, secondary_structure_mut, contact_distance_mut = \
             obtain_additional_mutation_properties(repairedPDB_mut_list, isinstance(d, sql_db.UniprotDomainPair))
+
+        self.logger.debug('solvent_accessibility (wt/mut): ({}/{})'.format(solvent_accessibility_wt, solvent_accessibility_mut))
+        self.logger.debug('secondary_structure (wt/mut): ({}/{})'.format(secondary_structure_wt, secondary_structure_mut))
+        self.logger.debug('contact_distance (wt/mut): ({}/{})'.format(contact_distance_wt, contact_distance_mut))
 
         #######################################################################
         ## 11th: get the BLOSUM (or what ever matrix is given) score
@@ -765,6 +782,7 @@ class GetMutation(object):
             if column_name not in clf_features:
                 feature_df.drop(column_name, axis=1, inplace=True)
         uniprot_mutation.ddg = clf.predict(feature_df)[0]
+        self.logger.debug('Predicted ddG: {}'.format(uniprot_mutation.ddg))
         return uniprot_mutation
 
 
