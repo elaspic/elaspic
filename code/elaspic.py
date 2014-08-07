@@ -75,6 +75,12 @@ class Pipeline(object):
 
         # Get the temporary folder, taking into account the $TMPDIR env variable
         self.temp_path = hf.get_temp_path(self.global_temp_path, temp_path_suffix)
+        # Make sure that the correct temporary folder is created when running as
+        # a job on a cluster
+        hostname = hf.get_hostname()
+        if (self.temp_path.startswith(os.path.join(self.global_temp_path, temp_path_suffix)) and
+            any([(x.lower() in hostname) for x in ['node', 'behemoth', 'grendel', 'beagle']])):
+            raise Exception('You should be using a temp folder that it specific to the particular job!')
 
         # Copy the sqlite version of the pdbfam database if using sqlite3
         if self.db_type == 'sqlite_file':
@@ -94,7 +100,7 @@ class Pipeline(object):
             if childProcess.returncode != 0:
                 print result
                 print error_message
-                sys.exit('Could not copy the sqlite3 database!')
+                raise Exception('Could not copy the sqlite3 database!')
 
 
     def __copy_blast_database(self):
@@ -224,7 +230,7 @@ class Pipeline(object):
         self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
         if not self.uniprot_domains:
             self.logger.error('Uniprot {} has no pfam domains'.format(self.uniprot_id))
-            sys.exit('Uniprot {} has no pfam domains'.format(self.uniprot_id))
+            raise Exception('Uniprot {} has no pfam domains'.format(self.uniprot_id))
         self._update_path_to_data(self.uniprot_domains)
 
         # Mutations
@@ -236,7 +242,7 @@ class Pipeline(object):
             self.logger.info("Computing provean...")
             if self._compute_provean():
                 if run_type == 1:
-                    sys.exit('Finished run_type {}'.format(run_type))
+                    raise Exception('Finished run_type {}'.format(run_type))
                 # If provean was updated, we need to reload uniprot domain data
                 # for all the other domains
                 self.logger.info('\n\n\n')
@@ -253,6 +259,7 @@ class Pipeline(object):
             self.logger.info('\n\n\n' + '*' * 80)
             self.logger.info("Building models...")
             self._compute_models()
+
         if run_type in [3, 4, 5]:
             self.logger.info('\n\n\n' + '*' * 80)
             self.logger.info("Analyzing mutations...")
@@ -559,8 +566,11 @@ class Pipeline(object):
             subprocess.check_call(cp_command, shell=True)
             # Dssp
             # cp_command = 'cp ' + self.bin_path + 'dssp-2.0.4-linux-amd64 ' + self.unique_temp_folder + '/analyze_structure/dssp'
-            cp_command = 'cp ' + self.bin_path + 'mkdssp ' + self.unique_temp_folder + '/analyze_structure/dssp'
+            # cp_command = 'cp ' + self.bin_path + 'mkdssp ' + self.unique_temp_folder + '/analyze_structure/dssp'
+            # subprocess.check_call(cp_command, shell=True)
+            cp_command = 'cp ' + self.bin_path + 'stride ' + self.unique_temp_folder + '/analyze_structure/stride'
             subprocess.check_call(cp_command, shell=True)
+
 #                # Naccess
 #                cp_command = (
 #                    'cp ' + self.bin_path + 'naccess ' + self.unique_temp_folder + '/analyze_structure/ && '
@@ -568,6 +578,7 @@ class Pipeline(object):
 #                    'cp ' + self.bin_path + 'standard.data ' + self.unique_temp_folder + '/analyze_structure/ && '
 #                    'cp ' + self.bin_path + 'vdw.radii ' + self.unique_temp_folder + '/analyze_structure/')
 #                subprocess.check_call(cp_command, shell=True)
+
             #MSMS
             cp_command = (
                 'cp ' + self.bin_path +  'pdb_to_xyzrn ' +  self.unique_temp_folder + '/analyze_structure/ && '
@@ -644,18 +655,11 @@ if __name__ == '__main__':
 
     run_type = args.run_type
     n_cores = args.n_cores
+
     # Run jobs
     for uniprot_id, mutation in zip(uniprot_ids, mutations):
         print uniprot_id
         print mutation
         print run_type
-
         uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
-        temp = sqlalchemy.ext.serializer.dumps(uniprot_domains_and_domain_pairs)
-        subprocess.check_call('mkdir -p /tmp/elaspic/sa_pickles/', shell=True)
-        with open('/tmp/elaspic/sa_pickles/{}_{}.pickle'.format(uniprot_id, mutation), 'wb') as ofh:
-            pickle.dump(temp, ofh, pickle.HIGHEST_PROTOCOL)
-
-        with open('/tmp/elaspic/sa_pickles/{}_{}.pickle'.format(uniprot_id, mutation), 'rb') as ifh:
-            uniprot_domains_and_domain_pairs = pickle.load(ifh)
 

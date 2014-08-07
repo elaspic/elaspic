@@ -539,8 +539,30 @@ class AnalyzeStructure(object):
 
 
 ###############################################################################
+    def get_secondary_structure(self):
+        return self.get_stride()
+
+
+    def get_stride(self):
+        system_command = './stride ' + ''.join(self.chain_ids) + '.pdb ' + '-fstride_results.txt'
+        self.logger.debug('stride system command: %s' % system_command)
+        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
+        self.logger.debug('stride return code: %i' % return_code)
+        self.logger.debug('stride result: %s' % result)
+        self.logger.debug('stride error: %s' % error_message)
+        # collect results
+        with open(self.working_path + 'stride_results.txt') as fh:
+            file_data_df = pd.DataFrame(
+                [[pdb_template.AAA_DICT[row.split()[1]], row.split()[2], row.split()[3], int(row.split()[4]), row.split()[5]]
+                for row in fh.readlines() if row[:3] == 'ASG'],
+                columns=['amino_acid', 'chain', 'resnum', 'idx', 'ss_code'])
+        return file_data_df
+
+
     def get_dssp(self):
-        """
+        """ Not used because crashes on server
         """
         n_tries = 0
         return_code = -1
@@ -559,6 +581,8 @@ class AnalyzeStructure(object):
             n_tries += 1
         if return_code != 0:
             if 'boost::thread_resource_error' in error_message:
+                system_command = "rsync {0}{1}.pdb /home/kimlab1/strokach/tmp/elaspic_bad_pdbs/"
+                hf.run_subprocess_locally(self.working_path, system_command)
                 raise errors.ResourceError(error_message)
         # collect results
         dssp_ss = {}

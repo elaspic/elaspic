@@ -199,11 +199,7 @@ def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
     # is created relative to that. This is useful when running on banting
     # (the cluster in the ccbr) and also on Scinet. Make sure that it
     # points to '/dev/shm/' on Scinet.
-    tmpdir_cluster = get_echo('$TMPDIR')
-    if tmpdir_cluster:
-        temp_path = os.path.join(tmpdir_cluster, temp_path_suffix)
-    else:
-        temp_path = os.path.join(global_temp_path, temp_path_suffix)
+    temp_path = os.path.join(os.environ.get('TMPDIR', global_temp_path), temp_path_suffix)
     subprocess.check_call('mkdir -p ' + temp_path, shell=True)
     return temp_path
 
