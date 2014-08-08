@@ -75,7 +75,12 @@ def get_mutation_feature_vector(d, mut):
         if isinstance(value_list, basestring):
             value_list = decode_text_as_list(value_list)[0]
         name_list = list(name_list)
-        value_list = list(value_list)
+        try:
+            value_list = list(value_list)
+        except TypeError:
+            print name_list
+            print value_list
+            raise
         for i in range(len(value_list)):
             if isinstance(value_list[i], datetime.datetime):
                 value_list[i] = value_list[i].strftime('%Y-%m-%d %H-%M-%S-%f')
