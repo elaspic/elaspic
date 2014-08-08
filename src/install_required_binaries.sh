@@ -87,6 +87,18 @@ cp -f topol $PATH_TO_BIN
 
 
 
+# Stride
+# http://webclu.bio.wzw.tum.de/stride/
+if ! [ -e ./stride*.tar.gz ]
+    then wget http://webclu.bio.wzw.tum.de/stride/stride.tar.gz
+fi
+tar xzvf stride.tar.gz
+cd stride
+make
+cp -f stride $PATH_TO_BIN
+
+
+
 ### Turns out Tcoffee installs these automatically in its plugins folder
 #~ # SAP
 #~ # http://mathbio.nimr.mrc.ac.uk/wiki/Software#SAP
