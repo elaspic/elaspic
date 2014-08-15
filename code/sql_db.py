@@ -25,9 +25,10 @@ from sqlalchemy.orm import sessionmaker, relationship, backref, aliased, scoped_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.serializer import loads, dumps
 
-from Bio import Seq
 from Bio import SeqIO
 from Bio import AlignIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 
 #import parse_pfamscan
 import helper_functions as hf
@@ -57,7 +58,7 @@ else:
 SHORT = 15
 MEDIUM = 255
 LONG = 16384
-SCHEMA_VERSION = 'elaspic_v5'
+SCHEMA_VERSION = 'elaspic_v6'
 
 def get_index_list(table_name, index_columns):
     index_list = []
@@ -117,6 +118,8 @@ class DomainContact(Base):
     contact_surface_area = Column(Float)
     atom_count_1 = Column(Integer)
     atom_count_2 = Column(Integer)
+    number_of_contact_residues_1 = Column(Integer)
+    number_of_contact_residues_2 = Column(Integer)
     contact_residues_1 = Column(Text)
     contact_residues_2 = Column(Text)
     crystal_packing = Column(Float)
@@ -467,12 +470,12 @@ CREATE INDEX irefindex_interactions_rigid_idx ON {0}.irefindex_interactions (rig
 pdbfam_name_to_pfam_clan_materialized_view_command = ("""
 CREATE MATERIALIZED VIEW {0}.pdbfam_name_to_pfam_clan AS
 SELECT DISTINCT pdbfam_name, pfam_clan
-FROM elaspic_v5.uniprot_domain;
+FROM {0}.uniprot_domain;
 
 CREATE INDEX pdbfam_name_to_pfam_clan_pdbfam_name_idx ON {0}.pdbfam_name_to_pfam_clan (pdbfam_name);
 CREATE INDEX pdbfam_name_to_pfam_clan_pfam_clan_idx ON {0}.pdbfam_name_to_pfam_clan (pfam_clan);
 CREATE UNIQUE INDEX pdbfam_name_to_pfam_clan_pdbfam_name_pfam_clan_idx ON {0}.pdbfam_name_to_pfam_clan (pdbfam_name, pfam_clan);
-""")
+""".format(SCHEMA_VERSION))
 
 
 
@@ -972,8 +975,8 @@ class MyDatabase(object):
                 uniprot_sequence.uniprot_sequence = str(sequence.seq)
                 self.add_uniprot_sequence(uniprot_sequence)
 
-        uniprot_seqrecord = SeqIO.SeqRecord(
-            seq=Seq.Seq(str(uniprot_sequence.uniprot_sequence)),
+        uniprot_seqrecord = SeqRecord(
+            seq=Seq(str(uniprot_sequence.uniprot_sequence)),
             id=uniprot_sequence.uniprot_id,
             name=uniprot_sequence.uniprot_name)
 
