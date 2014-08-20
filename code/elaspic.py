@@ -5,14 +5,12 @@ Created on Sun Dec 23 18:37:36 2012
 @author: niklas
 """
 import os
-import sys
 import time
 import subprocess
 import tempfile
 import argparse
 import atexit
 import signal
-import cPickle as pickle
 import sqlalchemy.ext.serializer
 
 from Bio.SubsMat import MatrixInfo

@@ -40,7 +40,7 @@ import errors as error
 # Not the best place to define this, bot collation changes depending on the
 # database type...
 #SQL_FLAVOUR = 'sqlite_file'
-SQL_FLAVOUR = 'postgresql'
+SQL_FLAVOUR = 'mysql'
 
 if SQL_FLAVOUR.split('_')[0] == 'sqlite': # sqlite_memory, sqlite_flatfile
     BINARY_COLLATION = 'RTRIM' # same as binary, except that trailing space characters are ignored.
@@ -58,7 +58,7 @@ else:
 SHORT = 15
 MEDIUM = 255
 LONG = 16384
-SCHEMA_VERSION = 'elaspic_v6'
+SCHEMA_VERSION = 'elaspic'
 
 def get_index_list(table_name, index_columns):
     index_list = []
@@ -68,7 +68,7 @@ def get_index_list(table_name, index_columns):
         elif type(columns) == list:
             unique = False
         index_list.append(
-            Index('{}_{}'.format(table_name, '_'.join(columns)), *columns, unique=unique))
+            Index('{}_{}'.format(table_name, '_'.join(columns))[:255], *columns, unique=unique))
     return tuple(index_list)
 
 
@@ -84,7 +84,8 @@ class Domain(Base):
             ['pdb_id'],
             ['pdb_pdbfam_name'],
             ['pdb_id', 'pdb_chain'],
-            (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True)]) +
+#            (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True)]
+            ]) +
         ({'schema': SCHEMA_VERSION},)
     )
 
@@ -167,7 +168,7 @@ class Provean(Base):
 class UniprotDomain(Base):
     __tablename__ = 'uniprot_domain'
     __table_args__ = (
-        UniqueConstraint('uniprot_id', 'pdbfam_name', 'alignment_def', name='unique_uniprot_domain'),
+#        UniqueConstraint('uniprot_id', 'pdbfam_name', 'alignment_def', name='unique_uniprot_domain'),
         {'sqlite_autoincrement': True, 'schema': SCHEMA_VERSION},
     )
 
@@ -177,10 +178,10 @@ class UniprotDomain(Base):
 #    uniprot_name = Column(Text)
     pdbfam_name = Column(String(LONG), index=True, nullable=False)
     pdbfam_idx = Column(Integer, nullable=False)
-    pfam_clan = Column(String(LONG))
+    pfam_clan = Column(Text)
     alignment_def = Column(String(MEDIUM))
     pfam_names = Column(String(LONG))
-    alignment_subdefs = Column(String(LONG))
+    alignment_subdefs = Column(Text)
     path_to_data = Column(Text)
     # Relationships
     uniprot_sequence = relationship(
@@ -206,7 +207,6 @@ class UniprotDomainPair(Base):
     rigids = Column(Text) # Interaction references from iRefIndex
     domain_contact_ids = Column(Text) # interaction references from PDBfam
     path_to_data = Column(Text)
-
 
     # Relationships
     uniprot_domain_1 = relationship(
@@ -439,43 +439,43 @@ class UniprotDomainPairMutation(Base):
         backref=backref('mutations', cascade='expunge')) # many to one
 
 
-irefindex_materialized_view_command = ("""
-CREATE MATERIALIZED VIEW {0}.irefindex_interactions AS
-SELECT
-mi.rigid,
-ma1.alias uniprot_name_1,
-up1.uniprot_id uniprot_id_1,
-ma2.alias uniprot_name_2,
-up2.uniprot_id uniprot_id_2
-FROM mitab_irefindex.mitab_interactions mi
-JOIN mitab_irefindex.mitab_aliases ma1 ON (ma1.uid = mi.uida)
-JOIN mitab_irefindex.mitab_aliases ma2 ON (ma2.uid = mi.uidb)
-JOIN uniprot_kb.uniprot_sequence up1 ON (up1.uniprot_name = ma1.alias)
-JOIN uniprot_kb.uniprot_sequence up2 ON (up2.uniprot_name = ma2.alias)
-WHERE ma1.dbname = 'uniprotkb'
-AND ma2.dbname = 'uniprotkb'
-AND up1.uniprot_id NOT LIKE '%%-%%'
-AND up2.uniprot_id NOT LIKE '%%-%%';
-
-CREATE INDEX irefindex_interactions_uniprot_name_1_idx ON {0}.irefindex_interactions (uniprot_name_1);
-CREATE INDEX irefindex_interactions_uniprot_name_2_idx ON {0}.irefindex_interactions (uniprot_name_2);
-CREATE INDEX irefindex_interactions_uniprot_name_1_uniprot_name_2_idx ON {0}.irefindex_interactions (uniprot_name_1, uniprot_name_2);
-CREATE INDEX irefindex_interactions_uniprot_id_1_idx ON {0}.irefindex_interactions (uniprot_id_1);
-CREATE INDEX irefindex_interactions_uniprot_id_2_idx ON {0}.irefindex_interactions (uniprot_id_2);
-CREATE INDEX irefindex_interactions_uniprot_id_1_uniprot_id_2_idx ON {0}.irefindex_interactions (uniprot_id_1, uniprot_id_2);
-CREATE INDEX irefindex_interactions_rigid_idx ON {0}.irefindex_interactions (rigid);
-""".format(SCHEMA_VERSION))
-
-
-pdbfam_name_to_pfam_clan_materialized_view_command = ("""
-CREATE MATERIALIZED VIEW {0}.pdbfam_name_to_pfam_clan AS
-SELECT DISTINCT pdbfam_name, pfam_clan
-FROM {0}.uniprot_domain;
-
-CREATE INDEX pdbfam_name_to_pfam_clan_pdbfam_name_idx ON {0}.pdbfam_name_to_pfam_clan (pdbfam_name);
-CREATE INDEX pdbfam_name_to_pfam_clan_pfam_clan_idx ON {0}.pdbfam_name_to_pfam_clan (pfam_clan);
-CREATE UNIQUE INDEX pdbfam_name_to_pfam_clan_pdbfam_name_pfam_clan_idx ON {0}.pdbfam_name_to_pfam_clan (pdbfam_name, pfam_clan);
-""".format(SCHEMA_VERSION))
+#irefindex_materialized_view_command = ("""
+#CREATE MATERIALIZED VIEW {0}.irefindex_interactions AS
+#SELECT
+#mi.rigid,
+#ma1.alias uniprot_name_1,
+#up1.uniprot_id uniprot_id_1,
+#ma2.alias uniprot_name_2,
+#up2.uniprot_id uniprot_id_2
+#FROM mitab_irefindex.mitab_interactions mi
+#JOIN mitab_irefindex.mitab_aliases ma1 ON (ma1.uid = mi.uida)
+#JOIN mitab_irefindex.mitab_aliases ma2 ON (ma2.uid = mi.uidb)
+#JOIN uniprot_kb.uniprot_sequence up1 ON (up1.uniprot_name = ma1.alias)
+#JOIN uniprot_kb.uniprot_sequence up2 ON (up2.uniprot_name = ma2.alias)
+#WHERE ma1.dbname = 'uniprotkb'
+#AND ma2.dbname = 'uniprotkb'
+#AND up1.uniprot_id NOT LIKE '%%-%%'
+#AND up2.uniprot_id NOT LIKE '%%-%%';
+#
+#CREATE INDEX irefindex_interactions_uniprot_name_1_idx ON {0}.irefindex_interactions (uniprot_name_1);
+#CREATE INDEX irefindex_interactions_uniprot_name_2_idx ON {0}.irefindex_interactions (uniprot_name_2);
+#CREATE INDEX irefindex_interactions_uniprot_name_1_uniprot_name_2_idx ON {0}.irefindex_interactions (uniprot_name_1, uniprot_name_2);
+#CREATE INDEX irefindex_interactions_uniprot_id_1_idx ON {0}.irefindex_interactions (uniprot_id_1);
+#CREATE INDEX irefindex_interactions_uniprot_id_2_idx ON {0}.irefindex_interactions (uniprot_id_2);
+#CREATE INDEX irefindex_interactions_uniprot_id_1_uniprot_id_2_idx ON {0}.irefindex_interactions (uniprot_id_1, uniprot_id_2);
+#CREATE INDEX irefindex_interactions_rigid_idx ON {0}.irefindex_interactions (rigid);
+#""".format(SCHEMA_VERSION))
+#
+#
+#pdbfam_name_to_pfam_clan_materialized_view_command = ("""
+#CREATE MATERIALIZED VIEW {0}.pdbfam_name_to_pfam_clan AS
+#SELECT DISTINCT pdbfam_name, pfam_clan
+#FROM {0}.uniprot_domain;
+#
+#CREATE INDEX pdbfam_name_to_pfam_clan_pdbfam_name_idx ON {0}.pdbfam_name_to_pfam_clan (pdbfam_name);
+#CREATE INDEX pdbfam_name_to_pfam_clan_pfam_clan_idx ON {0}.pdbfam_name_to_pfam_clan (pfam_clan);
+#CREATE UNIQUE INDEX pdbfam_name_to_pfam_clan_pdbfam_name_pfam_clan_idx ON {0}.pdbfam_name_to_pfam_clan (pdbfam_name, pfam_clan);
+#""".format(SCHEMA_VERSION))
 
 
 
@@ -507,6 +507,10 @@ class MyDatabase(object):
             autocommit=False
             autoflush=False
             engine = create_engine('postgresql://elaspic:elaspic@192.168.6.19:5432/kimlab') # , echo=True
+        elif SQL_FLAVOUR == 'mysql':
+            autocommit=False
+            autoflush=False
+            engine = create_engine('mysql://root:kim630@192.168.6.19:3306/{}'.format(SCHEMA_VERSION))
 
         if logger is None:
             logger = logging.getLogger(__name__)
@@ -538,7 +542,7 @@ class MyDatabase(object):
         if clear_schema:
             Base.metadata.drop_all(engine, metadata_tables.values())
         Base.metadata.create_all(engine, metadata_tables.values())
-        engine.execute(irefindex_materialized_view_command)
+#        engine.execute(irefindex_materialized_view_command)
 
 
     @contextmanager

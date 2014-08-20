@@ -236,9 +236,9 @@ class GetModel(object):
             self.unique_temp_folder + 'analyze_structure/',
             pdb_filename_wt, [uniprot_model.chain_1, uniprot_model.chain_2], None, self.logger)
         interface_area = analyze_structure_object.get_interface_area()
-        uniprot_model.interface_area_hydrophobic = interface_area[0]
-        uniprot_model.interface_area_hydrophilic = interface_area[1]
-        uniprot_model.interface_area_total = interface_area[2]
+        uniprot_model.interface_area_hydrophobic = interface_area[0] if not np.isnan(interface_area[0]) else None
+        uniprot_model.interface_area_hydrophilic = interface_area[1] if not np.isnan(interface_area[1]) else None
+        uniprot_model.interface_area_total = interface_area[2] if not np.isnan(interface_area[2]) else None
 
         # Values common for single domains and interactions
         model_errors =', '.join(model_errors)
