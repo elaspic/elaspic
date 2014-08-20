@@ -6,7 +6,6 @@ Created on Sat Dec 22 18:58:50 2012
 """
 import numpy as np
 import gzip
-import subprocess
 import string
 
 import Bio
