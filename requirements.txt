@@ -2,7 +2,7 @@ argparse
 Cython
 numpy
 scipy
-scikit-learn
+scikit-learn=0.14.1
 Biopython
 MySQL-python
 psycopg2
