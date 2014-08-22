@@ -16,15 +16,20 @@ import sqlalchemy.ext.serializer
 from Bio.SubsMat import MatrixInfo
 from ConfigParser import SafeConfigParser
 
-from modeller import ModellerError
-
 import domain_alignment
-import domain_model
 import domain_mutation
 
 import helper_functions as hf
 import errors
 import sql_db
+
+try:
+    from modeller import ModellerError
+    import domain_model
+    have_modeller = True
+except Exception as e:
+    print 'Failed to load modeller! Error message: {}'.format(e)
+    have_modeller = False
 
 
 class Pipeline(object):
@@ -36,7 +41,6 @@ class Pipeline(object):
         configParser = SafeConfigParser(
             defaults={
                 'db_type': sql_db.SQL_FLAVOUR,
-                'db_path': hf.get_path_to_current_file() + '/../db/pipeline.db',
                 'path_to_archive': '/home/kimlab1/database_data/elaspic_v2/',
                 'web_server': False,
             })
@@ -51,6 +55,7 @@ class Pipeline(object):
         self.n_cores = configParser.get('DEFAULT', 'n_cores')
         self.db_type = configParser.get('DEFAULT', 'db_type')
         self.db_path = configParser.get('DEFAULT', 'db_path')
+        self.db_is_immutable = True if self.db_type.lower().startswith('sqlite') else False
         self.web_server = configParser.get('DEFAULT', 'web_server')
 
         # From [SETTINGS]
@@ -81,8 +86,8 @@ class Pipeline(object):
             raise Exception('You should be using a temp folder that it specific to the particular job!')
 
         # Copy the sqlite version of the pdbfam database if using sqlite3
-        if self.db_type == 'sqlite_file':
-            self.__copy_sqlite_database()
+#        if self.db_type == 'sqlite_file':
+#            self.__copy_sqlite_database()
 
         # Copy the blast databaes
         self.__copy_blast_database()
@@ -202,33 +207,20 @@ class Pipeline(object):
         atexit.register(self.__clear_provean_temp_files)
 
         # Initialise the sql database for accessing all information
-        self.logger.info('Initializing the database...')
+        self.logger.info("Connecting to a '{}' database...".format(self.db_type))
+        if self.db_type.lower() == 'sqlite_file':
+            self.logger.info('Path to the database: {}'.format(self.db_path))
         self.db = sql_db.MyDatabase(
-            path_to_sqlite_db=self.temp_path+'pipeline.db', sql_flavour=self.db_type,
+            path_to_sqlite_db=self.db_path, sql_flavour=self.db_type,
             temp_path=self.temp_path, path_to_archive=self.path_to_archive,
-            is_immutable=False, logger=self.logger)
-
-        # Initialize external class objects
-        self.get_template = domain_alignment.GetTemplate(
-            self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
-            self.db, self.logger, self.n_cores,
-            self.provean_temp_path)
-
-        self.get_model = domain_model.GetModel(
-            self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
-            self.db, self.logger, self.n_cores, self.modeller_runs)
-
-        self.get_mutation = domain_mutation.GetMutation(
-            self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
-            self.db, self.logger, self.n_cores, self.bin_path, self.foldx_water,
-            self.foldx_num_of_runs, self.matrix, self.gap_start, self.gap_extend,)
+            is_immutable=self.db_is_immutable, logger=self.logger)
 
         # Obtain all domains and interactions for a given uniprot
         self.logger.info('Obtaining protein domain information...')
         self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
         if not self.uniprot_domains:
             self.logger.error('Uniprot {} has no pfam domains'.format(self.uniprot_id))
-            raise Exception('Uniprot {} has no pfam domains'.format(self.uniprot_id))
+            return
         self._update_path_to_data(self.uniprot_domains)
 
         # Mutations
@@ -240,7 +232,8 @@ class Pipeline(object):
             self.logger.info("Computing provean...")
             if self._compute_provean():
                 if run_type == 1:
-                    raise Exception('Finished run_type {}'.format(run_type))
+                    self.logger.info('Finished run_type {}'.format(run_type))
+                    return
                 # If provean was updated, we need to reload uniprot domain data
                 # for all the other domains
                 self.logger.info('\n\n\n')
@@ -253,16 +246,28 @@ class Pipeline(object):
             self.uniprot_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id, True)
             self._update_path_to_data(self.uniprot_domain_pairs)
 
-        if run_type in [2, 4, 5]:
+        # Make models
+        if have_modeller and run_type in [2, 4, 5]:
+            self.get_model = domain_model.GetModel(
+                self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
+                self.db, self.logger, self.n_cores, self.modeller_runs)
+
             self.logger.info('\n\n\n' + '*' * 80)
             self.logger.info("Building models...")
             self._compute_models()
-
+        
+        # Analyse mutations
         if run_type in [3, 4, 5]:
+            self.get_mutation = domain_mutation.GetMutation(
+                self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
+                self.db, self.logger, self.n_cores, self.bin_path, self.foldx_water,
+                self.foldx_num_of_runs, self.matrix, self.gap_start, self.gap_extend,)
+            
             self.logger.info('\n\n\n' + '*' * 80)
             self.logger.info("Analyzing mutations...")
             self._compute_mutations()
-
+            
+            
 
     def _update_path_to_data(self, d_list):
         if not isinstance(d_list, list):
@@ -645,11 +650,11 @@ if __name__ == '__main__':
     elif args.uniprot_id:
         uniprot_ids = [args.uniprot_id,]
         mutations = [args.mutations,] if args.mutations is not None else ['',]
-
     else:
-        raise Exception(
+        error_message = (
             'Need to supply either a list of uniprot_mutation combos '
             'or a flatfile with the same!')
+        raise Exception(error_message)
 
     run_type = args.run_type
     n_cores = args.n_cores

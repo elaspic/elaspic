@@ -36,12 +36,14 @@ import errors as error
 
 
 ###############################################################################
-### Constants
+### Modifiable variables
 # Not the best place to define this, bot collation changes depending on the
 # database type...
 #SQL_FLAVOUR = 'sqlite_file'
 SQL_FLAVOUR = 'mysql'
+SCHEMA_VERSION = 'elaspic'
 
+### Constants
 if SQL_FLAVOUR.split('_')[0] == 'sqlite': # sqlite_memory, sqlite_flatfile
     BINARY_COLLATION = 'RTRIM' # same as binary, except that trailing space characters are ignored.
 #    STRING_COLLATION = 'NOCASE'
@@ -58,7 +60,13 @@ else:
 SHORT = 15
 MEDIUM = 255
 LONG = 16384
-SCHEMA_VERSION = 'elaspic'
+if SQL_FLAVOUR.startswith('sqlite'):
+    schema_version_tuple = ({'sqlite_autoincrement': True},)
+    uniprot_kb_schema_tuple = ({'sqlite_autoincrement': True},)
+else:
+    schema_version_tuple = ({'schema': SCHEMA_VERSION},)
+    uniprot_kb_schema_tuple = ({'schema': 'uniprot_kb'},)
+
 
 def get_index_list(table_name, index_columns):
     index_list = []
@@ -85,8 +93,7 @@ class Domain(Base):
             ['pdb_pdbfam_name'],
             ['pdb_id', 'pdb_chain'],
 #            (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True)]
-            ]) +
-        ({'schema': SCHEMA_VERSION},)
+        ]) + schema_version_tuple
     )
 
     cath_id = Column(String(SHORT, collation=BINARY_COLLATION),
@@ -107,8 +114,8 @@ class DomainContact(Base):
     __tablename__ = 'domain_contact'
     __table_args__ = (
         get_index_list(__tablename__, [
-            (['cath_id_1', 'cath_id_2'], True)]) +
-        ({'schema': SCHEMA_VERSION},)
+            (['cath_id_1', 'cath_id_2'], True)
+        ]) + schema_version_tuple
     )
 
     domain_contact_id = Column(Integer, index=True, nullable=False, primary_key=True)
@@ -136,7 +143,7 @@ class UniprotSequence(Base):
     additional sequences that were added to the database.
     """
     __tablename__ = 'uniprot_sequence'
-    __table_args__ = ({'schema': 'uniprot_kb'},)
+    __table_args__ = uniprot_kb_schema_tuple
 
     db = Column(String(SHORT), nullable=False)
     uniprot_id = Column(String(SHORT), index=True, nullable=False, primary_key=True)
@@ -151,7 +158,7 @@ class UniprotSequence(Base):
 
 class Provean(Base):
     __tablename__ = 'provean'
-    __table_args__ = ({'schema': SCHEMA_VERSION})
+    __table_args__ = schema_version_tuple
 
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
                         index=True, nullable=False, primary_key=True)
@@ -167,10 +174,7 @@ class Provean(Base):
 
 class UniprotDomain(Base):
     __tablename__ = 'uniprot_domain'
-    __table_args__ = (
-#        UniqueConstraint('uniprot_id', 'pdbfam_name', 'alignment_def', name='unique_uniprot_domain'),
-        {'sqlite_autoincrement': True, 'schema': SCHEMA_VERSION},
-    )
+    __table_args__ = schema_version_tuple
 
     uniprot_domain_id = Column(Integer, index=True, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
@@ -194,8 +198,9 @@ class UniprotDomainPair(Base):
     __tablename__ = 'uniprot_domain_pair'
     __table_args__ = (
         get_index_list(__tablename__, [
-            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], True) ]) +
-        ({'sqlite_autoincrement': True, 'schema': SCHEMA_VERSION},) )
+            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], True)
+        ]) + schema_version_tuple
+    )
 
     uniprot_domain_pair_id = Column(Integer, index=True, nullable=False, primary_key=True, autoincrement=True)
     uniprot_domain_id_1 = Column(None, ForeignKey(UniprotDomain.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
@@ -219,11 +224,9 @@ class UniprotDomainPair(Base):
         cascade='expunge', lazy='joined') # many to one
 
 
-
-
 class UniprotDomainTemplate(Base):
     __tablename__ = 'uniprot_domain_template'
-    __table_args__ = ({'schema': SCHEMA_VERSION},)
+    __table_args__ = schema_version_tuple
 
     uniprot_domain_id = Column(None, ForeignKey(UniprotDomain.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
                                index=True, nullable=False, primary_key=True)
@@ -249,7 +252,7 @@ class UniprotDomainTemplate(Base):
 
 class UniprotDomainModel(Base):
     __tablename__ = 'uniprot_domain_model'
-    __table_args__ = ({'schema': SCHEMA_VERSION},)
+    __table_args__ = schema_version_tuple
 
     uniprot_domain_id = Column(
         None, ForeignKey(UniprotDomainTemplate.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
@@ -271,7 +274,7 @@ class UniprotDomainModel(Base):
 
 class UniprotDomainMutation(Base):
     __tablename__ = 'uniprot_domain_mutation'
-    __table_args__ = ({'schema': SCHEMA_VERSION},)
+    __table_args__ = schema_version_tuple
 
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
                         index=True, nullable=False, primary_key=True)
@@ -308,7 +311,7 @@ class UniprotDomainMutation(Base):
 
 class UniprotDomainPairTemplate(Base):
     __tablename__ = 'uniprot_domain_pair_template'
-    __table_args__ = ({'schema': SCHEMA_VERSION},)
+    __table_args__ = schema_version_tuple
 
     uniprot_domain_pair_id = Column(
         None, ForeignKey(UniprotDomainPair.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
@@ -370,7 +373,7 @@ class UniprotDomainPairTemplate(Base):
 
 class UniprotDomainPairModel(Base):
     __tablename__ = 'uniprot_domain_pair_model'
-    __table_args__ = ({'schema': SCHEMA_VERSION},)
+    __table_args__ = schema_version_tuple
 
     uniprot_domain_pair_id = Column(
         None, ForeignKey(UniprotDomainPairTemplate.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
@@ -399,7 +402,7 @@ class UniprotDomainPairModel(Base):
 
 class UniprotDomainPairMutation(Base):
     __tablename__ = 'uniprot_domain_pair_mutation'
-    __table_args__ = ({'schema': SCHEMA_VERSION},)
+    __table_args__ = schema_version_tuple
 
     uniprot_id = Column(None, ForeignKey(
         UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
@@ -491,7 +494,7 @@ class MyDatabase(object):
     """
     def __init__(
             self, sql_flavour=SQL_FLAVOUR, is_immutable=False,
-            temp_path='/tmp/', path_to_archive='/home/kimlab1/database_data/elaspic/',
+            temp_path='/tmp/', path_to_archive='/home/kimlab1/database_data/elaspic_v2/',
             path_to_sqlite_db='', create_database=False, clear_schema=False, logger=None):
 
         # Choose which database to use
@@ -502,7 +505,7 @@ class MyDatabase(object):
         elif SQL_FLAVOUR == 'sqlite_file':
             autocommit=True
             autoflush=True
-            engine = create_engine('sqlite:///' + path_to_sqlite_db, isolation_level='READ UNCOMMITTED')
+            engine = create_engine('sqlite:///' + path_to_sqlite_db, isolation_level='READ UNCOMMITTED') # 
         elif SQL_FLAVOUR == 'postgresql':
             autocommit=False
             autoflush=False
@@ -538,7 +541,7 @@ class MyDatabase(object):
         If 'clear_schema' == True, remove all the tables in the schema first.
         """
         metadata_tables = Base.metadata.tables.copy()
-        del metadata_tables['uniprot_kb.uniprot_sequence']
+#        del metadata_tables['uniprot_kb.uniprot_sequence']
         if clear_schema:
             Base.metadata.drop_all(engine, metadata_tables.values())
         Base.metadata.create_all(engine, metadata_tables.values())
@@ -553,13 +556,15 @@ class MyDatabase(object):
         session = self.Session()
         try:
             yield session
-            session.commit()
+            if not self.is_immutable:
+                session.commit()
         except:
-            session.rollback()
+            if not self.is_immutable:
+                session.rollback()
             raise
         finally:
             session.close()
-
+           
 
     ###########################################################################
     # Get objects from the database
@@ -927,7 +932,7 @@ class MyDatabase(object):
 
     ###########################################################################
 
-    def get_uniprot_sequence(self, uniprot_id, check_external=False):
+    def get_uniprot_sequence(self, uniprot_id, check_external=True):
         """ Return a Biopython SeqRecord object containg the sequence for the
         specified uniprot.
         """
