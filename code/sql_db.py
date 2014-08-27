@@ -41,7 +41,8 @@ import errors as error
 # database type...
 #SQL_FLAVOUR = 'sqlite_file'
 SQL_FLAVOUR = 'mysql'
-SCHEMA_VERSION = 'elaspic_dev'
+SCHEMA_VERSION = 'elaspic'
+#SCHEMA_VERSION = 'elaspic_dev'
 
 ### Constants
 if SQL_FLAVOUR.split('_')[0] == 'sqlite': # sqlite_memory, sqlite_flatfile
@@ -692,7 +693,7 @@ class MyDatabase(object):
                 session
                     .query(UniprotDomain)
                     .filter(UniprotDomain.uniprot_id == uniprot_id)
-                    # .options(joinedload('model'))
+                    .options(joinedload('template').joinedload('model'))
                     .all() )
 
         d_idx = 0
@@ -720,7 +721,7 @@ class MyDatabase(object):
                 .filter(or_(
                     "uniprot_domain_1.uniprot_id='{}'".format(uniprot_id),
                     "uniprot_domain_2.uniprot_id='{}'".format(uniprot_id)))
-                # .options(joinedload('model'))
+                .options(joinedload('template').joinedload('model'))
                 .all() )
 
         d_idx = 0

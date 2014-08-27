@@ -159,8 +159,8 @@ class FoldX():
 
 
     def __run_runfile(self):
-        # system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
-        system_command = './foldx64Linux -runfile ' + self.foldx_runfile
+        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
+#        system_command = './foldx64Linux -runfile ' + self.foldx_runfile
         self.logger.debug('FoldX system command: {}'.format(system_command))
         childProcess = hf.run_subprocess_locally(self.foldx_path, system_command)
         result, error_message = childProcess.communicate()

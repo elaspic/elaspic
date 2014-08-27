@@ -388,8 +388,8 @@ class Pipeline(object):
                     bad_domain = bad_domains[0]
                     bad_domain.domain_errors = str(d.uniprot_domain_id) + ': ' + str(type(e))
                     self.logger.error(
-                        'Adding error to the domain with cath_id {cath_id}...'
-                        .format(cath_id=d.template.cath_id))
+                        "Adding error '{0}' to the domain with cath_id {1}..."
+                        .format(bad_domain.domain_errors, d.template.cath_id))
                 elif isinstance(d, sql_db.UniprotDomainPair):
                     empty_model = sql_db.UniprotDomainPairModel()
                     empty_model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
@@ -406,9 +406,9 @@ class Pipeline(object):
                     bad_domain = bad_domains[0]
                     bad_domain.domain_contact_errors = str(d.uniprot_domain_pair_id) + ': ' + str(type(e))
                     self.logger.error(
-                        'Adding error to the domain pair with cath_id_1 {cath_id_1} '
-                        'and cath_id_2 {cath_id_2}...'
-                        .format(cath_id_1=d.template.cath_id_1, cath_id_2=d.template.cath_id_2))
+                        "Adding error '{0}' to the domain pair with cath_id_1 {1} "
+                        "and cath_id_2 {2}..."
+                        .format(bad_domain.domain_contact_errors, d.template.cath_id_1, d.template.cath_id_2))
                 # Add the error type to the model_errors column
                 empty_model.model_errors = self.__add_new_error(empty_model.model_errors, e)
                 self.logger.error(empty_model.model_errors)
