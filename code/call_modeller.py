@@ -2,6 +2,7 @@
 from modeller import *			# Load standard Modeller classes
 from modeller.automodel import *	# Load the automodel class
 import helper_functions as hf
+import errors 
 
 class modeller:
     """
