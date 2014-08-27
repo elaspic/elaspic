@@ -36,11 +36,10 @@ fi
 # CD-HIT
 # https://code.google.com/p/cdhit/
 cd $PATH_TO_SRC
-if ! [ -e ./cd-hit*.tgz ]
-    then wget https://cdhit.googlecode.com/files/cd-hit-v4.6.1-2012-08-27.tgz
+if ! [ -e ./cdhit ]
+    hg clone https://code.google.com/p/cdhit/
 fi
-tar xzvf cd-hit*.tgz
-cd cd-hit*
+cd cdhit
 make clean
 make
 cp -f cd-hit $PATH_TO_BIN
