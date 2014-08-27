@@ -41,8 +41,8 @@ import errors as error
 # database type...
 #SQL_FLAVOUR = 'sqlite_file'
 SQL_FLAVOUR = 'mysql'
-SCHEMA_VERSION = 'elaspic'
-#SCHEMA_VERSION = 'elaspic_dev'
+#SCHEMA_VERSION = 'elaspic'
+SCHEMA_VERSION = 'elaspic_dev'
 
 ### Constants
 if SQL_FLAVOUR.split('_')[0] == 'sqlite': # sqlite_memory, sqlite_flatfile
