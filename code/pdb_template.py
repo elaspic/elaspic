@@ -12,6 +12,7 @@ import Bio
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB import PDBIO
+from Bio.PDB.Atom import Atom
 from Bio.PDB.Polypeptide import PPBuilder
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
@@ -33,6 +34,38 @@ AAA_DICT['MSE'] = 'M'
 amino_acids = AAA_DICT.keys()
 methylated_lysines = ['MLZ', 'MLY', 'M3L']
 lysine_atoms = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
+
+
+
+
+
+def euclidean_distance(a, b):
+    """ Return euclidean distance between two lists or tuples of arbitrary length.
+    """
+    return np.sqrt(sum((a - b)**2 for a, b in zip(a, b)))
+
+
+def calculate_distance(atom_1, atom_2, cutoff=None):
+    """
+    Returns the distance of two points in three dimensional space
+    input: atom instance of biopython: class 'Bio.PDB.Atom.Atom
+    return: type 'float'
+    """
+
+    if ((type(atom_1) == type(atom_2) == list) or
+        (type(atom_1) == type(atom_2) == tuple)):
+            a = atom_1
+            b = atom_2
+    elif type(atom_1) == type(atom_2) == Atom:
+        a = atom_1.coord
+        b = atom_2.coord
+    else:
+        raise Exception('Unsupported format!')
+
+    assert(len(a) == 3 and len(b) == 3)
+    if (cutoff is None or
+        all([ abs(p - q) <= cutoff for p, q in zip(a, b) ])):
+            return euclidean_distance(a, b)
 
 
 def get_pdb(pdb_code, pdb_path, tmp_path='/tmp/', pdb_type='ent'):
@@ -228,10 +261,17 @@ class PDBTemplate():
             while res_idx < len(chain):
                 res = chain.child_list[res_idx]
                 old_res_id = res.id
-                # Remove water
+#                # Remove water 
+#                if res.id[0] == 'W':
+##                    self.logger.debug('Removing water molecule {}'.format(res.id))
+#                    chain.detach_child(res.id)
+#                    continue
+                # Move water to the hetatm chain
                 if res.id[0] == 'W':
-#                    self.logger.debug('Removing water molecule {}'.format(res.id))
                     chain.detach_child(res.id)
+                    hetatm_res = res
+                    hetatm_res.id = (hetatm_res.id[0], len(chain_for_hetatms)+1, hetatm_res.id[2],)
+                    chain_for_hetatms.add(hetatm_res)
                     continue
                 # Convert methylated lysines to regular lysines
                 if res.resname in methylated_lysines:
@@ -280,10 +320,7 @@ class PDBTemplate():
                 for res_2 in chain_2:
                     for atom_1 in res_1:
                         for atom_2 in res_2:
-                            a = atom_1.coord
-                            b = atom_2.coord
-                            r = np.sqrt(sum( (a - b)**2 for a, b in zip(a, b)))
-                            if r < 10:
+                            if calculate_distance(atom_1, atom_2, 10):
                                 in_contact = True
             if not in_contact:
                 chain_for_hetatms.detach_child(res_1.id)

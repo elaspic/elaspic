@@ -62,8 +62,11 @@ class modeller:
                 except IndexError:
                     raise
                 except:
-                    result, loop, failures = self.__run_modeller(aln, False)
-
+                    try:
+                        result, loop, failures = self.__run_modeller(aln, False)
+                    except ModellerError:
+                        raise errors.ModellerError
+                        
                 if not result:
                     raise failures[-1]
 
