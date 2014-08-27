@@ -266,8 +266,8 @@ class Pipeline(object):
             self.logger.info('\n\n\n' + '*' * 80)
             self.logger.info("Analyzing mutations...")
             self._compute_mutations()
-            
-            
+
+
 
     def _update_path_to_data(self, d_list):
         if not isinstance(d_list, list):
