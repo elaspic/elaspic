@@ -311,11 +311,8 @@ class GetModel(object):
             self._write_to_pir_alignment(pir_alignment_filehandle, 'structure', template_id, template_seq)
 
         # Make the homology model and check if it is knotted
-        try:
-            norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(
-                pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder)
-        except ModellerError:
-            raise ModellerError
+        norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(
+            pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder)
         self.logger.debug('model pdb file: %s, knotted: %s' % (pdb_filename_wt, knotted,))
         if knotted:
             model_errors.append('knotted')

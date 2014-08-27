@@ -11,7 +11,6 @@ import pandas as pd
 import helper_functions as hf
 
 from Bio.PDB import PDBIO
-from Bio.PDB.Atom import Atom
 from Bio.PDB.PDBParser import PDBParser
 
 import logging
@@ -19,36 +18,6 @@ import errors
 import pdb_template
 
 from collections import OrderedDict, deque
-
-
-
-def euclidean_distance(a, b):
-    """ Return euclidean distance between two lists or tuples of arbitrary length.
-    """
-    return sqrt(sum((a - b)**2 for a, b in zip(a, b)))
-
-
-def calculate_distance(atom_1, atom_2, cutoff=None):
-    """
-    Returns the distance of two points in three dimensional space
-    input: atom instance of biopython: class 'Bio.PDB.Atom.Atom
-    return: type 'float'
-    """
-
-    if ((type(atom_1) == type(atom_2) == list) or
-        (type(atom_1) == type(atom_2) == tuple)):
-            a = atom_1
-            b = atom_2
-    elif type(atom_1) == type(atom_2) == Atom:
-        a = atom_1.coord
-        b = atom_2.coord
-    else:
-        raise Exception('Unsupported format!')
-
-    assert(len(a) == 3 and len(b) == 3)
-    if (cutoff is None or
-        all([ abs(p - q) <= cutoff for p, q in zip(a, b) ])):
-            return euclidean_distance(a, b)
 
 
 
@@ -82,7 +51,7 @@ def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5)
                 if residue_2.resname in pdb_template.amino_acids and residue_2.id[0] == ' ':
                     for atom_1 in residue_1:
                         for atom_2 in residue_2:
-                            r = calculate_distance(atom_1, atom_2, r_cutoff)
+                            r = pdb_template.calculate_distance(atom_1, atom_2, r_cutoff)
                             if r is not None:
                                 if r_min and r < r_min:
                                     r_min = r
@@ -189,7 +158,7 @@ class PhysiChem():
             mutated_atom_type = self._get_atom_type(mutated_residue.resname, mutated_atom)
             # And each partner residue and partner atom
             for partner_atom in partner_residue:
-                r = calculate_distance(mutated_atom, partner_atom, self.vdW_distance)
+                r = pdb_template.calculate_distance(mutated_atom, partner_atom, self.vdW_distance)
                 if r is not None:
                     partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
                     if partner_atom_type == 'ignore':
@@ -656,7 +625,7 @@ class AnalyzeStructure(object):
                                     continue
                             for atom_1 in residue_1:
                                 for atom_2 in residue_2:
-                                    r = calculate_distance(atom_1, atom_2, min_r)
+                                    r = pdb_template.calculate_distance(atom_1, atom_2, min_r)
                                     if r and (not min_r or min_r > r):
                                         min_r = r
                         shortest_interchain_distances[chain_1.id][chain_2.id] = min_r
