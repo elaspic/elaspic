@@ -264,18 +264,18 @@ class PDBTemplate():
             while res_idx < len(chain):
                 res = chain.child_list[res_idx]
                 old_res_id = res.id
-                # Remove water 
-                if res.id[0] == 'W':
-#                    self.logger.debug('Removing water molecule {}'.format(res.id))
-                    chain.detach_child(res.id)
-                    continue
-#                # Move water to the hetatm chain
+#                # Remove water 
 #                if res.id[0] == 'W':
+##                    self.logger.debug('Removing water molecule {}'.format(res.id))
 #                    chain.detach_child(res.id)
-#                    hetatm_res = res
-#                    hetatm_res.id = (hetatm_res.id[0], len(chain_for_hetatms)+1, hetatm_res.id[2],)
-#                    chain_for_hetatms.add(hetatm_res)
 #                    continue
+                # Move water to the hetatm chain
+                if res.id[0] == 'W':
+                    chain.detach_child(res.id)
+                    hetatm_res = res
+                    hetatm_res.id = (hetatm_res.id[0], len(chain_for_hetatms)+1, hetatm_res.id[2],)
+                    chain_for_hetatms.add(hetatm_res)
+                    continue
                 # Convert methylated lysines to regular lysines
                 if res.resname in methylated_lysines:
                     new_resname = 'LYS'
