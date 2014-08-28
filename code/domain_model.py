@@ -94,6 +94,7 @@ class GetModel(object):
                     msms_length_mismatch = True
                 rel_sasa_for_each_residue.append(rel_sasa)
         d.template.model.sasa_score = ','.join(['{:.2}'.format(x) for x in rel_sasa_for_each_residue])
+
         if msms_length_mismatch:
             self.logger.error('msms score length mismatch')
             model_errors.append('msms score length mismatch')
