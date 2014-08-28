@@ -891,7 +891,8 @@ class MyDatabase(object):
             archive_save_path = self.path_to_archive + path_to_data
             # Save the row corresponding to the model as a serialized sqlalchemy object
             subprocess.check_call('mkdir -m 775 -p ' + archive_save_path, shell=True)
-            pickle.dump(dumps(d.template), open(archive_save_path + 'template.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
+            # Don't need to dump template. Templates are precalculated
+            # pickle.dump(dumps(d.template), open(archive_save_path + 'template.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
             pickle.dump(dumps(d.template.model), open(archive_save_path + 'model.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
             # Save the modelled structure
             if d.template.model.model_filename is not None:
