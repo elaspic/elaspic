@@ -11,25 +11,17 @@ import tempfile
 import argparse
 import atexit
 import signal
-import sqlalchemy.ext.serializer
 
 from Bio.SubsMat import MatrixInfo
 from ConfigParser import SafeConfigParser
 
 import domain_alignment
+import domain_model
 import domain_mutation
 
 import helper_functions as hf
 import errors
 import sql_db
-
-try:
-    from modeller import ModellerError
-    import domain_model
-    have_modeller = True
-except Exception as e:
-    print 'Failed to load modeller! Error message: {}'.format(e)
-    have_modeller = False
 
 
 class Pipeline(object):
@@ -247,7 +239,7 @@ class Pipeline(object):
             self._update_path_to_data(self.uniprot_domain_pairs)
 
         # Make models
-        if have_modeller and run_type in [2, 4, 5]:
+        if run_type in [2, 4, 5]:
             self.get_model = domain_model.GetModel(
                 self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
                 self.db, self.logger, self.n_cores, self.modeller_runs)
@@ -257,7 +249,7 @@ class Pipeline(object):
             self._compute_models()
         
         # Analyse mutations
-        if run_type in [3, 4, 5]:
+        if run_type in [3, 4, 5] and self.mutations:
             self.get_mutation = domain_mutation.GetMutation(
                 self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
                 self.db, self.logger, self.n_cores, self.bin_path, self.foldx_water,
@@ -268,17 +260,11 @@ class Pipeline(object):
             self._compute_mutations()
 
 
-
     def _update_path_to_data(self, d_list):
         if not isinstance(d_list, list):
             d_list = [d_list]
         for d in d_list:
-            if not d.path_to_data:
-                d.path_to_data = hf.get_uniprot_base_path(d) + hf.get_uniprot_domain_path(d)
-                self.db.merge_row(d)
-            try:
-                subprocess.check_call('mkdir -p {}'.format(self.temp_path + d.path_to_data), shell=True)
-            except Exception:
+            if not d.path_to_data or any([len(x) > 255 for x in d.path_to_data.split('/')]):
                 d.path_to_data = hf.get_uniprot_base_path(d) + hf.get_uniprot_domain_path(d)
                 self.db.merge_row(d)
                 subprocess.check_call('mkdir -p {}'.format(self.temp_path + d.path_to_data), shell=True)
@@ -338,7 +324,6 @@ class Pipeline(object):
         has a template in pdbfam
         """
         possible_model_errors = (
-            ModellerError,
             errors.ModellerError,
             errors.PDBChainError,
             errors.ChainsNotInteractingError,
@@ -351,7 +336,7 @@ class Pipeline(object):
         # Go over all domains and domain pairs for a given protein
         for d in self.uniprot_domains + self.uniprot_domain_pairs:
             self.__print_header(d)
-
+            
             # Check if we should skip the model
             if (isinstance(d, sql_db.UniprotDomain) and
                     not (d.template and d.template.cath_id) ):
@@ -365,23 +350,25 @@ class Pipeline(object):
                 self.logger.info('Model already calculated. Skipping...')
                 continue
             elif (d.template.model and d.template.model.model_errors and
-                    'Giving up' in d.template.model.model_errors ):
+                    (('Giving up' in d.template.model.model_errors) or
+                    (d.template.model.model_errors.count(';') > 2)) ):
                 self.logger.info(
-                    'Previous model had unfixable errors: {}. Skipping...'
+                    'Previous model had unfixable errors: "{}". Skipping...'
                     .format(d.template.model.model_errors))
                 continue
 
             # Make a homology model using the domain and template information
             try:
-                d.template.model = self.get_model(d)
+                self.get_model(d)
 
             except possible_model_errors as e:
                 # Find domains that were used as a template and eventually led to
                 # the error in the model, and add the error to their `domain_errors`
                 # or `domain_contact_errors` fields.
                 if isinstance(d, sql_db.UniprotDomain):
-                    empty_model = sql_db.UniprotDomainModel()
-                    empty_model.uniprot_domain_id = d.uniprot_domain_id
+                    if d.template.model == None:
+                        d.template.model = sql_db.UniprotDomainModel()
+                        d.template.model.uniprot_domain_id = d.uniprot_domain_id
                     bad_domains = self.db.get_rows_by_ids(
                         sql_db.Domain, [sql_db.Domain.cath_id], [d.template.cath_id])
                     assert len(bad_domains) == 1
@@ -391,8 +378,9 @@ class Pipeline(object):
                         "Adding error '{0}' to the domain with cath_id {1}..."
                         .format(bad_domain.domain_errors, d.template.cath_id))
                 elif isinstance(d, sql_db.UniprotDomainPair):
-                    empty_model = sql_db.UniprotDomainPairModel()
-                    empty_model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
+                    if d.template.model == None:
+                        d.template.model == sql_db.UniprotDomainPairModel()
+                        d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
                     bad_domains = self.db.get_rows_by_ids(
                         sql_db.DomainContact,
                         [sql_db.DomainContact.cath_id_1, sql_db.DomainContact.cath_id_2],
@@ -410,10 +398,10 @@ class Pipeline(object):
                         "and cath_id_2 {2}..."
                         .format(bad_domain.domain_contact_errors, d.template.cath_id_1, d.template.cath_id_2))
                 # Add the error type to the model_errors column
-                empty_model.model_errors = self.__add_new_error(empty_model.model_errors, e)
-                self.logger.error(empty_model.model_errors)
+                d.template.model.model_errors = self.__add_new_error(d.template.model.model_errors, e)
+                self.logger.error(d.template.model.model_errors)
                 self.db.merge_row(bad_domain)
-                d.template.model = empty_model
+                # d.template.model = empty_model
 
             # Add either the empty model or the calculated model to the database
             self.logger.info('Adding model...')

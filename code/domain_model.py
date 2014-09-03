@@ -43,9 +43,9 @@ class GetModel(object):
         """
         """
         if isinstance(d, sql_db.UniprotDomain):
-            return self.get_domain_model(d)
+            self.get_domain_model(d)
         elif isinstance(d, sql_db.UniprotDomainPair):
-            return self.get_domain_pair_model(d)
+            self.get_domain_pair_model(d)
         else:
             raise Exception("Wrong object type for parameter 'd'")
 
@@ -66,33 +66,34 @@ class GetModel(object):
         model = structure[0]
 
         ###
-        uniprot_model = sql_db.UniprotDomainModel()
-        uniprot_model.uniprot_domain_id = d.uniprot_domain_id
-        uniprot_model.model_filename = pdb_filename_wt
-        uniprot_model.norm_dope = norm_dope_wt
-        uniprot_model.chain = 'A'
-        uniprot_model.alignment_filename = alignment_filenames[0]
+        if d.template.model == None:
+            d.template.model = sql_db.UniprotDomainModel()
+            d.template.model.uniprot_domain_id = d.uniprot_domain_id
+        d.template.model.model_filename = pdb_filename_wt
+        d.template.model.norm_dope = norm_dope_wt
+        d.template.model.chain = 'A'
+        d.template.model.alignment_filename = alignment_filenames[0]
         # Run the homology model through msms and get dataframes with all the
         # per atom and per residue SASA values
         analyze_structure_object = analyze_structure.AnalyzeStructure(
             self.unique_temp_folder + 'modeller/',
             self.unique_temp_folder + 'analyze_structure/',
-            pdb_filename_wt, [uniprot_model.chain], None, self.logger)
+            pdb_filename_wt, [d.template.model.chain], None, self.logger)
         (seasa_by_chain_together, seasa_by_chain_separately,
         seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_object.get_seasa()
         # Get SASA only for amino acids in the chain of interest
         msms_length_mismatch = False
         rel_sasa_for_each_residue = []
-        for res in model[uniprot_model.chain]:
+        for res in model[d.template.model.chain]:
             if res.resname in pdb_template.amino_acids:
                 rel_sasa = seasa_by_residue_separately[
-                    (seasa_by_residue_separately['pdb_chain']==uniprot_model.chain) &
+                    (seasa_by_residue_separately['pdb_chain']==d.template.model.chain) &
                     (seasa_by_residue_separately['res_name']==res.resname) &
                     (seasa_by_residue_separately['res_num']==(str(res.id[1]) + res.id[2].strip()))].iloc[0]['rel_sasa']
                 if rel_sasa is None or rel_sasa is np.nan:
                     msms_length_mismatch = True
                 rel_sasa_for_each_residue.append(rel_sasa)
-        uniprot_model.sasa_score = ','.join([str(x) for x in rel_sasa_for_each_residue])
+        d.template.model.sasa_score = ','.join(['{:.2}'.format(x) for x in rel_sasa_for_each_residue])
         if msms_length_mismatch:
             self.logger.error('msms score length mismatch')
             model_errors.append('msms score length mismatch')
@@ -100,8 +101,9 @@ class GetModel(object):
         # Values common for single domains and interactions
         model_errors =', '.join(model_errors)
         if model_errors != '':
-            uniprot_model.model_errors = model_errors
-        return uniprot_model
+            d.template.model.model_errors = model_errors
+            
+#        return uniprot_model
 
 
     def get_domain_pair_model(self, d):
@@ -135,32 +137,34 @@ class GetModel(object):
         model = structure[0]
 
         ###
-        uniprot_model = sql_db.UniprotDomainPairModel()
-        uniprot_model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
-        uniprot_model.model_filename = pdb_filename_wt
-        uniprot_model.norm_dope = norm_dope_wt
-        uniprot_model.chain_1 = 'A'
-        uniprot_model.chain_2 = 'B'
-        uniprot_model.alignment_filename_1 = alignment_filenames[0]
-        uniprot_model.alignment_filename_2 = alignment_filenames[1]
+        if d.template.model == None:
+            d.template.model = sql_db.UniprotDomainPairModel()
+            d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
+        d.template.model.model_filename = pdb_filename_wt
+        d.template.model.norm_dope = norm_dope_wt
+        d.template.model.chain_1 = 'A'
+        d.template.model.chain_2 = 'B'
+        d.template.model.alignment_filename_1 = alignment_filenames[0]
+        d.template.model.alignment_filename_2 = alignment_filenames[1]
 
         interactions_between_chains = (
             analyze_structure.get_interactions_between_chains(
-                model, uniprot_model.chain_1, uniprot_model.chain_2, 5) )
+                model, d.template.model.chain_1, d.template.model.chain_2, 5) )
         chain_1_interactions = list(set([key[:2] for key in interactions_between_chains.keys()]))
         chain_2_interactions = list(set([value[:2] for values in interactions_between_chains.values() for value in values]))
         if not chain_1_interactions and not chain_2_interactions:
             raise errors.ChainsNotInteracting(
                 'Chains %s and %s are not interacting! chain_1_interactions: %s, chain_2_interactions: %s' %
-                (uniprot_model.chain_1, uniprot_model.chain_2, ','.join(list(chain_1_interactions)), ','.join(list(chain_2_interactions)),))
+                (d.template.model.chain_1, d.template.model.chain_2,
+                 ','.join(list(chain_1_interactions)), ','.join(list(chain_2_interactions)),))
 
-        chain_1_interactions.sort(key=lambda x: x[0]) # Sort by residue for easy reading
-        chain_2_interactions.sort(key=lambda x: x[0]) # Sort by residue for easy reading
+        chain_1_interactions.sort(key=lambda x: int(''.join([c for c in x[0] if c.isdigit()]))) # Sort by residue for easy reading
+        chain_2_interactions.sort(key=lambda x: int(''.join([c for c in x[0] if c.isdigit()]))) # Sort by residue for easy reading
 
         chain_1_interacting_resnum, chain_1_interacting_aa = self._get_unique_resnum_and_sequence(chain_1_interactions)
-        chain_1_numbering = pdb_template.get_chain_numbering(model[uniprot_model.chain_1], return_extended=True)
+        chain_1_numbering = pdb_template.get_chain_numbering(model[d.template.model.chain_1], return_extended=True)
         chain_2_interacting_resnum, chain_2_interacting_aa = self._get_unique_resnum_and_sequence(chain_2_interactions)
-        chain_2_numbering = pdb_template.get_chain_numbering(model[uniprot_model.chain_2], return_extended=True)
+        chain_2_numbering = pdb_template.get_chain_numbering(model[d.template.model.chain_2], return_extended=True)
 
         self.logger.debug('chain_1_interactions:')
         self.logger.debug(chain_1_interactions)
@@ -221,31 +225,32 @@ class GetModel(object):
                 len(chain_2_interacting_uninum) == 0)):
             raise errors.ChainsNotInteracting(
                 'Chains %s and %s are not interacting! chain_1_interactions: %s, chain_2_interactions: %s' %
-                (uniprot_model.chain_1, uniprot_model.chain_2, ','.join(list(chain_1_interactions)), ','.join(list(chain_2_interactions)),))
+                (d.template.model.chain_1, d.template.model.chain_2, 
+                ','.join(list(chain_1_interactions)), ','.join(list(chain_2_interactions)),))
 
         if ((chain_1_interacting_aa_from_uniprot != chain_1_interacting_aa) or
                 (chain_2_interacting_aa_from_uniprot != chain_2_interacting_aa)):
             raise Exception('Interacting amino acids do not match the uniprot sequence!')
 
-        uniprot_model.interacting_aa_1 = ','.join([str(uniprot_num) for uniprot_num in chain_1_interacting_uninum])
-        uniprot_model.interacting_aa_2 = ','.join([str(uniprot_num) for uniprot_num in chain_2_interacting_uninum])
+        d.template.model.interacting_aa_1 = ','.join([str(uniprot_num) for uniprot_num in chain_1_interacting_uninum])
+        d.template.model.interacting_aa_2 = ','.join([str(uniprot_num) for uniprot_num in chain_2_interacting_uninum])
 
         # Get interacting amino acids and interface area
         analyze_structure_object = analyze_structure.AnalyzeStructure(
             self.unique_temp_folder + 'modeller/',
             self.unique_temp_folder + 'analyze_structure/',
-            pdb_filename_wt, [uniprot_model.chain_1, uniprot_model.chain_2], None, self.logger)
+            pdb_filename_wt, [d.template.model.chain_1, d.template.model.chain_2], None, self.logger)
         interface_area = analyze_structure_object.get_interface_area()
-        uniprot_model.interface_area_hydrophobic = interface_area[0] if not np.isnan(interface_area[0]) else None
-        uniprot_model.interface_area_hydrophilic = interface_area[1] if not np.isnan(interface_area[1]) else None
-        uniprot_model.interface_area_total = interface_area[2] if not np.isnan(interface_area[2]) else None
+        d.template.model.interface_area_hydrophobic = interface_area[0] if not np.isnan(interface_area[0]) else None
+        d.template.model.interface_area_hydrophilic = interface_area[1] if not np.isnan(interface_area[1]) else None
+        d.template.model.interface_area_total = interface_area[2] if not np.isnan(interface_area[2]) else None
 
         # Values common for single domains and interactions
         model_errors =', '.join(model_errors)
         if model_errors != '':
-            uniprot_model.model_errors = model_errors
+            d.template.model.model_errors = model_errors
 
-        return uniprot_model
+        # return uniprot_model
 
 
     def _get_unique_resnum_and_sequence(self, interactions):
@@ -318,7 +323,9 @@ class GetModel(object):
             model_errors.append('knotted')
 
         # Save another copy of the modelled structure in the tmp export folder
-        subprocess.check_call('cp ' + self.unique_temp_folder + 'modeller/' + pdb_filename_wt + ' ' + save_path + pdb_filename_wt, shell=True)
+        subprocess.check_call("cp -f '{}' '{}'".format(
+            self.unique_temp_folder + 'modeller/' + pdb_filename_wt,
+            save_path + pdb_filename_wt), shell=True)
 
         return alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors
 
@@ -338,11 +345,15 @@ class GetModel(object):
     def get_pdb_domain_seqrecs(self, pdb_id, pdb_chains, pdb_domain_defs):
         """
         """
-        pdb_domain_defs = [
-            hf.decode_domain_def(pdb_domain_def, merge=False, return_string=True)
-            for pdb_domain_def in pdb_domain_defs]
+        decoded_pdb_domain_defs = []
+        for pdb_domain_def in pdb_domain_defs:
+            decoded_pdb_domain_defs.append(hf.decode_domain_def(pdb_domain_def, merge=False, return_string=True))
+        self.logger.debug('Obtaining protein sequence for pdb: {}, chains: {}'
+            .format(pdb_id, pdb_chains))
+        self.logger.debug('Raw domain definitions: {}, decoded domain definitions: {}'
+            .format(pdb_domain_defs, decoded_pdb_domain_defs))
         pdb = pdb_template.PDBTemplate(
-            self.pdb_path, pdb_id, pdb_chains, pdb_domain_defs,
+            self.pdb_path, pdb_id, pdb_chains, decoded_pdb_domain_defs,
             self.unique_temp_folder, self.unique_temp_folder, self.logger)
         pdb.extract()
         pdb_domain_seqrecs = []
@@ -373,15 +384,17 @@ class GetModel(object):
         assert len(alignments) == 1
         alignment = alignments[0]
         # Save the alignment
+        self.logger.debug(alignment)
         alignment_filename = alignment[0].id + '_' + alignment[1].id + '.aln'
         try:
             AlignIO.write(alignment, self.unique_temp_folder + 'tcoffee/' + alignment_filename, 'clustal')
         except IndexError as e:
             raise errors.EmptyPDBSequenceError('{}: {}'.format(type(e), e))
         temp_save_path = self.temp_path + path_to_data
-        subprocess.check_call('mkdir -p ' + temp_save_path, shell=True)
-        subprocess.check_call('cp ' + self.unique_temp_folder + 'tcoffee/' + alignment_filename +
-                                ' ' + temp_save_path + alignment_filename, shell=True)
+        subprocess.check_call("mkdir -p '{}'".format(temp_save_path), shell=True)
+        subprocess.check_call("cp -f '{}' '{}'".format(
+            self.unique_temp_folder + 'tcoffee/' + alignment_filename,
+            temp_save_path + alignment_filename), shell=True)
         return alignment, alignment_filename
 
 

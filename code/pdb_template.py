@@ -12,7 +12,7 @@ import Bio
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB import PDBIO
-from Bio.PDB.Atom import Atom
+from Bio.PDB import NeighborSearch
 from Bio.PDB.Polypeptide import PPBuilder
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
@@ -56,11 +56,11 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
         (type(atom_1) == type(atom_2) == tuple)):
             a = atom_1
             b = atom_2
-    elif type(atom_1) == type(atom_2) == Atom:
+    elif hasattr(atom_1, 'coord') and hasattr(atom_2, 'coord'):
         a = atom_1.coord
         b = atom_2.coord
     else:
-        raise Exception('Unsupported format {}'.format(type(atom_1)))
+        raise Exception('Unsupported format {} {}'.format(type(atom_1), type(atom_2)))
 
     assert(len(a) == 3 and len(b) == 3)
     if (cutoff is None or
@@ -88,13 +88,12 @@ def get_pdb(pdb_code, pdb_path, tmp_path='/tmp/', pdb_type='ent'):
         prefix = 'pdb'
         suffix = '.ent.gz'
     pdb_file = pdb_path + pdb_code[1:3].lower() + '/' + prefix + pdb_code.lower() + suffix
-
     try:
         with gzip.open(pdb_file, 'r') as ifh, \
         open(tmp_path + pdb_code + suffix.replace('.gz',''), 'w') as ofh:
             ofh.write(ifh.read())
     except IOError as e:
-        raise errors.NoPDBFoundError(e.message)
+        raise errors.PDBNotFoundError(e.message)
 
     result = parser.get_structure('ID', tmp_path + pdb_code + suffix.replace('.gz',''))
     return result
@@ -238,11 +237,15 @@ class PDBTemplate():
         else: # If [], extract all chains
             self.chain_ids = [chain.id for chain in self.structure[0].child_list]
         self.domain_boundaries = domain_boundaries # If [[[1,10],[20,45],]], extract the entire domain
-        self.domain_boundaries_extended = [[
-            [convert_resnum_alphanumeric_to_numeric(domain_fragment_start),
-             convert_resnum_alphanumeric_to_numeric(domain_fragment_end)]
-            for (domain_fragment_start, domain_fragment_end) in domain]
-            for domain in self.domain_boundaries]
+        
+        self.domain_boundaries_extended = []
+        if self.domain_boundaries:
+            self.domain_boundaries_extended = [[
+                [convert_resnum_alphanumeric_to_numeric(domain_fragment_start),
+                 convert_resnum_alphanumeric_to_numeric(domain_fragment_end)]
+                for (domain_fragment_start, domain_fragment_end) in domain]
+                for domain in self.domain_boundaries]
+                    
         self.logger = logger
 
 
@@ -299,7 +302,8 @@ class PDBTemplate():
                     chain_for_hetatms.add(hetatm_res)
                     continue
                 # Cut each chain to domain boundaries
-                if len(self.domain_boundaries_extended[i]) == 1 and self.domain_boundaries_extended[i][0] == []:
+                if ((not self.domain_boundaries_extended) or 
+                    len(self.domain_boundaries_extended[i]) == 1 and self.domain_boundaries_extended[i][0] == []):
                     pass # If a chain does not have any domain boundaries, use the entire chain
                 else:
                     keep_residue = False
@@ -312,16 +316,21 @@ class PDBTemplate():
                         continue
                 res_idx += 1
             new_model.add(chain)
-        # Remove hetatms if they are > 10A away from the chains of interest
+        # Remove hetatms if they are > 6A away from the chains of interest
+        ns = NeighborSearch(list(new_model.get_atoms()))
         chain_for_hetatms.id = [c for c in reversed(string.uppercase) if c not in self.chain_ids][0]
         for res_1 in chain_for_hetatms:
             in_contact = False
-            for chain_2 in new_model:
-                for res_2 in chain_2:
-                    for atom_1 in res_1:
-                        for atom_2 in res_2:
-                            if calculate_distance(atom_1, atom_2, 10):
-                                in_contact = True
+            for atom_1 in res_1:
+                if ns.search(atom_1.get_coord(), 6, 'S'):
+                    in_contact = True
+#            for chain_2 in new_model:
+#                for res_2 in chain_2:
+#                    for atom_1 in res_1:
+#                        for atom_2 in res_2:
+#                            # if calculate_distance(atom_1, atom_2, 10):
+#                            if (atom_1 - atom_2) > 10:
+#                                in_contact = True
             if not in_contact:
                 chain_for_hetatms.detach_child(res_1.id)
         if chain_for_hetatms:
