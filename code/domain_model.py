@@ -61,7 +61,7 @@ class GetModel(object):
             self.perform_alignments_and_modelling(
                 [d.uniprot_id], [d.uniprot_sequence.uniprot_sequence], [d.template.domain_def],
                 d.template.domain.pdb_id, [d.template.domain.pdb_chain], [d.template.domain.pdb_domain_def], d.path_to_data)
-
+        self.logger.debug('Finished performing alignments!')
         structure = hf.get_pdb_structure(self.unique_temp_folder + 'modeller/' + pdb_filename_wt)
         model = structure[0]
 
@@ -280,15 +280,17 @@ class GetModel(object):
         self.logger.debug('save path: {}'.format(save_path))
         uniprot_domain_seqrecs = self.get_uniprot_domain_seqrecs(uniprot_ids, uniprot_sequences, uniprot_domain_defs)
         pdb, pdb_domain_seqrecs = self.get_pdb_domain_seqrecs(pdb_id, pdb_chains, pdb_domain_defs)
-
         # Perform the alignments
         alignmnets = []
         alignment_filenames = []
+        
+        self.logger.debug('Performing alignments...')
         for uniprot_domain_seqrec, pdb_domain_seqrec in zip(uniprot_domain_seqrecs, pdb_domain_seqrecs):
             alignment, alignment_filename = self.perform_alignment(uniprot_domain_seqrec, pdb_domain_seqrec, 'expresso', path_to_data)
             alignmnets.append(alignment)
             alignment_filenames.append(alignment_filename)
-
+        
+        self.logger.debug('Joining alignments for different chains...')
         # Join alignments for different chains
         target_ids = [al[0].id for al in alignmnets]
         target_id = '_'.join(target_ids)
@@ -299,6 +301,7 @@ class GetModel(object):
         template_seq = '/'.join([str(alignmnet[1].seq) for alignmnet in alignmnets])
 
         # Add '.' in place of every heteroatom in the pdb
+        self.logger.debug('Adding hetatms to alignment...')
         hetatm_chains = []
         for chain in pdb.structure[0].child_list:
             if chain.id not in pdb_chains:
@@ -315,7 +318,7 @@ class GetModel(object):
         with open(pir_alignment_filename, 'w') as pir_alignment_filehandle:
             self._write_to_pir_alignment(pir_alignment_filehandle, 'sequence', target_id, target_seq)
             self._write_to_pir_alignment(pir_alignment_filehandle, 'structure', template_id, template_seq)
-
+            
         # Make the homology model and check if it is knotted
         norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(
             pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder)

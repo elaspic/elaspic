@@ -464,11 +464,11 @@ class GetMutation(object):
             system_command)
         result, error_message = child_process.communicate()
         self.logger.debug(result)
-        while (child_process.returncode != 0
-                and 'IDs are not matched' in error_message):
+        while (child_process.returncode != 0 and
+                ('IDs are not matched' in error_message or 'OID not found' in error_message)):
             self.logger.error(error_message)
-            line_to_remove = error_message.split(':')[1].split(',')[0]
-            self.logger.error('Removing line with id: {} from the supporting set...'.format())
+            line_to_remove = error_message.split(':')[1].split(',')[0].strip()
+            self.logger.error('Removing line with id: {} from the supporting set...'.format(line_to_remove))
             with open(path_to_provean_supset_local, 'r') as ifh, \
                     open(path_to_provean_supset_local + '.mod', 'w') as ofh:
                 for line in ifh:

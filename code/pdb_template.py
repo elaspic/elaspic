@@ -249,7 +249,7 @@ class PDBTemplate():
         self.logger = logger
 
 
-    def extract(self):
+    def extract(self, r_cutoff = 6):
         """ Extract the wanted chains out of the PDB file. Removes water atoms
         and selects the domain regions.
         """
@@ -264,11 +264,6 @@ class PDBTemplate():
             while res_idx < len(chain):
                 res = chain.child_list[res_idx]
                 old_res_id = res.id
-#                # Remove water 
-#                if res.id[0] == 'W':
-##                    self.logger.debug('Removing water molecule {}'.format(res.id))
-#                    chain.detach_child(res.id)
-#                    continue
                 # Move water to the hetatm chain
                 if res.id[0] == 'W':
                     chain.detach_child(res.id)
@@ -302,9 +297,9 @@ class PDBTemplate():
                     chain_for_hetatms.add(hetatm_res)
                     continue
                 # Cut each chain to domain boundaries
-                if ((not self.domain_boundaries_extended) or 
+                if (not self.domain_boundaries_extended or 
                     len(self.domain_boundaries_extended[i]) == 1 and self.domain_boundaries_extended[i][0] == []):
-                    pass # If a chain does not have any domain boundaries, use the entire chain
+                        pass # If a chain does not have any domain boundaries, use the entire chain
                 else:
                     keep_residue = False
                     resnum_extended = convert_resnum_alphanumeric_to_numeric(str(res.id[1]) + res.id[2].strip())
@@ -322,15 +317,8 @@ class PDBTemplate():
         for res_1 in chain_for_hetatms:
             in_contact = False
             for atom_1 in res_1:
-                if ns.search(atom_1.get_coord(), 6, 'S'):
+                if ns.search(atom_1.get_coord(), r_cutoff, 'S'):
                     in_contact = True
-#            for chain_2 in new_model:
-#                for res_2 in chain_2:
-#                    for atom_1 in res_1:
-#                        for atom_2 in res_2:
-#                            # if calculate_distance(atom_1, atom_2, 10):
-#                            if (atom_1 - atom_2) > 10:
-#                                in_contact = True
             if not in_contact:
                 chain_for_hetatms.detach_child(res_1.id)
         if chain_for_hetatms:

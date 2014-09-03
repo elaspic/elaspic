@@ -365,6 +365,7 @@ class Pipeline(object):
                 # Find domains that were used as a template and eventually led to
                 # the error in the model, and add the error to their `domain_errors`
                 # or `domain_contact_errors` fields.
+                self.logger.error(str(e))
                 if isinstance(d, sql_db.UniprotDomain):
                     if d.template.model == None:
                         d.template.model = sql_db.UniprotDomainModel()
@@ -379,7 +380,7 @@ class Pipeline(object):
                         .format(bad_domain.domain_errors, d.template.cath_id))
                 elif isinstance(d, sql_db.UniprotDomainPair):
                     if d.template.model == None:
-                        d.template.model == sql_db.UniprotDomainPairModel()
+                        d.template.model = sql_db.UniprotDomainPairModel()
                         d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
                     bad_domains = self.db.get_rows_by_ids(
                         sql_db.DomainContact,
@@ -496,7 +497,7 @@ class Pipeline(object):
         if d_error_log is None:
             return str(type(e))
         else:
-            return '{}; {}'.format(d_error_log, type(e))
+            return '{}; {}: {}'.format(d_error_log, type(e), str(e))
 
 
     def __prepare_temp_folder(self):
@@ -521,11 +522,14 @@ class Pipeline(object):
         # FoldX
         if not os.path.isdir(self.unique_temp_folder + '/FoldX'):
             # make the directories
-            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/FoldX'
+            subprocess.check_call("mkdir -p '{}'".format(self.unique_temp_folder + '/FoldX'), shell=True)
             # copy the executables
-            cp_command = 'cp ' + self.bin_path + 'FoldX.linux64 ' + self.unique_temp_folder + '/FoldX/ && ' + \
-                       'cp ' + self.bin_path + 'rotabase.txt ' + self.unique_temp_folder + '/FoldX/'
-            subprocess.check_call(mkdir_command + ' && ' + cp_command, shell=True)
+            subprocess.check_call("cp '{}' '{}'".format(
+                self.bin_path + 'foldx64Linux', self.unique_temp_folder + '/FoldX/'), shell=True)
+            subprocess.check_call("cp '{}' '{}'".format(
+                self.bin_path + 'FoldX.linux64', self.unique_temp_folder + '/FoldX/'), shell=True)
+            subprocess.check_call("cp '{}' '{}'".format(
+                self.bin_path + 'rotabase.txt', self.unique_temp_folder + '/FoldX/'), shell=True)
             # Copy dssp into the folder for modelling
 #            cp_command = 'cp ' + self.bin_path + 'mkdssp ' + self.unique_temp_folder + '/FoldX/'
 #            subprocess.check_call(cp_command, shell=True)
