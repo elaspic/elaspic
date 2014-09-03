@@ -27,11 +27,11 @@ class tcoffee_alignment:
 
     """
     def __init__(
-            self, global_temp_path, tmpPath, seqFiles, seqIDs, n_cores,
+            self, global_temp_path, unique_temp_folder, seqFiles, seqIDs, n_cores,
             pdb_path, mode, logger):
 
         self.global_temp_path = global_temp_path
-        self.tmpPath = tmpPath
+        self.unique_temp_folder = unique_temp_folder
         self.seqFiles = seqFiles
         self.seqIDs = seqIDs
         self.alnFormat = 'clustal'
@@ -72,24 +72,29 @@ class tcoffee_alignment:
         # also make sure to change the directory to a unique one bevore
         # calling T_Coffee
         my_env = environ.copy()
-        my_env['HOME_4_TCOFFEE'] = self.tmpPath + 'tcoffee/'
-        my_env['TMP_4_TCOFFEE'] = self.tmpPath + 'tcoffee/tmp/'
-        my_env['CACHE_4_TCOFFEE'] = self.tmpPath + 'tcoffee/cache/'
-        my_env['LOCKDIR_4_TCOFFEE'] = self.tmpPath + 'tcoffee/lck/'
-        my_env['ERRORFILE_4_TCOFFEE'] = self.tmpPath + 't_coffee.ErrorReport'
+        my_env['HOME_4_TCOFFEE'] = self.unique_temp_folder + 'tcoffee/'
+        my_env['TMP_4_TCOFFEE'] = self.unique_temp_folder + 'tcoffee/tmp/'
+        my_env['CACHE_4_TCOFFEE'] = self.unique_temp_folder + 'tcoffee/cache/'
+        my_env['LOCKDIR_4_TCOFFEE'] = self.unique_temp_folder + 'tcoffee/lck/'
+        my_env['ERRORFILE_4_TCOFFEE'] = self.unique_temp_folder + 't_coffee.ErrorReport'
         my_env['BLASTDB'] = self.global_temp_path + 'blast/db/'
         my_env['PDB_DIR'] = '/home/kimlab1/database_data/pdb/'
 #        my_env['NO_REMOTE_PDB_DIR'] = '1'
-#        print (
-#        'export tmp_path=`pwd` && '
-#        'export HOME_4_TCOFFEE=$tmp_path/tcoffee/ && '
-#        'export TMP_4_TCOFFEE=$tmp_path/tcoffee/ && '
-#        'export CACHE_4_TCOFFEE=$tmp_path/tcoffee/ && '
-#        'export LOCKDIR_4_TCOFFEE=$tmp_path/tcoffee/ && '
-#        'export ERRORFILE_4_TCOFFEE=$tmp_path/tcoffee/ && '
-#        'export BLASTDB=$tmp_path/../../blast/db/ && '
-#        'export PDB_DIR=/home/kimlab1/database_data/pdb/data/data/structures/divided/pdb/ && '
-#        'export NO_REMOTE_PDB_DIR=1')
+        print (
+        'export HOME_4_TCOFFEE={HOME_4_TCOFFEE} && '
+        'export TMP_4_TCOFFEE={TMP_4_TCOFFEE} && '
+        'export CACHE_4_TCOFFEE={CACHE_4_TCOFFEE} && '
+        'export LOCKDIR_4_TCOFFEE={LOCKDIR_4_TCOFFEE} && '
+        'export ERRORFILE_4_TCOFFEE={ERRORFILE_4_TCOFFEE} && '
+        'export BLASTDB={BLASTDB} && '
+        'export PDB_DIR={PDB_DIR} '.format(
+            HOME_4_TCOFFEE=my_env['HOME_4_TCOFFEE'],
+            TMP_4_TCOFFEE=my_env['TMP_4_TCOFFEE'],
+            CACHE_4_TCOFFEE=my_env['CACHE_4_TCOFFEE'],
+            LOCKDIR_4_TCOFFEE=my_env['LOCKDIR_4_TCOFFEE'],
+            ERRORFILE_4_TCOFFEE=my_env['ERRORFILE_4_TCOFFEE'],
+            BLASTDB=my_env['BLASTDB'],
+            PDB_DIR=my_env['PDB_DIR']))
 
         multi_core_option = '{}'.format(self.n_cores) if self.n_cores and self.n_cores > 1 else 'no'
         n_core_option = '{}'.format(self.n_cores) if self.n_cores else '1'
@@ -105,7 +110,7 @@ class tcoffee_alignment:
                 ' -output fasta_aln' +
                 ' -quiet -no_warning' +
                 ' -outfile=' + out +
-#                ' -multi_core no' +
+                ' -cache ignore ' +
                 ' -multi_core ' + multi_core_option + #AS changed !!!
                 ' -n_core ' + n_core_option) #AS changed !!!
 #
@@ -123,7 +128,6 @@ class tcoffee_alignment:
                 ' -output fasta_aln' +
                 ' -quiet -no_warning' +
                 ' -outfile=' + out +
-#                ' -multi_core no')
                 ' -multi_core ' + multi_core_option + #AS changed !!!
                 ' -n_core ' + n_core_option) #AS changed !!!
 
@@ -139,7 +143,6 @@ class tcoffee_alignment:
                 ' -output fasta_aln' +
                 ' -quiet -no_warning' +
                 ' -outfile=' + out +
-#                ' -multi_core no' +
                 ' -multi_core ' + multi_core_option + #AS changed !!!
                 ' -n_core ' + n_core_option) #AS changed !!!
         return system_command, my_env
@@ -161,12 +164,14 @@ class tcoffee_alignment:
         return: Biopython multiple sequence alignment object
         """
         # mode should be 'expresso'
-        out = self.tmpPath + 'sequenceAlignment.aln'
+        out = self.unique_temp_folder + 'sequenceAlignment.aln'
 
         # try the alignment in expresso mode (structure based with sap alignment)
         system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, self.mode)
-        child_process = hf.run_subprocess_locally(self.tmpPath, system_command, env=my_env)
+        self.logger.debug("tcoffee system command: '{}'".format(system_command))
+        child_process = hf.run_subprocess_locally(self.unique_temp_folder, system_command, env=my_env)
         result, error_message = child_process.communicate()
+        self.logger.debug("Finished aligning")
         return_code = child_process.returncode
 
         # check if tcoffee had an unexpected exit and if not, create and return
@@ -179,7 +184,7 @@ class tcoffee_alignment:
             self.logger.error(error_message)
             self.logger.error('Running quickaln alignment instead...')
             system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 'quick')
-            child_process = hf.run_subprocess_locally(self.tmpPath, system_command, env=my_env)
+            child_process = hf.run_subprocess_locally(self.unique_temp_folder, system_command, env=my_env)
             result, error_message = child_process.communicate()
             return_code = child_process.returncode
             if return_code == 0:

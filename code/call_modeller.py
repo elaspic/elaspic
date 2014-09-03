@@ -106,7 +106,6 @@ class modeller:
         env = environ() # create a new MODELLER environment to build this model in
 
         # directories for input atom files
-        print 'atom_files_directory: {}: {}'.format(type(self.filePath), self.filePath)
         env.io.atom_files_directory = [str(self.filePath.rstrip('/'))]
         env.schedule_scale = physical.values(default=1.0, soft_sphere=0.7)
         # selected atoms do not feel the neighborhood

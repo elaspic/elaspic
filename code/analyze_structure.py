@@ -386,16 +386,28 @@ class AnalyzeStructure(object):
                 ofh.writelines(result)
 
         # Calculate SASA and SESA (excluded)
-        system_command = (
+        probe_radius = 1.4
+        system_command_string = (
             './msms.x86_64Linux2.2.6.1 '
-            '-probe_radius 1.4 '
+            '-probe_radius {1:.1f} '
             '-surface ases '
             '-if {0}.xyzrn '
-            '-af {0}.area'.format(self.working_path + base_filename))
+            '-af {0}.area')
+        system_command = system_command_string.format(self.working_path + base_filename, probe_radius)
         self.logger.debug('msms system command 2: %s' % system_command)
         child_process = hf.run_subprocess_locally(self.working_path, system_command)
         result, error_message = child_process.communicate()
         return_code = child_process.returncode
+        number_of_tries = 0
+        while return_code != 0 and number_of_tries < 5:
+            self.logger.error('MSMS exited with an error!')
+            probe_radius -= 0.1
+            self.logger.debug('Reducing probe radius to {}'.format(probe_radius))
+            system_command = system_command_string.format(self.working_path + base_filename, probe_radius)
+            child_process = hf.run_subprocess_locally(self.working_path, system_command)
+            result, error_message = child_process.communicate()
+            return_code = child_process.returncode
+            number_of_tries += 1
         if return_code != 0:
             self.logger.debug('msms result 2:')
             self.logger.debug(result)
