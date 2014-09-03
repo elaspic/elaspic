@@ -58,13 +58,13 @@ def get_uniprot_domain_path(d):
     """
     if isinstance(d, sql_db.UniprotDomain):
         uniprot_domain_path = (
-            '{pfam_clan}*{alignment_def}/'
+            '{pfam_clan:.36}*{alignment_def}/'
             .format(
                 pfam_clan=d.pfam_clan,
                 alignment_def=d.alignment_def.replace(':','-'),))
     elif isinstance(d, sql_db.UniprotDomainPair):
         uniprot_domain_path = (
-            '{pfam_clan_1}*{alignment_def_1}/{pfam_clan_2}*{alignment_def_2}/{uniprot_id_2}/'
+            '{pfam_clan_1:.36}.{alignment_def_1}/{pfam_clan_2:.36}.{alignment_def_2}/{uniprot_id_2}/'
             .format(
                 pfam_clan_1 = d.uniprot_domain_1.pfam_clan,
                 alignment_def_1 = d.uniprot_domain_1.alignment_def.replace(':','-'),

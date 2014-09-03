@@ -65,11 +65,11 @@ class modeller:
                 except:
                     try:
                         result, loop, failures = self.__run_modeller(aln, False)
-                    except ModellerError:
-                        raise errors.ModellerError
+                    except ModellerError as e:
+                        raise errors.ModellerError(str(e))
                         
                 if not result:
-                    raise failures[-1]
+                    raise errors.ModellerError(str(failures[-1]))
 
                 for i in range(len(result)):
                     pdbFile, normDOPE = result[i][0], result[i][1]

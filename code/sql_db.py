@@ -706,7 +706,12 @@ class MyDatabase(object):
                 del uniprot_domains[d_idx]
                 continue
             if copy_data and d.template.model:
-                self._copy_uniprot_domain_data(d, d.path_to_data)
+                try:
+                    self._copy_uniprot_domain_data(d, d.path_to_data)
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(e)
+                    d.template.model.alignment_filename = None
+                    d.template.model.model_filename = None
             d_idx += 1
 
         return uniprot_domains
@@ -734,7 +739,13 @@ class MyDatabase(object):
                 del uniprot_domain_pairs[d_idx]
                 continue
             if copy_data and d.template.model:
-                self._copy_uniprot_domain_pair_data(d, d.path_to_data, uniprot_id)
+                try:
+                    self._copy_uniprot_domain_pair_data(d, d.path_to_data, uniprot_id)
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(e)
+                    d.template.model.alignment_filename_1 = None
+                    d.template.model.alignment_filename_2 = None
+                    d.template.model.model_filename = None
             d_idx += 1
 
         return uniprot_domain_pairs
@@ -749,17 +760,20 @@ class MyDatabase(object):
             tmp_save_path = self.temp_path + path_to_data
             archive_save_path = self.path_to_archive + path_to_data
             path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
-            subprocess.check_call('mkdir -p {}'.format(path_to_alignment), shell=True)
-            subprocess.check_call('cp -f {} {}'.format(
+            subprocess.check_call("mkdir -p '{}'".format(path_to_alignment), shell=True)
+            subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + d.template.model.alignment_filename,
                 tmp_save_path + d.template.model.alignment_filename), shell=True)
-            subprocess.check_call('cp -f {} {}'.format(
+            subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + d.template.model.model_filename,
                 tmp_save_path + d.template.model.model_filename), shell=True)
             # Copy Provean supporting set
-            self._copy_provean(d)
-
-
+            try:
+                self._copy_provean(d)
+            except subprocess.CalledProcessError as e:
+                self.logger.error(e)
+                ud.uniprot_sequence.provean.provean_supset_filename = ''
+                
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, uniprot_id):
         if (path_to_data
@@ -770,15 +784,15 @@ class MyDatabase(object):
             archive_save_path = self.path_to_archive + path_to_data
             path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
             path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
-            subprocess.check_call('mkdir -p {}'.format(path_to_alignment_1), shell=True)
-            subprocess.check_call('mkdir -p {}'.format(path_to_alignment_2), shell=True)
-            subprocess.check_call('cp -f {} {}'.format(
+            subprocess.check_call("mkdir -p '{}'".format(path_to_alignment_1), shell=True)
+            subprocess.check_call("mkdir -p '{}'".format(path_to_alignment_2), shell=True)
+            subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + d.template.model.alignment_filename_1,
                 tmp_save_path + d.template.model.alignment_filename_1), shell=True)
-            subprocess.check_call('cp -f {} {}'.format(
+            subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + d.template.model.alignment_filename_2,
                 tmp_save_path + d.template.model.alignment_filename_2), shell=True)
-            subprocess.check_call('cp -f {} {}'.format(
+            subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + d.template.model.model_filename,
                 tmp_save_path + d.template.model.model_filename), shell=True)
             # Copy Provean supporting set
@@ -792,22 +806,16 @@ class MyDatabase(object):
         if (ud.uniprot_sequence
                 and ud.uniprot_sequence.provean
                 and ud.uniprot_sequence.provean.provean_supset_filename):
-            try:
-                subprocess.check_call('cp -f {} {}'.format(
-                    self.path_to_archive + hf.get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename,
-                    self.temp_path + hf.get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
-                subprocess.check_call('cp -f {} {}'.format(
-                    self.path_to_archive + hf.get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-                    self.temp_path + hf.get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
-            except Exception as e:
-                self.logger.error('Could not copy provean supporting set files!!!')
-                self.logger.error(str(e))
-                self.logger.error('Removing provean info')
-                ud.uniprot_sequence.provean.provean_supset_filename = ''
+            subprocess.check_call("cp -f '{}' '{}'".format(
+                self.path_to_archive + hf.get_uniprot_base_path(ud) +
+                    ud.uniprot_sequence.provean.provean_supset_filename,
+                self.temp_path + hf.get_uniprot_base_path(ud) +
+                    ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
+            subprocess.check_call("cp -f '{}' '{}'".format(
+                self.path_to_archive + hf.get_uniprot_base_path(ud) +
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+                self.temp_path + hf.get_uniprot_base_path(ud) +
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
 
 
     def get_uniprot_mutation(self, d, mutation, uniprot_id=None, copy_data=False):
@@ -834,7 +842,11 @@ class MyDatabase(object):
             raise Exception('Not enough arguments, or the argument types are incorrect!')
 
         if copy_data:
-            self._copy_mutation_data(uniprot_mutation, d.path_to_data)
+            try:
+                self._copy_mutation_data(uniprot_mutation, d.path_to_data)
+            except subprocess.CalledProcessError as e:
+                self.logger.error(e)
+                uniprot_mutation.model_filename_wt = None
         return uniprot_mutation
 
 
@@ -843,11 +855,11 @@ class MyDatabase(object):
             tmp_save_path = self.temp_path + path_to_data
             archive_save_path = self.path_to_archive + path_to_data
             path_to_mutation = tmp_save_path + '/'.join(mutation.model_filename_wt.split('/')[:-1]) + '/'
-            subprocess.check_call('mkdir -p {}'.format(path_to_mutation), shell=True)
-            subprocess.check_call('cp -f {} {}'.format(
+            subprocess.check_call("mkdir -p '{}'".format(path_to_mutation), shell=True)
+            subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + mutation.model_filename_wt,
                 tmp_save_path + mutation.model_filename_wt), shell=True)
-            subprocess.check_call('cp -f {} {}'.format(
+            subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + mutation.model_filename_mut,
                 tmp_save_path + mutation.model_filename_mut), shell=True)
 
@@ -872,13 +884,13 @@ class MyDatabase(object):
                 os.path.isfile(self.temp_path + uniprot_base_path +
                     provean.provean_supset_filename + '.fasta') ):
             self.logger.debug('Moving provean supset to the output folder: {}'.format(self.path_to_archive + uniprot_base_path))
-            subprocess.check_call('mkdir -m 775 -p ' + self.path_to_archive + uniprot_base_path, shell=True)
-            subprocess.check_call(
-                'cp -f ' + self.temp_path + uniprot_base_path + provean.provean_supset_filename +
-                ' ' + self.path_to_archive + uniprot_base_path + provean.provean_supset_filename, shell=True)
-            subprocess.check_call(
-                'cp -f ' + self.temp_path + uniprot_base_path + provean.provean_supset_filename + '.fasta' +
-                ' ' + self.path_to_archive + uniprot_base_path + provean.provean_supset_filename + '.fasta', shell=True)
+            subprocess.check_call("mkdir -m 775 -p '{}'".format(self.path_to_archive + uniprot_base_path), shell=True)
+            subprocess.check_call("cp -f '{}' '{}'".format(
+                self.temp_path + uniprot_base_path + provean.provean_supset_filename,
+                self.path_to_archive + uniprot_base_path + provean.provean_supset_filename), shell=True)
+            subprocess.check_call("cp -f '{}' '{}'".format(
+                self.temp_path + uniprot_base_path + provean.provean_supset_filename + '.fasta',
+                self.path_to_archive + uniprot_base_path + provean.provean_supset_filename + '.fasta'), shell=True)
         self.merge_row(provean)
 
 
@@ -890,7 +902,7 @@ class MyDatabase(object):
             tmp_save_path = self.temp_path + path_to_data
             archive_save_path = self.path_to_archive + path_to_data
             # Save the row corresponding to the model as a serialized sqlalchemy object
-            subprocess.check_call('mkdir -m 775 -p ' + archive_save_path, shell=True)
+            subprocess.check_call("mkdir -m 775 -p '{}'".format(archive_save_path), shell=True)
             # Don't need to dump template. Templates are precalculated
             # pickle.dump(dumps(d.template), open(archive_save_path + 'template.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
             pickle.dump(dumps(d.template.model), open(archive_save_path + 'model.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
@@ -898,17 +910,21 @@ class MyDatabase(object):
             if d.template.model.model_filename is not None:
                 # Save alignments
                 if isinstance(d.template.model, UniprotDomainModel):
-                    subprocess.check_call('cp -f ' + tmp_save_path + d.template.model.alignment_filename +
-                        ' ' + archive_save_path + d.template.model.alignment_filename, shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        tmp_save_path + d.template.model.alignment_filename,
+                        archive_save_path + d.template.model.alignment_filename), shell=True)
                 elif isinstance(d.template.model, UniprotDomainPairModel):
-                    subprocess.check_call('cp -f ' + tmp_save_path + d.template.model.alignment_filename_1 +
-                        ' ' + archive_save_path + d.template.model.alignment_filename_1, shell=True)
-                    subprocess.check_call('cp -f ' + tmp_save_path + d.template.model.alignment_filename_2 +
-                        ' ' + archive_save_path + d.template.model.alignment_filename_2, shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        tmp_save_path + d.template.model.alignment_filename_1,
+                        archive_save_path + d.template.model.alignment_filename_1), shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        tmp_save_path + d.template.model.alignment_filename_2,
+                        archive_save_path + d.template.model.alignment_filename_2), shell=True)
                 # Save the model
-                subprocess.check_call('mkdir -m 775 -p ' + archive_save_path, shell=True)
-                subprocess.check_call('cp -f ' + tmp_save_path + d.template.model.model_filename +
-                    ' ' + archive_save_path + d.template.model.model_filename, shell=True)
+                subprocess.check_call("mkdir -m 775 -p '{}'".format(archive_save_path), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    tmp_save_path + d.template.model.model_filename,
+                    archive_save_path + d.template.model.model_filename), shell=True)
         self.merge_row([d.template, d.template.model])
 
 
@@ -921,14 +937,16 @@ class MyDatabase(object):
             archive_save_path = self.path_to_archive + path_to_data
             archive_save_subpath = mut.model_filename_wt.split('/')[0] + '/'
             # Save the row corresponding to the mutation as a serialized sqlalchemy object
-            subprocess.check_call('mkdir -m 775 -p ' + archive_save_path + archive_save_subpath, shell=True)
+            subprocess.check_call("mkdir -m 775 -p '{}'".format(archive_save_path + archive_save_subpath), shell=True)
             pickle.dump(dumps(mut), open(archive_save_path + archive_save_subpath + 'mutation.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
             if mut.model_filename_wt and mut.model_filename_mut:
                 # Save Foldx structures
-                subprocess.check_call('cp -f ' + tmp_save_path + mut.model_filename_wt +
-                                        ' ' + archive_save_path + mut.model_filename_wt, shell=True)
-                subprocess.check_call('cp -f ' + tmp_save_path + mut.model_filename_mut +
-                                        ' ' + archive_save_path + mut.model_filename_mut, shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    tmp_save_path + mut.model_filename_wt,
+                    archive_save_path + mut.model_filename_wt), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    tmp_save_path + mut.model_filename_mut,
+                    archive_save_path + mut.model_filename_mut), shell=True)
         self.merge_row(mut)
 
 

@@ -6,11 +6,10 @@ Created on Fri Mar  8 10:29:13 2013
 """
 import os
 import time
-from math import sqrt
 import pandas as pd
 import helper_functions as hf
 
-from Bio.PDB import PDBIO
+from Bio.PDB import PDBIO, NeighborSearch
 from Bio.PDB.PDBParser import PDBParser
 
 import logging
@@ -20,8 +19,45 @@ import pdb_template
 from collections import OrderedDict, deque
 
 
-
 def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
+    """
+    Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
+    interaction is defines as a pair of residues where at least one pair of atom
+    is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
+    """
+    # Extract the chains of interest from the model
+    chain_1 = None
+    chain_2 = None
+    for child in model.get_list():
+        if child.id == pdb_chain_1:
+            chain_1 = child
+        if child.id == pdb_chain_2:
+            chain_2 = child
+    if chain_1 is None or chain_2 is None:
+        raise Exception('Chains %s and %s were not found in the model' % (pdb_chain_1, pdb_chain_2))
+
+    ns = NeighborSearch(list(chain_2.get_atoms()))
+    interactions_between_chains = OrderedDict()
+    for idx, residue_1 in enumerate(chain_1):
+        if residue_1.resname in pdb_template.amino_acids and residue_1.id[0] == ' ':
+            resnum_1 = str(residue_1.id[1]) + residue_1.id[2].strip()
+            resaa_1 = pdb_template.convert_aa(residue_1.get_resname())
+            interacting_residues = set()
+            for atom_1 in residue_1:
+                interacting_residues.update(ns.search(atom_1.get_coord(), r_cutoff, 'R'))
+            interacting_resids = []
+            for residue_2 in interacting_residues:
+                resnum_2 = str(residue_2.id[1]) + residue_2.id[2].strip()
+                resaa_2 = pdb_template.convert_aa(residue_2.get_resname())
+                if residue_2.resname in pdb_template.amino_acids and residue_2.id[0] == ' ':
+                    interacting_resids.append((resnum_2, resaa_2,))
+            if interacting_resids:
+                interacting_resids.sort(key=lambda x: int(''.join([c for c in x[0] if c.isdigit()])))
+                interactions_between_chains[(resnum_1, resaa_1)] = interacting_resids
+    return interactions_between_chains
+
+
+def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
     """
     Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
     interaction is defines as a pair of residues where at least one pair of atom

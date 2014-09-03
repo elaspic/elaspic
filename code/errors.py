@@ -79,7 +79,7 @@ class PDBChainError(Exception):
 ###############################################################################
 # Making models
 
-class MsmsError(Exception):
+class MSMSError(Exception):
     pass
 
 class ModellerError(Exception):
