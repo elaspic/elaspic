@@ -274,14 +274,11 @@ class PDBTemplate():
             while res_idx < len(chain):
                 res = chain.child_list[res_idx]
                 old_res_id = res.id
-<<<<<<< HEAD
-=======
 #                # Remove water 
 #                if res.id[0] == 'W':
-##                    self.logger.debug('Removing water molecule {}'.format(res.id))
+#                    self.logger.debug('Removing water molecule {}'.format(res.id))
 #                    chain.detach_child(res.id)
 #                    continue
->>>>>>> 8cf4ac2c68b3e54f88b40b66f982fa6f169e8d73
                 # Move water to the hetatm chain
                 if res.id[0] == 'W':
                     chain.detach_child(res.id)
