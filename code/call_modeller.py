@@ -1,8 +1,15 @@
 # Homology modeling by the automodel class
+
+import sys
+
 from modeller import *			# Load standard Modeller classes
 from modeller.automodel import *	# Load the automodel class
 import helper_functions as hf
 import errors 
+
+
+
+
 
 class modeller:
     """
@@ -44,15 +51,14 @@ class modeller:
         """
         """
         ranking = dict() # key: assessment score
-                         # values: alignment, pdb of modell, from loop refinement yes or no
+                         # values: alignment, pdb filename, whether or not using loop refinement
         ranking_knotted = dict()
-
         knotted = True
         counter = 0
         while knotted and counter < 10:
             counter += 1
             ## NB: You can actually supply many alignments and modeller will give
-            # you the alignment with the best model, and that model
+            # you the alignment with the best model
             for aln in self.alignment:
                 # There is a chance that modeller fails to automatically select the
                 # regions for the loop modelling. In that case it tries to model
@@ -60,14 +66,14 @@ class modeller:
                 # the model is bad
                 try:
                     result, loop, failures = self.__run_modeller(aln, self.loopRefinement)
-                except IndexError:
-                    raise
-                except:
+                except Exception as e:
+                    self.logger.error('Loop refinement failed with an error: {}'.format(str(e)))
                     try:
                         result, loop, failures = self.__run_modeller(aln, False)
                     except ModellerError as e:
                         raise errors.ModellerError(str(e))
-                        
+                    except Exception as e:
+                        raise e
                 if not result:
                     raise errors.ModellerError(str(failures[-1]))
 
@@ -85,8 +91,7 @@ class modeller:
 
 
     def __make_alignment(self):
-        """
-        Functionality for modeller to make the alignment instead of relying on tcoffee
+        """ Functionality for modeller to make the alignment instead of relying on tcoffee
         """
         pass
 
@@ -102,41 +107,45 @@ class modeller:
 
         return: result      type: list          successfully calculated models
         """
+        
         log.none() # instructs Modeller to display no log output.
         env = environ() # create a new MODELLER environment to build this model in
 
-        # directories for input atom files
+        # Directories for input atom files
         env.io.atom_files_directory = [str(self.filePath.rstrip('/'))]
         env.schedule_scale = physical.values(default=1.0, soft_sphere=0.7)
-        # selected atoms do not feel the neighborhood
+        
+        # Selected atoms do not feel the neighborhood
         #env.edat.nonbonded_sel_atoms = 2
-
-        # Read in HETATM records from template PDBs
-        env.io.hetatm = True
-
+        env.io.hetatm = True # read in HETATM records from template PDBs
+        env.io.water = True # read in WATER records (including waters marked as HETATMs)
+        
+        self.logger.debug('Performing loop refinement in addition to regular modelling: {}'.format(loopRefinement))
         if loopRefinement == False:
-            a = automodel(env,
-                          alnfile = alignFile,      # alignment filename
-                          knowns = (self.templateID),                # codes of the templates
-                          sequence = self.seqID,	            		  # code of the target
-                          assess_methods=(assess.DOPE,
-                                          assess.normalized_dope)    # wich method for validation should be calculated
-                          )
+            a = automodel(
+                env,
+                alnfile = alignFile, # alignment filename
+                knowns = (self.templateID), # codes of the templates
+                sequence = self.seqID, # code of the target
+                assess_methods=(assess.DOPE, assess.normalized_dope) # wich method for validation should be calculated
+            )
+        else:
+            a = dope_loopmodel(
+                env,
+                alnfile=alignFile, # alignment filename
+                knowns=(self.templateID), # codes of the templates
+                sequence=self.seqID, # code of the target
+                assess_methods=(assess.DOPE, assess.normalized_dope), # wich method for validation should be calculated
+                loop_assess_methods=(assess.DOPE, assess.normalized_dope)
+            )
+            a.loop.starting_model = self.loopStart # index of the first loop model
+            a.loop.ending_model = self.loopEnd # index of the last loop model
+            a.loop.md_level = refine.slow # loop refinement method; this yields
+        
+        
+        a.starting_model = self.start # index of the first model
+        a.ending_model = self.end # index of the last model
 
-        if loopRefinement == True:
-            a = dope_loopmodel(env,
-                               alnfile = alignFile,      # alignment filename
-                               knowns = (self.templateID),                # codes of the templates
-                               sequence = self.seqID,	            		  # code of the target
-                               assess_methods=(assess.DOPE,
-                                               assess.normalized_dope),   # wich method for validation should be calculated
-                               loop_assess_methods=(assess.DOPE,
-                                                    assess.normalized_dope)
-                               )
-
-        a.starting_model = self.start		# index of the first model
-        a.ending_model = self.end   		# index of the last model
-                							# (determines how many models to calculate)
         # Very thorough VTFM optimization:
         a.library_schedule = autosched.slow
         a.max_var_iterations = 300
@@ -148,49 +157,47 @@ class modeller:
         # Repeat the whole cycle 2 times and do not stop unless obj.func. > 1E6
 #        a.repeat_optimization = 2
 
-        if loopRefinement == True:
-            a.loop.starting_model = self.loopStart      # index of the first loop model
-            a.loop.ending_model   = self.loopEnd        # index of the last loop model
-            a.loop.md_level       = refine.slow         # loop refinement method; this yields
-
         a.max_molpdf = 2e5
+        
+        with hf.log_print_statements(self.logger):        
+            a.make() # do the actual homology modeling
 
-        a.make()						# do the actual homology modeling
-
-        # the output produced by modeller is stored in a.loop.outputs or a.outputs
+        # The output produced by modeller is stored in a.loop.outputs or a.outputs
         # it is a dictionary
-        #
-        # check for each model if it was successfully calculated, i.e.
+        # Check for each model if it was successfully calculated, i.e.
         # for each "normal" model and each loop model and append the
         # assessment score to a list which is used to return the best model
-        loop = False
         result = []
+        loop = False
         failures = []
-        # add the loop output
-        if loopRefinement == True:
-            self.logger.debug('Modeller loop outputs:')
-            self.logger.debug(a.loop.outputs)
-            for i in range(len(a.loop.outputs)):
-                if not a.loop.outputs[i]['failure']:
-                    model_filename = a.loop.outputs[i]['name']
-                    model_dope_score = a.loop.outputs[i]['Normalized DOPE score']
-                    result.append((model_filename, model_dope_score))
-                    loop = True
-                else:
-                    failures.append(a.loop.outputs[i]['failure'])
-
-        # add the normal output
-        self.logger.debug('Modeller outputs:')
-        self.logger.debug(a.outputs)
+        # Add the normal output
         for i in range(len(a.outputs)):
             if not a.outputs[i]['failure']:
                 model_filename = a.outputs[i]['name']
                 model_dope_score = a.outputs[i]['Normalized DOPE score']
+                self.logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
                 result.append((model_filename, model_dope_score))
             else:
+                failure = a.outputs[i]['failure']
+                self.logger.debug('Failure! {}'.format(failure))
                 failures.append(a.outputs[i]['failure'])
+                
+        # Add the loop refinement output
+        if loopRefinement:
+            self.logger.debug('Modeller loop outputs:')
+            for i in range(len(a.loop.outputs)):
+                if not a.loop.outputs[i]['failure']:
+                    model_filename = a.loop.outputs[i]['name']
+                    model_dope_score = a.loop.outputs[i]['Normalized DOPE score']
+                    self.logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
+                    result.append((model_filename, model_dope_score))
+                    loop = True
+                else:
+                    failure = a.loop.outputs[i]['failure']
+                    self.logger.debug('Failure! {}'.format(failure))
+                    failures.append(failure)
 
-        # return the successfully calculated models and a loop flag indicating
+        # Return the successfully calculated models and a loop flag indicating
         # whether the returned models are loop refined or not
         return result, loop, failures
 
@@ -210,13 +217,13 @@ class modeller:
         # execution folder, this is created in the beginning
 
         system_command = './topol ' + pdbFile
-        self.logger.debug('FoldX system command: {}'.format(system_command))
+        self.logger.debug('Knot system command: {}'.format(system_command))
         child_process = hf.run_subprocess_locally('./', system_command)
         result, error_message = child_process.communicate()
         return_code = child_process.returncode
         if not return_code:
-            self.logger.error('FoldX result: {}'.format(result))
-            self.logger.error('FoldX error message: {}'.format(error_message))
+            self.logger.error('Knot result: {}'.format(result))
+            self.logger.error('Knot error message: {}'.format(error_message))
 
         line = [ x for x in result.split('\n') ]
 

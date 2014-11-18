@@ -27,13 +27,13 @@ class tcoffee_alignment:
 
     """
     def __init__(
-            self, global_temp_path, unique_temp_folder, seqFiles, seqIDs, n_cores,
-            pdb_path, mode, logger):
+            self, global_temp_path, unique_temp_folder, alignment_fasta_files,
+            alignment_template_files, n_cores, pdb_path, mode, logger):
 
         self.global_temp_path = global_temp_path
         self.unique_temp_folder = unique_temp_folder
-        self.seqFiles = seqFiles
-        self.seqIDs = seqIDs
+        self.alignment_fasta_files = alignment_fasta_files
+        self.alignment_template_files = alignment_template_files
         self.alnFormat = 'clustal'
         self.n_cores = n_cores
         self.pdb_path = pdb_path
@@ -42,35 +42,20 @@ class tcoffee_alignment:
 
 
     def align(self):
+        """ Start t_coffee in expresso mode and return the alignment
         """
-        start t_coffee in expresso mode and return the alignment
-        """
-        alignments = list()
-        for seq in self.seqFiles:
-            alignments.append(self.__call_tcoffee(seq))
-            # Commented out the line below because alignments are now saved by
-            # the function that calls align. This is to allow for some post-
-            # processing of the alginments (remove overhangs, etc.)
-            # self.__writeAlignment(alignments[-1], self.seqIDs[ self.seqFiles.index(seq) ])
+        alignments = []
+        for alignment_fasta_file, alignment_template_file in zip(
+                self.alignment_fasta_files, self.alignment_template_files):
+            alignments.append(self.__call_tcoffee(alignment_fasta_file, alignment_template_file))
         return alignments
 
 
-#    def __writeAlignment(self, alignment, seqID):
-#        """
-#        write the alignment in clustal format to the folder specified for the class instance
-#        """
-##        AlignIO.write(alignment, self.alnPath + seqID, self.alnFormat)
-#        try:
-#            AlignIO.write(alignment, self.alnPath + alignment[0].id + '_' + alignment[1].id + '.aln', self.alnFormat) # AS changed from above so that the alignments with the same template are not overwritten
-#        except IndexError as e:
-#            raise errors.EmptyPDBSequenceError(str(type(e)) + ': ' + e.__str__())
-
-
-    def __call_tcoffee_system_command(self, alignInFile, out, mode):
-        # to be able to run parallel instances of T_Coffee the environment
-        # variables have to be set to unique paths for each T_Coffee call
-        # also make sure to change the directory to a unique one bevore
-        # calling T_Coffee
+    def __call_tcoffee_system_command(self, alignment_fasta_file, alignment_template_file, out, mode):
+        # To be able to run parallel instances of t_coffee, the environment
+        # variables have to be set to unique paths for each t_coffee call.
+        # Also, make sure to change the directory to a unique one bevore
+        # calling t_coffee.
         my_env = environ.copy()
         my_env['HOME_4_TCOFFEE'] = self.unique_temp_folder + 'tcoffee/'
         my_env['TMP_4_TCOFFEE'] = self.unique_temp_folder + 'tcoffee/tmp/'
@@ -78,88 +63,113 @@ class tcoffee_alignment:
         my_env['LOCKDIR_4_TCOFFEE'] = self.unique_temp_folder + 'tcoffee/lck/'
         my_env['ERRORFILE_4_TCOFFEE'] = self.unique_temp_folder + 't_coffee.ErrorReport'
         my_env['BLASTDB'] = self.global_temp_path + 'blast/db/'
-        my_env['PDB_DIR'] = '/home/kimlab1/database_data/pdb/'
-#        my_env['NO_REMOTE_PDB_DIR'] = '1'
-        print (
-        'export HOME_4_TCOFFEE={HOME_4_TCOFFEE} && '
-        'export TMP_4_TCOFFEE={TMP_4_TCOFFEE} && '
-        'export CACHE_4_TCOFFEE={CACHE_4_TCOFFEE} && '
-        'export LOCKDIR_4_TCOFFEE={LOCKDIR_4_TCOFFEE} && '
-        'export ERRORFILE_4_TCOFFEE={ERRORFILE_4_TCOFFEE} && '
-        'export BLASTDB={BLASTDB} && '
-        'export PDB_DIR={PDB_DIR} '.format(
-            HOME_4_TCOFFEE=my_env['HOME_4_TCOFFEE'],
-            TMP_4_TCOFFEE=my_env['TMP_4_TCOFFEE'],
-            CACHE_4_TCOFFEE=my_env['CACHE_4_TCOFFEE'],
-            LOCKDIR_4_TCOFFEE=my_env['LOCKDIR_4_TCOFFEE'],
-            ERRORFILE_4_TCOFFEE=my_env['ERRORFILE_4_TCOFFEE'],
-            BLASTDB=my_env['BLASTDB'],
-            PDB_DIR=my_env['PDB_DIR']))
+        # my_env['PDB_DIR'] = '/home/kimlab1/database_data/pdb/'
+        # my_env['PDB_DIR'] = self.pdb_path
+        my_env['PDB_DIR'] = self.unique_temp_folder
+        my_env['NO_REMOTE_PDB_DIR'] = '1'
+        t_coffee_environment_variables = [
+            'HOME_4_TCOFFEE', 'TMP_4_TCOFFEE', 'CACHE_4_TCOFFEE', 'LOCKDIR_4_TCOFFEE',
+            'ERRORFILE_4_TCOFFEE', 'BLASTDB', 'PDB_DIR', 'NO_REMOTE_PDB_DIR']
+        self.logger.debug("System command for setting environmental variables:\n" +
+            ' && '.join(['export {}={}'.format(x, my_env.get(x, '$'+x)) for x in t_coffee_environment_variables]))
+
+        # Use the following command to clean the pdb file (add headers, etc.)
+        # 't_coffee -other_pg extract_from_pdb 32c2A.pdb > template.pdb '
+
+        # Use the folllowing command to perform the most accurate alignment
+        # 't_coffee -mode 3dcoffee -method sap_pair,mustang_pair,TMalign_pair
+        # -blast_server=LOCAL -pdb_db=pdbaa -protein_db=nr -outorder=input
+        # -output fasta_aln -outfile tcoffee_output.aln -seq seqfiles.fasta
+        # -pdb_min_sim=20 -template_file seqfiles.template '
 
         multi_core_option = '{}'.format(self.n_cores) if self.n_cores and self.n_cores > 1 else 'no'
         n_core_option = '{}'.format(self.n_cores) if self.n_cores else '1'
+        protein_db = self.global_temp_path + 'blast/db/nr'
+        pdb_db = self.global_temp_path + 'blast/db/pdbaa'
+        if mode == '3dcoffee':
+            system_command = (
+                "t_coffee " +
+                " -seq " + alignment_fasta_file +
+                " -method=sap_pair,mustang_pair,TMalign_pair " +
+                " -blast_server=LOCAL " +
+                " -protein_db=" + protein_db +
+                " -pdb_db=" + pdb_db +
+                " -outorder=input" +
+                " -output=fasta_aln" +
+                " -pdb_min_sim=30" +
+                #" -quiet" +
+                #" -no_warning" +
+                " -outfile=" + out +
+                " -multi_core=no" +
+                " -n_core=" + n_core_option +
+                " -template_file=" + alignment_template_file
+            )
         if mode == 'expresso':
             system_command = (
                 't_coffee' +
                 ' -mode expresso' +
                 ' -method sap_pair' +
-                ' -seq ' + alignInFile +
+                ' -seq ' + alignment_fasta_file +
                 ' -blast_server=LOCAL' +
-                ' -pdb_db=pdbaa -protein_db=nr' +
+                " -protein_db=" + protein_db +
+                " -pdb_db=" + pdb_db +
                 ' -outorder=input' +
                 ' -output fasta_aln' +
                 ' -quiet -no_warning' +
                 ' -outfile=' + out +
                 ' -cache ignore ' +
                 ' -multi_core ' + multi_core_option + #AS changed !!!
-                ' -n_core ' + n_core_option) #AS changed !!!
-#
-#        't_coffee -other_pg extract_from_pdb 32c2A.pdb > template.pdb '
-#        't_coffee -mode 3dcoffee -method sap_pair,mustang_pair,TMalign_pair -blast_server=LOCAL -pdb_db=pdbaa -protein_db=nr -outorder=input -output fasta_aln -outfile tcoffee_output.aln -seq seqfiles.fasta -pdb_min_sim=20 -template_file seqfiles.template '
+                ' -n_core ' + n_core_option #AS changed !!!
+            )
         if mode == 't_coffee':
             system_command = (
                 't_coffee' +
                 ' -mode expresso' +
                 ' -method clustalw_pair,slow_pair' +
-                ' -seq ' + alignInFile +
+                ' -seq ' + alignment_fasta_file +
                 ' -blast_server=LOCAL' +
-                ' -pdb_db=pdbaa -protein_db=pdbaa' +
+                " -protein_db=" + protein_db +
+                " -pdb_db=" + pdb_db +
                 ' -outorder=input' +
                 ' -output fasta_aln' +
                 ' -quiet -no_warning' +
                 ' -outfile=' + out +
                 ' -multi_core ' + multi_core_option + #AS changed !!!
-                ' -n_core ' + n_core_option) #AS changed !!!
-
+                ' -n_core ' + n_core_option #AS changed !!!
+            )
         if mode == 'quick':
             system_command = (
                 't_coffee' +
                 ' -mode quickaln' +
                 ' -method clustalw_pair,slow_pair' +
-                ' -seq ' + alignInFile +
+                ' -seq ' + alignment_fasta_file +
                 ' -blast_server=LOCAL' +
-                ' -pdb_db=pdbaa -protein_db=nr' +
+                " -protein_db=" + protein_db +
+                " -pdb_db=" + pdb_db +
                 ' -outorder=input' +
                 ' -output fasta_aln' +
                 ' -quiet -no_warning' +
                 ' -outfile=' + out +
                 ' -multi_core ' + multi_core_option + #AS changed !!!
-                ' -n_core ' + n_core_option) #AS changed !!!
+                ' -n_core ' + n_core_option #AS changed !!!
+            )
         return system_command, my_env
 
 
-    def __call_tcoffee(self, alignInFile, GAPOPEN=-0.0, GAPEXTEND=-0.0, recursion_counter=0):
-        """
-        calls t_coffee in expresso mode (make sure BLAST is installed locally)
-
-        input:  alignInFile     type: string        file containing two sequences
-                                                    in fasta format
-                tmpPATH         type: string        used to set a unique path
-                                                    for the t_coffee tmp, cache,
-                                                    and lock directory (for
-                                                    paralellization)
-                GAPOPEN         type: int or str    see t_coffee manual
-                GAPEXTEND       type: int or str    see t_coffee manual
+    def __call_tcoffee(self, alignment_fasta_file, alignment_template_file,
+            GAPOPEN=-0.0, GAPEXTEND=-0.0):
+        """ Calls t_coffee (make sure BLAST is installed locally)
+        Parameters
+        ----------
+        alignment_fasta_file : string
+            A file containing the fasta sequences to be aligned
+        alignment_template_file : string
+            A file containing the structural templates for the fasta sequences
+            described above
+        GAPOPEN : int or str
+            See t_coffee manual
+        GAPEXTEND : int or str
+            See t_coffee manual
 
         return: Biopython multiple sequence alignment object
         """
@@ -167,23 +177,34 @@ class tcoffee_alignment:
         out = self.unique_temp_folder + 'sequenceAlignment.aln'
 
         # try the alignment in expresso mode (structure based with sap alignment)
-        system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, self.mode)
-        self.logger.debug("tcoffee system command: '{}'".format(system_command))
+        system_command, my_env = self.__call_tcoffee_system_command(
+            alignment_fasta_file, alignment_template_file, out, self.mode)
+        self.logger.debug("t_coffee system command:\n{}".format(system_command))
+
+        import time
+        time.sleep(0.2)
         child_process = hf.run_subprocess_locally(self.unique_temp_folder, system_command, env=my_env)
         result, error_message = child_process.communicate()
-        self.logger.debug("Finished aligning")
+        self.logger.debug("t_coffee results:\n{}".format(result.strip()))
+        error_message_summary_idx = error_message.find('*                        MESSAGES RECAPITULATION')
+        if error_message_summary_idx == -1:
+            error_message_summary = ''
+        else:
+            error_message_summary = error_message[error_message_summary_idx:]
+        self.logger.debug("t_coffee errors:\n{}".format(error_message_summary.strip()))
         return_code = child_process.returncode
 
-        # check if tcoffee had an unexpected exit and if not, create and return
+        # Check if tcoffee had an unexpected exit and if not, create and return
         # the alignment object
         if return_code == 0:
+            self.logger.info("Successfully made the alignment")
             alignment = AlignIO.read(out, 'fasta')
             return alignment
         else:
-            self.logger.error('Structural alignment failed with the following error:')
-            self.logger.error(error_message)
-            self.logger.error('Running quickaln alignment instead...')
-            system_command, my_env = self.__call_tcoffee_system_command(alignInFile, out, 'quick')
+            self.logger.error('Structural alignment failed with the following error: {}'.format(error_message))
+            self.logger.error('Running quickalign alignment instead...')
+            system_command, my_env = self.__call_tcoffee_system_command(
+                alignment_fasta_file, alignment_template_file, out, 'quick')
             child_process = hf.run_subprocess_locally(self.unique_temp_folder, system_command, env=my_env)
             result, error_message = child_process.communicate()
             return_code = child_process.returncode
@@ -193,4 +214,4 @@ class tcoffee_alignment:
                     self.logger.error('Alignment length not 2 for file %s' % out)
                 return alignment
             self.logger.error('Even quickaln didn\'t work. Cannot create an alignment. Giving up.')
-            raise errors.TcoffeeError(result, error_message, alignInFile, system_command)
+            raise errors.TcoffeeError(result, error_message, alignment_fasta_file, system_command)

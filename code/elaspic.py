@@ -11,17 +11,16 @@ import tempfile
 import argparse
 import atexit
 import signal
-
-from Bio.SubsMat import MatrixInfo
 from ConfigParser import SafeConfigParser
 
+from Bio.SubsMat import MatrixInfo
+
+import errors
+import sql_db
 import domain_alignment
 import domain_model
 import domain_mutation
-
 import helper_functions as hf
-import errors
-import sql_db
 
 
 class Pipeline(object):
@@ -220,7 +219,7 @@ class Pipeline(object):
 
         # Find provean
         if run_type in [1, 5]:
-            self.logger.info('\n\n\n' + '*' * 80)
+            self.logger.info('\n\n\n' + '*' * 110)
             self.logger.info("Computing provean...")
             if self._compute_provean():
                 if run_type == 1:
@@ -244,18 +243,18 @@ class Pipeline(object):
                 self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
                 self.db, self.logger, self.n_cores, self.modeller_runs)
 
-            self.logger.info('\n\n\n' + '*' * 80)
+            self.logger.info('\n\n\n' + '*' * 110)
             self.logger.info("Building models...")
             self._compute_models()
-        
+
         # Analyse mutations
         if run_type in [3, 4, 5] and self.mutations:
             self.get_mutation = domain_mutation.GetMutation(
                 self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
                 self.db, self.logger, self.n_cores, self.bin_path, self.foldx_water,
                 self.foldx_num_of_runs, self.matrix, self.gap_start, self.gap_extend,)
-            
-            self.logger.info('\n\n\n' + '*' * 80)
+
+            self.logger.info('\n\n\n' + '*' * 110)
             self.logger.info("Analyzing mutations...")
             self._compute_mutations()
 
@@ -336,7 +335,7 @@ class Pipeline(object):
         # Go over all domains and domain pairs for a given protein
         for d in self.uniprot_domains + self.uniprot_domain_pairs:
             self.__print_header(d)
-            
+
             # Check if we should skip the model
             if (isinstance(d, sql_db.UniprotDomain) and
                     not (d.template and d.template.cath_id) ):
@@ -351,7 +350,7 @@ class Pipeline(object):
                 continue
             elif (d.template.model and d.template.model.model_errors and
                     (('Giving up' in d.template.model.model_errors) or
-                    (d.template.model.model_errors.count(';') > 2)) ):
+                    (d.template.model.model_errors.count(';') > 10)) ):
                 self.logger.info(
                     'Previous model had unfixable errors: "{}". Skipping...'
                     .format(d.template.model.model_errors))
@@ -486,11 +485,11 @@ class Pipeline(object):
 
     def __print_header(self, d):
         # self.logger.info('Domain or domain pair number: {}'.format(d_idx))
-        self.logger.debug('=' * 80)
+        self.logger.info('=' * 77)
         if isinstance(d, sql_db.UniprotDomain):
-            self.logger.debug('uniprot_domain_id: {}'.format(d.uniprot_domain_id))
+            self.logger.info('uniprot_domain_id: {}'.format(d.uniprot_domain_id))
         else:
-            self.logger.debug('uniprot_domain_pair_id: {}'.format(d.uniprot_domain_pair_id))
+            self.logger.info('uniprot_domain_pair_id: {}'.format(d.uniprot_domain_pair_id))
 
 
     def __add_new_error(self, d_error_log, e):
@@ -641,7 +640,7 @@ if __name__ == '__main__':
 
     elif args.uniprot_id:
         uniprot_ids = [args.uniprot_id,]
-        mutations = [args.mutations,] if args.mutations is not None else ['',]
+        mutations = args.mutations.split(',') if args.mutations is not None else ['']
     else:
         error_message = (
             'Need to supply either a list of uniprot_mutation combos '
@@ -651,10 +650,17 @@ if __name__ == '__main__':
     run_type = args.run_type
     n_cores = args.n_cores
 
+    #~ # Run jobs
+    #~ for uniprot_id, mutation in zip(uniprot_ids, mutations):
+        #~ print uniprot_id
+        #~ print mutation
+        #~ print run_type
+        #~ uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
+
     # Run jobs
-    for uniprot_id, mutation in zip(uniprot_ids, mutations):
-        print uniprot_id
-        print mutation
-        print run_type
+    uniprot_id = uniprot_ids[0]
+    for mutation in mutations:
+        print uniprot_id, mutation, run_type
         uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
+
 

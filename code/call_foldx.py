@@ -9,14 +9,14 @@ import errors
 import helper_functions as hf
 
 names_rows_stability = [
-    ['dG', 1], # totalEnergy
-    ['Backbone_Hbond', 2],
-    ['Sidechain_Hbond', 3],
-    ['Van_der_Waals', 4],
-    ['Electrostatics', 5],
-    ['Solvation_Polar', 6],
-    ['Solvation_Hydrophobic', 7],
-    ['Van_der_Waals_clashes', 8],
+    ['dg', 1], # totalEnergy
+    ['backbone_hbond', 2],
+    ['sidechain_hbond', 3],
+    ['van_der_waals', 4],
+    ['electrostatics', 5],
+    ['solvation_polar', 6],
+    ['solvation_hydrophobic', 7],
+    ['van_der_waals_clashes', 8],
     ['entropy_sidechain', 9],
     ['entropy_mainchain', 10],
     ['sloop_entropy', 11],
@@ -29,25 +29,25 @@ names_rows_stability = [
     ['disulfide', 18],
     ['electrostatic_kon', 19],
     ['partial_covalent_bonds', 20],
-    ['energy_Ionisation', 21],
-    ['Entropy_Complex', 22],
-    ['Number_of_Residues', 23],]
+    ['energy_ionisation', 21],
+    ['entropy_complex', 22],
+    ['number_of_residues', 23],]
 names_stability_wt = (
     [name + '_wt' for name in zip(*names_rows_stability)[0][:-1]] +
-    ['Number_of_Residues'])
+    ['number_of_residues'])
 names_stability_mut = (
     [name + '_mut' for name in zip(*names_rows_stability)[0][:-1]] +
-    ['Number_of_Residues'])
+    ['number_of_residues'])
 
 names_rows_stability_complex = (
-    [ ['intraclashesEnergy1', 3], ['intraclashesEnergy2', 4], ] +
+    [ ['intraclashes_energy_1', 3], ['intraclashes_energy_2', 4], ] +
     [ [x[0], x[1] + 4] for x in names_rows_stability ])
 names_stability_complex_wt = (
     [name + '_wt' for name in zip(*names_rows_stability_complex)[0][:-1]] +
-    ['Number_of_Residues'])
+    ['number_of_residues'])
 names_stability_complex_mut = (
     [name + '_mut' for name in zip(*names_rows_stability_complex)[0][:-1]] +
-    ['Number_of_Residues'])
+    ['number_of_residues'])
 
 
 class FoldX():

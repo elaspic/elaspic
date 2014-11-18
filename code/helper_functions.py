@@ -21,16 +21,54 @@ from Bio.PDB.PDBParser import PDBParser
 import sql_db
 
 
-###############################################################################
-#
 
-def get_pdb_structure(path_to_pdb_file):
-    parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
-    structure = parser.get_structure('ID', path_to_pdb_file)
-    return structure
+class memoized(object):
+    """
+    """
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
 
+    def __call__(self, *args, **kwargs):
+        key = (self.func, args, frozenset(kwargs.iteritems()))
+        try:
+            return self.cache[key]
+        except KeyError:
+            self.cache[key] = self.func(*args, **kwargs)
+            return self.cache[key]
+        except TypeError:
+            print "ncacheable, so just return calculated value without caching"
+            return self.func(*args, **kwargs)
 
+    def __get__(self, obj, objtype=None):
+        """ Support instance methods
+        
+        self == instance of memoized
+        obj == instance of my_class
+        objtype == class object of __main__.my_class
+        """
+        if obj is None:
+            return self
+
+        # new_func is the bound method my_func of my_class instance
+        new_func = self.func.__get__(obj, objtype)
+
+        # instantiates a brand new class...this is not helping us, because it's a 
+        # new class each time, which starts with a fresh cache
+        return self.__class__(new_func)
+
+    def clear_cache(self):
+        """ New method that will allow me to reset the memoized cache
+        """
+        print "cache reset"
+        self.cache = {}
+        
+
+#%% Elaspic-specific helper functions
 def get_uniprot_base_path(d):
+    """ The uniprot id is cut into several chunks to create folders that will
+    hold a manageable number of pdbs.
+    """
     if isinstance(d, sql_db.UniprotDomain):
         uniprot_id = d.uniprot_id
         uniprot_name = d.uniprot_sequence.uniprot_name
@@ -54,11 +92,11 @@ def get_uniprot_base_path(d):
 
 
 def get_uniprot_domain_path(d):
-    """
+    """ Return the path to individual domains or domain pairs.
     """
     if isinstance(d, sql_db.UniprotDomain):
         uniprot_domain_path = (
-            '{pfam_clan:.36}*{alignment_def}/'
+            '{pfam_clan:.36}.{alignment_def}/'
             .format(
                 pfam_clan=d.pfam_clan,
                 alignment_def=d.alignment_def.replace(':','-'),))
@@ -74,8 +112,67 @@ def get_uniprot_domain_path(d):
     return uniprot_domain_path
 
 
+
+def scinetCleanup(folder, destination, name=None):
+    """
+    zip and copy the results from the ramdisk to /scratch
+    """
+    print 'saving the result in', folder
+    os.chdir(folder)
+    if name == None:
+        output_name = 'result_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
+    else:
+        output_name = name + '_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
+    copy = 'cp ' + output_name + ' ' + destination + output_name
+#    copy = 'cp ' + output_name + ' $SCRATCH/niklas-pipeline/' + output_name
+#    copy = 'cp ' + output_name + ' /home/niklas/tmp/' + output_name
+    system_command = 'tar -acf ' + output_name + ' * && ' + copy
+
+    childProcess = subprocess.Popen(system_command,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    shell=True,
+                                    )
+    result, error = childProcess.communicate()
+    if childProcess.returncode != 0:
+        print 'error', error
+    return
+
+
+#%%
+class WritableObject:
+    """ A class for collecting all the print statements from modeller in order
+    to redirect them to the logger later on
+    """
+    def __init__(self, logger):
+        self.logger = logger
+    def write(self, string):
+        self.logger.debug(string.strip())
+
+
+@contextmanager
+def log_print_statements(logger):
+    """ Channel print statements to the debug logger
+    """
+    original_formatters = []
+    for i in range(len(logger.handlers)):
+        original_formatters.append(logger.handlers[0].formatter)
+        logger.handlers[i].formatter = logging.Formatter('%(message)s')
+    wo = WritableObject(logger)
+    try:
+        sys.stdout = wo
+        yield
+    except:
+        raise
+    finally:
+        sys.stdout = sys.__stdout__
+        for i in range(len(logger.handlers)):
+            logger.handlers[i].formatter = original_formatters[i]
+
+
+#%%
 def get_path_to_current_file():
-    """ Find the location of the files being executed
+    """ Find the location of the file that is being executed
     """
     encoding = sys.getfilesystemencoding()
     if hasattr(sys, "frozen"):
@@ -85,7 +182,7 @@ def get_path_to_current_file():
         return os.path.dirname(unicode(__file__, encoding))
 
 
-def get_logger(do_debug=False):
+def get_logger(do_debug=True):
     logger = logging.getLogger(__name__)
     if do_debug:
         logger.setLevel(logging.DEBUG)
@@ -104,9 +201,14 @@ def make_tarfile(output_filename, source_dir):
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
 
-###############################################################################
-# Helper functions for sql objects
+#%% Working with pdb structures
+def get_pdb_structure(path_to_pdb_file):
+    parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
+    structure = parser.get_structure('ID', path_to_pdb_file)
+    return structure
 
+
+#%% Helper functions for sql objects
 def decode_domain_def(domains, merge=True, return_string=False):
     """ Unlike split_domain(), this function returns a tuple of tuples of strings,
     preserving letter numbering (e.g. 10B)
@@ -142,13 +244,10 @@ def decode_aa_list(interface_aa):
     if interface_aa and (interface_aa != '') and (interface_aa != 'NULL'):
         if interface_aa[-1] == ',':
             interface_aa = interface_aa[:-1]
-
         x  = interface_aa
         return_tuple = tuple([int(r.strip()) for r in x.split(',')])
-
     else:
         return_tuple = []
-
     return return_tuple
 
 
@@ -158,13 +257,10 @@ def row2dict(row):
         d[column.name] = getattr(row, column.name)
         if type(d[column.name]) == datetime.datetime:
             d[column.name] = d[column.name].strftime('%Y-%m-%d %H-%M-%S-%f')
-
     return d
 
 
-###############################################################################
-# Helper functions for different subprocess commands
-
+#%% Helper functions for different subprocess commands
 def get_username():
     child_process = subprocess.Popen('whoami', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     username, __ = child_process.communicate()
@@ -194,11 +290,11 @@ def get_which(bin_name):
 
 
 def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
-    #######################################################################
-    # If a TMPDIR is given as an environment variable, the tmp directory
-    # is created relative to that. This is useful when running on banting
-    # (the cluster in the ccbr) and also on Scinet. Make sure that it
-    # points to '/dev/shm/' on Scinet.
+    """ If a TMPDIR is given as an environment variable, the tmp directory
+    is created relative to that. This is useful when running on banting
+    (the cluster in the ccbr) and also on Scinet. Make sure that it
+    points to '/dev/shm/' on Scinet.
+    """
     temp_path = os.path.join(os.environ.get('TMPDIR', global_temp_path), temp_path_suffix)
     subprocess.check_call('mkdir -p ' + temp_path, shell=True)
     return temp_path
@@ -238,7 +334,6 @@ def kill_child_process(child_process):
             print "Letting it go..."
             pass
     print 'OK'
-
 
 
 ###############################################################################
@@ -300,32 +395,3 @@ def run_subprocess_locally(working_path, system_command, **popen_argvars):
 #        .format(child_process_group_id))
 #    subprocess_ids.remove(child_process.pid)
 #    return result, error_message, returncode
-
-
-
-def scinetCleanup(folder, destination, name=None):
-    """
-    zip and copy the results from the ramdisk to /scratch
-    """
-    print 'saving the result in', folder
-    os.chdir(folder)
-    if name == None:
-        output_name = 'result_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
-    else:
-        output_name = name + '_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
-    copy = 'cp ' + output_name + ' ' + destination + output_name
-#    copy = 'cp ' + output_name + ' $SCRATCH/niklas-pipeline/' + output_name
-#    copy = 'cp ' + output_name + ' /home/niklas/tmp/' + output_name
-    system_command = 'tar -acf ' + output_name + ' * && ' + copy
-
-    childProcess = subprocess.Popen(system_command,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    shell=True,
-                                    )
-    result, error = childProcess.communicate()
-    if childProcess.returncode != 0:
-        print 'error', error
-    return
-
-
