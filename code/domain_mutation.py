@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import datetime
 import cPickle as pickle
 
 import pandas as pd
@@ -16,23 +15,21 @@ import errors
 import sql_db
 import analyze_structure
 import pdb_template
-from pdb_template import PDBTemplate
 import call_foldx
 import helper_functions as hf
 
 
 ###############################################################################
 # Useful functions
+def _score_match(pair_match, matrix_match):
+    if pair_match not in matrix_match:
+        return matrix_match[(tuple(reversed(pair_match)))]
+    else:
+        return matrix_match[pair_match]
+
 
 def score_pairwise(seq1, seq2, matrix, gap_s, gap_e):
-    """ Required to get the BLOSUM score
-    """
-    def score_match(pair_match, matrix_match):
-        if pair_match not in matrix_match:
-            return matrix_match[(tuple(reversed(pair_match)))]
-        else:
-            return matrix_match[pair_match]
-
+    """ Function needed to get the BLOSUM score """
     score = 0
     gap = False
     for i in range(len(seq1)):
@@ -42,154 +39,118 @@ def score_pairwise(seq1, seq2, matrix, gap_s, gap_e):
                 gap = True
                 score += gap_s
             else:
-                score += score_match(pair, matrix)
+                score += _score_match(pair, matrix)
         else:
             if '-' not in pair:
                 gap = False
-                score += score_match(pair, matrix)
+                score += _score_match(pair, matrix)
             else:
                 score += gap_e
     return score
 
 
 ###############################################################################
-def get_mutation_feature_vector(d, mut):
-    """
-    Return two dataframes for a supplied mutation (sql_db.UniprotDomainMutation
-    or sql_db.UniprotDomainPairMutation object). The first dataframe contains the
-    header information for that mutation. The second dataframe contains all
-    the features to be used in machine learning.
-    """
-    # H    Alpha helix
-    # G    3-10 helix
-    # I    PI-helix
-    # E    Extended conformation
-    # B|b Isolated bridge
-    # T    Turn
-    # C    Coil (none of the above) ()
-    secondary_structure_to_int = {
-        '-': 0, 'C': 0, 'B': 1, 'b': 1, 'E': 2, 'G': 3, 'H': 4, 'I': 5, 'S': 6, 'T': 7}
+# H     Alpha helix
+# G     3-10 helix
+# I     PI-helix
+# E     Extended conformation
+# B|b   Isolated bridge
+# T     Turn
+# C|-   Coil (none of the above) ()
+secondary_structure_to_int = {
+    '-': 0, 'C': 0, 'B': 1, 'b': 1, 'E': 2, 'G': 3, 'H': 4, 'I': 5, 'S': 6, 'T': 7}
 
-    def append_to_df(name_list_value_list, dfs, existing_columns=None):
-        name_list, value_list = name_list_value_list
-        if isinstance(value_list, basestring):
-            value_list = decode_text_as_list(value_list)[0]
-        name_list = list(name_list)
-        try:
-            value_list = list(value_list)
-        except TypeError:
-            print name_list
-            print value_list
-            raise
-        for i in range(len(value_list)):
-            if isinstance(value_list[i], datetime.datetime):
-                value_list[i] = value_list[i].strftime('%Y-%m-%d %H-%M-%S-%f')
-        # Remove duplicates if a set of existing columns exists
-        if existing_columns is not None:
-            column_idx = 0
-            while column_idx < len(name_list):
-                if name_list[column_idx] in existing_columns:
-                    # print 'Removing duplicate column {}'.format(name_list[column_idx])
-                    del name_list[column_idx]
-                    del value_list[column_idx]
-                    continue
-                column_idx += 1
-            existing_columns.update(name_list)
-        dfs.append(pd.DataFrame([value_list], columns=name_list))
 
-    header_dfs = []
-    def append_to_header_df(name_list_value_list):
-        append_to_df(name_list_value_list, header_dfs)
+def format_mutation_features(feature_df, core_or_interface):
+    if core_or_interface == False or core_or_interface == 0 or core_or_interface == 'core':
+        foldx_column_name = 'stability_energy'
+        foldx_feature_names_wt = call_foldx.names_stability_wt
+        foldx_feature_names_mut = call_foldx.names_stability_mut
+    elif core_or_interface == True or core_or_interface == 1 or core_or_interface == 'interface':
+        foldx_column_name = 'analyse_complex_energy'
+        foldx_feature_names_wt = call_foldx.names_stability_complex_wt
+        foldx_feature_names_mut = call_foldx.names_stability_complex_mut
 
-    feature_dfs = []
-    feature_existing_columns = set()
-    def append_to_feature_df(name_list_value_list):
-        append_to_df(name_list_value_list, feature_dfs, feature_existing_columns)
+    # Drop rows that have missing FoldX information
+    # (should not happen when callced from inside the pipeline because we have only one column)
+    feature_df = feature_df.dropna(subset=[foldx_column_name + '_wt', foldx_column_name + '_mut'])
 
-    ### Header information ----------------------------------------------------
-    header_common = [
-        ['uniprot_id', mut.uniprot_id],
-        ['mutation', mut.mutation],
-        ['t_date_modified', d.template.t_date_modified],
-        ['m_date_modified', d.template.model.m_date_modified],
-        ['mut_date_modified', mut.mut_date_modified]]
-    append_to_header_df(zip(*header_common))
-
-    if isinstance(d, sql_db.UniprotDomain):
-        header_domain = [
-            ['cath_id_1', d.template.cath_id],
-            ['pfam_name_1', d.pdbfam_name],
-            ['clan_name_1', d.pfam_clan],
-            ['uniprot_domain_id', d.uniprot_domain_id],]
-        append_to_header_df(zip(*header_domain))
-
-    elif isinstance(d, sql_db.UniprotDomainPair):
-        header_domain_contact = [
-            ['cath_id_1', d.template.cath_id_1],
-            ['cath_id_2', d.template.cath_id_2],
-            ['pfam_name_1', d.uniprot_domain_1.pdbfam_name],
-            ['pfam_name_2', d.uniprot_domain_2.pdbfam_name],
-            ['clan_name_1', d.uniprot_domain_1.pfam_clan],
-            ['clan_name_2', d.uniprot_domain_2.pfam_clan],
-            ['uniprot_domain_pair_id', d.uniprot_domain_pair_id],]
-        append_to_header_df(zip(*header_domain_contact))
-
-    ### Feature information ---------------------------------------------------
     # FoldX output
-    if isinstance(d, sql_db.UniprotDomain):
-        append_to_feature_df([call_foldx.names_stability_wt, mut.stability_energy_wt])
-        append_to_feature_df([call_foldx.names_stability_mut, mut.stability_energy_mut])
+    for column_index, column_name in enumerate(foldx_feature_names_wt):
+        feature_df[column_name] = feature_df[foldx_column_name + '_wt'].apply(lambda x: float(x.split(',')[column_index]))
+    del feature_df[foldx_column_name + '_wt']
 
-    if isinstance(d, sql_db.UniprotDomainPair):
-        append_to_feature_df([call_foldx.names_stability_complex_wt, mut.analyse_complex_energy_wt])
-        append_to_feature_df([call_foldx.names_stability_complex_mut, mut.analyse_complex_energy_mut])
+    for column_index, column_name in enumerate(foldx_feature_names_mut):
+        feature_df[column_name] = feature_df[foldx_column_name + '_mut'].apply(lambda x: float(x.split(',')[column_index]))
+    del feature_df[foldx_column_name + '_mut']
 
     # PhysicoChemical properties
-    names_phys_chem = ['pcv_salt_equal', 'pcv_salt_opposite', 'pcv_hbond', 'pcv_vdW']
-    append_to_feature_df([[name + '_wt' for name in names_phys_chem], mut.physchem_wt])
-    append_to_feature_df([[name + '_self_wt' for name in names_phys_chem], mut.physchem_wt_ownchain])
-    append_to_feature_df([[name + '_mut' for name in names_phys_chem], mut.physchem_mut])
-    append_to_feature_df([[name + '_self_mut' for name in names_phys_chem], mut.physchem_mut_ownchain])
+    names_phys_chem = ['pcv_salt_equal', 'pcv_salt_opposite', 'pcv_hbond', 'pcv_vdw']
+    for column_index, column_name in enumerate(names_phys_chem):
+        feature_df[column_name + '_wt'] = feature_df['physchem_wt'].apply(lambda x: int(x.split(',')[column_index]))
+        feature_df[column_name + '_self_wt'] = feature_df['physchem_wt_ownchain'].apply(lambda x: int(x.split(',')[column_index]))
+        feature_df[column_name + '_mut'] = feature_df['physchem_mut'].apply(lambda x: int(x.split(',')[column_index]))
+        feature_df[column_name + '_self_mut'] = feature_df['physchem_mut_ownchain'].apply(lambda x: int(x.split(',')[column_index]))
+    del feature_df['physchem_wt']
+    del feature_df['physchem_wt_ownchain']
+    del feature_df['physchem_mut']
+    del feature_df['physchem_mut_ownchain']
 
-    # Other features
-    other_features_common = [
-        ['secondary_structure_wt', mut.secondary_structure_wt],
-        ['solvent_accessibility_wt', mut.solvent_accessibility_wt],
-        ['secondary_structure_mut', mut.secondary_structure_mut],
-        ['solvent_accessibility_mut', mut.solvent_accessibility_mut],
-        ['sift_score', mut.provean_score],
-        ['normDOPE', d.template.model.norm_dope],
-        ['matrix_score', mut.matrix_score],]
-    append_to_feature_df(zip(*other_features_common))
+    for col in feature_df.columns:
+        if 'secondary_structure' in col:
+            feature_df[col] = feature_df[col].apply(lambda x: secondary_structure_to_int[x])
+    return feature_df
 
-    if isinstance(d, sql_db.UniprotDomain):
-        other_features_domain = [
-            ['seq_id_avg', d.template.alignment_identity],]
-        append_to_feature_df(zip(*other_features_domain))
 
-    if isinstance(d, sql_db.UniprotDomainPair):
-        other_features_domain_pair = [
-            ['seq_id_avg', d.template.identical_1 + d.template.identical_2],
-            ['seq_id_chain1', d.template.identical_1],
-            ['seq_id_chain2', d.template.identical_2],
-            ['if_hydrophobic', d.template.model.interface_area_hydrophobic],
-            ['if_hydrophilic', d.template.model.interface_area_hydrophilic],
-            ['if_total', d.template.model.interface_area_total],
-            ['contact_distance_wt', mut.contact_distance_wt],
-            ['contact_distance_mut', mut.contact_distance_mut],]
-        append_to_feature_df(zip(*other_features_domain_pair))
+def get_mutation_features(d, mut, row_idx=0):
+    """
+    """
+    feature_dict = {key: value for (key, value) in mut.__dict__.iteritems() if key[0] != '_'}
 
-    ### Join df lists
-    header_dfs_joined = header_dfs[0]
-    for header_df in header_dfs[1:]:
-        header_dfs_joined = header_dfs_joined.join(header_df)
-    feature_dfs_joined = feature_dfs[0]
-    for feature_df in feature_dfs[1:]:
-        feature_dfs_joined = feature_dfs_joined.join(feature_df)
-    for name, value in zip(feature_dfs_joined.columns, feature_dfs_joined.loc[0].values):
-        if 'secondary_structure' in name:
-            feature_dfs_joined.loc[0, name] = secondary_structure_to_int[feature_dfs_joined.loc[0, name]]
-    return header_dfs_joined, feature_dfs_joined
+    feature_dict.update({
+        # Header columns
+        # 'uniprot_id': mut.uniprot_id,
+        # 'mutation': mut.mutation,
+        't_date_modified': d.template.t_date_modified,
+        'm_date_modified': d.template.model.m_date_modified,
+        # 'mut_date_modified': mut.mut_date_modified,
+        #
+        'norm_dope': d.template.model.norm_dope,
+    })
+
+    if hasattr(d, 'uniprot_domain_id'):
+        feature_dict.update({
+            # Header columns
+            'uniprot_domain_id': d.uniprot_domain_id,
+            'cath_id': d.template.cath_id,
+            'pfam_name': d.pdbfam_name,
+            'clan_name': d.pfam_clan,
+            #
+            'alignment_identity': d.template.alignment_identity,
+        })
+
+    elif hasattr(d, 'uniprot_domain_pair_id'):
+        feature_dict.update({
+            # Header columns
+            'uniprot_domain_pair_id': d.uniprot_domain_pair_id,
+            'cath_id_1': d.template.cath_id_1,
+            'cath_id_2': d.template.cath_id_2,
+            'pfam_name_1': d.uniprot_domain_1.pdbfam_name,
+            'pfam_name_2': d.uniprot_domain_2.pdbfam_name,
+            'clan_name_1': d.uniprot_domain_1.pfam_clan,
+            'clan_name_2': d.uniprot_domain_2.pfam_clan,
+            #
+            'alignment_identity': d.template.identical_1 + d.template.identical_2,
+            'identical_1': d.template.identical_1,
+            'identical_2': d.template.identical_2,
+            'interface_area_hydrophobic': d.template.model.interface_area_hydrophobic,
+            'interface_area_hydrophilic': d.template.model.interface_area_hydrophilic,
+            'interface_area_total': d.template.model.interface_area_total,
+        })
+
+    feature_df = pd.DataFrame(feature_dict, index=[row_idx])
+
+    return feature_df
 
 
 def convert_features_to_differences(df, keep_mut=False):
@@ -199,17 +160,20 @@ def convert_features_to_differences(df, keep_mut=False):
     """
     column_list = []
     for column_name, column in df.iteritems():
-        if '_mut' in column_name and column_name.replace('_mut','_wt') in df.columns:
-            if keep_mut:
-                column_list.append(column)
-            new_column = column - df[column_name.replace('_mut','_wt')]
-            if 'secondary_structure' in column_name:
-                new_column = new_column.apply(lambda x: 1 if x else 0)
-            new_column.name = column_name.replace('_mut','_change')
-            column_list.append(new_column)
+        if ('_mut' in column_name and
+            column_name.replace('_mut','_wt') in df.columns and
+            df[column_name].dtype != object):
+                if keep_mut:
+                    column_list.append(column)
+                new_column = column - df[column_name.replace('_mut','_wt')]
+                if 'secondary_structure' in column_name:
+                    new_column = new_column.apply(lambda x: 1 if x else 0)
+                new_column.name = column_name.replace('_mut','_change')
+                column_list.append(new_column)
         else:
             column_list.append(column)
-    new_df = pd.DataFrame(column_list).T
+#    new_df = pd.DataFrame(column_list).T
+    new_df = pd.concat(column_list, axis=1)
     return new_df
 
 
@@ -268,10 +232,10 @@ class GetMutation(object):
         self.gap_s = gap_s
         self.gap_e = gap_e
         self.n_cores = n_cores
-        with open(bin_path + 'clf_domain.pickle', 'rb') as ifh:
-            self.clf_domain, self.clf_domain_features = pickle.load(ifh)
-        with open(bin_path + 'clf_interface.pickle', 'rb') as ifh:
-            self.clf_interface, self.clf_interface_features = pickle.load(ifh)
+#        with open(bin_path + 'clf_domain.pickle', 'rb') as ifh:
+#            self.clf_domain, self.clf_domain_features = pickle.load(ifh)
+#        with open(bin_path + 'clf_interface.pickle', 'rb') as ifh:
+#            self.clf_interface, self.clf_interface_features = pickle.load(ifh)
 
 
     def get_mutation_data(self, d, uniprot_id_1, mutation):
@@ -389,36 +353,49 @@ class GetMutation(object):
             self.logger.debug(key + ':')
             self.logger.debug(value)
 
+        # Run some sanity checks
+        mutated_aa_uniprot = mut_data.uniprot_sequences[0][int(mutation[1:-1])-1]
+        if mutated_aa_uniprot != mutation[0]:
+            self.logger.error('Uniprot sequence: {}'.format(uniprot_sequences[0]))
+            self.logger.error('Uniprot AA: {};\t Mutation AA: {}'.format(mutated_aa_uniprot, mutation[0]))
+            raise Exception('Mutated amino acid was not found inside the specified uniprot!')
+
+        mutated_aa_domain = str(mut_data.domain_sequences[0].seq)[int(mut_data.mutation_domain[1:-1])-1]
+        if mutated_aa_domain != mut_data.mutation_domain[0]:
+            self.logger.error('Domain sequence: {}'.format(str(mut_data.domain_sequences[0].seq)))
+            self.logger.error('Domain AA: {};\t Mutation AA: {}'.format(mutated_aa_domain, mut_data.mutation_domain[0]))
+            raise Exception('Mutated amino acid was not found inside the specified domain!')
+
         return mut_data
 
 
     def evaluate_mutation(self, d, mut_data, uniprot_mutation):
         """
         """
-        if (mut_data.path_to_provean_supset and not uniprot_mutation.provean_score):
-            self.logger.debug('Calculating the provean score for the mutation...')
-            try:
-                provean_mutation, provean_score = self.get_provean_score(
-                    mut_data.uniprot_domain_id, mut_data.mutation_domain,
-                    mut_data.domain_sequences[0], mut_data.path_to_provean_supset)
-            except errors.ProveanError as e:
-                self.logger.error(str(type(e)) + ': ' + e.__str__())
-                provean_mutation, provean_score = None, None
-            self.logger.debug('provean mutation:')
-            self.logger.debug(provean_mutation)
-            self.logger.debug('provean score:')
-            self.logger.debug(provean_score)
-            uniprot_mutation.provean_score = provean_score
+#        if (mut_data.path_to_provean_supset and not uniprot_mutation.provean_score):
+#            self.logger.debug('Calculating the provean score for the mutation...')
+#            try:
+#                provean_mutation, provean_score = self.get_provean_score(
+#                    mut_data.uniprot_domain_id, mut_data.mutation_domain,
+#                    mut_data.domain_sequences[0], mut_data.path_to_provean_supset)
+#            except errors.ProveanError as e:
+#                self.logger.error(str(type(e)) + ': ' + e.__str__())
+#                provean_mutation, provean_score = None, None
+#            self.logger.debug('provean mutation:')
+#            self.logger.debug(provean_mutation)
+#            self.logger.debug('provean score:')
+#            self.logger.debug(provean_score)
+#            uniprot_mutation.provean_score = provean_score
 
         if not uniprot_mutation.stability_energy_wt:
             self.logger.debug('Evaluating the structural impact of the mutation...')
             uniprot_mutation = self.evaluate_structural_impact(d, mut_data, uniprot_mutation)
 
-        if (uniprot_mutation.provean_score and
-                uniprot_mutation.stability_energy_wt and
-                uniprot_mutation.ddg == None):
-            self.logger.debug('Predicting the thermodynamic effect of the mutation...')
-            uniprot_mutation = self.predict_thermodynamic_effect(d, uniprot_mutation)
+#        if (uniprot_mutation.provean_score and
+#                uniprot_mutation.stability_energy_wt and
+#                uniprot_mutation.ddg == None):
+#            self.logger.debug('Predicting the thermodynamic effect of the mutation...')
+#            uniprot_mutation = self.predict_thermodynamic_effect(d, uniprot_mutation)
 
         return uniprot_mutation
 
@@ -553,7 +530,6 @@ class GetMutation(object):
 #        self.logger.debug(mutations_foldX)
 
         # compile a list of mutations
-        assert(str(mut_data.domain_sequences[0].seq)[int(mut_data.mutation_domain[1:-1])-1] == mut_data.mutation_domain[0])
         mutCodes = [mutation[0] + mut_data.chains_modeller[0] + mut_data.position_modeller[0] + mutation[-1], ]
         self.logger.debug('Mutcodes for foldx:')
         self.logger.debug(mutCodes)
@@ -741,8 +717,7 @@ class GetMutation(object):
         #######################################################################
         # Save alignments and modeller models to output database for storage
         # Move template files to the output folder as a tar archives
-#        self.make_tarfile(self.HOME + self.outputPath + save_path + '_' + mutation + '.tar.bz2',
-#                          save_path[:-1])
+        # self.make_tarfile(self.HOME + self.outputPath + save_path + '_' + mutation + '.tar.bz2', save_path[:-1])
 
         #######################################################################
         self.logger.info('Finished processing template:')
@@ -781,11 +756,16 @@ class GetMutation(object):
         elif isinstance(d, sql_db.UniprotDomainPair):
             clf = self.clf_interface
             clf_features = self.clf_interface_features
-        header_df, feature_df = get_mutation_feature_vector(d, uniprot_mutation)
+        feature_name_conversion = {
+            'normDOPE': 'norm_dope',
+            'seq_id_avg': 'alignment_identity'}
+        clf_features = [feature_name_conversion.get(x, x) for x in clf_features]
+
+        feature_df = get_mutation_features(d, uniprot_mutation)
+        feature_df = format_mutation_features(feature_df, isinstance(d, sql_db.UniprotDomainPair))
         feature_df = convert_features_to_differences(feature_df, True) # keep mut, remove it in next step
-        for column_name in feature_df.columns:
-            if column_name not in clf_features:
-                feature_df.drop(column_name, axis=1, inplace=True)
+        feature_df = feature_df[clf_features]
+
         uniprot_mutation.ddg = clf.predict(feature_df)[0]
         self.logger.debug('Predicted ddG: {}'.format(uniprot_mutation.ddg))
         return uniprot_mutation
@@ -862,7 +842,7 @@ class GetMutation(object):
         """
         domains = [['Null', 'Null'], ] # extract the full sequence
 
-        pdb = PDBTemplate(self.pdb_path, pdbCode, chain, domains, self.unique_temp_folder, self.unique_temp_folder, self.logger)
+        pdb = pdb_template.PDBTemplate(self.pdb_path, pdbCode, chain, domains, self.unique_temp_folder, self.unique_temp_folder, self.logger)
 
         HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
         chainNumberingDomain = pdb.get_chain_numbering(chain)
@@ -875,7 +855,7 @@ class GetMutation(object):
 
     def _getCrystalStructure(self, pdbCode, chains, savePDB, FULL_PATH=False):
         domains = [['Null', 'Null'] for i in range(len(chains)) ]
-        pdb = PDBTemplate(self.pdb_path, pdbCode, chains, domains, savePDB, self.unique_temp_folder, self.logger)
+        pdb = pdb_template.PDBTemplate(self.pdb_path, pdbCode, chains, domains, savePDB, self.unique_temp_folder, self.logger)
         HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
 
         SWITCH_CHAIN = False

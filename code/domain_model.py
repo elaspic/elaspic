@@ -57,7 +57,7 @@ class GetModel(object):
             'Aligning: {}/{}*{}:{}'
             .format(d.uniprot_id, d.pdbfam_name, d.template.domain_def.replace(':', '-'), d.template.cath_id))
 
-        alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors = \
+        alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offset = \
             self.perform_alignments_and_modelling(
                 [d.uniprot_id], [d.uniprot_sequence.uniprot_sequence], [d.template.domain_def],
                 d.template.domain.pdb_id, [d.template.domain.pdb_chain], [d.template.domain.pdb_domain_def], d.path_to_data)
@@ -93,8 +93,12 @@ class GetModel(object):
                 if rel_sasa is None or rel_sasa is np.nan:
                     msms_length_mismatch = True
                 rel_sasa_for_each_residue.append(rel_sasa)
-        d.template.model.sasa_score = ','.join(['{:.2}'.format(x) for x in rel_sasa_for_each_residue])
+        d.template.model.sasa_score = ','.join(['{:.2f}'.format(x) for x in rel_sasa_for_each_residue])
 
+        d.template.model.model_domain_def = self._truncate_domain_defs(
+            d.template.domain_def, 
+            [x if x else 0 for x in domain_def_offset])
+            
         if msms_length_mismatch:
             self.logger.error('msms score length mismatch')
             model_errors.append('msms score length mismatch')
@@ -103,7 +107,7 @@ class GetModel(object):
         model_errors =', '.join(model_errors)
         if model_errors != '':
             d.template.model.model_errors = model_errors
-            
+
 #        return uniprot_model
 
 
@@ -122,7 +126,7 @@ class GetModel(object):
                 d.template.cath_id_2,
                 d.uniprot_domain_2.uniprot_id))
 
-        alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors = \
+        alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offsets = \
             self.perform_alignments_and_modelling(
                 [d.uniprot_domain_1.uniprot_id, d.uniprot_domain_2.uniprot_id],
                 [d.uniprot_domain_1.uniprot_sequence.uniprot_sequence,
@@ -154,7 +158,7 @@ class GetModel(object):
         chain_1_interactions = list(set([key[:2] for key in interactions_between_chains.keys()]))
         chain_2_interactions = list(set([value[:2] for values in interactions_between_chains.values() for value in values]))
         if not chain_1_interactions and not chain_2_interactions:
-            raise errors.ChainsNotInteracting(
+            raise errors.ChainsNotInteractingError(
                 'Chains %s and %s are not interacting! chain_1_interactions: %s, chain_2_interactions: %s' %
                 (d.template.model.chain_1, d.template.model.chain_2,
                  ','.join(list(chain_1_interactions)), ','.join(list(chain_2_interactions)),))
@@ -226,7 +230,7 @@ class GetModel(object):
                 len(chain_2_interacting_uninum) == 0)):
             raise errors.ChainsNotInteracting(
                 'Chains %s and %s are not interacting! chain_1_interactions: %s, chain_2_interactions: %s' %
-                (d.template.model.chain_1, d.template.model.chain_2, 
+                (d.template.model.chain_1, d.template.model.chain_2,
                 ','.join(list(chain_1_interactions)), ','.join(list(chain_2_interactions)),))
 
         if ((chain_1_interacting_aa_from_uniprot != chain_1_interacting_aa) or
@@ -246,6 +250,14 @@ class GetModel(object):
         d.template.model.interface_area_hydrophilic = interface_area[1] if not np.isnan(interface_area[1]) else None
         d.template.model.interface_area_total = interface_area[2] if not np.isnan(interface_area[2]) else None
 
+        # Save model_domain_defs, which might be truncated compared to uniprot_domain_template domain defs
+        d.template.model.model_domain_def_1 = self._truncate_domain_defs(
+            d.uniprot_domain_1.template.domain_def, 
+            [x if x else 0 for x in domain_def_offsets[0]])
+        d.template.model.model_domain_def_2 = self._truncate_domain_defs(
+            d.uniprot_domain_2.template.domain_def, 
+            [x if x else 0 for x in domain_def_offsets[1]])        
+        
         # Values common for single domains and interactions
         model_errors =', '.join(model_errors)
         if model_errors != '':
@@ -253,6 +265,15 @@ class GetModel(object):
 
         # return uniprot_model
 
+    def _truncate_domain_defs(self, domain_def, domain_def_offset):
+        n_gaps_start, n_gaps_end = [x if x else 0 for x in domain_def_offset]
+        domain_def_new = (
+            [str(int(domain_def.split(':')[0]) + n_gaps_start)] + 
+            domain_def.split(':')[1:-1] + 
+            [str(int(domain_def.split(':')[-1]) - n_gaps_end)])
+        domain_def_new = ':'.join(domain_def_new)
+        return domain_def_new
+            
 
     def _get_unique_resnum_and_sequence(self, interactions):
         """
@@ -274,24 +295,33 @@ class GetModel(object):
         """
         """
         model_errors = []
+        
         # Folder for storing files for export to output
         save_path = self.temp_path + path_to_data
         self.logger.debug('Template pdb: {}'.format(pdb_id))
         self.logger.debug('save path: {}'.format(save_path))
         uniprot_domain_seqrecs = self.get_uniprot_domain_seqrecs(uniprot_ids, uniprot_sequences, uniprot_domain_defs)
         pdb, pdb_domain_seqrecs = self.get_pdb_domain_seqrecs(pdb_id, pdb_chains, pdb_domain_defs)
+        
         # Perform the alignments
+        self.logger.debug('Performing alignments...')
         alignmnets = []
         alignment_filenames = []
-        
-        self.logger.debug('Performing alignments...')
-        for uniprot_domain_seqrec, pdb_domain_seqrec in zip(uniprot_domain_seqrecs, pdb_domain_seqrecs):
-            alignment, alignment_filename = self.perform_alignment(uniprot_domain_seqrec, pdb_domain_seqrec, 'expresso', path_to_data)
+        domain_def_offsets = []
+        for i in range(len(uniprot_domain_seqrecs)):
+            alignment, alignment_filename = self.perform_alignment(
+                uniprot_domain_seqrecs[i], pdb_domain_seqrecs[i], '3dcoffee', path_to_data)
+            domain_def_offset = self._get_alignment_overhangs(alignment)
+            if any(domain_def_offset):
+                uniprot_domain_seqrecs[i] = uniprot_domain_seqrecs[i][domain_def_offset[0]:domain_def_offset[-1]]
+                alignment, alignment_filename = self.perform_alignment(
+                    uniprot_domain_seqrecs[i], pdb_domain_seqrecs[i], '3dcoffee', path_to_data)
             alignmnets.append(alignment)
             alignment_filenames.append(alignment_filename)
-        
-        self.logger.debug('Joining alignments for different chains...')
+            domain_def_offsets.append(domain_def_offset)
+
         # Join alignments for different chains
+        self.logger.debug('Joining alignments for different chains...')
         target_ids = [al[0].id for al in alignmnets]
         target_id = '_'.join(target_ids)
         target_seq = '/'.join([str(alignmnet[0].seq) for alignmnet in alignmnets])
@@ -310,15 +340,16 @@ class GetModel(object):
         if len(hetatm_chains) > 1:
             raise Exception('Too many extra chains!')
         if len(hetatm_chains) == 1:
-            target_seq += '/' + '.' * len(hetatm_chains[0])
-            template_seq += '/' + '.'* len(hetatm_chains[0])
+            number_of_hetatms_excluding_water = len([res for res in hetatm_chains[0] if res.id[0] != 'W'])
+            target_seq += '/' + '.' * number_of_hetatms_excluding_water
+            template_seq += '/' + '.'* number_of_hetatms_excluding_water
 
         # Write the alignment file for modeller
         pir_alignment_filename = self.unique_temp_folder + 'modeller/outFile_wildtype'
         with open(pir_alignment_filename, 'w') as pir_alignment_filehandle:
             self._write_to_pir_alignment(pir_alignment_filehandle, 'sequence', target_id, target_seq)
             self._write_to_pir_alignment(pir_alignment_filehandle, 'structure', template_id, template_seq)
-            
+
         # Make the homology model and check if it is knotted
         norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(
             pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder)
@@ -331,7 +362,31 @@ class GetModel(object):
             self.unique_temp_folder + 'modeller/' + pdb_filename_wt,
             save_path + pdb_filename_wt), shell=True)
 
-        return alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors
+        return alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offsets
+
+
+    def _get_alignment_overhangs(self, aln):
+        """ Remove gap overhangs from the alignments. 
+        There are cases where no template sequence is availible for a big chunk
+        of the protein. Return the number of amino acids that should be removed
+        from the start and end of the query sequence in order to match the template.
+        """
+        n_gaps_start = 0
+        n_gaps_end = 0
+        for aa_query, aa_template in zip(*aln):
+            if aa_query != '-' and aa_template == '-':
+                n_gaps_start += 1
+            else:
+                break
+        for aa_query, aa_template in reversed(zip(*aln)):
+            if aa_query != '-' and aa_template == '-':
+                n_gaps_end += 1
+            else:
+                break
+        n_gaps_start = n_gaps_start if n_gaps_start else None
+        n_gaps_end = n_gaps_end if n_gaps_end else None
+        return n_gaps_start, n_gaps_end       
+
 
 
     def get_uniprot_domain_seqrecs(self, uniprot_ids, uniprot_sequences, uniprot_domain_defs):
@@ -370,23 +425,50 @@ class GetModel(object):
     def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data):
         """
         """
-        # Write both sequences to a single file
-        with open(self.unique_temp_folder + 'seqfiles.fasta', 'w') as seqfiles:
-            SeqIO.write([uniprot_seqrecord, pdb_seqrecord], seqfiles, 'fasta')
+        # sequence_ids = [uniprot_seqrecord.id, pdb_seqrecord.id]
+        alignment_fasta_file = self.unique_temp_folder + 'seqfiles.fasta'
+        alignment_template_file = self.unique_temp_folder + 'seqfiles.template_list'
+
+        # Write a fasta file with sequences to be aligned
+        with open(alignment_fasta_file, 'w') as fh:
+            SeqIO.write([uniprot_seqrecord, pdb_seqrecord], fh, 'fasta')
+
+        # Write a template PDB file in a format that is compatible with t_coffee
+        self.logger.debug("Cleaning pdb {} to serve as a template for t_coffee...".format(pdb_seqrecord.id + '.pdb'))
+        system_command = "t_coffee -other_pg extract_from_pdb {} > {}".format(
+            pdb_seqrecord.id + '.pdb', pdb_seqrecord.id.upper() + '.pdb')
+        child_process = hf.run_subprocess_locally(self.unique_temp_folder, system_command)
+        result, error_message = child_process.communicate()
+        if child_process.returncode:
+            self.logger.error(
+                "Error cleaning pdb!\nSystem command: '{}'\nResult: '{}'\nError message: '{}'"
+                .format(system_command, result, error_message))
+
+        # Write a template file for the sequences to be aligned
+        with open(alignment_template_file, 'w') as fh:
+            fh.writelines([
+                ">" + uniprot_seqrecord.id + " _P_ " + pdb_seqrecord.id.upper() + "\n"
+                ">" + pdb_seqrecord.id + " _P_ " + pdb_seqrecord.id.upper() + "\n"
+            ])
+
         # Perform the alignment
-        sequence_ids = [uniprot_seqrecord.id, pdb_seqrecord.id]
-        tcoffee = call_tcoffee.tcoffee_alignment(
+        t_coffee_parameters = [
             self.global_temp_path,
             self.unique_temp_folder,
-            [self.unique_temp_folder + 'seqfiles.fasta'],
-            sequence_ids,
+            [alignment_fasta_file],
+            [alignment_template_file],
             self.n_cores,
             self.pdb_path,
             mode,
-            self.logger)
+            self.logger,
+        ]
+        self.logger.debug("Calling t_coffee with parameters:\n" +
+            ', '.join(['{}'.format(x) for x in t_coffee_parameters]))
+        tcoffee = call_tcoffee.tcoffee_alignment(*t_coffee_parameters)
         alignments = tcoffee.align()
         assert len(alignments) == 1
         alignment = alignments[0]
+
         # Save the alignment
         self.logger.debug(alignment)
         alignment_filename = alignment[0].id + '_' + alignment[1].id + '.aln'
@@ -399,6 +481,7 @@ class GetModel(object):
         subprocess.check_call("cp -f '{}' '{}'".format(
             self.unique_temp_folder + 'tcoffee/' + alignment_filename,
             temp_save_path + alignment_filename), shell=True)
+
         return alignment, alignment_filename
 
 
@@ -443,12 +526,14 @@ class GetModel(object):
 
 
     def score_alignment(self, identity, coverage, alpha=0.95):
-        """
+        """ T-score from the interactome3d paper
         """
         return alpha * (identity) * (coverage) + (1.0 - alpha) * (coverage)
 
 
     def _write_to_pir_alignment(self, pir_alignment_filehandle, seq_type, seq_name, seq):
+        """ Write the *.pir alignment compatible with modeller
+        """
         pir_alignment_filehandle.write('>P1;' + seq_name + '\n')
         pir_alignment_filehandle.write(seq_type + ':' + seq_name + ':.:.:.:.::::\n')
         pir_alignment_filehandle.write(seq + '*')
@@ -469,19 +554,24 @@ class GetModel(object):
                 modeller_template_id = template_ids[0]
             else:
                 # Modelling two domains using two chains in the pdb
-                # if more than two chains are used this has to be adjusted
+                # If more than two chains are used this has to be adjusted
                 modeller_template_id = template_ids[0] + template_ids[1][-1]
 
-        modeller_path = self.unique_temp_folder + 'modeller/'
-        modeller = call_modeller.modeller(
+        modeller_parameters = [
             [pir_alignment_filename],
             modeller_target_id,
             modeller_template_id,
-            save_path, # path_to_pdb_for_modeller
+            save_path, # path to pdb for modeller
             self.unique_temp_folder, # path to folders with executables
             self.logger,
             self.modeller_runs,
-            loopRefinement=True)
+            True # loop refinement
+        ]
+        self.logger.debug(
+            "Calling modeller with parameters:\n" +
+            ', '.join(['{}'.format(x) for x in modeller_parameters]))
+        modeller = call_modeller.modeller(*modeller_parameters)
+        modeller_path = self.unique_temp_folder + 'modeller/'
         with hf.switch_paths(modeller_path):
             normDOPE, pdbFile, knotted = modeller.run()
 
@@ -499,8 +589,5 @@ class GetModel(object):
         io.save(modeller_path + pdbFile)
 
         return normDOPE, pdbFile, knotted
-
-
-
 
 

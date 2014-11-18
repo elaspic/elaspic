@@ -8,6 +8,8 @@ import numpy as np
 import gzip
 import string
 
+from collections import defaultdict
+
 import Bio
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
@@ -18,8 +20,8 @@ from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 
 import errors
+import helper_functions as hf
 
-from collections import defaultdict
 
 A_DICT = {
     'A':'ALA', 'R':'ARG', 'N':'ASN', 'D':'ASP', 'C':'CYS', 'E':'GLU',
@@ -31,9 +33,12 @@ A_DICT = {
 AAA_DICT = dict([(value,key) for key,value in A_DICT.items()])
 AAA_DICT['UNK'] = 'X'
 AAA_DICT['MSE'] = 'M'
+AAA_DICT['SEP'] = 'S'
+AAA_DICT['CSD'] = 'C'
 amino_acids = AAA_DICT.keys()
 methylated_lysines = ['MLZ', 'MLY', 'M3L']
 lysine_atoms = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
+
 
 
 
@@ -68,6 +73,7 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
             return euclidean_distance(a, b)
 
 
+@hf.memoized
 def get_pdb(pdb_code, pdb_path, tmp_path='/tmp/', pdb_type='ent'):
     """ Parse a pdb file with biopythons PDBParser() and return the structure
     :param pdb_code:  type String     four letter code of the PDB file
@@ -217,7 +223,7 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 
 class PDBTemplate():
 
-    def __init__(self, pdb_path, pdb_id, chain_ids, domain_boundaries, outputPath, tmp_path, logger):
+    def __init__(self, pdb_path, pdb_id, chain_ids, domain_boundaries, output_path, tmp_path, logger):
         """
         Parameters
         ----------
@@ -230,14 +236,14 @@ class PDBTemplate():
         """
         self.pdb_path = pdb_path
         self.pdb_id = pdb_id
-        self.outputPath = outputPath
-        self.structure = get_pdb(self.pdb_id, self.pdb_path, tmp_path)
+        self.output_path = output_path
+        self.structure = get_pdb(self.pdb_id, self.pdb_path, tmp_path).copy()
         if chain_ids:
             self.chain_ids = chain_ids
         else: # If [], extract all chains
             self.chain_ids = [chain.id for chain in self.structure[0].child_list]
         self.domain_boundaries = domain_boundaries # If [[[1,10],[20,45],]], extract the entire domain
-        
+
         self.domain_boundaries_extended = []
         if self.domain_boundaries:
             self.domain_boundaries_extended = [[
@@ -245,14 +251,18 @@ class PDBTemplate():
                  convert_resnum_alphanumeric_to_numeric(domain_fragment_end)]
                 for (domain_fragment_start, domain_fragment_end) in domain]
                 for domain in self.domain_boundaries]
-                    
+
         self.logger = logger
 
 
-    def extract(self, r_cutoff = 6):
+    def extract(self, r_cutoff = 5):
         """ Extract the wanted chains out of the PDB file. Removes water atoms
-        and selects the domain regions.
+        and selects the domain regions (i.e. selects only those parts of the 
+        domain that are within the domain boundaries specified).
         """
+        self.logger.debug(
+            'Extracting pdb {}, chains {}, domain_boundaries {}, domain_boundaries_extended {}'
+            .format(self.pdb_id, self.chain_ids, self.domain_boundaries, self.domain_boundaries_extended))
         io = PDBIO()
         model = self.structure[0] # assuming that model 0 is always the desired one
         new_structure = Bio.PDB.Structure.Structure('ID')
@@ -297,7 +307,7 @@ class PDBTemplate():
                     chain_for_hetatms.add(hetatm_res)
                     continue
                 # Cut each chain to domain boundaries
-                if (not self.domain_boundaries_extended or 
+                if (not self.domain_boundaries_extended or
                     len(self.domain_boundaries_extended[i]) == 1 and self.domain_boundaries_extended[i][0] == []):
                         pass # If a chain does not have any domain boundaries, use the entire chain
                 else:
@@ -311,16 +321,29 @@ class PDBTemplate():
                         continue
                 res_idx += 1
             new_model.add(chain)
+        # Make sure that there are atoms
+        if not new_model.get_atoms():
+            raise errors.PDBEmptySequenceError(
+                'pdb_id: {}, pdb_chain: {}, pdb_domain_def: {}'
+                .format(self.pdb_id, self.chain_ids, self.domain_boundaries))
         # Remove hetatms if they are > 6A away from the chains of interest
         ns = NeighborSearch(list(new_model.get_atoms()))
         chain_for_hetatms.id = [c for c in reversed(string.uppercase) if c not in self.chain_ids][0]
-        for res_1 in chain_for_hetatms:
+        res_idx = 0
+        while res_idx < len(chain_for_hetatms):
+            res_1 = chain_for_hetatms.child_list[res_idx]
             in_contact = False
             for atom_1 in res_1:
-                if ns.search(atom_1.get_coord(), r_cutoff, 'S'):
+                interacting_residues = ns.search(atom_1.get_coord(), r_cutoff, 'R')
+                if interacting_residues:
+                    # self.logger.debug(res_1.id)
+                    # self.logger.debug(interacting_residues)
                     in_contact = True
-            if not in_contact:
-                chain_for_hetatms.detach_child(res_1.id)
+            if in_contact:
+                res_idx += 1
+                continue
+            # self.logger.debug('Detaching child: {}'.format(res_1.id))
+            chain_for_hetatms.detach_child(res_1.id)
         if chain_for_hetatms:
             self.logger.debug('Adding hetatm chain of length {}'.format(len(chain_for_hetatms)))
             new_model.add(chain_for_hetatms)
@@ -329,8 +352,27 @@ class PDBTemplate():
         self.structure = new_structure
         # Save the structure to a pdb file
         io.set_structure(self.structure)
-        outFile = self.outputPath + self.pdb_id + ''.join(self.chain_ids) + '.pdb'
-        io.save(outFile)
+        outFile = self.output_path + self.pdb_id + ''.join(self.chain_ids) + '.pdb'
+        try:
+            io.save(outFile)
+        except AttributeError as e:
+            self.logger.error(str(e))
+            self.logger.debug('Setting all residues and atoms marked as disorded to non-disorded')
+            for m in self.structure:
+                for c in m:
+                    for r in c:
+                        if r.is_disordered() or r.disordered:
+                            self.logger.debug(
+                                'Changing disordered_flag on residue {} from {} to 0'
+                                .format(r, r.disordered))
+                            r.disordered = 0
+                        for a in r:
+                            if a.is_disordered() or a.disordered_flag:
+                                self.logger.debug(
+                                    'Changing disordered_flag on atom {} from {} to 0'
+                                    .format(a, a.disordered_flag))
+                                a.disordered_flag = 0
+            io.save(outFile)
 
         # Save the sequence of each chain to a fasta file
         self.chain_numbering_extended_dict = {}
@@ -339,10 +381,11 @@ class PDBTemplate():
             chain_numbering_extended, chain_sequence = self.get_chain_numbering(chain_id, return_sequence=True, return_extended=True)
             self.chain_numbering_extended_dict[chain_id] = chain_numbering_extended
             self.chain_sequence_dict[chain_id] = chain_sequence
-            with open(self.outputPath + self.pdb_id + chain_id + '.seq.txt', 'w') as f:
+            with open(self.output_path + self.pdb_id + chain_id + '.seq.txt', 'w') as f:
                 f.write('>' + self.pdb_id + chain_id + '\n')
                 f.write(chain_sequence + '\n')
                 f.write('\n')
+        self.logger.debug('PDB {} extracted successfully\n'.format(self.pdb_id))
 
 
     def get_chain_numbering(self, chain_id, return_sequence=False, return_extended=False, include_hetatms=False):
@@ -372,7 +415,7 @@ if __name__ == '__main__':
     pdbCode = '1VOK'
     chains = ['A', 'B']
     domainBoundaries = [[23, 115], [29, 198]]
-    outputPath = './'
+    output_path = './'
 
     import logging
     logger = logging.getLogger(__name__)
@@ -383,5 +426,5 @@ if __name__ == '__main__':
     logger.addHandler(handler)
     log = logger
 
-    p = PDBTemplate(pdbPath, pdbCode, chains, domainBoundaries, outputPath, logger)
+    p = PDBTemplate(pdbPath, pdbCode, chains, domainBoundaries, output_path, logger)
     print p.extract()

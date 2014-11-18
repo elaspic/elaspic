@@ -63,7 +63,7 @@ class PDBNotFoundError(Exception):
 
 class PDBEmptySequenceError(Exception):
     """ One of the sequences is missing from the alignment. The most likely cause
-    is that the alignment domain definitions were incorrect. 
+    is that the alignment domain definitions were incorrect.
     """
     pass
 
@@ -74,7 +74,7 @@ class PDBDomainDefsError(Exception):
 
 class PDBChainError(Exception):
     pass
-        
+
 
 ###############################################################################
 # Making models
@@ -103,8 +103,6 @@ class ResourceError(Exception):
 
 ###############################################################################
 # Computing mutations
-
-
 
 class NoSequenceFound(Exception):
     pass

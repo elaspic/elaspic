@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sun Feb  3 15:07:51 2013
 
-@author: alexey
-"""
 import os
 import pandas as pd
 import urllib2
@@ -41,8 +37,9 @@ import errors as error
 # database type...
 #SQL_FLAVOUR = 'sqlite_file'
 SQL_FLAVOUR = 'mysql'
-SCHEMA_VERSION = 'elaspic'
+#SCHEMA_VERSION = 'elaspic'
 #SCHEMA_VERSION = 'elaspic_dev'
+SCHEMA_VERSION = 'elaspic_training'
 
 ### Constants
 if SQL_FLAVOUR.split('_')[0] == 'sqlite': # sqlite_memory, sqlite_flatfile
@@ -264,6 +261,7 @@ class UniprotDomainModel(Base):
     chain = Column(String(SHORT))
     norm_dope = Column(Float)
     sasa_score = Column(Text)
+    model_domain_def = Column(String(MEDIUM))
     m_date_modified = Column(DateTime, default=datetime.datetime.utcnow,
                              onupdate=datetime.datetime.utcnow, nullable=False)
     # Relationships
@@ -392,6 +390,8 @@ class UniprotDomainPairModel(Base):
     interface_dg = Column(Float)
     interacting_aa_1 = Column(Text)
     interacting_aa_2 = Column(Text)
+    model_domain_def_1 = Column(String(MEDIUM))
+    model_domain_def_2 = Column(String(MEDIUM))
     m_date_modified = Column(DateTime, default=datetime.datetime.utcnow,
                              onupdate=datetime.datetime.utcnow, nullable=False)
     # Relationships
@@ -506,7 +506,7 @@ class MyDatabase(object):
         elif SQL_FLAVOUR == 'sqlite_file':
             autocommit=True
             autoflush=True
-            engine = create_engine('sqlite:///' + path_to_sqlite_db, isolation_level='READ UNCOMMITTED') # 
+            engine = create_engine('sqlite:///' + path_to_sqlite_db, isolation_level='READ UNCOMMITTED') #
         elif SQL_FLAVOUR == 'postgresql':
             autocommit=False
             autoflush=False
@@ -565,7 +565,7 @@ class MyDatabase(object):
             raise
         finally:
             session.close()
-           
+
 
     ###########################################################################
     # Get objects from the database
@@ -773,7 +773,7 @@ class MyDatabase(object):
             except subprocess.CalledProcessError as e:
                 self.logger.error(e)
                 ud.uniprot_sequence.provean.provean_supset_filename = ''
-                
+
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, uniprot_id):
         if (path_to_data
