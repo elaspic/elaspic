@@ -22,31 +22,6 @@ from Bio.PDB.PDBParser import PDBParser
 import sql_db
 
 
-#%%
-class memoized(object):
-    """Memoize data returned by a function
-    """
-    def __init__(self, func):
-        self.func = func
-        self.cache = {}
-
-    def __call__(self, *args, **kwargs):
-        key = (self.func, args, frozenset(kwargs.iteritems()))
-        try:
-            return deepcopy(self.cache[key])
-        except KeyError:
-            self.cache[key] = self.func(*args, **kwargs)
-            return deepcopy(self.cache[key])
-        except TypeError:
-            print "Argumnets are non-cacheable.\nReturned the calculated value(s) without caching."
-            return self.func(*args, **kwargs)
-
-    def clear_cache(self):
-        """Reset the memoized cache
-        """
-        print "cache reset!"
-        self.cache = {}
-        
 
 #%% Elaspic-specific helper functions
 def get_uniprot_base_path(d):
