@@ -37,9 +37,9 @@ import errors as error
 # database type...
 #SQL_FLAVOUR = 'sqlite_file'
 SQL_FLAVOUR = 'mysql'
-#SCHEMA_VERSION = 'elaspic'
+SCHEMA_VERSION = 'elaspic'
 #SCHEMA_VERSION = 'elaspic_dev'
-SCHEMA_VERSION = 'elaspic_training'
+#SCHEMA_VERSION = 'elaspic_training'
 
 ### Constants
 if SQL_FLAVOUR.split('_')[0] == 'sqlite': # sqlite_memory, sqlite_flatfile
@@ -760,7 +760,7 @@ class MyDatabase(object):
             tmp_save_path = self.temp_path + path_to_data
             archive_save_path = self.path_to_archive + path_to_data
             path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
-            subprocess.check_call("mkdir -p '{}'".format(path_to_alignment), shell=True)
+            subprocess.check_call("mkdir -m 775 -p '{}'".format(path_to_alignment), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + d.template.model.alignment_filename,
                 tmp_save_path + d.template.model.alignment_filename), shell=True)
@@ -772,7 +772,7 @@ class MyDatabase(object):
                 self._copy_provean(d)
             except subprocess.CalledProcessError as e:
                 self.logger.error(e)
-                ud.uniprot_sequence.provean.provean_supset_filename = ''
+                d.uniprot_sequence.provean.provean_supset_filename = ''
 
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, uniprot_id):
@@ -784,8 +784,8 @@ class MyDatabase(object):
             archive_save_path = self.path_to_archive + path_to_data
             path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
             path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
-            subprocess.check_call("mkdir -p '{}'".format(path_to_alignment_1), shell=True)
-            subprocess.check_call("mkdir -p '{}'".format(path_to_alignment_2), shell=True)
+            subprocess.check_call("mkdir -m 775 -p '{}'".format(path_to_alignment_1), shell=True)
+            subprocess.check_call("mkdir -m 775 -p '{}'".format(path_to_alignment_2), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + d.template.model.alignment_filename_1,
                 tmp_save_path + d.template.model.alignment_filename_1), shell=True)
@@ -855,7 +855,7 @@ class MyDatabase(object):
             tmp_save_path = self.temp_path + path_to_data
             archive_save_path = self.path_to_archive + path_to_data
             path_to_mutation = tmp_save_path + '/'.join(mutation.model_filename_wt.split('/')[:-1]) + '/'
-            subprocess.check_call("mkdir -p '{}'".format(path_to_mutation), shell=True)
+            subprocess.check_call("mkdir -m 775 -p '{}'".format(path_to_mutation), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + mutation.model_filename_wt,
                 tmp_save_path + mutation.model_filename_wt), shell=True)
@@ -1222,7 +1222,7 @@ class MyDatabase(object):
 #            names = ['uniprot_domain_id', 'uniprot_id', 'pfam_name', 'alignment_def']
             uniprot_domain_df_with_id = pd.read_csv(uniprot_domain_infile, sep='\t', na_values='\N', index_col=False)
             uniprot_domain_df_with_id['alignment_defs'] = uniprot_domain_df_with_id['alignment_def']
-            uniprot_domain_df_with_id['alignment_def'] = uniprot_domain_df_with_id['alignment_defs'].apply(lambda x: encode_domain(decode_domain(x)))
+            uniprot_domain_df_with_id['alignment_def'] = uniprot_domain_df_with_id['alignment_defs'].apply(lambda x: hf.encode_domain(hf.decode_domain(x)))
 
             tmp = uniprot_domain_df_with_id.merge(uniprot_sequence_df, how='left', left_on='uniprot_id', right_on='uniprot_id', suffixes=('_domain', ''))
             uniprot_domain_df_with_id['organism_name'] = tmp['uniprot_name'].apply(lambda x: x.split('_')[-1])

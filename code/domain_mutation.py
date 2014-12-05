@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-import cPickle as pickle
 
 import pandas as pd
 
@@ -248,7 +247,12 @@ class GetMutation(object):
             d_1 = d
             self.logger.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
             pdbfam_name = d.pdbfam_name
-            domain_start, domain_end = hf.decode_domain_def(d.template.domain_def)
+            if d.template.model.model_domain_def != None:
+                self.logger.debug('Using model domain definitions')
+                domain_start, domain_end = hf.decode_domain_def(d.template.model.model_domain_def)
+            else:
+                self.logger.debug('Using template domain definitions')
+                domain_start, domain_end = hf.decode_domain_def(d.template.domain_def)
             alignment, __ = self.db.get_alignment(d.template.model, d.path_to_data)
 #            alignment_id = d.template.model.alignment_id
             chains_pdb = [d.template.domain.pdb_chain, ]
@@ -263,8 +267,15 @@ class GetMutation(object):
             if uniprot_id_1 == d.uniprot_domain_1.uniprot_id:
                 uniprot_id_2 = d.uniprot_domain_2.uniprot_id
                 d_1, d_2 = d.uniprot_domain_1, d.uniprot_domain_2
-                domain_start, domain_end = hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)
-                domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)
+                # 
+                if (d.template.model.model_domain_def_1 != None and 
+                    d.template.model.model_domain_def_2 != None):
+                        domain_start, domain_end = hf.decode_domain_def(d.template.model.model_domain_def_1)
+                        domain_2_start, domain_2_end = hf.decode_domain_def(d.template.model.model_domain_def_2)
+                else:
+                        domain_start, domain_end = hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)
+                        domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)
+                                        
                 alignment, __ = self.db.get_alignment(d.template.model, d.path_to_data)
 #                alignment_id = d.alignment_id_1
                 chains_pdb = [d.template.domain_1.pdb_chain, d.template.domain_2.pdb_chain]
@@ -275,8 +286,15 @@ class GetMutation(object):
                 self.logger.debug('Mutated uniprot is uniprot 2. Rearranging...')
                 uniprot_id_2 = d.uniprot_domain_1.uniprot_id
                 d_1, d_2 = d.uniprot_domain_2, d.uniprot_domain_1
-                domain_start, domain_end = hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)
-                domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)
+                
+                if (d.template.model.model_domain_def_1 != None and 
+                    d.template.model.model_domain_def_2 != None):
+                        domain_start, domain_end = hf.decode_domain_def(d.template.model.model_domain_def_2)
+                        domain_2_start, domain_2_end = hf.decode_domain_def(d.template.model.model_domain_def_1)
+                else:
+                        domain_start, domain_end = hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)
+                        domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)
+
                 __, alignment = self.db.get_alignment(d.template.model, d.path_to_data)
 #                alignment_id = d.alignment_id_2
                 chains_pdb = [d.template.domain_2.pdb_chain, d.template.domain_1.pdb_chain]
@@ -322,7 +340,7 @@ class GetMutation(object):
         self.logger.debug('Modeller pdb file: {}'.format(save_path + pdbFile_wt))
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         structure = parser.get_structure('ID', save_path + pdbFile_wt)
-        position_modeller = pdb_template.convert_position_to_resid(structure[0], chains_modeller[0], [position_domain])
+        position_modeller = pdb_template.convert_position_to_resid(structure[0][chains_modeller[0]], [position_domain])
         mutation_modeller = mutation[0] + position_modeller[0] + mutation[-1]
 
         # Save the results
@@ -543,8 +561,8 @@ class GetMutation(object):
                       self.logger)
         repairedPDB_wt_list, repairedPDB_mut_list = fX_wt('BuildModel', mutCodes)
 
-        wt_chain_sequences = pdb_template.get_chain_sequences(repairedPDB_wt_list[0])
-        mut_chain_sequences = pdb_template.get_chain_sequences(repairedPDB_mut_list[0])
+        wt_chain_sequences = pdb_template.get_structure_sequences(repairedPDB_wt_list[0])
+        mut_chain_sequences = pdb_template.get_structure_sequences(repairedPDB_mut_list[0])
         self.logger.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
         self.logger.debug('wt_chain_sequences: %s' % str(wt_chain_sequences))
         self.logger.debug('repairedPDB_mut_list: %s' % str(repairedPDB_mut_list))
@@ -837,25 +855,22 @@ class GetMutation(object):
 
 
     def _get_pdb_sequence(self, pdbCode, chain):
-        """
+        """ 
         Return the pdb file sequence (not SEQRES)
         """
-        domains = [['Null', 'Null'], ] # extract the full sequence
-
-        pdb = pdb_template.PDBTemplate(self.pdb_path, pdbCode, chain, domains, self.unique_temp_folder, self.unique_temp_folder, self.logger)
-
+        pdb = pdb_template.PDBTemplate(self.pdb_path, pdbCode, chain, [], self.unique_temp_folder, self.unique_temp_folder, self.logger)
+        
         HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
-        chainNumberingDomain = pdb.get_chain_numbering(chain)
-        if chainNumberingDomain == []:
+        __, chain_numbering = pdb.get_chain_sequence_and_numbering(chain)
+        if chain_numbering == []:
             raise errors.PDBError('Could not get the pdb numbering for ' + pdbCode + '_' + chain)
 
-        return next(SeqIO.parse(self.unique_temp_folder + '/' + pdbCode + chain + '.seq.txt', 'fasta')), chainNumberingDomain
+        return next(SeqIO.parse(self.unique_temp_folder + '/' + pdbCode + chain + '.seq.txt', 'fasta')), chain_numbering
 
 
 
     def _getCrystalStructure(self, pdbCode, chains, savePDB, FULL_PATH=False):
-        domains = [['Null', 'Null'] for i in range(len(chains)) ]
-        pdb = pdb_template.PDBTemplate(self.pdb_path, pdbCode, chains, domains, savePDB, self.unique_temp_folder, self.logger)
+        pdb = pdb_template.PDBTemplate(self.pdb_path, pdbCode, chains, [], savePDB, self.unique_temp_folder, self.logger)
         HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
 
         SWITCH_CHAIN = False
