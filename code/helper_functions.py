@@ -14,6 +14,7 @@ import datetime
 import logging
 import time
 
+from copy import deepcopy
 from contextlib import contextmanager
 
 from Bio.PDB.PDBParser import PDBParser
@@ -21,9 +22,9 @@ from Bio.PDB.PDBParser import PDBParser
 import sql_db
 
 
-
+#%%
 class memoized(object):
-    """
+    """Memoize data returned by a function
     """
     def __init__(self, func):
         self.func = func
@@ -32,35 +33,18 @@ class memoized(object):
     def __call__(self, *args, **kwargs):
         key = (self.func, args, frozenset(kwargs.iteritems()))
         try:
-            return self.cache[key]
+            return deepcopy(self.cache[key])
         except KeyError:
             self.cache[key] = self.func(*args, **kwargs)
-            return self.cache[key]
+            return deepcopy(self.cache[key])
         except TypeError:
-            print "ncacheable, so just return calculated value without caching"
+            print "Argumnets are non-cacheable.\nReturned the calculated value(s) without caching."
             return self.func(*args, **kwargs)
 
-    def __get__(self, obj, objtype=None):
-        """ Support instance methods
-        
-        self == instance of memoized
-        obj == instance of my_class
-        objtype == class object of __main__.my_class
-        """
-        if obj is None:
-            return self
-
-        # new_func is the bound method my_func of my_class instance
-        new_func = self.func.__get__(obj, objtype)
-
-        # instantiates a brand new class...this is not helping us, because it's a 
-        # new class each time, which starts with a fresh cache
-        return self.__class__(new_func)
-
     def clear_cache(self):
-        """ New method that will allow me to reset the memoized cache
+        """Reset the memoized cache
         """
-        print "cache reset"
+        print "cache reset!"
         self.cache = {}
         
 
@@ -89,6 +73,7 @@ def get_uniprot_base_path(d):
             uniprot_id_part_2=uniprot_id[3:5],
             uniprot_id_part_3=uniprot_id,))
     return uniprot_base_path
+
 
 
 def get_uniprot_domain_path(d):

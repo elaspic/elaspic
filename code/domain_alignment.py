@@ -466,7 +466,7 @@ class GetTemplate():
                     self.logger.error("Didn't find the pdb file? Check if it is correct. Skipping...")
                     continue
                 pdb.extract()
-                __, chain_sequence = pdb.get_chain_numbering(domain.pdb_chain, return_sequence=True, return_extended=True)
+                chain_sequence, __ = pdb.get_chain_sequence_and_numbering(domain.pdb_chain)
                 chain_sequence = SeqRecord(seq=Seq(chain_sequence), id=domain.pdb_id+domain.pdb_chain)
                 domain_def = sql_db.decode_domain(d.envelope_def)
                 template = sql_db.UniprotDomainTemplate()
@@ -559,9 +559,9 @@ class GetTemplate():
                     self.logger.error("Didn't find the pdb file? Check if it is correct. Skipping...")
                     continue
                 pdb.extract()
-                chain_numbering_1, chain_sequence_1 = pdb.get_chain_numbering(domain.domain_1.pdb_chain, return_sequence=True, return_extended=True)
+                chain_sequence_1, chain_numbering_1 = pdb.get_chain_sequence_and_numbering(domain.domain_1.pdb_chain)
                 chain_sequence_1 = SeqRecord(seq=Seq(chain_sequence_1), id=domain.domain_1.pdb_id+domain.domain_1.pdb_chain)
-                chain_numbering_2, chain_sequence_2 = pdb.get_chain_numbering(domain.domain_2.pdb_chain, return_sequence=True, return_extended=True)
+                chain_sequence_2, chain_numbering_2 = pdb.get_chain_sequence_and_numbering(domain.domain_2.pdb_chain)
                 chain_sequence_2 = SeqRecord(seq=Seq(chain_sequence_2), id=domain.domain_2.pdb_id+domain.domain_2.pdb_chain)
                 domain_def_1 = sql_db.decode_domain(d.uniprot_domain_1.envelope_def)
                 domain_def_2 = sql_db.decode_domain(d.uniprot_domain_2.envelope_def)
@@ -1068,7 +1068,7 @@ class GetTemplate():
         pdb = pdb_template.PDBTemplate(self.pdb_path, pdb_code, chain_id, domains,
                                        self.unique_temp_folder, self.unique_temp_folder, self.logger)
         pdb.extract()
-        chain_numbering_extended, chain_sequence = pdb.get_chain_numbering(chain_id, return_sequence=True, return_extended=True)
+        chain_sequence, chain_numbering_extended = pdb.get_chain_sequence_and_numbering(chain_id)
         chain_seqrecord = SeqRecord(seq=Seq(chain_sequence), id=pdb_code+chain_id)
 
         # It happend that the given domain boundaries are larger than the

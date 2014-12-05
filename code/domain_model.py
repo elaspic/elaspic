@@ -57,7 +57,7 @@ class GetModel(object):
             'Aligning: {}/{}*{}:{}'
             .format(d.uniprot_id, d.pdbfam_name, d.template.domain_def.replace(':', '-'), d.template.cath_id))
 
-        alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offset = \
+        alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offsets = \
             self.perform_alignments_and_modelling(
                 [d.uniprot_id], [d.uniprot_sequence.uniprot_sequence], [d.template.domain_def],
                 d.template.domain.pdb_id, [d.template.domain.pdb_chain], [d.template.domain.pdb_domain_def], d.path_to_data)
@@ -97,7 +97,7 @@ class GetModel(object):
 
         d.template.model.model_domain_def = self._truncate_domain_defs(
             d.template.domain_def, 
-            [x if x else 0 for x in domain_def_offset])
+            domain_def_offsets[0])
             
         if msms_length_mismatch:
             self.logger.error('msms score length mismatch')
@@ -167,9 +167,9 @@ class GetModel(object):
         chain_2_interactions.sort(key=lambda x: int(''.join([c for c in x[0] if c.isdigit()]))) # Sort by residue for easy reading
 
         chain_1_interacting_resnum, chain_1_interacting_aa = self._get_unique_resnum_and_sequence(chain_1_interactions)
-        chain_1_numbering = pdb_template.get_chain_numbering(model[d.template.model.chain_1], return_extended=True)
+        __, chain_1_numbering = pdb_template.get_chain_sequence_and_numbering(model[d.template.model.chain_1])
         chain_2_interacting_resnum, chain_2_interacting_aa = self._get_unique_resnum_and_sequence(chain_2_interactions)
-        chain_2_numbering = pdb_template.get_chain_numbering(model[d.template.model.chain_2], return_extended=True)
+        __, chain_2_numbering = pdb_template.get_chain_sequence_and_numbering(model[d.template.model.chain_2])
 
         self.logger.debug('chain_1_interactions:')
         self.logger.debug(chain_1_interactions)
@@ -253,10 +253,10 @@ class GetModel(object):
         # Save model_domain_defs, which might be truncated compared to uniprot_domain_template domain defs
         d.template.model.model_domain_def_1 = self._truncate_domain_defs(
             d.uniprot_domain_1.template.domain_def, 
-            [x if x else 0 for x in domain_def_offsets[0]])
+            domain_def_offsets[0])
         d.template.model.model_domain_def_2 = self._truncate_domain_defs(
             d.uniprot_domain_2.template.domain_def, 
-            [x if x else 0 for x in domain_def_offsets[1]])        
+            domain_def_offsets[1])        
         
         # Values common for single domains and interactions
         model_errors =', '.join(model_errors)
@@ -265,8 +265,9 @@ class GetModel(object):
 
         # return uniprot_model
 
+
     def _truncate_domain_defs(self, domain_def, domain_def_offset):
-        n_gaps_start, n_gaps_end = [x if x else 0 for x in domain_def_offset]
+        n_gaps_start, n_gaps_end = domain_def_offset
         domain_def_new = (
             [str(int(domain_def.split(':')[0]) + n_gaps_start)] + 
             domain_def.split(':')[1:-1] + 
@@ -313,7 +314,10 @@ class GetModel(object):
                 uniprot_domain_seqrecs[i], pdb_domain_seqrecs[i], '3dcoffee', path_to_data)
             domain_def_offset = self._get_alignment_overhangs(alignment)
             if any(domain_def_offset):
-                uniprot_domain_seqrecs[i] = uniprot_domain_seqrecs[i][domain_def_offset[0]:domain_def_offset[-1]]
+                self.logger.debug('Shortening uniprot domain sequence because the alignment had large overhangs...')
+                cut_from_start = domain_def_offset[0] if domain_def_offset[0] else None
+                cut_from_end = -domain_def_offset[1] if domain_def_offset[1] else None
+                uniprot_domain_seqrecs[i] = uniprot_domain_seqrecs[i][cut_from_start:cut_from_end]                    
                 alignment, alignment_filename = self.perform_alignment(
                     uniprot_domain_seqrecs[i], pdb_domain_seqrecs[i], '3dcoffee', path_to_data)
             alignmnets.append(alignment)
@@ -350,19 +354,25 @@ class GetModel(object):
             self._write_to_pir_alignment(pir_alignment_filehandle, 'sequence', target_id, target_seq)
             self._write_to_pir_alignment(pir_alignment_filehandle, 'structure', template_id, template_seq)
 
-        # Make the homology model and check if it is knotted
+        # Make the homology model and check if it is knotted               
         norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(
             pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder)
         self.logger.debug('model pdb file: %s, knotted: %s' % (pdb_filename_wt, knotted,))
         if knotted:
             model_errors.append('knotted')
 
-        # Save another copy of the modelled structure in the tmp export folder
+        # Rename the pdb file in order to prevent overwrites for cases where you wish
+        # to use multiple models (for example when making the training set)
+        pdb_filename_wt_new = '_'.join(uniprot_ids) + '_' + pdb_id + ''.join(pdb_chains) + '.pdb'
         subprocess.check_call("cp -f '{}' '{}'".format(
             self.unique_temp_folder + 'modeller/' + pdb_filename_wt,
-            save_path + pdb_filename_wt), shell=True)
+            self.unique_temp_folder + 'modeller/' + pdb_filename_wt_new), shell=True)
+        # Save another copy of the modelled structure in the tmp export folder
+        subprocess.check_call("cp -f '{}' '{}'".format(
+            self.unique_temp_folder + 'modeller/' + pdb_filename_wt_new,
+            save_path + pdb_filename_wt_new), shell=True)
 
-        return alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offsets
+        return alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt_new, knotted, model_errors, domain_def_offsets
 
 
     def _get_alignment_overhangs(self, aln):
@@ -383,10 +393,7 @@ class GetModel(object):
                 n_gaps_end += 1
             else:
                 break
-        n_gaps_start = n_gaps_start if n_gaps_start else None
-        n_gaps_end = n_gaps_end if n_gaps_end else None
-        return n_gaps_start, n_gaps_end       
-
+        return n_gaps_start, n_gaps_end
 
 
     def get_uniprot_domain_seqrecs(self, uniprot_ids, uniprot_sequences, uniprot_domain_defs):
@@ -404,15 +411,10 @@ class GetModel(object):
     def get_pdb_domain_seqrecs(self, pdb_id, pdb_chains, pdb_domain_defs):
         """
         """
-        decoded_pdb_domain_defs = []
-        for pdb_domain_def in pdb_domain_defs:
-            decoded_pdb_domain_defs.append(hf.decode_domain_def(pdb_domain_def, merge=False, return_string=True))
-        self.logger.debug('Obtaining protein sequence for pdb: {}, chains: {}'
-            .format(pdb_id, pdb_chains))
-        self.logger.debug('Raw domain definitions: {}, decoded domain definitions: {}'
-            .format(pdb_domain_defs, decoded_pdb_domain_defs))
+        self.logger.debug('Obtaining protein sequence for pdb: {}, chains: {}, domain_defs: {}'
+            .format(pdb_id, pdb_chains, pdb_domain_defs))
         pdb = pdb_template.PDBTemplate(
-            self.pdb_path, pdb_id, pdb_chains, decoded_pdb_domain_defs,
+            self.pdb_path, pdb_id, pdb_chains, pdb_domain_defs,
             self.unique_temp_folder, self.unique_temp_folder, self.logger)
         pdb.extract()
         pdb_domain_seqrecs = []
