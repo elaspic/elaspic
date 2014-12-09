@@ -96,9 +96,9 @@ class GetModel(object):
         d.template.model.sasa_score = ','.join(['{:.2f}'.format(x) for x in rel_sasa_for_each_residue])
 
         d.template.model.model_domain_def = self._truncate_domain_defs(
-            d.template.domain_def, 
+            d.template.domain_def,
             domain_def_offsets[0])
-            
+
         if msms_length_mismatch:
             self.logger.error('msms score length mismatch')
             model_errors.append('msms score length mismatch')
@@ -252,12 +252,12 @@ class GetModel(object):
 
         # Save model_domain_defs, which might be truncated compared to uniprot_domain_template domain defs
         d.template.model.model_domain_def_1 = self._truncate_domain_defs(
-            d.uniprot_domain_1.template.domain_def, 
+            d.uniprot_domain_1.template.domain_def,
             domain_def_offsets[0])
         d.template.model.model_domain_def_2 = self._truncate_domain_defs(
-            d.uniprot_domain_2.template.domain_def, 
-            domain_def_offsets[1])        
-        
+            d.uniprot_domain_2.template.domain_def,
+            domain_def_offsets[1])
+
         # Values common for single domains and interactions
         model_errors =', '.join(model_errors)
         if model_errors != '':
@@ -269,12 +269,12 @@ class GetModel(object):
     def _truncate_domain_defs(self, domain_def, domain_def_offset):
         n_gaps_start, n_gaps_end = domain_def_offset
         domain_def_new = (
-            [str(int(domain_def.split(':')[0]) + n_gaps_start)] + 
-            domain_def.split(':')[1:-1] + 
+            [str(int(domain_def.split(':')[0]) + n_gaps_start)] +
+            domain_def.split(':')[1:-1] +
             [str(int(domain_def.split(':')[-1]) - n_gaps_end)])
         domain_def_new = ':'.join(domain_def_new)
         return domain_def_new
-            
+
 
     def _get_unique_resnum_and_sequence(self, interactions):
         """
@@ -296,14 +296,14 @@ class GetModel(object):
         """
         """
         model_errors = []
-        
+
         # Folder for storing files for export to output
         save_path = self.temp_path + path_to_data
         self.logger.debug('Template pdb: {}'.format(pdb_id))
         self.logger.debug('save path: {}'.format(save_path))
         uniprot_domain_seqrecs = self.get_uniprot_domain_seqrecs(uniprot_ids, uniprot_sequences, uniprot_domain_defs)
         pdb, pdb_domain_seqrecs = self.get_pdb_domain_seqrecs(pdb_id, pdb_chains, pdb_domain_defs)
-        
+
         # Perform the alignments
         self.logger.debug('Performing alignments...')
         alignmnets = []
@@ -317,7 +317,7 @@ class GetModel(object):
                 self.logger.debug('Shortening uniprot domain sequence because the alignment had large overhangs...')
                 cut_from_start = domain_def_offset[0] if domain_def_offset[0] else None
                 cut_from_end = -domain_def_offset[1] if domain_def_offset[1] else None
-                uniprot_domain_seqrecs[i] = uniprot_domain_seqrecs[i][cut_from_start:cut_from_end]                    
+                uniprot_domain_seqrecs[i] = uniprot_domain_seqrecs[i][cut_from_start:cut_from_end]
                 alignment, alignment_filename = self.perform_alignment(
                     uniprot_domain_seqrecs[i], pdb_domain_seqrecs[i], '3dcoffee', path_to_data)
             alignmnets.append(alignment)
@@ -354,7 +354,7 @@ class GetModel(object):
             self._write_to_pir_alignment(pir_alignment_filehandle, 'sequence', target_id, target_seq)
             self._write_to_pir_alignment(pir_alignment_filehandle, 'structure', template_id, template_seq)
 
-        # Make the homology model and check if it is knotted               
+        # Make the homology model and check if it is knotted
         norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(
             pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder)
         self.logger.debug('model pdb file: %s, knotted: %s' % (pdb_filename_wt, knotted,))
@@ -376,7 +376,7 @@ class GetModel(object):
 
 
     def _get_alignment_overhangs(self, aln):
-        """ Remove gap overhangs from the alignments. 
+        """ Remove gap overhangs from the alignments.
         There are cases where no template sequence is availible for a big chunk
         of the protein. Return the number of amino acids that should be removed
         from the start and end of the query sequence in order to match the template.
@@ -417,6 +417,8 @@ class GetModel(object):
             self.pdb_path, pdb_id, pdb_chains, pdb_domain_defs,
             self.unique_temp_folder, self.unique_temp_folder, self.logger)
         pdb.extract()
+        pdb.save_structure()
+        pdb.save_sequences()
         pdb_domain_seqrecs = []
         for pdb_chain in pdb_chains:
             chain_sequence = pdb.chain_sequence_dict[pdb_chain]

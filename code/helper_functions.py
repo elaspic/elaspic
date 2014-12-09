@@ -14,7 +14,6 @@ import datetime
 import logging
 import time
 
-from copy import deepcopy
 from contextlib import contextmanager
 
 from Bio.PDB.PDBParser import PDBParser
