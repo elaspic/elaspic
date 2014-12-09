@@ -267,15 +267,15 @@ class GetMutation(object):
             if uniprot_id_1 == d.uniprot_domain_1.uniprot_id:
                 uniprot_id_2 = d.uniprot_domain_2.uniprot_id
                 d_1, d_2 = d.uniprot_domain_1, d.uniprot_domain_2
-                # 
-                if (d.template.model.model_domain_def_1 != None and 
+                #
+                if (d.template.model.model_domain_def_1 != None and
                     d.template.model.model_domain_def_2 != None):
                         domain_start, domain_end = hf.decode_domain_def(d.template.model.model_domain_def_1)
                         domain_2_start, domain_2_end = hf.decode_domain_def(d.template.model.model_domain_def_2)
                 else:
                         domain_start, domain_end = hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)
                         domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)
-                                        
+
                 alignment, __ = self.db.get_alignment(d.template.model, d.path_to_data)
 #                alignment_id = d.alignment_id_1
                 chains_pdb = [d.template.domain_1.pdb_chain, d.template.domain_2.pdb_chain]
@@ -286,8 +286,8 @@ class GetMutation(object):
                 self.logger.debug('Mutated uniprot is uniprot 2. Rearranging...')
                 uniprot_id_2 = d.uniprot_domain_1.uniprot_id
                 d_1, d_2 = d.uniprot_domain_2, d.uniprot_domain_1
-                
-                if (d.template.model.model_domain_def_1 != None and 
+
+                if (d.template.model.model_domain_def_1 != None and
                     d.template.model.model_domain_def_2 != None):
                         domain_start, domain_end = hf.decode_domain_def(d.template.model.model_domain_def_2)
                         domain_2_start, domain_2_end = hf.decode_domain_def(d.template.model.model_domain_def_1)
@@ -791,6 +791,7 @@ class GetMutation(object):
 
 ###############################################################################
 # Methods when the input is a raw crystal structure
+# They are deprecated and do not work anymore...
 
     def get_pdb_and_mutations(self, mutations):
         # mutations is of the form I_V70A (2VIR_AB_C_TC131I, 1PGA_A__VA29P)
@@ -855,11 +856,11 @@ class GetMutation(object):
 
 
     def _get_pdb_sequence(self, pdbCode, chain):
-        """ 
+        """
         Return the pdb file sequence (not SEQRES)
         """
         pdb = pdb_template.PDBTemplate(self.pdb_path, pdbCode, chain, [], self.unique_temp_folder, self.unique_temp_folder, self.logger)
-        
+
         HETATMsInChain_PDBnumbering, HETflag, chains_pdb_order = pdb.extract()
         __, chain_numbering = pdb.get_chain_sequence_and_numbering(chain)
         if chain_numbering == []:

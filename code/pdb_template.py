@@ -9,11 +9,12 @@ import gzip
 import string
 import ftplib
 
+from fastcache import clru_cache
 from tempfile import NamedTemporaryFile
 from collections import defaultdict
 
 import Bio
-from Bio.PDB import PDBIO, NeighborSearch, Select
+from Bio.PDB import PDBIO, NeighborSearch
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB.Polypeptide import PPBuilder
@@ -46,7 +47,7 @@ lysine_atoms = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
 
 
 
-#%%############################################################################
+#%%################################################################################################
 ### Functions for downloading and parsing pdb files
 
 class MMCIFParserMod(MMCIFParser):
@@ -117,7 +118,7 @@ def _get_pdb_path_suffix(pdb_id, pdb_type='ent'):
     return pdb_path_suffix
 
 
-
+@clru_cache(maxsize=128, typed=False)
 def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=True):
     """
     Parse a pdb file with biopythons PDBParser() and return the structure.
@@ -329,12 +330,7 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 
 
 
-#%%############################################################################
-
-class NotDisordered(Select):
-    def accept_atom(self, atom):
-        return not atom.is_disordered() or atom.get_altloc()=='A'
-
+#%%################################################################################################
 
 class PDBTemplate():
 
@@ -428,12 +424,6 @@ class PDBTemplate():
         # If the hetatm chain is not empty, add it to the model
         new_structure.add(new_model)
         self.structure = new_structure
-
-        # Save the structure to a pdb file
-        self._save_structure()
-
-        # Save the sequence of each chain to a fasta file
-        self._save_sequences()
 
         self.logger.debug('PDB {} extracted successfully\n'.format(self.pdb_id))
 
@@ -562,7 +552,7 @@ class PDBTemplate():
                             a.disordered_flag = 0
 
 
-    def _save_structure(self):
+    def save_structure(self):
         io = PDBIO()
         io.set_structure(self.structure)
         outFile = self.output_path + self.pdb_id + ''.join(self.chain_ids) + '.pdb'
@@ -574,7 +564,7 @@ class PDBTemplate():
             io.save(outFile)
 
 
-    def _save_sequences(self):
+    def save_sequences(self):
         self.chain_numbering_extended_dict = {}
         self.chain_sequence_dict = {}
         for chain_id in self.chain_ids:
@@ -585,7 +575,6 @@ class PDBTemplate():
                 f.write('>' + self.pdb_id + chain_id + '\n')
                 f.write(chain_sequence + '\n')
                 f.write('\n')
-
 
 
 
@@ -604,10 +593,5 @@ if __name__ == '__main__':
     handler = logging.StreamHandler()
     handler.setLevel(logging.DEBUG)
     logger.addHandler(handler)
-    log = logger
-
-    p = PDBTemplate(pdbPath, pdbCode, chains, domainBoundaries, output_path, logger)
-    print p.extract()
-
 
 
