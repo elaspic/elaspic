@@ -97,8 +97,6 @@ class Domain(Base):
     cath_id = Column(String(SHORT, collation=BINARY_COLLATION),
                      index=True, nullable=False, primary_key=True)
     pdb_id = Column(String(SHORT), nullable=False)
-    pdb_type = Column(String(MEDIUM), nullable=True)
-    pdb_resolution = Column(Float, nullable=True)
     pdb_chain = Column(String(SHORT), nullable=False)
     pdb_domain_def = Column(String(MEDIUM), nullable=False)
     pdb_pdbfam_name = Column(String(LONG), nullable=False)
@@ -693,7 +691,7 @@ class MyDatabase(object):
                 session
                     .query(UniprotDomain)
                     .filter(UniprotDomain.uniprot_id == uniprot_id)
-                    .options(joinedload('template').joinedload('model'))
+                    # .options(joinedload('template').joinedload('model'))
                     .all() )
 
         d_idx = 0
@@ -726,7 +724,7 @@ class MyDatabase(object):
                 .filter(or_(
                     "uniprot_domain_1.uniprot_id='{}'".format(uniprot_id),
                     "uniprot_domain_2.uniprot_id='{}'".format(uniprot_id)))
-                .options(joinedload('template').joinedload('model'))
+                # .options(joinedload('template').joinedload('model'))
                 .all() )
 
         d_idx = 0
