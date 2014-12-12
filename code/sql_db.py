@@ -17,7 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import Column, Index, UniqueConstraint
 from sqlalchemy import Integer, Float, String, Boolean, Text, DateTime, Sequence
 from sqlalchemy import ForeignKey
-from sqlalchemy.orm import sessionmaker, relationship, backref, aliased, scoped_session, joinedload
+from sqlalchemy.orm import sessionmaker, relationship, backref, aliased, scoped_session, joinedload, contains_eager
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.serializer import loads, dumps
 
@@ -62,7 +62,7 @@ if SQL_FLAVOUR.startswith('sqlite'):
     schema_version_tuple = ({'sqlite_autoincrement': True},)
     uniprot_kb_schema_tuple = ({'sqlite_autoincrement': True},)
 else:
-    schema_version_tuple = ({'schema': SCHEMA_VERSION},)
+    # schema_version_tuple = ({'schema': SCHEMA_VERSION},)
     uniprot_kb_schema_tuple = ({'schema': 'uniprot_kb'},)
 
 
@@ -91,7 +91,7 @@ class Domain(Base):
             ['pdb_pdbfam_name'],
             ['pdb_id', 'pdb_chain'],
 #            (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True)]
-        ]) + schema_version_tuple
+        ]) #+ schema_version_tuple
     )
 
     cath_id = Column(String(SHORT, collation=BINARY_COLLATION),
@@ -111,7 +111,7 @@ class DomainContact(Base):
     __table_args__ = (
         get_index_list(__tablename__, [
             (['cath_id_1', 'cath_id_2'], True)
-        ]) + schema_version_tuple
+        ]) #+ schema_version_tuple
     )
 
     domain_contact_id = Column(Integer, index=True, nullable=False, primary_key=True)
@@ -154,7 +154,7 @@ class UniprotSequence(Base):
 
 class Provean(Base):
     __tablename__ = 'provean'
-    __table_args__ = schema_version_tuple
+    # __table_args__ = schema_version_tuple
 
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
                         index=True, nullable=False, primary_key=True)
@@ -170,7 +170,7 @@ class Provean(Base):
 
 class UniprotDomain(Base):
     __tablename__ = 'uniprot_domain'
-    __table_args__ = schema_version_tuple
+    # __table_args__ = schema_version_tuple
 
     uniprot_domain_id = Column(Integer, index=True, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
@@ -195,7 +195,7 @@ class UniprotDomainPair(Base):
     __table_args__ = (
         get_index_list(__tablename__, [
             (['uniprot_domain_id_1', 'uniprot_domain_id_2'], True)
-        ]) + schema_version_tuple
+        ]) #+ schema_version_tuple
     )
 
     uniprot_domain_pair_id = Column(Integer, index=True, nullable=False, primary_key=True, autoincrement=True)
@@ -222,7 +222,7 @@ class UniprotDomainPair(Base):
 
 class UniprotDomainTemplate(Base):
     __tablename__ = 'uniprot_domain_template'
-    __table_args__ = schema_version_tuple
+    #__table_args__ = schema_version_tuple
 
     uniprot_domain_id = Column(None, ForeignKey(UniprotDomain.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
                                index=True, nullable=False, primary_key=True)
@@ -248,7 +248,7 @@ class UniprotDomainTemplate(Base):
 
 class UniprotDomainModel(Base):
     __tablename__ = 'uniprot_domain_model'
-    __table_args__ = schema_version_tuple
+    #__table_args__ = schema_version_tuple
 
     uniprot_domain_id = Column(
         None, ForeignKey(UniprotDomainTemplate.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
@@ -271,7 +271,7 @@ class UniprotDomainModel(Base):
 
 class UniprotDomainMutation(Base):
     __tablename__ = 'uniprot_domain_mutation'
-    __table_args__ = schema_version_tuple
+    #__table_args__ = schema_version_tuple
 
     uniprot_id = Column(None, ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
                         index=True, nullable=False, primary_key=True)
@@ -308,7 +308,7 @@ class UniprotDomainMutation(Base):
 
 class UniprotDomainPairTemplate(Base):
     __tablename__ = 'uniprot_domain_pair_template'
-    __table_args__ = schema_version_tuple
+    #__table_args__ = schema_version_tuple
 
     uniprot_domain_pair_id = Column(
         None, ForeignKey(UniprotDomainPair.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
@@ -370,7 +370,7 @@ class UniprotDomainPairTemplate(Base):
 
 class UniprotDomainPairModel(Base):
     __tablename__ = 'uniprot_domain_pair_model'
-    __table_args__ = schema_version_tuple
+    #__table_args__ = schema_version_tuple
 
     uniprot_domain_pair_id = Column(
         None, ForeignKey(UniprotDomainPairTemplate.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
@@ -401,7 +401,7 @@ class UniprotDomainPairModel(Base):
 
 class UniprotDomainPairMutation(Base):
     __tablename__ = 'uniprot_domain_pair_mutation'
-    __table_args__ = schema_version_tuple
+    #__table_args__ = schema_version_tuple
 
     uniprot_id = Column(None, ForeignKey(
         UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
@@ -492,7 +492,7 @@ class MyDatabase(object):
     """
     """
     def __init__(
-            self, sql_flavour=SQL_FLAVOUR, is_immutable=False,
+            self, sql_flavour=SQL_FLAVOUR, schema_version=SCHEMA_VERSION, is_immutable=False,
             temp_path='/tmp/', path_to_archive='/home/kimlab1/database_data/elaspic_v2/',
             path_to_sqlite_db='', create_database=False, clear_schema=False, logger=None):
 
@@ -535,9 +535,9 @@ class MyDatabase(object):
 
 
     def _create_database(self, engine, clear_schema):
-        """ Creating a new database in the schema specified by the
-        'SCHEMA_VERSION' global variable.
-        If 'clear_schema' == True, remove all the tables in the schema first.
+        """
+        Create a new database in the schema specified by the ``schema_version`` global variable.
+        If ``clear_schema`` == True, remove all the tables in the schema first.
         """
         metadata_tables = Base.metadata.tables.copy()
 #        del metadata_tables['uniprot_kb.uniprot_sequence']
@@ -689,10 +689,12 @@ class MyDatabase(object):
         with self.session_scope() as session:
             uniprot_domains = (
                 session
-                    .query(UniprotDomain)
-                    .filter(UniprotDomain.uniprot_id == uniprot_id)
-                    # .options(joinedload('template').joinedload('model'))
-                    .all() )
+                .query(UniprotDomain)
+                .filter(UniprotDomain.uniprot_id == uniprot_id)
+                # .options(joinedload('template').joinedload('model'))
+                .options(joinedload('template', innerjoin=True))
+                .all()
+            )
 
         d_idx = 0
         while d_idx < len(uniprot_domains):
@@ -725,7 +727,9 @@ class MyDatabase(object):
                     "uniprot_domain_1.uniprot_id='{}'".format(uniprot_id),
                     "uniprot_domain_2.uniprot_id='{}'".format(uniprot_id)))
                 # .options(joinedload('template').joinedload('model'))
-                .all() )
+                .options(joinedload('template', innerjoin=True))
+                .all()
+            )
 
         d_idx = 0
         while d_idx < len(uniprot_domain_pairs):

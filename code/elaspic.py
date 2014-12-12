@@ -50,6 +50,7 @@ class Pipeline(object):
         self.web_server = configParser.get('DEFAULT', 'web_server')
 
         # From [SETTINGS]
+        self.schema_version = configParser.get('SETTINGS', 'schema_version')
         self.blast_db_path = configParser.get('SETTINGS', 'blast_db_path')
         self.pdb_path = configParser.get('SETTINGS', 'pdb_path')
         self.output_path = configParser.get('SETTINGS', 'output_path')
@@ -202,7 +203,7 @@ class Pipeline(object):
         if self.db_type.lower() == 'sqlite_file':
             self.logger.info('Path to the database: {}'.format(self.db_path))
         self.db = sql_db.MyDatabase(
-            path_to_sqlite_db=self.db_path, sql_flavour=self.db_type,
+            path_to_sqlite_db=self.db_path, sql_flavour=self.db_type, schema_version=self.schema_version,
             temp_path=self.temp_path, path_to_archive=self.path_to_archive,
             is_immutable=self.db_is_immutable, logger=self.logger)
 
