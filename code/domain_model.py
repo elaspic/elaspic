@@ -141,6 +141,15 @@ class GetModel(object):
         structure = hf.get_pdb_structure(self.unique_temp_folder + 'modeller/' + pdb_filename_wt)
         model = structure[0]
 
+        model_domain_def_1 = self._truncate_domain_defs(
+            d.uniprot_domain_1.template.domain_def,
+            domain_def_offsets[0])
+
+        model_domain_def_2 = self._truncate_domain_defs(
+            d.uniprot_domain_2.template.domain_def,
+            domain_def_offsets[1])
+
+
         ###
         if d.template.model == None:
             d.template.model = sql_db.UniprotDomainPairModel()
@@ -189,11 +198,14 @@ class GetModel(object):
 #            self.logger.debug('chain_2_numbering:')
 #            self.logger.debug(chain_2_numbering)
 
+        model_domain_1_start = hf.decode_domain_def(model_domain_def_1)[0]
         chain_1_interacting_uninum = [
-            hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)[0] + chain_1_numbering.index(resnum)
+            model_domain_1_start + chain_1_numbering.index(resnum)
             for resnum in chain_1_interacting_resnum]
+
+        model_domain_2_start = hf.decode_domain_def(model_domain_def_2)[0]
         chain_2_interacting_uninum = [
-            hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)[0] + chain_2_numbering.index(resnum)
+            model_domain_2_start + chain_2_numbering.index(resnum)
             for resnum in chain_2_interacting_resnum]
 
         chain_1_interactions_uniprot = zip(chain_1_interacting_uninum, chain_1_interacting_aa)
@@ -215,12 +227,14 @@ class GetModel(object):
             chain_2_interacting_aa_from_uniprot += d.uniprot_domain_2.uniprot_sequence.uniprot_sequence[uniprot_idx]
 
         self.logger.debug('domain_def_1: {}'.format(d.uniprot_domain_1.template.domain_def))
+        self.logger.debug('model_domain_def_1: {}'.format(model_domain_def_1))
         self.logger.debug('chain_1_interactions_uniprot: {}'.format(chain_1_interactions_uniprot))
         self.logger.debug('uniprot_sequence_1: {}'.format(d.uniprot_domain_1.uniprot_sequence.uniprot_sequence))
         self.logger.debug('chain_1_interacting_aa: {}'.format(chain_1_interacting_aa))
         self.logger.debug('chain_1_interacting_aa_from_uniprot: {}'.format(chain_1_interacting_aa_from_uniprot))
 
         self.logger.debug('domain_def_2: {}'.format(d.uniprot_domain_2.template.domain_def))
+        self.logger.debug('model_domain_def_2: {}'.format(model_domain_def_2))
         self.logger.debug('chain_2_interactions_uniprot: {}'.format(chain_2_interactions_uniprot))
         self.logger.debug('uniprot_sequence_2: {}'.format(d.uniprot_domain_2.uniprot_sequence.uniprot_sequence))
         self.logger.debug('chain_2_interacting_aa: {}'.format(chain_2_interacting_aa))
@@ -251,12 +265,8 @@ class GetModel(object):
         d.template.model.interface_area_total = interface_area[2] if not np.isnan(interface_area[2]) else None
 
         # Save model_domain_defs, which might be truncated compared to uniprot_domain_template domain defs
-        d.template.model.model_domain_def_1 = self._truncate_domain_defs(
-            d.uniprot_domain_1.template.domain_def,
-            domain_def_offsets[0])
-        d.template.model.model_domain_def_2 = self._truncate_domain_defs(
-            d.uniprot_domain_2.template.domain_def,
-            domain_def_offsets[1])
+        d.template.model.model_domain_def_1 = model_domain_def_1
+        d.template.model.model_domain_def_2 = model_domain_def_2
 
         # Values common for single domains and interactions
         model_errors =', '.join(model_errors)
