@@ -512,7 +512,7 @@ class MyDatabase(object):
         elif SQL_FLAVOUR == 'mysql':
             autocommit=False
             autoflush=False
-            engine = create_engine('mysql://elaspic:elaspic@192.168.6.19:3306/{}'.format(SCHEMA_VERSION))
+            engine = create_engine('mysql://elaspic:elaspic@192.168.6.19:3306/{}'.format(schema_version))
 
         if logger is None:
             logger = logging.getLogger(__name__)

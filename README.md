@@ -15,10 +15,10 @@ should run successfully.
 
 It is recommended that you use python 2.7 for this project. If your system
 comes with an earlier version of python, you should download and compile 
-python2.7 binaries from source. Use ``make altinstall`` instead of 
+python 2.7 binaries from source. Use ``make altinstall`` instead of 
 ``make install`` to prevent any system python binaries from being overwritten.
-Also, you must send the following options to *./configure* in order for
-the required python packages to work: 
+Also, you must specify the following options while running *./configure* 
+in order for the required python packages to work: 
 
     --enable-unicode=ucs4 
     --enable-ipv6 
@@ -29,8 +29,8 @@ The ``--enable-unicode=ucs4`` is particularly important, as it is required
 for 3rd-party packags such as numpy / scipy.
 
 
-After you have python 2.7 binaries, it is recommended that you set up
-a virual python environment to work with the elaspic project. 
+After you have installed python 2.7 binaries, it is recommended that you 
+set up a virual python environment to work with the elaspic project. 
 The instructions on how to do this can be found on the 
 [virtualenv](http://virtualenv.readthedocs.org/en/latest/) and
 [virtuanenvwrapper](http://virtualenvwrapper.readthedocs.org/en/latest/)
@@ -42,7 +42,7 @@ If you would like a development environment with a working copy of
 [Spyder](https://bitbucket.org/spyder-ide/spyderlib/downloads),
 you also have to run ``pip install -r requirements_dev.txt`` and copy the
 *elaspic/src/postmkvirtualenv* file to your *.virtualenvs* path (or 
-manually create the symbolic links contained in that file). 
+manually create the symbolic links specified in that file). 
 
 
 ### Installing external software
