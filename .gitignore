@@ -1,11 +1,11 @@
 # Folders
 bin_centos/
 bin_ubuntu/
-code_supl/
 db/
-error_logs_to_fix/
+data/
 input/
 reports/
+publications/
 
 # Hidden files
 .*
