@@ -408,6 +408,8 @@ class GetMutation(object):
         if not uniprot_mutation.stability_energy_wt:
             self.logger.debug('Evaluating the structural impact of the mutation...')
             uniprot_mutation = self.evaluate_structural_impact(d, mut_data, uniprot_mutation)
+            uniprot_mutation.ddg = 1.0
+            uniprot_mutation.provean_score = 1.0
 
 #        if (uniprot_mutation.provean_score and
 #                uniprot_mutation.stability_energy_wt and
@@ -786,6 +788,7 @@ class GetMutation(object):
 
         uniprot_mutation.ddg = clf.predict(feature_df)[0]
         self.logger.debug('Predicted ddG: {}'.format(uniprot_mutation.ddg))
+
         return uniprot_mutation
 
 
