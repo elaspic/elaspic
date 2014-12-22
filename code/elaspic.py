@@ -34,6 +34,7 @@ class Pipeline(object):
                 'db_type': sql_db.SQL_FLAVOUR,
                 'path_to_archive': '/home/kimlab1/database_data/elaspic_v2/',
                 'web_server': False,
+                'schema_version': 'elaspic',
             })
         configParser.read(configFile)
 
@@ -48,9 +49,9 @@ class Pipeline(object):
         self.db_path = configParser.get('DEFAULT', 'db_path')
         self.db_is_immutable = True if self.db_type.lower().startswith('sqlite') else False
         self.web_server = configParser.get('DEFAULT', 'web_server')
+        self.schema_version = configParser.get('DEFAULT', 'schema_version')
 
         # From [SETTINGS]
-        self.schema_version = configParser.get('SETTINGS', 'schema_version')
         self.blast_db_path = configParser.get('SETTINGS', 'blast_db_path')
         self.pdb_path = configParser.get('SETTINGS', 'pdb_path')
         self.output_path = configParser.get('SETTINGS', 'output_path')
