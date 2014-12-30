@@ -425,14 +425,15 @@ class Pipeline(object):
             if not self.mutations:
                 self.logger.debug('Not evaluating mutations because no mutations specified...')
                 continue
-            elif ( (isinstance(d, sql_db.UniprotDomain) and
-                    not d.template.domain) or
-                    (isinstance(d, sql_db.UniprotDomainPair) and
-                    not (d.template.domain_1 and d.template.domain_2)) ):
+            elif ( (isinstance(d, sql_db.UniprotDomain) and not d.template.domain) or
+                    (isinstance(d, sql_db.UniprotDomainPair) and not (d.template.domain_1 and d.template.domain_2)) ):
                 self.logger.debug('Skipping because no structural template is availible...')
                 continue
-            elif not d.template.model or not d.template.model.model_filename:
+            elif d.template.model == None or d.template.model.model_filename == None:
                 self.logger.debug('Skipping because no model...')
+                continue
+            elif d.template.model.model_errors != None:
+                self.logger.debug('Skipping because the model has errors: {}!'.format(d.template.model.model_errors))
                 continue
 
             self.logger.debug('Going over all mutations: {}'.format(self.mutations))

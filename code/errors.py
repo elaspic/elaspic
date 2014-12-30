@@ -137,3 +137,8 @@ class MutationOutsideDomainError(Exception):
 class MutationOutsideInterfaceError(Exception):
     pass
 
+class NoModelFoundError(Exception):
+    pass
+
+
+
