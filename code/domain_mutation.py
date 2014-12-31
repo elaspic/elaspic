@@ -105,8 +105,8 @@ def format_mutation_features(feature_df, core_or_interface):
 def get_mutation_features(d, mut, row_idx=0):
     """
     """
-    feature_dict = {key: value for (key, value) in mut.__dict__.iteritems() if key[0] != '_'}
-
+    feature_dict = {key: value for (key, value) in mut.__dict__.iteritems() if not key.startswith('_')}
+    print(feature_dict)
     feature_dict.update({
         # Header columns
         # 'uniprot_id': mut.uniprot_id,
@@ -127,6 +127,8 @@ def get_mutation_features(d, mut, row_idx=0):
             'clan_name': d.pfam_clan,
             #
             'alignment_identity': d.template.alignment_identity,
+            'alignment_coverage': d.template.alignment_coverage,
+            'alignment_score': d.template.alignment_score,
         })
 
     elif hasattr(d, 'uniprot_domain_pair_id'):
@@ -186,6 +188,7 @@ def decode_text_as_list(list_string):
     return zip(*[[str2num(x) for x in sublist.split(':')] for sublist in list_string.split(',')])
 
 
+
 ###############################################################################
 class MutationData(object):
 
@@ -233,10 +236,11 @@ class GetMutation(object):
         self.gap_e = gap_e
         self.n_cores = n_cores
         self.provean_temp_path = provean_temp_path
-#        with open(bin_path + 'clf_domain.pickle', 'rb') as ifh:
-#            self.clf_domain, self.clf_domain_features = pickle.load(ifh)
-#        with open(bin_path + 'clf_interface.pickle', 'rb') as ifh:
-#            self.clf_interface, self.clf_interface_features = pickle.load(ifh)
+
+        self.clf_domain = pd.read_pickle(bin_path + 'machine_learning_protherm_clf.pickle')
+        self.clf_domain_features = pd.read_pickle(bin_path + 'machine_learning_protherm_features.pickle')
+#        self.clf_interface = pd.read_pickle(bin_path + 'clf_interface.pickle')
+#        self.clf_interface_features = pd.read_pickle(bin_path + 'clf_interface_features.pickle')
 
 
     def get_mutation_data(self, d, uniprot_id_1, mutation):
@@ -398,7 +402,8 @@ class GetMutation(object):
     def evaluate_mutation(self, d, mut_data, uniprot_mutation):
         """
         """
-        if (mut_data.path_to_provean_supset and not uniprot_mutation.provean_score):
+        if (mut_data.path_to_provean_supset and
+            uniprot_mutation.provean_score in {None, 1.0}): # TODO: change back to None
             self.logger.debug('Calculating the provean score for the mutation...')
             try:
                 provean_mutation, provean_score = self.get_provean_score(
@@ -416,14 +421,12 @@ class GetMutation(object):
         if not uniprot_mutation.stability_energy_wt:
             self.logger.debug('Evaluating the structural impact of the mutation...')
             uniprot_mutation = self.evaluate_structural_impact(d, mut_data, uniprot_mutation)
-            uniprot_mutation.ddg = 1.0
-            uniprot_mutation.provean_score = 1.0
 
-#        if (uniprot_mutation.provean_score and
-#                uniprot_mutation.stability_energy_wt and
-#                uniprot_mutation.ddg == None):
-#            self.logger.debug('Predicting the thermodynamic effect of the mutation...')
-#            uniprot_mutation = self.predict_thermodynamic_effect(d, uniprot_mutation)
+        if (uniprot_mutation.provean_score and
+            uniprot_mutation.stability_energy_wt and
+            uniprot_mutation.ddg in {None, 1.0}): # TODO: Change back to None
+                self.logger.debug('Predicting the thermodynamic effect of the mutation...')
+                uniprot_mutation = self.predict_thermodynamic_effect(d, uniprot_mutation)
 
         return uniprot_mutation
 
@@ -767,8 +770,12 @@ class GetMutation(object):
             clf = self.clf_domain
             clf_features = self.clf_domain_features
         elif isinstance(d, sql_db.UniprotDomainPair):
-            clf = self.clf_interface
-            clf_features = self.clf_interface_features
+            # TODO: FIX THIS
+            #clf = self.clf_interface
+            #clf_features = self.clf_interface_features
+            uniprot_mutation.ddg = 1.0
+            return uniprot_mutation.ddg
+
         feature_name_conversion = {
             'normDOPE': 'norm_dope',
             'seq_id_avg': 'alignment_identity'}
