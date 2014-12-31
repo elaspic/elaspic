@@ -6,9 +6,12 @@ Created on Sat Dec 22 19:03:01 2012
 """
 
 from os import environ
+import time
+from Bio import SeqIO
 from Bio import AlignIO
 import errors
 import helper_functions as hf
+
 
 class tcoffee_alignment:
     """
@@ -27,13 +30,13 @@ class tcoffee_alignment:
 
     """
     def __init__(
-            self, global_temp_path, unique_temp_folder, alignment_fasta_files,
-            alignment_template_files, n_cores, pdb_path, mode, logger):
+            self, global_temp_path, unique_temp_folder, uniprot_seqrecord,
+            pdb_seqrecord, n_cores, pdb_path, mode, logger):
 
         self.global_temp_path = global_temp_path
         self.unique_temp_folder = unique_temp_folder
-        self.alignment_fasta_files = alignment_fasta_files
-        self.alignment_template_files = alignment_template_files
+        self.uniprot_seqrecord = uniprot_seqrecord
+        self.pdb_seqrecord = pdb_seqrecord
         self.alnFormat = 'clustal'
         self.n_cores = n_cores
         self.pdb_path = pdb_path
@@ -44,11 +47,9 @@ class tcoffee_alignment:
     def align(self):
         """ Start t_coffee in expresso mode and return the alignment
         """
-        alignments = []
-        for alignment_fasta_file, alignment_template_file in zip(
-                self.alignment_fasta_files, self.alignment_template_files):
-            alignments.append(self.__call_tcoffee(alignment_fasta_file, alignment_template_file))
+        alignments = [self._call_tcoffee()]
         return alignments
+
 
 
     def __call_tcoffee_system_command(self, alignment_fasta_file, alignment_template_file, out, mode):
@@ -156,8 +157,11 @@ class tcoffee_alignment:
         return system_command, my_env
 
 
-    def __call_tcoffee(self, alignment_fasta_file, alignment_template_file,
-            GAPOPEN=-0.0, GAPEXTEND=-0.0):
+
+
+
+
+    def _call_tcoffee(self, GAPOPEN=-0.0, GAPEXTEND=-0.0):
         """ Calls t_coffee (make sure BLAST is installed locally)
         Parameters
         ----------
@@ -173,16 +177,45 @@ class tcoffee_alignment:
 
         return: Biopython multiple sequence alignment object
         """
-        # mode should be 'expresso'
-        out = self.unique_temp_folder + 'sequenceAlignment.aln'
+        ### Spliced from another function
+
+        # sequence_ids = [uniprot_seqrecord.id, pdb_seqrecord.id]
+        alignment_fasta_file = self.unique_temp_folder + 'seqfiles.fasta'
+        alignment_template_file = self.unique_temp_folder + 'seqfiles.template_list'
+
+        # Write a fasta file with sequences to be aligned
+        with open(alignment_fasta_file, 'w') as fh:
+            SeqIO.write([self.uniprot_seqrecord, self.pdb_seqrecord], fh, 'fasta')
+
+        # Write a template file for the sequences to be aligned
+        with open(alignment_template_file, 'w') as fh:
+            fh.writelines([
+                ">" + self.uniprot_seqrecord.id + " _P_ " + self.pdb_seqrecord.id.upper() + "\n"
+                ">" + self.pdb_seqrecord.id + " _P_ " + self.pdb_seqrecord.id.upper() + "\n"
+            ])
+
 
         # try the alignment in expresso mode (structure based with sap alignment)
+        out = self.unique_temp_folder + 'sequenceAlignment.aln'
         system_command, my_env = self.__call_tcoffee_system_command(
             alignment_fasta_file, alignment_template_file, out, self.mode)
-        self.logger.debug("t_coffee system command:\n{}".format(system_command))
 
-        import time
+
+        # Write a template PDB file in a format that is compatible with t_coffee
+        self.logger.debug("Cleaning pdb {} to serve as a template for t_coffee...".format(self.pdb_seqrecord.id + '.pdb'))
+        format_pdb_system_command = "t_coffee -other_pg extract_from_pdb {} > {}".format(
+            self.pdb_seqrecord.id + '.pdb', self.pdb_seqrecord.id.upper() + '.pdb')
+        child_process = hf.run_subprocess_locally(self.unique_temp_folder, format_pdb_system_command, env=my_env)
+        result, error_message = child_process.communicate()
+        if child_process.returncode:
+            self.logger.error(
+                "Error cleaning pdb!\nSystem command: '{}'\nResult: '{}'\nError message: '{}'"
+                .format(system_command, result, error_message))
         time.sleep(0.2)
+
+
+        # Perform t_coffee alignment
+        self.logger.debug("t_coffee system command:\n{}".format(system_command))
         child_process = hf.run_subprocess_locally(self.unique_temp_folder, system_command, env=my_env)
         result, error_message = child_process.communicate()
         self.logger.debug("t_coffee results:\n{}".format(result.strip()))
