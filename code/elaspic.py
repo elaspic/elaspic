@@ -291,18 +291,20 @@ class Pipeline(object):
 #                    self.path_to_archive + hf.get_uniprot_base_path(d) +
 #                    d.uniprot_sequence.provean.provean_supset_filename)
                 if os.path.isfile(path_to_provean_supset):
+                    if not self.remake_provean_supset:
+                        self.logger.debug('The provean supset has already been calculated. Done!\n')
+                        return None
                     first_aa = d.uniprot_sequence.uniprot_sequence[0]
                     domain_mutation = '{0}1{0}'.format(first_aa)
                     result, error_message, return_code = domain_alignment.check_provean_supporting_set(
                         self, domain_mutation, d.uniprot_sequence.uniprot_sequence, d.uniprot_id,
                         path_to_provean_supset, save_supporting_set=False, check_mem_usage=False)
-                    if return_code == 0 or not self.remake_provean_supset :
-                        self.logger.debug('The provean supset has already been calculated. Done!')
+                    if return_code == 0:
+                        self.logger.debug('The provean supset has already been calculated. Done!\n')
                         return None
-                    else:
-                        self.logger.debug('Provean supporting set caused an error:\n\n{}'.format(error_message))
-                        self.logger.debug('Recompiling...')
-                        provean = d.uniprot_sequence.provean
+                    self.logger.debug('Provean supporting set caused an error:\n\n{}'.format(error_message))
+                    self.logger.debug('Recompiling...')
+                    provean = d.uniprot_sequence.provean
                 else:
                     self.logger.error('Provean has been calculated but the file is missing! Recompiling...')
                     provean = d.uniprot_sequence.provean
@@ -333,7 +335,7 @@ class Pipeline(object):
 
         self.__clear_provean_temp_files()
         self.db.merge_provean(provean, hf.get_uniprot_base_path(d))
-        self.logger.info('Finished computing provean for {}'.format(d.uniprot_id))
+        self.logger.info('Finished computing provean for {}\n'.format(d.uniprot_id))
         return provean
 
 
@@ -468,7 +470,8 @@ class Pipeline(object):
                 if (precalculated_mutation and
                         (precalculated_mutation.provean_score and
                         precalculated_mutation.stability_energy_wt and
-                        precalculated_mutation.ddg != None)):
+                        precalculated_mutation.ddg != None and
+                        precalculated_mutation.ddg != 1.0)): # TODO: Remove this line
                     self.calculated_mutations.append(precalculated_mutation)
                     self.logger.info('Mutation has already been completely evaluated. Skipping...')
                     continue
