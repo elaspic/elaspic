@@ -217,7 +217,7 @@ class GetMutation(object):
 
     def __init__(
             self, global_temp_path, temp_path, unique, pdb_path,
-            db, logger, n_cores, bin_path, foldX_WATER, build_model_runs, matrix, gap_s, gap_e):
+            db, logger, n_cores, bin_path, provean_temp_path, foldX_WATER, build_model_runs, matrix, gap_s, gap_e):
         self.global_temp_path = global_temp_path
         self.temp_path = temp_path
         self.unique = unique
@@ -232,6 +232,7 @@ class GetMutation(object):
         self.gap_s = gap_s
         self.gap_e = gap_e
         self.n_cores = n_cores
+        self.provean_temp_path = provean_temp_path
 #        with open(bin_path + 'clf_domain.pickle', 'rb') as ifh:
 #            self.clf_domain, self.clf_domain_features = pickle.load(ifh)
 #        with open(bin_path + 'clf_interface.pickle', 'rb') as ifh:
