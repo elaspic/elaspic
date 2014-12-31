@@ -773,6 +773,7 @@ class MyDatabase(object):
             try:
                 self._copy_provean(d)
             except subprocess.CalledProcessError as e:
+                self.logger.error('Failed to copy provean supporting set!')
                 self.logger.error(e)
                 d.uniprot_sequence.provean.provean_supset_filename = ''
 
@@ -805,19 +806,19 @@ class MyDatabase(object):
 
 
     def _copy_provean(self, ud):
-        if (ud.uniprot_sequence
-                and ud.uniprot_sequence.provean
-                and ud.uniprot_sequence.provean.provean_supset_filename):
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                self.path_to_archive + hf.get_uniprot_base_path(ud) +
-                    ud.uniprot_sequence.provean.provean_supset_filename,
-                self.temp_path + hf.get_uniprot_base_path(ud) +
-                    ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                self.path_to_archive + hf.get_uniprot_base_path(ud) +
-                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-                self.temp_path + hf.get_uniprot_base_path(ud) +
-                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
+        if (ud.uniprot_sequence and
+            ud.uniprot_sequence.provean and
+            ud.uniprot_sequence.provean.provean_supset_filename):
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    self.path_to_archive + hf.get_uniprot_base_path(ud) +
+                        ud.uniprot_sequence.provean.provean_supset_filename,
+                    self.temp_path + hf.get_uniprot_base_path(ud) +
+                        ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    self.path_to_archive + hf.get_uniprot_base_path(ud) +
+                        ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+                    self.temp_path + hf.get_uniprot_base_path(ud) +
+                        ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
 
 
     def get_uniprot_mutation(self, d, mutation, uniprot_id=None, copy_data=False):

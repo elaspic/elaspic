@@ -26,52 +26,78 @@ import helper_functions as hf
 
 
 
+def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
+    if isinstance(sequence, basestring):
+        seqrec = SeqRecord(Seq(sequence), id=str(sequence_id))
+    elif isinstance(sequence, Seq):
+        seqrec = SeqRecord(sequence, id=str(sequence_id))
+    elif isinstance(sequence, SeqRecord):
+        seqrec = sequence
+    else:
+        raise Exception("Wrong class type %s for ``sequence``" % str(type(sequence)))
 
-def build_provean_supporting_set(self, uniprot_id, uniprot_name, uniprot_sequence, supset_version=0):
+    return seqrec
+
+
+
+def check_provean_supporting_set(self, domain_mutation, sequence, sequence_id='id',
+                                 path_to_provean_supset=None, save_supporting_set=False, check_mem_usage=False):
     """
-    :param d: UniprotDomain object
-    :rtype: [str, int]
 
-    Provean results look something like this:
+    Provean results look something like this
     -----------------------------------------
-    #[23:28:34] clustering subject sequences...
-    #[23:28:34] selecting clusters...
-    #[23:28:34] 0 subject sequences in 0 clusters were selected for supporting sequences.
-    #[23:28:34] use the query itself as a supporting sequence
-    #[23:28:34] loading subject sequences from a FASTA file...
-    #[23:28:34] scores were computed based on the query sequence itself.
-    ## Number of clusters:	1
-    ## Number of supporting sequences used:	1
-    #[23:28:34] computing delta alignment scores...
-    #[23:28:34] printing PROVEAN scores...
-    ### PROVEAN scores ##
-    ## VARIATION	SCORE
-    #M1A	-6.000
-    """
-    # Get the required parameters
-    first_aa = uniprot_sequence[0]
-    uniprot_seqrecord = SeqRecord(
-        seq=Seq(uniprot_sequence), id=str(uniprot_id), description=uniprot_name)
-    SeqIO.write(uniprot_seqrecord, self.unique_temp_folder + 'sequence_conservation/sequence.fasta', 'fasta')
-    provean_supset_path = (
-        self.temp_path + hf.get_uniprot_base_path(
-            {'uniprot_id': uniprot_id, 'uniprot_name': uniprot_name}))
-    provean_supset_filename = uniprot_id + '_provean_supset_{}'.format(supset_version)
+    .. code-block:: txt
 
-    # Get initial measurements of how much virtual memory and disk space is availible
-    disk_space_availible = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
-    self.logger.debug('Disk space availible: {:.2f} GB'.format(disk_space_availible))
-    if disk_space_availible < 5:
-        raise errors.ProveanError('Not enough disk space ({:.2f} GB) to run provean'.format(disk_space_availible))
-    memory_availible = psutil.virtual_memory().available / float(1024)**3
-    self.logger.debug('Memory availible: {:.2f} GB'.format(memory_availible))
-    if memory_availible < 0.5:
-        raise errors.ProveanError('Not enough memory ({:.2f} GB) to run provean'.format(memory_availible))
+        #[23:28:34] clustering subject sequences...
+        #[23:28:34] selecting clusters...
+        #[23:28:34] 0 subject sequences in 0 clusters were selected for supporting sequences.
+        #[23:28:34] use the query itself as a supporting sequence
+        #[23:28:34] loading subject sequences from a FASTA file...
+        #[23:28:34] scores were computed based on the query sequence itself.
+        ## Number of clusters:	1
+        ## Number of supporting sequences used:	1
+        #[23:28:34] computing delta alignment scores...
+        #[23:28:34] printing PROVEAN scores...
+        ### PROVEAN scores ##
+        ## VARIATION	SCORE
+        #M1A	-6.000
+
+
+    Exceptions
+    ----------
+    errors.ProveanError
+        Can raise this exception only if ``check_mem_usage`` is set to ``True``.
+
+
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    list
+        [result, error_message, return_code] -- The output from running a provean system command.
+    """
+
+    if check_mem_usage:
+        # Get initial measurements of how much virtual memory and disk space is availible
+        disk_space_availible = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
+        self.logger.debug('Disk space availible: {:.2f} GB'.format(disk_space_availible))
+        if disk_space_availible < 5:
+            raise errors.ProveanError('Not enough disk space ({:.2f} GB) to run provean'.format(disk_space_availible))
+        memory_availible = psutil.virtual_memory().available / float(1024)**3
+        self.logger.debug('Memory availible: {:.2f} GB'.format(memory_availible))
+        if memory_availible < 0.5:
+            raise errors.ProveanError('Not enough memory ({:.2f} GB) to run provean'.format(memory_availible))
 
     # Run provean
+    seqrec = convert_basestring_to_seqrecord(sequence, sequence_id)
+    SeqIO.write(seqrec, self.unique_temp_folder + 'sequence_conservation/sequence.fasta', 'fasta')
+
     subprocess.check_call(
-        'echo {0}1{0} > {1}sequence_conservation/decoy.var'
-        .format(first_aa, self.unique_temp_folder), shell=True)
+        'echo {0} > {1}sequence_conservation/decoy.var'
+        .format(domain_mutation, self.unique_temp_folder), shell=True)
+
     system_command = (
         './provean ' +
         ' -q ./sequence.fasta ' +
@@ -81,19 +107,24 @@ def build_provean_supporting_set(self, uniprot_id, uniprot_name, uniprot_sequenc
         ' --num_threads ' + '{}'.format(self.n_cores) +
         ' --psiblast ' + hf.get_which('psiblast') +
         ' --blastdbcmd ' + hf.get_which('blastdbcmd') +
-        ' --cdhit ' + hf.get_which('cd-hit') +
-        ' --save_supporting_set ' + provean_supset_path + provean_supset_filename)
-    self.logger.debug(system_command)
+        ' --cdhit ' + hf.get_which('cd-hit')
+    )
+    if save_supporting_set:
+        system_command += ' --save_supporting_set ' + path_to_provean_supset
+    elif path_to_provean_supset: # use supporting set
+        system_command += ' --supporting_set ' + path_to_provean_supset
 
+    self.logger.debug(system_command)
     child_process = hf.run_subprocess_locally(
         self.unique_temp_folder + 'sequence_conservation/',
         system_command)
+
     self.logger.debug('Parent group id: {}'.format(os.getpgrp()))
     child_process_group_id = os.getpgid(child_process.pid)
     self.logger.debug('Child group id: {}'.format(child_process_group_id))
 
     # Keep an eye on provean to make sure it doesn't do anything crazy
-    while child_process.poll() is None:
+    while check_mem_usage and child_process.poll() is None:
         disk_space_availible_now = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
         if disk_space_availible_now < 5: # less than 5 GB of free disk space left
             raise errors.ProveanResourceError(
@@ -111,6 +142,32 @@ def build_provean_supporting_set(self, uniprot_id, uniprot_name, uniprot_sequenc
     # Collect the results and check for errors
     result, error_message = child_process.communicate()
     return_code = child_process.returncode
+
+    return result, error_message, return_code
+
+
+
+def build_provean_supporting_set(self, uniprot_id, uniprot_name, uniprot_sequence, supset_version=0):
+    """
+    """
+    # Get the required parameters
+    first_aa = uniprot_sequence[0]
+    domain_mutation = '{0}1{0}'.format(first_aa)
+
+    uniprot_seqrecord = SeqRecord(
+        seq=Seq(uniprot_sequence), id=str(uniprot_id), description=uniprot_name)
+
+    provean_supset_path = (
+        self.temp_path + hf.get_uniprot_base_path(
+            {'uniprot_id': uniprot_id, 'uniprot_name': uniprot_name}))
+    provean_supset_filename = uniprot_id + '_provean_supset_{}'.format(supset_version)
+
+    # Run provean
+    result, error_message, return_code = check_provean_supporting_set(
+        self, domain_mutation, uniprot_seqrecord, uniprot_id,
+        provean_supset_path + provean_supset_filename,
+        save_supporting_set=True, check_mem_usage=True)
+
     if return_code != 0:
         self.logger.error(error_message)
         raise errors.ProveanError(error_message)

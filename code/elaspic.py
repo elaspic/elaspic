@@ -35,6 +35,7 @@ class Pipeline(object):
                 'path_to_archive': '/home/kimlab1/database_data/elaspic_v2/',
                 'web_server': False,
                 'schema_version': 'elaspic',
+                'remake_provean_supset': False,
             })
         configParser.read(configFile)
 
@@ -50,6 +51,8 @@ class Pipeline(object):
         self.db_is_immutable = True if self.db_type.lower().startswith('sqlite') else False
         self.web_server = configParser.get('DEFAULT', 'web_server')
         self.schema_version = configParser.get('DEFAULT', 'schema_version')
+        self.remake_provean_supset = configParser.get('DEFAULT', 'remake_provean_supset')
+        print(self.remake_provean_supset)
 
         # From [SETTINGS]
         self.blast_db_path = configParser.get('SETTINGS', 'blast_db_path')
@@ -280,16 +283,29 @@ class Pipeline(object):
         self.__print_header(d)
 
         if (d.uniprot_sequence.provean and
-                d.uniprot_sequence.provean.provean_supset_filename and
-                os.path.isfile(
-                    self.path_to_archive + hf.get_uniprot_base_path(d) +
-                    d.uniprot_sequence.provean.provean_supset_filename) ):
-            self.logger.debug('The provean supset has already been calculated. Done!')
-            return None
-        elif (d.uniprot_sequence.provean and
-                d.uniprot_sequence.provean.provean_supset_filename):
-            self.logger.debug('Provean has been calculated but the file is missing!!!!!!! Recalculating...')
-            provean = d.uniprot_sequence.provean
+            d.uniprot_sequence.provean.provean_supset_filename):
+                path_to_provean_supset = (
+                    self.temp_path + hf.get_uniprot_base_path(d) +
+                    d.uniprot_sequence.provean.provean_supset_filename)
+#                path_to_provean_supset = (
+#                    self.path_to_archive + hf.get_uniprot_base_path(d) +
+#                    d.uniprot_sequence.provean.provean_supset_filename)
+                if os.path.isfile(path_to_provean_supset):
+                    first_aa = d.uniprot_sequence.uniprot_sequence[0]
+                    domain_mutation = '{0}1{0}'.format(first_aa)
+                    result, error_message, return_code = domain_alignment.check_provean_supporting_set(
+                        self, domain_mutation, d.uniprot_sequence.uniprot_sequence, d.uniprot_id,
+                        path_to_provean_supset, save_supporting_set=False, check_mem_usage=False)
+                    if return_code == 0 or not self.remake_provean_supset :
+                        self.logger.debug('The provean supset has already been calculated. Done!')
+                        return None
+                    else:
+                        self.logger.debug('Provean supporting set caused an error:\n\n{}'.format(error_message))
+                        self.logger.debug('Recompiling...')
+                        provean = d.uniprot_sequence.provean
+                else:
+                    self.logger.error('Provean has been calculated but the file is missing! Recompiling...')
+                    provean = d.uniprot_sequence.provean
         elif d.uniprot_sequence.provean:
             provean = d.uniprot_sequence.provean
         else:
@@ -602,8 +618,9 @@ class Pipeline(object):
 
 
     def __clear_provean_temp_files(self):
-        subprocess.check_call('rm -rf ' + self.provean_temp_path + '/provean*', shell=True)
-        subprocess.check_call('rm -rf ' + self.provean_temp_path + '/*cdhit*', shell=True)
+        self.logger.debug("Clearning provean temporary files from '{}'".format(self.provean_temp_path))
+        subprocess.check_call('rm -rf ' + self.provean_temp_path + 'provean*', shell=True)
+        subprocess.check_call('rm -rf ' + self.provean_temp_path + '*cdhit*', shell=True)
 
 
 

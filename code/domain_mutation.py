@@ -10,6 +10,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.PDB.PDBParser import PDBParser
 
+import domain_alignment
 import errors
 import sql_db
 import analyze_structure
@@ -332,6 +333,7 @@ class GetMutation(object):
                         .format(path_to_provean_supset)
                     )
                     self.logger.error(error_message)
+                    self.logger.error('d_1: {}'.format(d_1))
                     self.logger.error('listdir: {}'.format(os.listdir(os.path.dirname(path_to_provean_supset))))
                     raise Exception(error_message)
 
@@ -395,20 +397,20 @@ class GetMutation(object):
     def evaluate_mutation(self, d, mut_data, uniprot_mutation):
         """
         """
-#        if (mut_data.path_to_provean_supset and not uniprot_mutation.provean_score):
-#            self.logger.debug('Calculating the provean score for the mutation...')
-#            try:
-#                provean_mutation, provean_score = self.get_provean_score(
-#                    mut_data.uniprot_domain_id, mut_data.mutation_domain,
-#                    mut_data.domain_sequences[0], mut_data.path_to_provean_supset)
-#            except errors.ProveanError as e:
-#                self.logger.error(str(type(e)) + ': ' + e.__str__())
-#                provean_mutation, provean_score = None, None
-#            self.logger.debug('provean mutation:')
-#            self.logger.debug(provean_mutation)
-#            self.logger.debug('provean score:')
-#            self.logger.debug(provean_score)
-#            uniprot_mutation.provean_score = provean_score
+        if (mut_data.path_to_provean_supset and not uniprot_mutation.provean_score):
+            self.logger.debug('Calculating the provean score for the mutation...')
+            try:
+                provean_mutation, provean_score = self.get_provean_score(
+                    mut_data.uniprot_domain_id, mut_data.mutation_domain,
+                    mut_data.domain_sequences[0], mut_data.path_to_provean_supset)
+            except errors.ProveanError as e:
+                self.logger.error(str(type(e)) + ': ' + e.__str__())
+                provean_mutation, provean_score = None, None
+            self.logger.debug('provean mutation:')
+            self.logger.debug(provean_mutation)
+            self.logger.debug('provean score:')
+            self.logger.debug(provean_score)
+            uniprot_mutation.provean_score = provean_score
 
         if not uniprot_mutation.stability_energy_wt:
             self.logger.debug('Evaluating the structural impact of the mutation...')
@@ -439,53 +441,38 @@ class GetMutation(object):
             domain_sequence = str(domain_sequence.seq)
         else:
             raise Exception('Wrong class type %s for domain_sequence' % str(type(domain_sequence)))
-        domain_sequence_seqrec = SeqRecord(seq=Seq(domain_sequence), id=str(uniprot_domain_id))
-        SeqIO.write(domain_sequence_seqrec, self.unique_temp_folder + 'sequence_conservation/sequence.fasta', 'fasta')
 
 #        first_aa = uniprot_sequence_domain[0]
     #    provean_supset_filename = t.alignment_filename.replace('.aln', '.supset')
 #        provean_supset_filename = t.provean_supset_filename
 
-        subprocess.check_call('echo ' + domain_mutation + ' > ' + self.unique_temp_folder + 'sequence_conservation/decoy.var', shell=True)
         path_to_provean_supset_local = self.unique_temp_folder + 'sequence_conservation/' + path_to_provean_supset.split('/')[-1]
         subprocess.check_call('cp -f ' + path_to_provean_supset + ' ' + path_to_provean_supset_local, shell=True)
         subprocess.check_call('cp -f ' + path_to_provean_supset + '.fasta ' + path_to_provean_supset_local + '.fasta', shell=True)
-        system_command = (
-            './provean' +
-            ' -q ' + './sequence.fasta' +
-            ' -v ' + './decoy.var' +
-            ' -d ' + self.global_temp_path + 'blast/db/nr' +
-            ' --tmp_dir ' + self.unique_temp_folder +
-            ' --num_threads ' + '{}'.format(self.n_cores) +
-            ' --psiblast ' + hf.get_which('psiblast') +
-            ' --blastdbcmd ' + hf.get_which('blastdbcmd') +
-            ' --cdhit ' + hf.get_which('cd-hit') +
-            ' --supporting_set ' + path_to_provean_supset_local)
-        child_process = hf.run_subprocess_locally(
-            self.unique_temp_folder + 'sequence_conservation/',
-            system_command)
-        result, error_message = child_process.communicate()
+
+        result, error_message, return_code = domain_alignment.check_provean_supporting_set(
+            self, domain_mutation, domain_sequence, str(uniprot_domain_id), path_to_provean_supset_local,
+            save_supporting_set=False, check_mem_usage=False)
+
         self.logger.debug(result)
-        while (child_process.returncode != 0 and
+        while (return_code != 0 and
                 ('IDs are not matched' in error_message or 'OID not found' in error_message)):
             self.logger.error(error_message)
             line_to_remove = error_message.split(':')[1].split(',')[0].strip()
             self.logger.error('Removing line with id: {} from the supporting set...'.format(line_to_remove))
-            with open(path_to_provean_supset_local, 'r') as ifh, \
+            with open(path_to_provean_supset_local) as ifh, \
                     open(path_to_provean_supset_local + '.mod', 'w') as ofh:
                 for line in ifh:
                     if line_to_remove not in line:
                         ofh.write(line)
             subprocess.check_call('mv -f ' + path_to_provean_supset_local + '.mod ' + path_to_provean_supset_local, shell=True)
-            child_process = hf.run_subprocess_locally(
-                self.unique_temp_folder + 'sequence_conservation/',
-                system_command)
-            result, error_message = child_process.communicate()
+            result, error_message, return_code = domain_alignment.check_provean_supporting_set(
+                self, domain_mutation, domain_sequence, str(uniprot_domain_id), path_to_provean_supset_local,
+                save_supporting_set=False, check_mem_usage=False)
             self.logger.debug(result)
 
-        if child_process.returncode != 0:
+        if return_code != 0:
             self.logger.error(error_message)
-            self.logger.error(system_command)
             raise errors.ProveanError(error_message)
 
         ### Results look something like this:
