@@ -258,7 +258,7 @@ class Pipeline(object):
         if run_type in [3, 4, 5] and self.mutations:
             self.get_mutation = domain_mutation.GetMutation(
                 self.global_temp_path, self.temp_path, self.unique, self.pdb_path,
-                self.db, self.logger, self.n_cores, self.bin_path, self.foldx_water,
+                self.db, self.logger, self.n_cores, self.bin_path, self.provean_temp_path, self.foldx_water,
                 self.foldx_num_of_runs, self.matrix, self.gap_start, self.gap_extend,)
 
             self.logger.info('\n\n\n' + '*' * 110)
