@@ -439,38 +439,12 @@ class GetModel(object):
     def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data):
         """
         """
-        # sequence_ids = [uniprot_seqrecord.id, pdb_seqrecord.id]
-        alignment_fasta_file = self.unique_temp_folder + 'seqfiles.fasta'
-        alignment_template_file = self.unique_temp_folder + 'seqfiles.template_list'
-
-        # Write a fasta file with sequences to be aligned
-        with open(alignment_fasta_file, 'w') as fh:
-            SeqIO.write([uniprot_seqrecord, pdb_seqrecord], fh, 'fasta')
-
-        # Write a template PDB file in a format that is compatible with t_coffee
-        self.logger.debug("Cleaning pdb {} to serve as a template for t_coffee...".format(pdb_seqrecord.id + '.pdb'))
-        system_command = "t_coffee -other_pg extract_from_pdb {} > {}".format(
-            pdb_seqrecord.id + '.pdb', pdb_seqrecord.id.upper() + '.pdb')
-        child_process = hf.run_subprocess_locally(self.unique_temp_folder, system_command)
-        result, error_message = child_process.communicate()
-        if child_process.returncode:
-            self.logger.error(
-                "Error cleaning pdb!\nSystem command: '{}'\nResult: '{}'\nError message: '{}'"
-                .format(system_command, result, error_message))
-
-        # Write a template file for the sequences to be aligned
-        with open(alignment_template_file, 'w') as fh:
-            fh.writelines([
-                ">" + uniprot_seqrecord.id + " _P_ " + pdb_seqrecord.id.upper() + "\n"
-                ">" + pdb_seqrecord.id + " _P_ " + pdb_seqrecord.id.upper() + "\n"
-            ])
-
         # Perform the alignment
         t_coffee_parameters = [
             self.global_temp_path,
             self.unique_temp_folder,
-            [alignment_fasta_file],
-            [alignment_template_file],
+            uniprot_seqrecord,
+            pdb_seqrecord,
             self.n_cores,
             self.pdb_path,
             mode,
