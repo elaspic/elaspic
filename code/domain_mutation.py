@@ -322,14 +322,19 @@ class GetMutation(object):
 
         # Provean
         if (d_1.uniprot_sequence.provean and
-            d_1.uniprot_sequence.provean.provean_supset_filename ):
+            d_1.uniprot_sequence.provean.provean_supset_filename):
                 path_to_provean_supset = (
                     self.temp_path + hf.get_uniprot_base_path(d_1) +
                     d_1.uniprot_sequence.provean.provean_supset_filename )
                 if not os.path.isfile(path_to_provean_supset):
-                    raise Exception(
-                        'Provean supporting set sequence does not exist even '
-                        'though it should!\n' + path_to_provean_supset)
+                    error_message = (
+                        'Provean supporting set sequence does not exist even though it should!\n{}'
+                        .format(path_to_provean_supset)
+                    )
+                    self.logger.error(error_message)
+                    self.logger.error('listdir: {}'.format(os.listdir(os.path.dirname(path_to_provean_supset))))
+                    raise Exception(error_message)
+
 
         # Convert mutation from uniprot domain numbering to pdb domain numbering
         position_domain = int(mutation[1:-1]) - domain_start + 1 # +1 to have the numbering staring with 1

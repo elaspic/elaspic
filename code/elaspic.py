@@ -204,7 +204,7 @@ class Pipeline(object):
             "Connecting to a '{}' database and copying files from the '{}' data folder..."
             .format(self.db_type, self.path_to_archive))
         if self.db_type.lower() == 'sqlite_file':
-            self.logger.info('Path to the database: {}'.format(self.db_path))
+            self.logger.info('Path to the sqlite database: {}'.format(self.db_path))
         self.db = sql_db.MyDatabase(
             path_to_sqlite_db=self.db_path, sql_flavour=self.db_type, schema_version=self.schema_version,
             temp_path=self.temp_path, path_to_archive=self.path_to_archive,
