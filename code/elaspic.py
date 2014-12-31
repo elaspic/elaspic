@@ -200,7 +200,9 @@ class Pipeline(object):
         atexit.register(self.__clear_provean_temp_files)
 
         # Initialise the sql database for accessing all information
-        self.logger.info("Connecting to a '{}' database...".format(self.db_type))
+        self.logger.info(
+            "Connecting to a '{}' database and copying files from the '{}' data folder..."
+            .format(self.db_type, self.path_to_archive))
         if self.db_type.lower() == 'sqlite_file':
             self.logger.info('Path to the database: {}'.format(self.db_path))
         self.db = sql_db.MyDatabase(
