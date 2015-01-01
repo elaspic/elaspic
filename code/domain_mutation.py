@@ -2,7 +2,7 @@
 
 import os
 import subprocess
-import cPicle as pickle
+import cPickle as pickle
 
 import pandas as pd
 
