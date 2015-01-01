@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import cPicle as pickle
 
 import pandas as pd
 
@@ -106,7 +107,7 @@ def get_mutation_features(d, mut, row_idx=0):
     """
     """
     feature_dict = {key: value for (key, value) in mut.__dict__.iteritems() if not key.startswith('_')}
-    print(feature_dict)
+
     feature_dict.update({
         # Header columns
         # 'uniprot_id': mut.uniprot_id,
@@ -237,9 +238,9 @@ class GetMutation(object):
         self.n_cores = n_cores
         self.provean_temp_path = provean_temp_path
 
-        self.clf_domain = pd.read_pickle(bin_path + 'machine_learning_protherm_clf.pickle')
+        self.clf_domain = pickle.load(open(bin_path + 'machine_learning_protherm_clf.pickle'), 'rb')
         self.clf_domain_features = pd.read_pickle(bin_path + 'machine_learning_protherm_features.pickle')
-#        self.clf_interface = pd.read_pickle(bin_path + 'clf_interface.pickle')
+#        self.clf_interface = pickle.load(open(bin_path + 'clf_interface.pickle', 'rb'))
 #        self.clf_interface_features = pd.read_pickle(bin_path + 'clf_interface_features.pickle')
 
 
