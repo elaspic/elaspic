@@ -238,8 +238,8 @@ class GetMutation(object):
         self.n_cores = n_cores
         self.provean_temp_path = provean_temp_path
 
-        self.clf_domain = pickle.load(open(bin_path + 'machine_learning_protherm_clf.pickle', 'rb'))
-        self.clf_domain_features = pd.read_pickle(bin_path + 'machine_learning_protherm_features.pickle')
+        self.clf_domain = pickle.load(open(bin_path + 'ml_clf_core.pickle', 'rb'))
+        self.clf_domain_features = pickle.load(open(bin_path + 'ml_features_core.pickle', 'rb'))
 #        self.clf_interface = pickle.load(open(bin_path + 'clf_interface.pickle', 'rb'))
 #        self.clf_interface_features = pd.read_pickle(bin_path + 'clf_interface_features.pickle')
 
