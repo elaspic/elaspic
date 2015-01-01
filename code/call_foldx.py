@@ -4,6 +4,7 @@ Created on Fri Jan 11 09:49:26 2013
 
 @author: niklas
 """
+from os import environ
 import shutil
 import errors
 import helper_functions as hf
@@ -160,9 +161,12 @@ class FoldX():
 
     def __run_runfile(self):
 #        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
+        my_env = environ.copy()
+        my_env['LD_PRELOAD'] = self.foldx_path + 'libfaketime.so.1'
+        my_env['FAKETIME'] = "-1y"
         system_command = './foldx64Linux -runfile ' + self.foldx_runfile
         self.logger.debug('FoldX system command: {}'.format(system_command))
-        childProcess = hf.run_subprocess_locally(self.foldx_path, system_command)
+        childProcess = hf.run_subprocess_locally(self.foldx_path, system_command, env=my_env)
         result, error_message = childProcess.communicate()
         return_code = childProcess.returncode
         if return_code != 0:

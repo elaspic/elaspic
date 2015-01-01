@@ -553,6 +553,8 @@ class Pipeline(object):
                 self.bin_path + 'FoldX.linux64', self.unique_temp_folder + '/FoldX/'), shell=True)
             subprocess.check_call("cp '{}' '{}'".format(
                 self.bin_path + 'rotabase.txt', self.unique_temp_folder + '/FoldX/'), shell=True)
+            subprocess.check_call("cp '{}' '{}'".format(
+                self.bin_path + 'libfaketime.so.1', self.unique_temp_folder + '/FoldX/'), shell=True)                
             # Copy dssp into the folder for modelling
 #            cp_command = 'cp ' + self.bin_path + 'mkdssp ' + self.unique_temp_folder + '/FoldX/'
 #            subprocess.check_call(cp_command, shell=True)
