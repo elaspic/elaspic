@@ -775,7 +775,7 @@ class GetMutation(object):
             #clf = self.clf_interface
             #clf_features = self.clf_interface_features
             uniprot_mutation.ddg = 1.0
-            return uniprot_mutation.ddg
+            return uniprot_mutation
 
         feature_name_conversion = {
             'normDOPE': 'norm_dope',
