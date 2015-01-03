@@ -37,7 +37,7 @@ import errors as error
 # database type...
 #SQL_FLAVOUR = 'sqlite_file'
 SQL_FLAVOUR = 'mysql'
-SCHEMA_VERSION = 'elaspic'
+#SCHEMA_VERSION = 'elaspic'
 #SCHEMA_VERSION = 'elaspic_dev'
 #SCHEMA_VERSION = 'elaspic_training'
 
@@ -492,10 +492,13 @@ class MyDatabase(object):
     """
     """
     def __init__(
-            self, sql_flavour=SQL_FLAVOUR, schema_version=SCHEMA_VERSION, is_immutable=False,
+            self, sql_flavour=SQL_FLAVOUR, schema_version=None, is_immutable=False,
             temp_path='/tmp/', path_to_archive='/home/kimlab1/database_data/elaspic_v2/',
             path_to_sqlite_db='', create_database=False, clear_schema=False, logger=None):
 
+        if schema_version is None:
+            raise Exception('A schema_version has to be specified explicitly now!')
+            
         # Choose which database to use
         if SQL_FLAVOUR == 'sqlite':
             autocommit=True
@@ -940,7 +943,8 @@ class MyDatabase(object):
             archive_save_path = self.path_to_archive + path_to_data
             archive_save_subpath = mut.model_filename_wt.split('/')[0] + '/'
             # Save the row corresponding to the mutation as a serialized sqlalchemy object
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path + archive_save_subpath), shell=True)
+            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
+                archive_save_path + archive_save_subpath), shell=True)
             pickle.dump(dumps(mut), open(archive_save_path + archive_save_subpath + 'mutation.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
             if mut.model_filename_wt and mut.model_filename_mut:
                 # Save Foldx structures

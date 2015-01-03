@@ -69,8 +69,6 @@ class FoldX():
         self.logger = logger
 
 
-
-
     def __call__(self, whatToRun, mutCodes=[]):
         """
         Select which action should be performed by FoldX by setting 'whatToRun'
@@ -163,7 +161,7 @@ class FoldX():
 #        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
         my_env = environ.copy()
         my_env['LD_PRELOAD'] = self.foldx_path + 'libfaketime.so.1'
-        my_env['FAKETIME'] = "-1y"
+        my_env['FAKETIME'] = "2014-12-24 20:30:00"
         system_command = './foldx64Linux -runfile ' + self.foldx_runfile
         self.logger.debug('FoldX system command: {}'.format(system_command))
         childProcess = hf.run_subprocess_locally(self.foldx_path, system_command, env=my_env)
