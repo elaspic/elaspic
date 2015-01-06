@@ -149,6 +149,7 @@ def get_mutation_features(d, mut, row_idx=0):
             'interface_area_hydrophobic': d.template.model.interface_area_hydrophobic,
             'interface_area_hydrophilic': d.template.model.interface_area_hydrophilic,
             'interface_area_total': d.template.model.interface_area_total,
+            'score_total': d.template.score_total,
         })
 
     feature_df = pd.DataFrame(feature_dict, index=[row_idx])
