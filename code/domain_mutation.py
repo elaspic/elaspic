@@ -240,8 +240,8 @@ class GetMutation(object):
 
         self.clf_domain = pickle.load(open(bin_path + 'ml_clf_core.pickle', 'rb'))
         self.clf_domain_features = pickle.load(open(bin_path + 'ml_features_core.pickle', 'rb'))
-#        self.clf_interface = pickle.load(open(bin_path + 'clf_interface.pickle', 'rb'))
-#        self.clf_interface_features = pd.read_pickle(bin_path + 'clf_interface_features.pickle')
+        self.clf_interface = pickle.load(open(bin_path + 'ml_clf_interface.pickle', 'rb'))
+        self.clf_interface_features = pd.read_pickle(bin_path + 'ml_features_interface.pickle')
 
 
     def get_mutation_data(self, d, uniprot_id_1, mutation):
@@ -771,11 +771,8 @@ class GetMutation(object):
             clf = self.clf_domain
             clf_features = self.clf_domain_features
         elif isinstance(d, sql_db.UniprotDomainPair):
-            # TODO: FIX THIS
-            #clf = self.clf_interface
-            #clf_features = self.clf_interface_features
-            uniprot_mutation.ddg = 1.0
-            return uniprot_mutation
+            clf = self.clf_interface
+            clf_features = self.clf_interface_features
 
         feature_name_conversion = {
             'normDOPE': 'norm_dope',

@@ -191,7 +191,7 @@ class Pipeline(object):
         self.logger = logger
         self.logger.info(self.unique_temp_folder)
         self.logger.info(self.schema_version)
-        
+
         # Switch to the root of the unique tmp directory
         os.chdir(self.unique_temp_folder)
 
@@ -273,7 +273,7 @@ class Pipeline(object):
             if not d.path_to_data or any([len(x) > 255 for x in d.path_to_data.split('/')]):
                 d.path_to_data = hf.get_uniprot_base_path(d) + hf.get_uniprot_domain_path(d)
                 self.db.merge_row(d)
-                subprocess.check_call('mkdir -p {}'.format(self.temp_path + d.path_to_data), shell=True)
+            subprocess.check_call('mkdir -p {}'.format(self.temp_path + d.path_to_data), shell=True)
 
 
     def _compute_provean(self):
@@ -554,7 +554,7 @@ class Pipeline(object):
             subprocess.check_call("cp '{}' '{}'".format(
                 self.bin_path + 'rotabase.txt', self.unique_temp_folder + '/FoldX/'), shell=True)
             subprocess.check_call("cp '{}' '{}'".format(
-                self.bin_path + 'libfaketime.so.1', self.unique_temp_folder + '/FoldX/'), shell=True)                
+                self.bin_path + 'libfaketime.so.1', self.unique_temp_folder + '/FoldX/'), shell=True)
             # Copy dssp into the folder for modelling
 #            cp_command = 'cp ' + self.bin_path + 'mkdssp ' + self.unique_temp_folder + '/FoldX/'
 #            subprocess.check_call(cp_command, shell=True)
