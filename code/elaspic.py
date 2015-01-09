@@ -133,6 +133,10 @@ class Pipeline(object):
 #                'mkdir -p ' + self.global_temp_path + 'blast/db/ && ' +
 #                # 'rsync -rzu ' + self.blast_db_path + 'pdbaa_db/ ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
 #                'rsync -rzu ' + self.blast_db_path + 'db/ ' + self.global_temp_path + 'blast/db/')
+#
+#   System command to execute on each node in order to copy / update the blast database
+#   rm '/tmp/blast/db' && mkdir -p '/tmp/blast/db/' && rsync --update -rzu '/home/kimlab1/database_data/blast/db/' '/tmp/blast/db/'
+
         elif username == 'strokach' or username == 'alexey':
             # Use a symbolic link to the blast database and use the home folder for temporary storage
             system_command = (
@@ -225,7 +229,7 @@ class Pipeline(object):
         self.uniprot_mutations = []
 
         # Find provean
-        if run_type in [1, 5] and not self.web_server:
+        if run_type in [1, 5]:
             self.logger.info('\n\n\n' + '*' * 110)
             self.logger.info("Computing provean...")
             if self._compute_provean():

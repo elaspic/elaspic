@@ -4,6 +4,7 @@ Created on Mon Mar  4 11:04:40 2013
 
 @author: niklas
 """
+#%%
 import os
 import sys
 import shlex
@@ -142,6 +143,8 @@ def get_path_to_current_file():
 
 
 def get_logger(do_debug=True):
+    import logging
+    reload(logging)
     logger = logging.getLogger(__name__)
     if do_debug:
         logger.setLevel(logging.DEBUG)
@@ -150,8 +153,7 @@ def get_logger(do_debug=True):
     handler = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
-    logger.handlers = []
-    logger.addHandler(handler)
+    logger.handlers = [handler]
     return logger
 
 
