@@ -14,7 +14,7 @@ from tempfile import NamedTemporaryFile
 from collections import defaultdict
 
 import Bio
-from Bio.PDB import PDBIO, NeighborSearch
+from Bio.PDB import PDBIO, NeighborSearch, Select
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB.Polypeptide import PPBuilder
@@ -51,11 +51,14 @@ lysine_atoms = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
 ### Functions for downloading and parsing pdb files
 
 class MMCIFParserMod(MMCIFParser):
-    def get_structure(self, structure_id, gzip_fh, tmp_path):
+    def __init__(self, tmp_path):
+        self.tmp_path = tmp_path
+
+    def get_structure(self, structure_id, gzip_fh):
         """
         Altered ``get_structure`` method which accepts gzip file-handles as input.
         """
-        with NamedTemporaryFile(mode='w', dir=tmp_path) as temp_fh:
+        with NamedTemporaryFile(mode='w', dir=self.tmp_path) as temp_fh:
             temp_fh.writelines(gzip_fh.readlines())
             temp_fh.flush()
             temp_fh.seek(0)
@@ -144,7 +147,7 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
     if pdb_type in {'ent', 'pdb'}:
         parser = PDBParser(QUIET=True)
     elif pdb_type in {'cif'}:
-        parser = MMCIFParserMod()
+        parser = MMCIFParserMod(tmp_path=tmp_path)
     else:
         raise Exception('Unsupported ``pdb_type`` {}'.format(pdb_type))
 
@@ -331,6 +334,17 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 
 
 #%%################################################################################################
+
+class SelectChains(Select):
+    """Only accept the specified chains when saving.
+    """
+    def __init__(self, chain_letters):
+        self.chain_letters = chain_letters
+
+    def accept_chain(self, chain):
+        return (chain.get_id() in self.chain_letters)
+
+
 
 class PDBTemplate():
 
@@ -552,16 +566,23 @@ class PDBTemplate():
                             a.disordered_flag = 0
 
 
-    def save_structure(self):
+    def save_structure(self, remove_disordered=False):
+        if remove_disordered:
+            self._unset_disordered_flags()
+
         io = PDBIO()
         io.set_structure(self.structure)
-        outFile = self.output_path + self.pdb_id + ''.join(self.chain_ids) + '.pdb'
         try:
+            outFile = self.output_path + self.pdb_id + ''.join(self.chain_ids) + '.pdb'
             io.save(outFile)
+            if len(self.chain_ids) > 1:
+                for chain_id in self.chain_ids:
+                    outFile = self.output_path + self.pdb_id + chain_id + '.pdb'
+                    io.save(outFile, select=SelectChains(chain_id))
         except AttributeError as e:
-            self.logger.error(str(e))
-            self._unset_disordered_flags()
-            io.save(outFile)
+            if remove_disordered:
+                raise(e)
+            self.save_structure(remove_disordered=True)
 
 
     def save_sequences(self):
@@ -575,6 +596,7 @@ class PDBTemplate():
                 f.write('>' + self.pdb_id + chain_id + '\n')
                 f.write(chain_sequence + '\n')
                 f.write('\n')
+
 
 
 
