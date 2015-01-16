@@ -498,7 +498,8 @@ class MyDatabase(object):
 
         if schema_version is None:
             raise Exception('A schema_version has to be specified explicitly now!')
-            
+
+        self.schema_version = schema_version
         # Choose which database to use
         if SQL_FLAVOUR == 'sqlite':
             autocommit=True
@@ -868,6 +869,23 @@ class MyDatabase(object):
             subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_save_path + mutation.model_filename_mut,
                 tmp_save_path + mutation.model_filename_mut), shell=True)
+
+
+    def remove_model(self, d):
+        """
+        """
+        if isinstance(d, UniprotDomain):
+            with self.session_scope() as session:
+                session.execute(
+                    'delete from {0}.uniprot_domain_model where uniprot_domain_id = {1}'
+                    .format(self.schema_version, d.uniprot_domain_id))
+        elif isinstance(d, UniprotDomainPair):
+            with self.session_scope() as session:
+                session.execute(
+                    'delete from {0}.uniprot_domain_pair_model where uniprot_domain_pair_id = {1}'
+                    .format(self.schema_version, d.uniprot_domain_pair_id))
+        else:
+            raise Exception('Not enough arguments, or the argument types are incorrect!')
 
 
     ###########################################################################

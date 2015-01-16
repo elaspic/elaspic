@@ -44,8 +44,8 @@ def check_provean_supporting_set(self, domain_mutation, sequence, sequence_id='i
                                  path_to_provean_supset=None, save_supporting_set=False, check_mem_usage=False):
     """
 
-    Provean results look something like this
-    -----------------------------------------
+    Provean results look something like this:
+
     .. code-block:: txt
 
         #[23:28:34] clustering subject sequences...

@@ -496,6 +496,24 @@ class Pipeline(object):
                 try:
                     mut_data = self.get_mutation.get_mutation_data(d, self.uniprot_id, mutation)
                     uniprot_mutation = self.get_mutation.evaluate_mutation(d, mut_data, uniprot_mutation)
+                except errors.FoldXAAMismatchError as e:
+                    self.logger.error('{}: {}'.format(type(e), e))
+                    unique_id_string, unique_id = self.__get_unique_id(d)
+                    if self.number_of_tries.count(unique_id) > 3:
+                        self.logger.error(
+                            'An error occured more than three times for {}: {}! It cannot be fixed!'
+                            .format(unique_id_string, unique_id)
+                        )
+                        raise e
+                    self.number_of_tries.append(unique_id)
+                    self.logger.debug(
+                        'Deleting the model for {}: {} and trying to run the pipeline again... number_of_tries: {}'
+                        .format(unique_id_string, unique_id, self.number_of_tries))
+                    self.db.remove_model(d)
+                    self.__call__(
+                        self.uniprot_id, self.mutations, self.run_type, self.n_cores,
+                        self.number_of_tries, self.logger
+                    )
                 except (errors.MutationOutsideDomainError,
                         errors.MutationOutsideInterfaceError) as e:
                     self.logger.debug('{}: {}; OK'.format(type(e), e))
@@ -511,13 +529,18 @@ class Pipeline(object):
         self.logger.info('Finished processing all mutations for {} {}'.format(self.uniprot_id, self.mutations))
 
 
+    def __get_unique_id(self, d):
+        if isinstance(d, sql_db.UniprotDomain):
+            return ('uniprot_domain_id', d.uniprot_domain_id)
+        else:
+            return('uniprot_domain_pair_id', d.uniprot_domain_pair_id)
+
+
     def __print_header(self, d):
         # self.logger.info('Domain or domain pair number: {}'.format(d_idx))
         self.logger.info('=' * 77)
-        if isinstance(d, sql_db.UniprotDomain):
-            self.logger.info('uniprot_domain_id: {}'.format(d.uniprot_domain_id))
-        else:
-            self.logger.info('uniprot_domain_pair_id: {}'.format(d.uniprot_domain_pair_id))
+        unique_id = self.__get_unique_id(d)
+        self.logger.info('{}: {}'.format(*unique_id))
 
 
     def __add_new_error(self, d_error_log, e):

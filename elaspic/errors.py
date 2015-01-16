@@ -88,6 +88,9 @@ class ModellerError(Exception):
 class FoldxError(Exception):
     pass
 
+class FoldXAAMismatchError(Exception):
+    pass
+
 class DataError(Exception):
     pass
 
