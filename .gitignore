@@ -6,6 +6,7 @@ data/
 input/
 reports/
 publications/
+_*
 
 # Hidden files
 .*
