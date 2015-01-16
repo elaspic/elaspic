@@ -762,7 +762,7 @@ class GetMutation(object):
             self.logger.error(residue.id)
             self.logger.error(mut_data.position_modeller)
             self.logger.error(expecte_aa)
-            raise Exception('Expected and actual FoldX amino acids do not match!')
+            raise errors.FoldXAAMismatchError('Expected and actual FoldX amino acids do not match!')
 
 
     def predict_thermodynamic_effect(self, d, uniprot_mutation):
