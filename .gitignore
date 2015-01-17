@@ -6,7 +6,10 @@ data/
 input/
 reports/
 publications/
-_*
+docs/_*
+
+# Hidden files in root folder
+./__init__.py
 
 # Hidden files
 .*
