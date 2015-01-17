@@ -1,13 +1,12 @@
 argparse
 Cython
 numpy
-scipy
-scikit-learn=0.14.1
+scikit-learn
 Biopython
 MySQL-python
-psycopg2
 SQLAlchemy
 django
 psutil
 pandas
-
+fastcache
+sphinx
