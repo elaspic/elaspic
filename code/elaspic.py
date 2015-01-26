@@ -310,7 +310,9 @@ class Pipeline(object):
                     self.logger.debug('Recompiling...')
                     provean = d.uniprot_sequence.provean
                 else:
-                    self.logger.error('Provean has been calculated but the file is missing! Recompiling...')
+                    self.logger.error(
+                        'Provean has been calculated but the file is missing from:\n{}\nRecompiling...'
+                        .format(path_to_provean_supset))
                     provean = d.uniprot_sequence.provean
         elif d.uniprot_sequence.provean:
             provean = d.uniprot_sequence.provean

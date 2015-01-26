@@ -758,55 +758,57 @@ class MyDatabase(object):
 
 
     def _copy_uniprot_domain_data(self, d, path_to_data):
-        if (path_to_data
-                and d.template
-                and d.template.model
-                and d.template.model.alignment_filename
-                and d.template.model.model_filename):
-            tmp_save_path = self.temp_path + path_to_data
-            archive_save_path = self.path_to_archive + path_to_data
-            path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_save_path + d.template.model.alignment_filename,
-                tmp_save_path + d.template.model.alignment_filename), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_save_path + d.template.model.model_filename,
-                tmp_save_path + d.template.model.model_filename), shell=True)
-            # Copy Provean supporting set
-            try:
-                self._copy_provean(d)
-            except subprocess.CalledProcessError as e:
-                self.logger.error('Failed to copy provean supporting set!')
-                self.logger.error(e)
-                d.uniprot_sequence.provean.provean_supset_filename = ''
+        if path_to_data is None:
+            return
+        if (d.template != None and
+            d.template.model != None and
+            d.template.model.alignment_filename != None and
+            d.template.model.model_filename != None):
+                tmp_save_path = self.temp_path + path_to_data
+                archive_save_path = self.path_to_archive + path_to_data
+                path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
+                subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.alignment_filename,
+                    tmp_save_path + d.template.model.alignment_filename), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.model_filename,
+                    tmp_save_path + d.template.model.model_filename), shell=True)
+        # Copy Provean supporting set
+        try:
+            self._copy_provean(d)
+        except subprocess.CalledProcessError as e:
+            self.logger.error('Failed to copy provean supporting set!')
+            self.logger.error(e)
+            d.uniprot_sequence.provean.provean_supset_filename = ''
 
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, uniprot_id):
-        if (path_to_data
-                and d.template.model.alignment_filename_1
-                and d.template.model.alignment_filename_2
-                and d.template.model.model_filename):
-            tmp_save_path = self.temp_path + path_to_data
-            archive_save_path = self.path_to_archive + path_to_data
-            path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
-            path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_save_path + d.template.model.alignment_filename_1,
-                tmp_save_path + d.template.model.alignment_filename_1), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_save_path + d.template.model.alignment_filename_2,
-                tmp_save_path + d.template.model.alignment_filename_2), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_save_path + d.template.model.model_filename,
-                tmp_save_path + d.template.model.model_filename), shell=True)
-            # Copy Provean supporting set
-            if d.uniprot_domain_1.uniprot_id == uniprot_id:
-                self._copy_provean(d.uniprot_domain_1)
-            elif d.uniprot_domain_2.uniprot_id == uniprot_id:
-                self._copy_provean(d.uniprot_domain_2)
+        if path_to_data is None:
+            return
+        if (d.template.model.alignment_filename_1 != None and
+            d.template.model.alignment_filename_2 != None and
+            d.template.model.model_filename != None):
+                tmp_save_path = self.temp_path + path_to_data
+                archive_save_path = self.path_to_archive + path_to_data
+                path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
+                path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
+                subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
+                subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.alignment_filename_1,
+                    tmp_save_path + d.template.model.alignment_filename_1), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.alignment_filename_2,
+                    tmp_save_path + d.template.model.alignment_filename_2), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.model_filename,
+                    tmp_save_path + d.template.model.model_filename), shell=True)
+        # Copy Provean supporting set
+        if d.uniprot_domain_1.uniprot_id == uniprot_id:
+            self._copy_provean(d.uniprot_domain_1)
+        elif d.uniprot_domain_2.uniprot_id == uniprot_id:
+            self._copy_provean(d.uniprot_domain_2)
 
 
     def _copy_provean(self, ud):
