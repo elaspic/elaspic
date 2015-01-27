@@ -709,7 +709,7 @@ class MyDatabase(object):
                     'have a structural template...'.format(d.uniprot_domain_id))
                 del uniprot_domains[d_idx]
                 continue
-            if copy_data and d.template.model:
+            if copy_data:
                 try:
                     self._copy_uniprot_domain_data(d, d.path_to_data)
                 except subprocess.CalledProcessError as e:
@@ -744,7 +744,7 @@ class MyDatabase(object):
                     'have a structural template...'.format(d.uniprot_domain_pair_id))
                 del uniprot_domain_pairs[d_idx]
                 continue
-            if copy_data and d.template.model:
+            if copy_data:
                 try:
                     self._copy_uniprot_domain_pair_data(d, d.path_to_data, uniprot_id)
                 except subprocess.CalledProcessError as e:
@@ -759,6 +759,7 @@ class MyDatabase(object):
 
     def _copy_uniprot_domain_data(self, d, path_to_data):
         if path_to_data is None:
+            self.logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
         if (d.template != None and
             d.template.model != None and
@@ -785,6 +786,7 @@ class MyDatabase(object):
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, uniprot_id):
         if path_to_data is None:
+            self.logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
         if (d.template.model.alignment_filename_1 != None and
             d.template.model.alignment_filename_2 != None and
