@@ -696,7 +696,7 @@ if __name__ == '__main__':
 
     elif args.uniprot_id:
         uniprot_ids = [args.uniprot_id,]
-        mutations = args.mutations.split(',') if args.mutations is not None else ['']
+        mutations = args.mutations if args.mutations is not None else ''
     else:
         error_message = (
             'Need to supply either a list of uniprot_mutation combos '
@@ -714,6 +714,7 @@ if __name__ == '__main__':
         #~ uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
 
     # Run jobs
+    # uniprot_id, mutations as a comma-separated string,
     uniprot_domains_and_domain_pairs = pipeline(uniprot_ids[0], mutations, run_type, n_cores)
 
 
