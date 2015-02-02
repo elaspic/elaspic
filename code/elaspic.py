@@ -714,9 +714,6 @@ if __name__ == '__main__':
         #~ uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
 
     # Run jobs
-    uniprot_id = uniprot_ids[0]
-    for mutation in mutations:
-        print uniprot_id, mutation, run_type
-        uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
+    uniprot_domains_and_domain_pairs = pipeline(uniprot_ids[0], mutations, run_type, n_cores)
 
 
