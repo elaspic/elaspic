@@ -788,7 +788,9 @@ class MyDatabase(object):
         if path_to_data is None:
             self.logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
-        if (d.template.model.alignment_filename_1 != None and
+        if (d.template != None and
+            d.template.model != None and
+            d.template.model.alignment_filename_1 != None and
             d.template.model.alignment_filename_2 != None and
             d.template.model.model_filename != None):
                 tmp_save_path = self.temp_path + path_to_data
@@ -817,6 +819,12 @@ class MyDatabase(object):
         if (ud.uniprot_sequence and
             ud.uniprot_sequence.provean and
             ud.uniprot_sequence.provean.provean_supset_filename):
+                subprocess.check_call(
+                    "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
+                        os.path.dirname(
+                            self.temp_path + hf.get_uniprot_base_path(ud) +
+                            ud.uniprot_sequence.provean.provean_supset_filename)),
+                    shell=True)
                 subprocess.check_call("cp -f '{}' '{}'".format(
                     self.path_to_archive + hf.get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename,
