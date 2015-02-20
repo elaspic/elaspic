@@ -4,7 +4,7 @@ Introduction
 Welcome to the ELASPIC code repository! 
 
 Complete documentation is availible on `ReadTheDocs <http://elaspic.readthedocs.org>`_.
-Try running ELASPIC using our `webserver <http://elaspic.kimlab.org/>`_.
+For a small number of mutations, you can try running ELASPIC using our `webserver <http://elaspic.kimlab.org/>`_.
 
 .. 
    Continuous testing runs on drone.io:
