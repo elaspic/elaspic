@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import stat
 import pandas as pd
 import urllib2
 import subprocess
@@ -76,6 +77,18 @@ def get_index_list(table_name, index_columns):
         index_list.append(
             Index('{}_{}'.format(table_name, '_'.join(columns))[:255], *columns, unique=unique))
     return tuple(index_list)
+
+
+
+def pickle_dump(obj, filename):
+    mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH
+    umask_original = os.umask(0)
+    try:
+        handle = os.fdopen(os.open(filename, os.O_WRONLY | os.O_CREAT, mode), 'wb')
+    finally:
+        os.umask(umask_original)
+    pickle.dump(obj, handle, pickle.HIGHEST_PROTOCOL)
+    handle.close()
 
 
 ###############################################################################
@@ -940,8 +953,8 @@ class MyDatabase(object):
             # Save the row corresponding to the model as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path), shell=True)
             # Don't need to dump template. Templates are precalculated
-            # pickle.dump(dumps(d.template), open(archive_save_path + 'template.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
-            pickle.dump(dumps(d.template.model), open(archive_save_path + 'model.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
+            # pickle_dump(dumps(d.template), archive_save_path + 'template.pickle')
+            pickle_dump(dumps(d.template.model), archive_save_path + 'model.pickle')
             # Save the modelled structure
             if d.template.model.model_filename is not None:
                 # Save alignments
@@ -975,7 +988,7 @@ class MyDatabase(object):
             # Save the row corresponding to the mutation as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
                 archive_save_path + archive_save_subpath), shell=True)
-            pickle.dump(dumps(mut), open(archive_save_path + archive_save_subpath + 'mutation.pickle', 'wb'), pickle.HIGHEST_PROTOCOL)
+            pickle_dump(dumps(mut), archive_save_path + archive_save_subpath + 'mutation.pickle')
             if mut.model_filename_wt and mut.model_filename_mut:
                 # Save Foldx structures
                 subprocess.check_call("cp -f '{}' '{}'".format(
