@@ -1,10 +1,14 @@
 Introduction
 ============
 
-Welcome to the ELASPIC code repository!
+Welcome to the ELASPIC code repository! 
 
-Documentation for the ELASPIC package is availible `here <http://elaspic.readthedocs.org>`_.
+Complete documentation is availible on `ReadTheDocs <http://elaspic.readthedocs.org>`_.
+Try running ELASPIC using our `webserver <http://elaspic.kimlab.org/>`_.
 
+.. 
+   Continuous testing runs on drone.io:
+   .. image:: https://drone.io/bitbucket.org/ostrokach/elaspic/status.png
 
 
 Installation Instructions
@@ -16,17 +20,17 @@ Configuring python
 Using anaconda
 ~~~~~~~~~~~~~~
 Downlaod and install the anaconda python 2.7 distribution for linux: 
-http://continuum.io/downloads. Run ``pip install -r requirements_dev.txt``
+http://continuum.io/downloads. Run ``pip install -r requirements.txt``
 in the elaspic directory to install the python packages required by elaspic.
 
 
 Using virtualenv
 ~~~~~~~~~~~~~~~~
-It is recommended that you use python2.7 for this project. If your system
+It is recommended that you use python 2.7 for this project. If your system
 comes with an earlier version of python, you should download and compile 
 python2.7 binaries from source. Use ``make altinstall`` instead of 
 ``make install`` to prevent any system python binaries from being overwritten.
-Also, you must specify the following options while running *./configure* 
+Also, you must specify the following options when running *./configure* 
 in order for the required python packages to work::
 
     --enable-unicode=ucs4 
@@ -36,19 +40,20 @@ in order for the required python packages to work::
 
 
 The ``--enable-unicode=ucs4`` is particularly important, as it is required
-for 3:superscript:`rd`-party packags such as numpy / scipy.
+for third-party packags such as numpy / scipy.
 
-After you have installed python2.7 binaries, it is recommended that you 
-set up a virual python environment to work with the elaspic project. 
-The instructions on how to do this can be found on the `virtualenv`_ and
-`virtuanenvwrapper`_ websites. Run ``pip install -r requirements_dev.txt`` 
-in the elaspic directory to install the python packages required by elaspic.
+Once you have python 2.7 installed in your system, you should set up a virual environment 
+for the elaspic project. The instructions on how to do this can be found on the 
+`virtualenv`_ and `virtuanenvwrapper`_ websites. 
+
+Run ``pip install -r requirements.txt`` in the elaspic directory to install the required 
+python packages.
 
 
 Installing external software
 ----------------------------
 
-Install `BLAST`_, `MODELLER`_, and `TCOFFEE`_, and modify the `.bashrc` file
+Install `BLAST`_, `MODELLER`_, and `TCOFFEE`_, and modify the .bashrc file
 accordingly. If you install all three programs in your home directory, 
 your `.bashrc` file should look something like this::
 
@@ -71,9 +76,9 @@ your `.bashrc` file should look something like this::
     export PYTHONPATH=$HOME/modeller9.13/modlib:$HOME/modeller9.13/lib/x86_64-intel8/python2.5:$PYTHONPATH
 
 
-All other binaries required to run elaspic come precompiled in the `elaspic/bin`
+All other binaries required to run elaspic come precompiled in the *./elaspic/bin*
 folder. If you are running a strange flavour of linux, you may have to compile
-some of those libraries from source. The script `/elaspic/src/install_required_binaries.sh`
+some of those libraries from source. The script *./elaspic/src/install_required_binaries.sh*
 is designed to streamline this process.
 
 .. _virtualenv: http://virtualenv.readthedocs.org/en/latest/

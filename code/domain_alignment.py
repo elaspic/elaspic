@@ -44,9 +44,7 @@ def check_provean_supporting_set(self, domain_mutation, sequence, sequence_id='i
                                  path_to_provean_supset=None, save_supporting_set=False, check_mem_usage=False):
     """
 
-    Provean results look something like this:
-
-    .. code-block:: txt
+    Provean results look something like this::
 
         #[23:28:34] clustering subject sequences...
         #[23:28:34] selecting clusters...
@@ -62,21 +60,20 @@ def check_provean_supporting_set(self, domain_mutation, sequence, sequence_id='i
         ## VARIATION	SCORE
         #M1A	-6.000
 
-
-    Exceptions
-    ----------
-    errors.ProveanError
-        Can raise this exception only if ``check_mem_usage`` is set to ``True``.
-
-
     Parameters
     ----------
-
+    domain_mutation : string
+        Mutation in domain coordinates (i.e. relative to the start of the domain)
 
     Returns
     -------
     list
         [result, error_message, return_code] -- The output from running a provean system command.
+
+    Exceptions
+    ----------
+    errors.ProveanError
+        Can raise this exception only if ``check_mem_usage`` is set to ``True``.
     """
 
     if check_mem_usage:
@@ -185,61 +182,46 @@ class DomainPairTemplate():
     """
     R CODE PROTOTYPE:
 
-    aligment.domains <-
-      function(x,chain,dir_db,dir_query,dir_blastp,definition,libraries){
+    .. code-block:: r
 
-        BE = definition[,x,drop=FALSE]
-        family = gsub(pattern="\\|([[:digit:]])*$",replacement="",x=colnames(BE))
-        B = BE["Begin",]
-        E = BE["End",]
-
-        if( family%in%libraries ){
-
-          query = paste(dir_query,chain,".fasta",sep = "")
-          db = paste(dir_db,family,"/",family,sep = "")
-          cmd = paste("blastp -db",db,"-query",query,"-outfmt 10 -evalue 0.001")
-          aligment = system(cmd,intern=TRUE)
-
-          if( length(aligment) == 0 ){
-
-            templete = unique(x,chain,B,E,type=2)
-
-          } else{
-
-            aligment = lapply(aligment,formating)
-            aligment = do.call(rbind,aligment)
-
-            B2 = as.vector(aligment[,"q_start"])
-            E2 = as.vector(aligment[,"q_end"])
-
-            overlapings = mapply(overlap.internal,B1 = B,B2 = B2,E1 = E,E2 = E2,
-                                 MoreArgs=list(type="percentage_1"),SIMPLIFY=TRUE)
-
-            t_score = mapply( FUN = T_score,
-                              identity = as.vector(aligment[,"identity"]),
-                              coverage = overlapings,
-                              SIMPLIFY = TRUE )
-
-            type = 1
-            aligment = cbind(aligment,overlapings,t_score,type)
-
-            dir_blastp_domain = paste(dir_blastp,x,".csv",sep="")
-            write.csv(aligment,file=dir_blastp_domain)
-
-            ind_templete = which.max(aligment[,"t_score"])                          # criterion see t_score function
-            templete = aligment[ind_templete,,drop=FALSE]
-
+        aligment.domains <- function(x,chain,dir_db,dir_query,dir_blastp,definition,libraries) {
+            BE = definition[,x,drop=FALSE]
+            family = gsub(pattern="\\|([[:digit:]])*$",replacement="",x=colnames(BE))
+            B = BE["Begin",]
+            E = BE["End",]
+            if(family %in% libraries) {
+              query = paste(dir_query,chain,".fasta",sep = "")
+              db = paste(dir_db,family,"/",family,sep = "")
+              cmd = paste("blastp -db",db,"-query",query,"-outfmt 10 -evalue 0.001")
+              aligment = system(cmd,intern=TRUE)
+              # Start inner if
+              if (length(aligment) == 0) {
+                templete = unique(x,chain,B,E,type=2)
+              } else {
+                aligment = lapply(aligment,formating)
+                aligment = do.call(rbind,aligment)
+                B2 = as.vector(aligment[,"q_start"])
+                E2 = as.vector(aligment[,"q_end"])
+                overlapings = mapply(overlap.internal,B1 = B,B2 = B2,E1 = E,E2 = E2,
+                                     MoreArgs=list(type="percentage_1"),
+                                     SIMPLIFY=TRUE)
+                t_score = mapply(FUN = T_score,
+                                 identity = as.vector(aligment[,"identity"]),
+                                 coverage = overlapings,
+                                 SIMPLIFY = TRUE)
+                type = 1
+                aligment = cbind(aligment,overlapings,t_score,type)
+                dir_blastp_domain = paste(dir_blastp,x,".csv",sep="")
+                write.csv(aligment,file=dir_blastp_domain)
+                ind_templete = which.max(aligment[,"t_score"]) # criterion see t_score function
+                templete = aligment[ind_templete,,drop=FALSE]
+              }
+            # End inner if
+            } else {
+              templete = unique(x,chain,B,E,type=3)
+            }
+            return(templete)
           }
-
-        } else{
-
-          templete = unique(x,chain,B,E,type=3)
-
-        }
-
-        return(templete)
-
-      }
     """
 
     def __init__(
@@ -255,31 +237,6 @@ class DomainPairTemplate():
         self.logger = logger
         self.refine = refine
         self.n_cores = n_cores
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -356,8 +313,12 @@ class GetTemplate():
 
     def run(self, d, canonical_domain):
         """
-        d: sql_db.UniprotDomain or sql_db.UniprotDomainPair object
-        domain: sql_db.Domain or sql_db.DomainContact object
+        Parameters
+        ----------
+        d : sql_db.UniprotDomain or sql_db.UniprotDomainPair
+            Information about the given domain
+        domain : sql_db.Domain or sql_db.DomainContact
+            Information about the particular domain domain interaction
         """
         #######################################################################
         # Obtain a list of template domains and calculate some of their properties

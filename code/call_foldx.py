@@ -2,7 +2,6 @@
 """
 Created on Fri Jan 11 09:49:26 2013
 
-@author: niklas
 """
 from os import environ
 import shutil

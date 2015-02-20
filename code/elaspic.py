@@ -315,6 +315,7 @@ class Pipeline(object):
                         .format(path_to_provean_supset))
                     provean = d.uniprot_sequence.provean
         elif d.uniprot_sequence.provean:
+            self.logger.info('Provean supporting set has not been calculated previously. Computing...')
             provean = d.uniprot_sequence.provean
         else:
             provean = sql_db.Provean()

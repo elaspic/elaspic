@@ -786,7 +786,7 @@ class MyDatabase(object):
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, uniprot_id):
         if path_to_data is None:
-            self.logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
+            self.logger.error('Cannot copy uniprot domain pair data because `path_to_data` is None')
             return
         if (d.template != None and
             d.template.model != None and

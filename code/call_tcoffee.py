@@ -15,19 +15,7 @@ import helper_functions as hf
 
 class tcoffee_alignment:
     """
-    Alignes sequences using t_coffee in expresso mode
-
-    input:  tmpPath     type: string        set a unique path for t_coffee
-                                            (see __call_tcoffee)
-            seqFile     type: file          containing two sequences in fasta format
-            seqID       type: string        sequence ID of the target sequence
-                                            (in pipeline for modelling with modeller)
-            seqFile2    type: file          containing two sequences in fasta format
-            seqID2      type: string        sequence ID of the target sequence
-                                            (in pipeline for modelling with modeller)
-
-    return: Biopython alignment object
-
+    Alignes sequences using t_coffee in expresso mode.
     """
     def __init__(
             self, global_temp_path, unique_temp_folder, uniprot_seqrecord,

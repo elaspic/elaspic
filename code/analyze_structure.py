@@ -2,7 +2,6 @@
 """
 Created on Fri Mar  8 10:29:13 2013
 
-@author: niklas
 """
 import os
 import time
