@@ -59,7 +59,8 @@ def score_pairwise(seq1, seq2, matrix, gap_s, gap_e):
 # T     Turn
 # C|-   Coil (none of the above) ()
 secondary_structure_to_int = {
-    '-': 0, 'C': 0, 'B': 1, 'b': 1, 'E': 2, 'G': 3, 'H': 4, 'I': 5, 'S': 6, 'T': 7}
+    '-': 0, 'C': 0, 'B': 1, 'b': 1, 'E': 2, 'G': 3, 'H': 4, 'I': 5, 'S': 6, 'T': 7
+}
 
 
 def format_mutation_features(feature_df, core_or_interface):
@@ -105,6 +106,15 @@ def format_mutation_features(feature_df, core_or_interface):
 
 def get_mutation_features(d, mut, row_idx=0):
     """
+    Returns a dataframe that contains all features for the given mutation that are relevant for
+    machine learning.
+
+    Parameters
+    ----------
+    d : sqlalchemy orm object
+       Contains domain information for the given mutation
+    mut : sqlalchemy orm object
+       Contains information about the mutation in question
     """
     feature_dict = {key: value for (key, value) in mut.__dict__.iteritems() if not key.startswith('_')}
 
@@ -142,7 +152,7 @@ def get_mutation_features(d, mut, row_idx=0):
             'pfam_name_2': d.uniprot_domain_2.pdbfam_name,
             'clan_name_1': d.uniprot_domain_1.pfam_clan,
             'clan_name_2': d.uniprot_domain_2.pfam_clan,
-            #
+            # Feature columns
             'alignment_identity': d.template.identical_1 + d.template.identical_2,
             'identical_1': d.template.identical_1,
             'identical_2': d.template.identical_2,
@@ -159,8 +169,9 @@ def get_mutation_features(d, mut, row_idx=0):
 
 def convert_features_to_differences(df, keep_mut=False):
     """
-    Return a dataframe with all the `_mut` features replaced with `_change`
-    features which coresspond to the difference between `_mut` and `_wt`.
+    Creates a new set of features (ending in `_change`) that describe the difference between values
+    of the wildtype (features ending in `_wt`) and mutant (features ending in `_mut`) features.
+    If `keep_mut` is `False`, removes all mutant features (features ending in `_mut`).
     """
     column_list = []
     for column_name, column in df.iteritems():
@@ -182,10 +193,18 @@ def convert_features_to_differences(df, keep_mut=False):
 
 
 def encode_list_as_text(list_of_lists):
+    """
+    Uses the database convention to encode a list of lists, describing domain boundaries of
+    multiple domains, as a string.
+    """
     return ','.join([':'.join([str(x) for x in xx]) for xx in zip(*list_of_lists)])
 
 
 def decode_text_as_list(list_string):
+    """
+    Uses the database convention to decode a string, describing domain boundaries of
+    multiple domains, as a list of lists.
+    """
     str2num = lambda x: float(x) if '.' in x else int(x)
     return zip(*[[str2num(x) for x in sublist.split(':')] for sublist in list_string.split(',')])
 
@@ -193,6 +212,9 @@ def decode_text_as_list(list_string):
 
 ###############################################################################
 class MutationData(object):
+    """
+    Empty class that holds attributes that are relevant for a given mutation.
+    """
 
     def __init__(self):
         self.uniprot_id_1 = None

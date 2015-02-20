@@ -11,7 +11,7 @@ Contents:
 .. toctree::
    :maxdepth: 4
 
-   installation_instructions
+   readme
    modules
 
 

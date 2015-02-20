@@ -1,28 +1,34 @@
-# Homology modeling by the automodel class
+# -*- coding: utf-8 -*-
+"""
+Homology modeling by the automodel class
 
-import sys
+"""
 
-from modeller import *			# Load standard Modeller classes
+from modeller import * # Load standard Modeller classes
 from modeller.automodel import *	# Load the automodel class
 import helper_functions as hf
-import errors 
-
-
-
-
+import errors
 
 class modeller:
     """
-    run modeller
+    Runs MODELLER in order to make a homology model of the given protein.
 
-    input:  alignment                   type: list      list containing filenames with modeller
-                                                        input files in PIR format
-            seqID                       type: string    name of the sequence (target)
-            templateID                  type: string    name of the template (structure)
-            path_to_pdb_for_modeller    type: string    path to PDB files
-            tmpPath                     type: string    path for storing tmp files
-            modeller_runs               type: int       how many rounds of modelling should be done
-            loopRefinement              type: boolean   if True calculate loop refinemnts
+    Parameters
+    ----------
+    alignment : list
+        Contains filenames with modeller input files in a PIR file format
+    seqID : string
+        Name of the sequence (target)
+    templateID : string
+        Name of the template (structure)
+    path_to_pdb_for_modeller : string
+        Path to PDB files
+    tmpPath : string
+        Path for storing tmp files
+    modeller_runs : int
+       How many rounds of modelling should be done
+    loopRefinement : boolean
+        If True, calculate loop refinemnts
     """
     def __init__(
             self, alignment, seqID, templateID, path_to_pdb_for_modeller,
@@ -90,36 +96,35 @@ class modeller:
             return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], knotted
 
 
-    def __make_alignment(self):
-        """ Functionality for modeller to make the alignment instead of relying on tcoffee
-        """
-        pass
-
-
     def __run_modeller(self, alignFile, loopRefinement):
         """
-        more or less taken from the modeller website
+        Parameters
+        ----------
+        alignFile : string
+            File containing the input data
+        result : list
+            The successfully calculated models are stored in this list
+        loopRefinement : boolean
+            If `True`, perform loop refinements
 
-        input:  alignFile   type: string        File containing the input data
-                result      type: list          The successfully calculated models
-                                                are stored in this list
-                loopRefinement  type: boolean   if True: perform loopfeinements
-
-        return: result      type: list          successfully calculated models
+        Returns
+        -------
+        list
+            Successfully calculated models
         """
-        
+
         log.none() # instructs Modeller to display no log output.
         env = environ() # create a new MODELLER environment to build this model in
 
         # Directories for input atom files
         env.io.atom_files_directory = [str(self.filePath.rstrip('/'))]
         env.schedule_scale = physical.values(default=1.0, soft_sphere=0.7)
-        
+
         # Selected atoms do not feel the neighborhood
         #env.edat.nonbonded_sel_atoms = 2
         env.io.hetatm = True # read in HETATM records from template PDBs
         env.io.water = True # read in WATER records (including waters marked as HETATMs)
-        
+
         self.logger.debug('Performing loop refinement in addition to regular modelling: {}'.format(loopRefinement))
         if loopRefinement == False:
             a = automodel(
@@ -141,8 +146,8 @@ class modeller:
             a.loop.starting_model = self.loopStart # index of the first loop model
             a.loop.ending_model = self.loopEnd # index of the last loop model
             a.loop.md_level = refine.slow # loop refinement method; this yields
-        
-        
+
+
         a.starting_model = self.start # index of the first model
         a.ending_model = self.end # index of the last model
 
@@ -158,8 +163,8 @@ class modeller:
 #        a.repeat_optimization = 2
 
         a.max_molpdf = 2e5
-        
-        with hf.log_print_statements(self.logger):        
+
+        with hf.log_print_statements(self.logger):
             a.make() # do the actual homology modeling
 
         # The output produced by modeller is stored in a.loop.outputs or a.outputs
@@ -181,7 +186,7 @@ class modeller:
                 failure = a.outputs[i]['failure']
                 self.logger.debug('Failure! {}'.format(failure))
                 failures.append(a.outputs[i]['failure'])
-                
+
         # Add the loop refinement output
         if loopRefinement:
             self.logger.debug('Modeller loop outputs:')
@@ -204,17 +209,23 @@ class modeller:
 
     def __call_knot(self, pdbFile):
         """
-        check a PDB structure for knots using the program KNOTS by Willi Taylor
-
+        Check a PDB structure for knots using the program KNOTS by Willi Taylor
         Make sure to set the command and PDB path!
 
-        input:  pdbFile     type: string        Filename of the PDB structure
+        N.B.
+        For multiprocessing the KNOT program needs to be run from a unique execution folder.
 
-        return: 0 or 1      type: int           0: no knot
-                                                1: knotted
+        Parameters
+        ----------
+        pdbFile : string
+            Filename of the PDB structure
+
+        Returns
+        -------
+        int
+            0: no knot; 1: knot
         """
-        # for multiprocessing the KNOT program needs to be run from a unique
-        # execution folder, this is created in the beginning
+
 
         system_command = './topol ' + pdbFile
         self.logger.debug('Knot system command: {}'.format(system_command))
