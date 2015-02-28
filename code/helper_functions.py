@@ -114,6 +114,7 @@ class WritableObject:
 def log_print_statements(logger):
     """ Channel print statements to the debug logger
     """
+    original_stdout = sys.stdout
     original_formatters = []
     for i in range(len(logger.handlers)):
         original_formatters.append(logger.handlers[0].formatter)
@@ -125,7 +126,7 @@ def log_print_statements(logger):
     except:
         raise
     finally:
-        sys.stdout = sys.__stdout__
+        sys.stdout = original_stdout
         for i in range(len(logger.handlers)):
             logger.handlers[i].formatter = original_formatters[i]
 

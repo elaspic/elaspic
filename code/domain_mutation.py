@@ -338,6 +338,8 @@ class GetMutation(object):
                                 uniprot_sequences[1][domain_2_start-1:domain_2_end]]
 
             if int(mutation[1:-1]) not in interacting_aa:
+                self.logger.error('Mutation: {}'.format(mutation))
+                self.logger.error('Interacting AA: {}'.format(interacting_aa))
                 raise errors.MutationOutsideInterfaceError('mutated residue not involved in the interaction')
 
         #######################################################################
