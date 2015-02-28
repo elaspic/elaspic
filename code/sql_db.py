@@ -15,12 +15,12 @@ from collections import deque
 
 from sqlalchemy import or_
 from sqlalchemy import create_engine
-from sqlalchemy import Column, Index, UniqueConstraint
-from sqlalchemy import Integer, Float, String, Boolean, Text, DateTime, Sequence
+from sqlalchemy import Column, Index
+from sqlalchemy import Integer, Float, String, Text, DateTime
 from sqlalchemy import ForeignKey
-from sqlalchemy.orm import sessionmaker, relationship, backref, aliased, scoped_session, joinedload, contains_eager
+from sqlalchemy.orm import sessionmaker, relationship, backref, aliased, joinedload
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.ext.serializer import loads, dumps
+from sqlalchemy.ext.serializer import dumps
 
 from Bio import SeqIO
 from Bio import AlignIO
@@ -31,13 +31,13 @@ from Bio.SeqRecord import SeqRecord
 import helper_functions as hf
 import errors as error
 
+from __init__ import SQL_FLAVOUR
+
 
 ###############################################################################
 ### Modifiable variables
 # Not the best place to define this, bot collation changes depending on the
 # database type...
-#SQL_FLAVOUR = 'sqlite_file'
-SQL_FLAVOUR = 'mysql'
 #SCHEMA_VERSION = 'elaspic'
 #SCHEMA_VERSION = 'elaspic_dev'
 #SCHEMA_VERSION = 'elaspic_training'

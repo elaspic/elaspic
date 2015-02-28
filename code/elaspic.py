@@ -22,6 +22,8 @@ import domain_model
 import domain_mutation
 import helper_functions as hf
 
+from __init__ import SQL_FLAVOUR
+
 
 class Pipeline(object):
 
@@ -31,34 +33,36 @@ class Pipeline(object):
         # Read the configuration file and set the variables
         configParser = SafeConfigParser(
             defaults={
-                'db_type': sql_db.SQL_FLAVOUR,
-                'path_to_archive': '/home/kimlab1/database_data/elaspic_v2/',
-                'web_server': False,
+                'global_temp_path': '/tmp/',
+                'temp_path': 'elaspic/',
+                'debug': 'True',
+                'look_for_interactions': 'True',
+                'remake_provean_supset': 'False',
+                'n_cores': '1',
                 'schema_version': 'elaspic',
-                'remake_provean_supset': False,
+                'web_server': 'False',
+                'db_type': SQL_FLAVOUR,
             })
         configParser.read(configFile)
 
         # From [DEFAULT]
         self.global_temp_path = configParser.get('DEFAULT', 'global_temp_path')
-        temp_path_suffix = configParser.get('DEFAULT', 'temp_path').strip('/') + '/' # So it never starts with '/';
-        self.debug = configParser.getboolean('DEFAULT', 'DEBUG')
-        self.path_to_archive = configParser.get('DEFAULT', 'path_to_archive')
+        temp_path_suffix = configParser.get('DEFAULT', 'temp_path').strip('/') + '/'
+        self.debug = configParser.getboolean('DEFAULT', 'debug')
         self.look_for_interactions = configParser.getboolean('DEFAULT', 'look_for_interactions')
-        self.n_cores = configParser.get('DEFAULT', 'n_cores')
-        self.db_type = configParser.get('DEFAULT', 'db_type')
-        self.db_path = configParser.get('DEFAULT', 'db_path')
-        self.db_is_immutable = True if self.db_type.lower().startswith('sqlite') else False
-        self.web_server = configParser.get('DEFAULT', 'web_server')
-        self.schema_version = configParser.get('DEFAULT', 'schema_version')
         self.remake_provean_supset = configParser.get('DEFAULT', 'remake_provean_supset')
+        self.n_cores = configParser.get('DEFAULT', 'n_cores')
+        self.schema_version = configParser.get('DEFAULT', 'schema_version')
+        self.web_server = configParser.get('DEFAULT', 'web_server')
+        self.db_type = configParser.get('DEFAULT', 'db_type')
+        self.db_is_immutable = True if self.db_type.lower().startswith('sqlite') else False
 
         # From [SETTINGS]
+        self.path_to_archive = configParser.get('SETTINGS', 'path_to_archive')
         self.blast_db_path = configParser.get('SETTINGS', 'blast_db_path')
+        self.sqlite_db_path = configParser.get('SETTINGS', 'sqlite_db_path')
         self.pdb_path = configParser.get('SETTINGS', 'pdb_path')
-        self.output_path = configParser.get('SETTINGS', 'output_path')
         self.bin_path = configParser.get('SETTINGS', 'bin_path')
-        self.max_runtime = configParser.get('SETTINGS', 'max_runtime')
 
         # From [GET_MODEL]
         self.modeller_runs = configParser.getint('GET_MODEL', 'modeller_runs')
@@ -89,9 +93,9 @@ class Pipeline(object):
 
 
     def __copy_sqlite_database(self):
-        db_filename = self.db_path.strip().split('/')[-1]
+        db_filename = self.sqlite_db_path.strip().split('/')[-1]
         if not os.path.isfile(self.temp_path + db_filename):
-            system_command = 'cp -u ' + self.temp_path + ' ' + self.db_path + '/'
+            system_command = 'cp -u ' + self.temp_path + ' ' + self.sqlite_db_path + '/'
             print system_command
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, error_message = childProcess.communicate()
@@ -102,41 +106,28 @@ class Pipeline(object):
 
 
     def __copy_blast_database(self):
-        #######################################################################
-        # If running on the cluster copy the database to the tmp DIR for
-        # speedup and to avoid killing the network. BLAST is very IO intensive
-        # and you don't want that to be run over the network!
-        # I can distinguish where the pipeline is running by checking the username.
-        # You will have to adjust that!
-        # My usernames are:
-        # local: niklas
-        # banting: nberliner
-        # Scinet: joan
+        if (os.path.isdir(self.global_temp_path + 'blast/db/') and
+            os.path.isfile(self.global_temp_path + 'blast/db/nr.pal') and
+            os.path.isfile(self.global_temp_path + 'blast/db/pdbaa.pal')):
+                print('The blast database already exists.')
+                return
+
         username  = hf.get_username()
         hostname = hf.get_hostname()
         if username == 'strokach' and (('beagle' in hostname) or ('grendel' in hostname)):
-            # The blast database should already have been copied to the local temp folder
-            if not os.path.isdir(self.global_temp_path + 'blast/db/'):
-#                raise Exception(
-#                    'Could not find a blast database even though it should be '
-#                    'present on these nodes.')
-                print ('Creating a simlink to the blast folder even though the '
-                    'blast database should be copied on these nodes')
-                system_command = (
-                    'mkdir -p ' + self.global_temp_path + 'blast/ && ' +
-                    'ln -sf ' + self.blast_db_path + 'db ' +  self.global_temp_path + 'blast/')
-            else:
-                return
-#            # Copy the blast database if running on beagle or Grendel
-#            system_command = (
-#                # 'mkdir -p ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
-#                'mkdir -p ' + self.global_temp_path + 'blast/db/ && ' +
-#                # 'rsync -rzu ' + self.blast_db_path + 'pdbaa_db/ ' + self.global_temp_path + 'blast/pdbaa_db/ && ' +
-#                'rsync -rzu ' + self.blast_db_path + 'db/ ' + self.global_temp_path + 'blast/db/')
-#
-#   System command to execute on each node in order to copy / update the blast database
-#   rm '/tmp/blast/db' && mkdir -p '/tmp/blast/db/' && rsync --update -rzu '/home/kimlab1/database_data/blast/db/' '/tmp/blast/db/'
-
+            ### The blast database should already have been copied to the local temp folder
+#            raise Exception(
+#                'Could not find the blast database even though it should be '
+#                'present on these nodes.'
+#            )
+            print (
+                'Creating a simlink to the blast folder, even though the blast database '
+                'should already exist on these nodes.'
+            )
+            system_command = (
+                'mkdir -p ' + self.global_temp_path + 'blast/ && ' +
+                'ln -sf ' + self.blast_db_path + 'db ' +  self.global_temp_path + 'blast/'
+            )
         elif username == 'strokach' or username == 'alexey':
             # Use a symbolic link to the blast database and use the home folder for temporary storage
             system_command = (
@@ -150,24 +141,19 @@ class Pipeline(object):
                 'mkdir -p ' + self.global_temp_path + 'blast/ && ' +
                 'ln -sf ' + self.blast_db_path + 'pdbaa_db ' + self.global_temp_path + 'blast/ && ' +
                 'ln -sf ' + self.blast_db_path + 'db ' +  self.global_temp_path + 'blast/')
-        elif username == 'joan':
-            # For scinet, blast is already installed, but the database needs to be copied
-            system_command = (
-                'mkdir -p ' + self.global_temp_path + 'blast && ' +
-                'cp -ru $HOME/niklas-pipeline/blastdb/pdbaa_db ' +
-                self.global_temp_path + 'blast/')
+        print(system_command)
 
-        print system_command
-        # Try running the system command several times in case it doesn't work
-        # the first time
+        # Try running the system command several times in case it doesn't work the first time
         n_tries = 0
-        childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        childProcess = subprocess.Popen(
+            system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         result, error_message = childProcess.communicate()
         rc = childProcess.returncode
         while rc != 0 and n_tries < 10:
             print "Couldn't copy the blast database. Retrying..."
             time.sleep(15)
-            childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            childProcess = subprocess.Popen(
+                system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         if rc != 0:
             print result
             print error_message
@@ -211,9 +197,9 @@ class Pipeline(object):
             "Connecting to a '{}' database and copying files from the '{}' data folder..."
             .format(self.db_type, self.path_to_archive))
         if self.db_type.lower() == 'sqlite_file':
-            self.logger.info('Path to the sqlite database: {}'.format(self.db_path))
+            self.logger.info('Path to the sqlite database: {}'.format(self.sqlite_db_path))
         self.db = sql_db.MyDatabase(
-            path_to_sqlite_db=self.db_path, sql_flavour=self.db_type, schema_version=self.schema_version,
+            path_to_sqlite_db=self.sqlite_db_path, sql_flavour=self.db_type, schema_version=self.schema_version,
             temp_path=self.temp_path, path_to_archive=self.path_to_archive,
             is_immutable=self.db_is_immutable, logger=self.logger)
 

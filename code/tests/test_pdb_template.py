@@ -4,7 +4,34 @@ Created on Thu Jan  8 17:13:11 2015
 
 @author: alexey
 """
+#%% Imports ommon to all test files
+from __future__ import print_function
+import os
+import sys
 
+try:
+    code_path = os.path.join(os.path.dirname(__file__), '..')
+except:
+    code_path = os.path.dirname(os.getcwd())
+
+if code_path not in sys.path:
+    sys.path.insert(0, code_path)
+
+try:
+    from elaspic import Pipeline
+    import helper_functions as hf
+except ImportError:
+    del sys.modules['elaspic']
+    from elaspic import Pipeline
+    import helper_functions as hf
+
+default_config_file = os.path.join(code_path, '../config/config_file.ini')
+temp_path = hf.get_temp_path()
+pipeline = Pipeline(default_config_file)
+
+
+
+#%%
 import os
 import sys
 
