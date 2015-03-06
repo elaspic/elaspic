@@ -6,6 +6,7 @@ Created on Fri Feb 27 16:57:30 2015
 """
 #%%
 from __future__ import print_function
+from builtins import object
 import random
 import pandas as pd
 import sqlalchemy as sa
@@ -20,7 +21,7 @@ engine = sa.create_engine('mysql://elaspic:elaspic@192.168.6.19/elaspic')
 
 
 #%%
-class TestUniprotDomain:
+class TestUniprotDomain(object):
 
     domain_query = """
     select
@@ -126,7 +127,7 @@ class TestUniprotDomain:
 
 
 #%%
-class TestUniprotDomainPair:
+class TestUniprotDomainPair(object):
 
     domain_pair_query = """
     select

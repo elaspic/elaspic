@@ -3,10 +3,15 @@
 Created on Fri Jan 11 09:49:26 2013
 
 """
+from __future__ import absolute_import
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
 from os import environ
 import shutil
-import errors
-import helper_functions as hf
+from . import errors
+from . import helper_functions as hf
 
 names_rows_stability = [
     ['dg', 1], # totalEnergy
@@ -50,7 +55,7 @@ names_stability_complex_mut = (
     ['number_of_residues'])
 
 
-class FoldX():
+class FoldX(object):
 
     def __init__(self, tmp_path, pdb_file, chain_id, buildModel_runs, foldX_WATER, logger):
         """

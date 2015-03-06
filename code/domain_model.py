@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
 # -*- coding: utf-8 -*-
 
 import numpy as np
@@ -9,13 +14,13 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.PDB import PDBIO
 
-import helper_functions as hf
-import pdb_template
-import errors
-import call_modeller
-import call_tcoffee
-import sql_db
-import analyze_structure
+from . import helper_functions as hf
+from . import pdb_template
+from . import errors
+from . import call_modeller
+from . import call_tcoffee
+from . import sql_db
+from . import analyze_structure
 
 
 class GetModel(object):
@@ -164,8 +169,8 @@ class GetModel(object):
         interactions_between_chains = (
             analyze_structure.get_interactions_between_chains(
                 model, d.template.model.chain_1, d.template.model.chain_2, 5) )
-        chain_1_interactions = list(set([key[:2] for key in interactions_between_chains.keys()]))
-        chain_2_interactions = list(set([value[:2] for values in interactions_between_chains.values() for value in values]))
+        chain_1_interactions = list(set([key[:2] for key in list(interactions_between_chains.keys())]))
+        chain_2_interactions = list(set([value[:2] for values in list(interactions_between_chains.values()) for value in values]))
         if not chain_1_interactions and not chain_2_interactions:
             raise errors.ChainsNotInteractingError(
                 'Chains %s and %s are not interacting! chain_1_interactions: %s, chain_2_interactions: %s' %
@@ -208,18 +213,18 @@ class GetModel(object):
             model_domain_2_start + chain_2_numbering.index(resnum)
             for resnum in chain_2_interacting_resnum]
 
-        chain_1_interactions_uniprot = zip(chain_1_interacting_uninum, chain_1_interacting_aa)
+        chain_1_interactions_uniprot = list(zip(chain_1_interacting_uninum, chain_1_interacting_aa))
         chain_1_interactions_uniprot.sort(key=lambda x: x[0])
-        chain_1_interacting_uninum, chain_1_interacting_aa = zip(*chain_1_interactions_uniprot)
+        chain_1_interacting_uninum, chain_1_interacting_aa = list(zip(*chain_1_interactions_uniprot))
         chain_1_interacting_aa = ''.join(chain_1_interacting_aa)
         chain_1_interacting_aa_from_uniprot = ''
         for uninum, aa in chain_1_interactions_uniprot:
             uniprot_idx = uninum - 1
             chain_1_interacting_aa_from_uniprot += d.uniprot_domain_1.uniprot_sequence.uniprot_sequence[uniprot_idx]
 
-        chain_2_interactions_uniprot = zip(chain_2_interacting_uninum, chain_2_interacting_aa)
+        chain_2_interactions_uniprot = list(zip(chain_2_interacting_uninum, chain_2_interacting_aa))
         chain_2_interactions_uniprot.sort(key=lambda x: x[0])
-        chain_2_interacting_uninum, chain_2_interacting_aa = zip(*chain_2_interactions_uniprot)
+        chain_2_interacting_uninum, chain_2_interacting_aa = list(zip(*chain_2_interactions_uniprot))
         chain_2_interacting_aa = ''.join(chain_2_interacting_aa)
         chain_2_interacting_aa_from_uniprot = ''
         for uninum, aa in chain_2_interactions_uniprot:
@@ -398,7 +403,7 @@ class GetModel(object):
                 n_gaps_start += 1
             else:
                 break
-        for aa_query, aa_template in reversed(zip(*aln)):
+        for aa_query, aa_template in reversed(list(zip(*aln))):
             if aa_query != '-' and aa_template == '-':
                 n_gaps_end += 1
             else:

@@ -4,6 +4,12 @@ Created on Sun Dec 23 18:37:36 2012
 
 @author: niklas
 """
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import object
 import os
 import time
 import subprocess
@@ -11,18 +17,18 @@ import tempfile
 import argparse
 import atexit
 import signal
-from ConfigParser import SafeConfigParser
+from configparser import SafeConfigParser
 
 from Bio.SubsMat import MatrixInfo
 
-import errors
-import sql_db
-import domain_alignment
-import domain_model
-import domain_mutation
-import helper_functions as hf
+from . import errors
+from . import sql_db
+from . import domain_alignment
+from . import domain_model
+from . import domain_mutation
+from . import helper_functions as hf
 
-from __init__ import SQL_FLAVOUR
+from .__init__ import SQL_FLAVOUR
 
 
 class Pipeline(object):
@@ -96,12 +102,12 @@ class Pipeline(object):
         db_filename = self.sqlite_db_path.strip().split('/')[-1]
         if not os.path.isfile(self.temp_path + db_filename):
             system_command = 'cp -u ' + self.temp_path + ' ' + self.sqlite_db_path + '/'
-            print system_command
+            print(system_command)
             childProcess = subprocess.Popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             result, error_message = childProcess.communicate()
             if childProcess.returncode != 0:
-                print result
-                print error_message
+                print(result)
+                print(error_message)
                 raise Exception('Could not copy the sqlite3 database!')
 
 
@@ -150,13 +156,13 @@ class Pipeline(object):
         result, error_message = childProcess.communicate()
         rc = childProcess.returncode
         while rc != 0 and n_tries < 10:
-            print "Couldn't copy the blast database. Retrying..."
+            print("Couldn't copy the blast database. Retrying...")
             time.sleep(15)
             childProcess = subprocess.Popen(
                 system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         if rc != 0:
-            print result
-            print error_message
+            print(result)
+            print(error_message)
             raise Exception(
                 'Couldn\'t copy the blast database on {hostname} as {username}!'
                 .format(hostname=hostname, username=username))

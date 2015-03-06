@@ -4,6 +4,7 @@ Created on Tue Dec 30 13:57:36 2014
 
 @author: alexey
 """
+from __future__ import print_function
 #%% Common to all test files
 from elaspic_tests import Pipeline, default_config_file
 pipeline = Pipeline(default_config_file)

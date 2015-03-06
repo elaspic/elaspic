@@ -1,8 +1,16 @@
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import next
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
 # -*- coding: utf-8 -*-
 
 import os
 import subprocess
-import cPickle as pickle
+import pickle as pickle
 
 import pandas as pd
 
@@ -11,13 +19,13 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.PDB.PDBParser import PDBParser
 
-import domain_alignment
-import errors
-import sql_db
-import analyze_structure
-import pdb_template
-import call_foldx
-import helper_functions as hf
+from . import domain_alignment
+from . import errors
+from . import sql_db
+from . import analyze_structure
+from . import pdb_template
+from . import call_foldx
+from . import helper_functions as hf
 
 
 ###############################################################################
@@ -116,7 +124,7 @@ def get_mutation_features(d, mut, row_idx=0):
     mut : sqlalchemy orm object
        Contains information about the mutation in question
     """
-    feature_dict = {key: value for (key, value) in mut.__dict__.iteritems() if not key.startswith('_')}
+    feature_dict = {key: value for (key, value) in mut.__dict__.items() if not key.startswith('_')}
 
     feature_dict.update({
         # Header columns
@@ -174,7 +182,7 @@ def convert_features_to_differences(df, keep_mut=False):
     If `keep_mut` is `False`, removes all mutant features (features ending in `_mut`).
     """
     column_list = []
-    for column_name, column in df.iteritems():
+    for column_name, column in df.items():
         if ('_mut' in column_name and
             column_name.replace('_mut','_wt') in df.columns and
             df[column_name].dtype != object):
@@ -206,7 +214,7 @@ def decode_text_as_list(list_string):
     multiple domains, as a list of lists.
     """
     str2num = lambda x: float(x) if '.' in x else int(x)
-    return zip(*[[str2num(x) for x in sublist.split(':')] for sublist in list_string.split(',')])
+    return list(zip(*[[str2num(x) for x in sublist.split(':')] for sublist in list_string.split(',')]))
 
 
 
@@ -405,7 +413,7 @@ class GetMutation(object):
         mut_data.position_modeller = position_modeller
         mut_data.mutation_modeller = mutation_modeller
 
-        for key, value in mut_data.__dict__.iteritems():
+        for key, value in mut_data.__dict__.items():
             self.logger.debug(key + ':')
             self.logger.debug(value)
 

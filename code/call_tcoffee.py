@@ -4,16 +4,18 @@ Created on Sat Dec 22 19:03:01 2012
 
 @author: niklas
 """
+from __future__ import absolute_import
+from builtins import object
 
 from os import environ
 import time
 from Bio import SeqIO
 from Bio import AlignIO
-import errors
-import helper_functions as hf
+from . import errors
+from . import helper_functions as hf
 
 
-class tcoffee_alignment:
+class tcoffee_alignment(object):
     """
     Alignes sequences using t_coffee in expresso mode.
     """

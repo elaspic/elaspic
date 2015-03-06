@@ -4,6 +4,11 @@ Created on Sat Dec 22 18:58:50 2012
 
 @author: niklas
 """
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import str
+from builtins import zip
+from builtins import object
 import numpy as np
 import gzip
 import string
@@ -21,8 +26,8 @@ from Bio.PDB.Polypeptide import PPBuilder
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 
-import errors
-import helper_functions as hf
+from . import errors
+from . import helper_functions as hf
 
 
 A_DICT = {
@@ -32,7 +37,7 @@ A_DICT = {
     'Y':'TYR', 'V':'VAL', 'U':'SEC', 'O':'PYL',
     'B':'ASX', 'Z':'GLX', 'J':'XLE', 'X':'XAA', '*':'TER'
 }
-AAA_DICT = dict([(value,key) for key,value in A_DICT.items()])
+AAA_DICT = dict([(value,key) for key,value in list(A_DICT.items())])
 AAA_DICT['UNK'] = 'X'
 AAA_DICT['MSE'] = 'M'
 AAA_DICT['SEP'] = 'S'
@@ -42,7 +47,7 @@ AAA_DICT['MLZ'] = 'K'
 AAA_DICT['MLY'] = 'K'
 AAA_DICT['M3L'] = 'K'
 methylated_lysines = ['MLZ', 'MLY', 'M3L']
-amino_acids = AAA_DICT.keys()
+amino_acids = list(AAA_DICT.keys())
 lysine_atoms = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
 
 
@@ -157,7 +162,7 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
         error_message = 'PDB not found! (pdb_id: {}, pdb_path: {}, pdb_type: {})'.format(pdb_id, pdb_path, pdb_type)
         if not use_external:
             raise errors.PDBNotFoundError(error_message)
-        print 'Retrieving pdb from the wwpdb ftp server...'
+        print('Retrieving pdb from the wwpdb ftp server...')
         temp_filename = download_pdb(pdb_id, pdb_path_suffix, tmp_path)
         structure = parser.get_structure(pdb_id, gzip.open(temp_filename, 'r'))
 
@@ -271,7 +276,7 @@ def get_structure_sequences(file_or_structure, seqres_sequence=False):
     Convenience function returining a dictionary of sequences for a given file
     or a Biopython Structure, Model or Chain.
     """
-    if isinstance(file_or_structure, basestring):
+    if isinstance(file_or_structure, str):
         parser = PDBParser(QUIET=True)
         structure = parser.get_structure('ID', file_or_structure)
         model = structure[0]
@@ -304,15 +309,15 @@ def convert_aa(aa):
         try:
             return AAA_DICT[aa.upper()]
         except KeyError:
-            print  'Not a valid amino acid'
+            print('Not a valid amino acid')
             return
     if len(aa) == 1:
         try:
             return A_DICT[aa.upper()]
         except KeyError:
-            print  'Not a valid amino acid'
+            print('Not a valid amino acid')
             return
-    print 'Not a valid amino acid'
+    print('Not a valid amino acid')
 
 
 def convert_resnum_alphanumeric_to_numeric(resnum):
@@ -346,7 +351,7 @@ class SelectChains(Select):
 
 
 
-class PDBTemplate():
+class PDBTemplate(object):
 
     def __init__(self, pdb_path, pdb_id, chain_ids, domain_defs, output_path, tmp_path, logger):
         """
@@ -466,7 +471,7 @@ class PDBTemplate():
                 tuple(chain_numbering.index(resid) for resid in resids)
                 for resids in zip(*self.domain_boundaries[chain_idx])]
         except Exception as e:
-            print str(e)
+            print(str(e))
             raise errors.PDBDomainDefsError(self.unique_id)
 
         return chain_numbering, domain_start_idxs, domain_end_idxs

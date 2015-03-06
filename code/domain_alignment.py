@@ -4,6 +4,14 @@ Created on Thu May  2 17:25:45 2013
 
 @author: niklas
 """
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import os
 import psutil
 import time
@@ -18,16 +26,16 @@ from Bio import AlignIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-import sql_db
-import errors
-import call_tcoffee
-import pdb_template
-import helper_functions as hf
+from . import sql_db
+from . import errors
+from . import call_tcoffee
+from . import pdb_template
+from . import helper_functions as hf
 
 
 
 def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
-    if isinstance(sequence, basestring):
+    if isinstance(sequence, str):
         seqrec = SeqRecord(Seq(sequence), id=str(sequence_id))
     elif isinstance(sequence, Seq):
         seqrec = SeqRecord(sequence, id=str(sequence_id))
@@ -78,11 +86,11 @@ def check_provean_supporting_set(self, domain_mutation, sequence, sequence_id='i
 
     if check_mem_usage:
         # Get initial measurements of how much virtual memory and disk space is availible
-        disk_space_availible = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
+        disk_space_availible = old_div(psutil.disk_usage(self.provean_temp_path).free, float(1024)**3)
         self.logger.debug('Disk space availible: {:.2f} GB'.format(disk_space_availible))
         if disk_space_availible < 5:
             raise errors.ProveanError('Not enough disk space ({:.2f} GB) to run provean'.format(disk_space_availible))
-        memory_availible = psutil.virtual_memory().available / float(1024)**3
+        memory_availible = old_div(psutil.virtual_memory().available, float(1024)**3)
         self.logger.debug('Memory availible: {:.2f} GB'.format(memory_availible))
         if memory_availible < 0.5:
             raise errors.ProveanError('Not enough memory ({:.2f} GB) to run provean'.format(memory_availible))
@@ -122,13 +130,13 @@ def check_provean_supporting_set(self, domain_mutation, sequence, sequence_id='i
 
     # Keep an eye on provean to make sure it doesn't do anything crazy
     while check_mem_usage and child_process.poll() is None:
-        disk_space_availible_now = psutil.disk_usage(self.provean_temp_path).free / float(1024)**3
+        disk_space_availible_now = old_div(psutil.disk_usage(self.provean_temp_path).free, float(1024)**3)
         if disk_space_availible_now < 5: # less than 5 GB of free disk space left
             raise errors.ProveanResourceError(
                 'Ran out of disk space and provean had to be terminated ({} GB used)'
                 .format(disk_space_availible-disk_space_availible_now),
                 child_process_group_id)
-        memory_availible_now = psutil.virtual_memory().available / float(1024)**3
+        memory_availible_now = old_div(psutil.virtual_memory().available, float(1024)**3)
         if memory_availible_now < 0.5:
             raise errors.ProveanResourceError(
                 'Ran out of RAM and provean had to be terminated ({} GB left)'
@@ -178,7 +186,7 @@ def build_provean_supporting_set(self, uniprot_id, uniprot_name, uniprot_sequenc
 
 
 
-class DomainPairTemplate():
+class DomainPairTemplate(object):
     """
     R CODE PROTOTYPE:
 
@@ -242,7 +250,7 @@ class DomainPairTemplate():
 
 
 
-class GetTemplate():
+class GetTemplate(object):
     """
     Parent class holding functions for finding the correct template given a
     uniprot sequence
@@ -467,9 +475,9 @@ class GetTemplate():
                     .format('' if canonical_domain else 'not '))
                 self.logger.debug(
                     'Has {}been visited!'
-                    .format('' if pfam_cluster_ids_visited.has_key(pfam_cluster_id) else 'not '))
+                    .format('' if pfam_cluster_id in pfam_cluster_ids_visited else 'not '))
                 if (not canonical_domain and
-                        pfam_cluster_ids_visited.has_key(pfam_cluster_id)):
+                        pfam_cluster_id in pfam_cluster_ids_visited):
                     continue
 
                 # Get the parameters required to make alignments
@@ -550,12 +558,12 @@ class GetTemplate():
                     .format('' if canonical_domain else 'not '))
                 self.logger.debug(
                     'Has {}been visited!'
-                    .format('' if pfam_cluster_ids_visited.has_key(pfam_cluster_id) else 'not '))
+                    .format('' if pfam_cluster_id in pfam_cluster_ids_visited else 'not '))
                 self.logger.debug(
                     'Pfam cluster visited previously had cdhit cluster idxs: {}, {}'
                     .format(*pfam_cluster_ids_visited.get(pfam_cluster_id, [None, None])))
                 if (not canonical_domain and
-                        pfam_cluster_ids_visited.has_key(pfam_cluster_id) and
+                        pfam_cluster_id in pfam_cluster_ids_visited and
                         pfam_cluster_ids_visited[pfam_cluster_id][0] <= domain.domain_1.cdhit_cluster_idx and
                         pfam_cluster_ids_visited[pfam_cluster_id][1] <= domain.domain_2.cdhit_cluster_idx):
                     self.logger.debug('Already covered this cluster pair. Skipping...')
@@ -851,9 +859,9 @@ class GetTemplate():
             top_overhang = 0
             bottom_overhang = 0
             if do_reversed:
-                custom_iterator = reversed(zip(str(seqrec_1.seq), str(seqrec_2.seq)))
+                custom_iterator = reversed(list(zip(str(seqrec_1.seq), str(seqrec_2.seq))))
             else:
-                custom_iterator = zip(str(seqrec_1.seq), str(seqrec_2.seq))
+                custom_iterator = list(zip(str(seqrec_1.seq), str(seqrec_2.seq)))
             for aa_1, aa_2 in custom_iterator:
                 if (aa_1 != '-') and (aa_2 != '-'):
                     break
@@ -1108,7 +1116,7 @@ class GetTemplate():
 
 def split_superdomains_1(superdomain):
     domains = [domain.split('_') for domain in superdomain.split('+')]
-    print domains
+    print(domains)
     all_superdomains = set()
     for d1_idx in range(len(domains)):
         for d2_idx in range(d1_idx+1, len(domains)+1):
@@ -1165,9 +1173,9 @@ if __name__ == '__main__':
 
     get_template = GetTemplate(tmp_path, unique, pdb_path, db, logger)
     temp = Bio.Align.MultipleSeqAlignment([Bio.SeqRecord.SeqRecord(seq=Bio.Seq.Seq('--AGGA-')), Bio.SeqRecord.SeqRecord(seq=Bio.Seq.Seq('MMMGGMM'))])
-    print get_template.get_coverage(temp, len(temp[0]))
-    print get_template.get_identity(temp)
-    print get_template.get_interacting_identity(temp, [4,5], 2)
+    print(get_template.get_coverage(temp, len(temp[0])))
+    print(get_template.get_identity(temp))
+    print(get_template.get_interacting_identity(temp, [4,5], 2))
 
     p = db.get_uniprot_domain('Q8NEU8') + db.get_uniprot_domain_pair('Q8NEU8')
     p = [db.get_uniprot_domain_pair('Q8NEU8')[0]]

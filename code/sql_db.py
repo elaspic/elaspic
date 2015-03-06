@@ -1,16 +1,23 @@
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import next
+from builtins import str
+from builtins import object
 # -*- coding: utf-8 -*-
 
 import os
 import stat
 import pandas as pd
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 import subprocess
 import json
 from string import uppercase
 import datetime
 import logging
 from contextlib import contextmanager
-import cPickle as pickle
+import pickle as pickle
 from collections import deque
 
 from sqlalchemy import or_
@@ -28,10 +35,10 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 #import parse_pfamscan
-import helper_functions as hf
-import errors as error
+from . import helper_functions as hf
+from . import errors as error
 
-from __init__ import SQL_FLAVOUR
+from .__init__ import SQL_FLAVOUR
 
 
 ###############################################################################
@@ -559,8 +566,8 @@ class MyDatabase(object):
         metadata_tables = Base.metadata.tables.copy()
 #        del metadata_tables['uniprot_kb.uniprot_sequence']
         if clear_schema:
-            Base.metadata.drop_all(engine, metadata_tables.values())
-        Base.metadata.create_all(engine, metadata_tables.values())
+            Base.metadata.drop_all(engine, list(metadata_tables.values()))
+        Base.metadata.create_all(engine, list(metadata_tables.values()))
 #        engine.execute(irefindex_materialized_view_command)
 
 
@@ -861,7 +868,7 @@ class MyDatabase(object):
                             (UniprotDomainMutation.uniprot_domain_id == d.uniprot_domain_id) &
                             (UniprotDomainMutation.mutation == mutation))
                         .scalar() )
-        elif isinstance(d, UniprotDomainPair) and isinstance(uniprot_id, basestring):
+        elif isinstance(d, UniprotDomainPair) and isinstance(uniprot_id, str):
             with self.session_scope() as session:
                 uniprot_mutation = (
                     session.query(UniprotDomainPairMutation)
@@ -1030,14 +1037,14 @@ class MyDatabase(object):
                 return None
             else:
                 self.logger.debug('Fetching sequence for uniprot {} from an online server'.format(uniprot_id))
-                print 'Fetching sequence for uniprot {} from an online server'.format(uniprot_id)
+                print('Fetching sequence for uniprot {} from an online server'.format(uniprot_id))
                 address = 'http://www.uniprot.org/uniprot/{}.fasta'.format(uniprot_id)
                 try:
-                    handle = urllib2.urlopen(address)
+                    handle = urllib.request.urlopen(address)
                     sequence = next(SeqIO.parse(handle, "fasta"))
-                except (StopIteration, urllib2.HTTPError) as e:
+                except (StopIteration, urllib.error.HTTPError) as e:
                     self.logger.debug('{}: {}'.format(type(e), str(e)))
-                    print '{}: {}'.format(type(e), str(e))
+                    print('{}: {}'.format(type(e), str(e)))
                     return None
                 uniprot_sequence = UniprotSequence()
                 uniprot_sequence.uniprot_id = uniprot_id
@@ -1363,7 +1370,7 @@ if __name__ == '__main__':
 #    return
     # run to generate an initial state database (with no precalculatios)
     raise Exception
-    print SQL_FLAVOUR
+    print(SQL_FLAVOUR)
     db = MyDatabase('/home/kimlab1/strokach/working/pipeline/db/pipeline.db',
                     path_to_archive='/home/kimlab1/database_data/elaspic/',
                     SQL_FLAVOUR=SQL_FLAVOUR,
