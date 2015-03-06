@@ -3,13 +3,17 @@
 Homology modeling by the automodel class
 
 """
+from __future__ import absolute_import
+from builtins import str
+from builtins import range
+from builtins import object
 
 from modeller import * # Load standard Modeller classes
 from modeller.automodel import *	# Load the automodel class
-import helper_functions as hf
-import errors
+from . import helper_functions as hf
+from . import errors
 
-class modeller:
+class modeller(object):
     """
     Runs MODELLER in order to make a homology model of the given protein.
 

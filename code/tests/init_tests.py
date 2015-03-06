@@ -4,6 +4,7 @@ Created on Fri Feb 27 22:35:03 2015
 
 @author: Alexey Strokach
 """
+from __future__ import print_function
 #%% Imports common to all test files
 import os
 import os.path as op

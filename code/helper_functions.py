@@ -4,6 +4,11 @@ Created on Mon Mar  4 11:04:40 2013
 
 @author: niklas
 """
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import str
+from builtins import range
+from builtins import object
 #%%
 import os
 import sys
@@ -19,7 +24,7 @@ from contextlib import contextmanager
 
 from Bio.PDB.PDBParser import PDBParser
 
-import sql_db
+from . import sql_db
 
 
 
@@ -77,7 +82,7 @@ def scinetCleanup(folder, destination, name=None):
     """
     zip and copy the results from the ramdisk to /scratch
     """
-    print 'saving the result in', folder
+    print('saving the result in', folder)
     os.chdir(folder)
     if name == None:
         output_name = 'result_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
@@ -95,12 +100,12 @@ def scinetCleanup(folder, destination, name=None):
                                     )
     result, error = childProcess.communicate()
     if childProcess.returncode != 0:
-        print 'error', error
+        print('error', error)
     return
 
 
 #%%
-class WritableObject:
+class WritableObject(object):
     """ A class for collecting all the print statements from modeller in order
     to redirect them to the logger later on
     """
@@ -138,9 +143,9 @@ def get_path_to_current_file():
     encoding = sys.getfilesystemencoding()
     if hasattr(sys, "frozen"):
         # All of the modules are built-in to the interpreter, e.g., by py2exe
-        return os.path.dirname(unicode(sys.executable, encoding))
+        return os.path.dirname(str(sys.executable, encoding))
     else:
-        return os.path.dirname(unicode(__file__, encoding))
+        return os.path.dirname(str(__file__, encoding))
 
 
 def get_logger(do_debug=True):
@@ -282,20 +287,20 @@ def kill_child_process(child_process):
                 .format(child_process.pid, child_process.returncode))
         return
     try:
-        print 'Trying to terminate gracefully child process with pid: {}'.child_process.pid
+        print('Trying to terminate gracefully child process with pid: {}'.child_process.pid)
         os.killpg(child_process.pid, signal.SIGTERM)
 #        child_process.terminate()
     except Exception as e:
-        print "Didn't work because of error: {}".format(e.__str__())
+        print("Didn't work because of error: {}".format(e.__str__()))
         try:
-            print 'Trying to kill child process...'
+            print('Trying to kill child process...')
             os.killpg(child_process.pid, signal.SIGKILL)
 #            child_process.kill()
         except:
-            print "Didn't work because of error: {}".format(e.__str__())
-            print "Letting it go..."
+            print("Didn't work because of error: {}".format(e.__str__()))
+            print("Letting it go...")
             pass
-    print 'OK'
+    print('OK')
 
 
 ###############################################################################
@@ -315,7 +320,7 @@ def set_process_group(parent_process_group_id):
 
 def run_subprocess_locally(working_path, system_command, **popen_argvars):
     with switch_paths(working_path):
-        if isinstance(system_command, unicode):
+        if isinstance(system_command, str):
             system_command = system_command.encode('utf8')
         args = shlex.split(system_command)
         child_process = subprocess.Popen(

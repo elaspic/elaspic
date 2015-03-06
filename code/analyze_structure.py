@@ -3,17 +3,24 @@
 Created on Fri Mar  8 10:29:13 2013
 
 """
+from __future__ import division
+from __future__ import print_function
+from __future__ import absolute_import
+from builtins import zip
+from builtins import str
+from past.utils import old_div
+from builtins import object
 import os
 import time
 import pandas as pd
-import helper_functions as hf
+from . import helper_functions as hf
 
 from Bio.PDB import PDBIO, NeighborSearch
 from Bio.PDB.PDBParser import PDBParser
 
 import logging
-import errors
-import pdb_template
+from . import errors
+from . import pdb_template
 
 from collections import OrderedDict, deque
 
@@ -100,7 +107,7 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
 
 
 
-class PhysiChem():
+class PhysiChem(object):
 
     def __init__(self, vdW, d, unique, logger):
         self.vdW_distance = float(vdW)
@@ -488,9 +495,9 @@ class AnalyzeStructure(object):
                     sidechain_abs, sidechain_rel, mainchain_abs, mainchain_rel,
                     nonpolar_abs, nonpolar_rel, polar_abs, polar_rel) = row
                 except ValueError as e:
-                    print e
-                    print line
-                    print row
+                    print(e)
+                    print(line)
+                    print(row)
                 sasa_scores.setdefault(chain, []).append(sidechain_rel) # percent sasa on sidechain
         return sasa_scores
 
@@ -544,13 +551,13 @@ class AnalyzeStructure(object):
                     continue
                 if current_residue_number != residue_number:
                     if current_residue_number:
-                        per_residue_sasa_scores.append(total_sasa/total_sa)
+                        per_residue_sasa_scores.append(old_div(total_sasa,total_sa))
                     current_residue_number = residue_number
                     total_sasa = 0
                     total_sa = 0
                 total_sasa += sasa
                 total_sa += sa
-            per_residue_sasa_scores.append(total_sasa/total_sa)
+            per_residue_sasa_scores.append(old_div(total_sasa,total_sa))
         return per_residue_sasa_scores
 
 
@@ -638,7 +645,7 @@ class AnalyzeStructure(object):
                         raise e
                 dssp_ss.setdefault(chainid, []).append(ss) # percent sasa on sidechain
                 dssp_acc.setdefault(chainid, []).append(acc)
-        for key in dssp_ss.keys():
+        for key in list(dssp_ss.keys()):
             dssp_ss[key] = ''.join(dssp_ss[key])
         return dssp_ss, dssp_acc
 
@@ -684,10 +691,10 @@ class AnalyzeStructure(object):
                     .format(pdb_chain, pdb_mutation))
                 raise Exception()
 
-        for key_1, value_1 in shortest_interchain_distances.iteritems():
+        for key_1, value_1 in shortest_interchain_distances.items():
             self.logger.debug(
                 'Calculated interchain distances between chain {} and chains {}'
-                .format(key_1, ', '.join(value_1.keys())))
+                .format(key_1, ', '.join(list(value_1.keys()))))
 
         return shortest_interchain_distances
 
@@ -752,11 +759,11 @@ class AnalyzeStructure(object):
 
         sasa = [ 0, 0, 0 ]
         # hydrophobic
-        sasa[0] = (sasa_chain[0] + sasa_oppositeChain[0] - sasa_complex[0]) / 2.0
+        sasa[0] = old_div((sasa_chain[0] + sasa_oppositeChain[0] - sasa_complex[0]), 2.0)
         # hydrophilic
-        sasa[1] = (sasa_chain[1] + sasa_oppositeChain[1] - sasa_complex[1]) / 2.0
+        sasa[1] = old_div((sasa_chain[1] + sasa_oppositeChain[1] - sasa_complex[1]), 2.0)
         # total
-        sasa[2] = (sasa_chain[2] + sasa_oppositeChain[2] - sasa_complex[2]) / 2.0
+        sasa[2] = old_div((sasa_chain[2] + sasa_oppositeChain[2] - sasa_complex[2]), 2.0)
 
         return sasa
 
