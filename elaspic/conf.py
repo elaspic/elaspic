@@ -11,13 +11,14 @@ import subprocess
 from configparser import SafeConfigParser
 from Bio.SubsMat import MatrixInfo
 
+from . import sql_db
+
+
+#%%
 try:
     code_path = os.path.dirname(os.path.abspath(__file__))
 except:
-    code_path = os.path.dirname(os.path.getcwd())
-
-#SQL_FLAVOUR = 'sqlite_file'
-SQL_FLAVOUR = 'mysql'
+    code_path = os.path.dirname(os.getcwd())
 
 
 #%%
@@ -28,33 +29,42 @@ def read_configuration_file(config_file):
     configParser = SafeConfigParser(
         defaults={
             'global_temp_path': '/tmp/',
-            'temp_path': 'elaspic/',
-            'debug': 'True',
+            'temp_path_suffix': 'elaspic/',
+            'debug': 'False',
             'look_for_interactions': 'True',
             'remake_provean_supset': 'False',
             'n_cores': '1',
-            'schema_version': 'elaspic',
             'web_server': 'False',
-            'db_type': SQL_FLAVOUR,
         })
     configParser.read(config_file)
 
     # From [DEFAULT]
     configs['global_temp_path'] = configParser.get('DEFAULT', 'global_temp_path')
-    configs['temp_path_suffix'] = configParser.get('DEFAULT', 'temp_path').strip('/') + '/'
+    configs['temp_path_suffix'] = configParser.get('DEFAULT', 'temp_path_suffix').strip('/') + '/'
     configs['debug'] = configParser.getboolean('DEFAULT', 'debug')
     configs['look_for_interactions'] = configParser.getboolean('DEFAULT', 'look_for_interactions')
-    configs['remake_provean_supset'] = configParser.get('DEFAULT', 'remake_provean_supset')
+    configs['remake_provean_supset'] = configParser.getboolean('DEFAULT', 'remake_provean_supset')
     configs['n_cores'] = configParser.getint('DEFAULT', 'n_cores')
-    configs['schema_version'] = configParser.get('DEFAULT', 'schema_version')
     configs['web_server'] = configParser.get('DEFAULT', 'web_server')
-    configs['db_type'] = configParser.get('DEFAULT', 'db_type')
-    configs['db_is_immutable'] = True if configs['db_type'].lower().startswith('sqlite') else False
 
+    # From [DATABASE]
+    configs['db_type'] = configParser.get('DATABASE', 'db_type')
+    sql_db.DB_TYPE = configs['db_type']
+    if configs['db_type'] == 'sqlite':
+        configs['sqlite_db_path'] = configParser.get('DATABASE', 'sqlite_db_path')
+        configs['db_is_immutable'] = True
+    elif configs['db_type'] in ['mysql', 'postgresql']:
+        configs['db_username'] = configParser.get('DATABASE', 'db_username')
+        configs['db_password'] = configParser.get('DATABASE', 'db_password')
+        configs['db_url'] = configParser.get('DATABASE', 'db_url')
+        configs['db_schema'] = configParser.get('DATABASE', 'db_schema')
+        configs['db_is_immutable'] = False
+    else:
+        raise Exception("Only 'mysql', 'postgresql', and 'sqlite' databases are supported!")
+        
     # From [SETTINGS]
     configs['path_to_archive'] = configParser.get('SETTINGS', 'path_to_archive')
     configs['blast_db_path'] = configParser.get('SETTINGS', 'blast_db_path')
-    configs['sqlite_db_path'] = configParser.get('SETTINGS', 'sqlite_db_path')
     configs['pdb_path'] = configParser.get('SETTINGS', 'pdb_path')
     configs['bin_path'] = configParser.get('SETTINGS', 'bin_path')
 
@@ -63,7 +73,7 @@ def read_configuration_file(config_file):
 
     # From [GET_MUTATION]
     configs['foldx_water'] = configParser.get('GET_MUTATION', 'foldx_water')
-    configs['foldx_num_of_runs'] = configParser.get('GET_MUTATION', 'foldx_num_of_runs')
+    configs['foldx_num_of_runs'] = configParser.getint('GET_MUTATION', 'foldx_num_of_runs')
     configs['matrix_type'] = configParser.get('GET_MUTATION', 'matrix_type')
     configs['gap_start'] = configParser.getint('GET_MUTATION', 'gap_start')
     configs['gap_extend'] = configParser.getint('GET_MUTATION', 'gap_extend')
