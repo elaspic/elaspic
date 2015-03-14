@@ -31,7 +31,7 @@ from sqlalchemy import Column, Index
 from sqlalchemy import Integer, Float, String, Text, DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship, backref, aliased, joinedload
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base, DeferredReflection
 from sqlalchemy.ext.serializer import dumps
 
 from Bio import SeqIO
@@ -40,6 +40,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 #import parse_pfamscan
+from . import conf
 from . import helper_functions as hf
 from . import errors as error
 
@@ -51,93 +52,101 @@ SHORT = 15
 MEDIUM = 255
 LONG = 16384
 
-# Some database-specific parameters that SQLAlchemy can't figure out
-DB_NAME = None
-DB_SCHEMA = None
-DB_SCHEMA_UNIPROT = None
+naming_convention = {
+  "ix": 'ix_%(column_0_label)s',
+  "uq": "uq_%(table_name)s_%(column_0_name)s",
+  "ck": "ck_%(table_name)s_%(constraint_name)s",
+  "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+  "pk": "pk_%(table_name)s"
+}
+
+
+#%% Some database-specific parameters that SQLAlchemy can't figure out
+
+DB_TYPE = conf.configs.get('db_type')
+DB_DATABASE = conf.configs.get('db_database')
+DB_SCHEMA = conf.configs.get('db_schema')
+DB_SCHEMA_UNIPROT = conf.configs.get('db_schema_uniprot')
 
 db_specific_properties = {
     'mysql': {
         'BINARY_COLLATION': 'utf8_bin',
         'STRING_COLLATION': 'utf8_unicode_ci',
-        'schema_version_tuple': ({'schema': DB_SCHEMA},),
-        'uniprot_kb_schema_tuple': ({'schema': DB_SCHEMA_UNIPROT},)
+        'schema_version_tuple': {'schema': DB_SCHEMA},
+        'uniprot_kb_schema_tuple': {'schema': DB_SCHEMA_UNIPROT},
     },
     'postgresql': {
         'BINARY_COLLATION': 'en_US.utf8',
         'STRING_COLLATION': 'en_US.utf8',
-        'schema_version_tuple': ({'schema': DB_SCHEMA},),
-        'uniprot_kb_schema_tuple': ({'schema': DB_SCHEMA_UNIPROT},)
+        'schema_version_tuple': {'schema': DB_SCHEMA},
+        'uniprot_kb_schema_tuple': {'schema': DB_SCHEMA_UNIPROT},
     },
     'sqlite': {
         'BINARY_COLLATION': 'RTRIM',
         'STRING_COLLATION': 'NOCASE',
-        'schema_version_tuple': ({'sqlite_autoincrement': True},),
-        'uniprot_kb_schema_tuple': ({'sqlite_autoincrement': True},),
+        'schema_version_tuple': {'sqlite_autoincrement': True},
+        'uniprot_kb_schema_tuple': {'sqlite_autoincrement': True},
     }, 
 }
 
-def get_db_specific_value(key):
-    if DB_NAME is None:
+
+def get_db_specific_param(key):
+    if DB_TYPE is None:
         error_message = (
-            'The `DB_NAME` has not been set. Do not know what database is being used!'
+            'The `DB_TYPE` has not been set. Do not know what database is being used!'
         )
         raise Exception(error_message)
-    if DB_NAME in ['mysql', 'postgresql'] and (DB_SCHEMA is None or DB_SCHEMA_UNIPROT is None):
-        error_message = (
-            'Both the `DB_SCHEMA` and `DB_SCHEMA_UNIPROT` have to be specified when using '
-            'a MySQL or PostgreSQL database!'
-        )
-        raise Exception(error_message)
-    return db_specific_properties[DB_NAME][key]
+    if (DB_TYPE in ['mysql', 'postgresql'] and 
+        (DB_DATABASE is None or DB_SCHEMA is None or DB_SCHEMA_UNIPROT is None)):
+            error_message = (
+                'Both the `DB_SCHEMA` and `DB_SCHEMA_UNIPROT` have to be specified when using '
+                'a MySQL or PostgreSQL database!'
+            )
+            raise Exception(error_message)
+    return db_specific_properties[DB_TYPE][key]
     
 
-def get_table_args(indices=None, db_specific_params=None):
-   
-
-#%%
-def get_index_list(table_name, index_columns):
-    index_list = []
+def get_table_args(table_name, index_columns=[], db_specific_params=[]):
+    """
+    Returns a tuple of additional table arguments.
+    """
+    table_args = []
+    # Create indexes over several columns
     for columns in index_columns:
         if type(columns) == tuple:
-            columns, unique = columns
+            column_names, unique = columns
         elif type(columns) == list:
+            column_names = columns
             unique = False
-        index_list.append(
-            Index('{}_{}'.format(table_name, '_'.join(columns))[:255], *columns, unique=unique))
-    return tuple(index_list)
-
-
-def pickle_dump(obj, filename):
-    mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH
-    umask_original = os.umask(0)
-    try:
-        handle = os.fdopen(os.open(filename, os.O_WRONLY | os.O_CREAT, mode), 'wb')
-    finally:
-        os.umask(umask_original)
-    pickle.dump(obj, handle, pickle.HIGHEST_PROTOCOL)
-    handle.close()
-
+        index_name = (
+            'ix_{table_name}_{column_0_name}'
+            .format(table_name=table_name, column_0_name=column_names[0])[:255]
+        )
+        table_args.append(Index(index_name, *column_names, unique=unique))
+    # Other table parameters, such as schemas, etc.
+    for db_specific_param in db_specific_params:
+        table_args.append(get_db_specific_param(db_specific_param))
+    return tuple(table_args)
+   
 
 
 #%%
 Base = declarative_base()
+Base.metadata.naming_conventions = naming_convention
 
 class Domain(Base):
     """ Table containing pdbfam domain definitions for all pdbs()
     """
     __tablename__ = 'domain'
-    multicolumn_indexes = [
-        ['pdb_id', 'pdb_chain'],
+    _indexes = [
         (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True),
     ]
-    _compound_indexes = get_index_list(__tablename__, compound_indexes)
-    __table_args__ = _compound_indexes + get_db_specific_value('schema_version_tuple')
+    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
     
     cath_id = Column(
-        String(SHORT, collation=get_db_specific_value('BINARY_COLLATION')), 
+        String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
         primary_key=True)
-    pdb_id = Column(String(SHORT), nullable=False, index=True)
+    pdb_id = Column(String(SHORT), nullable=False)
     pdb_chain = Column(String(SHORT), nullable=False)
     pdb_domain_def = Column(String(MEDIUM), nullable=False)
     pdb_pdbfam_name = Column(String(LONG), nullable=False, index=True)
@@ -149,19 +158,20 @@ class DomainContact(Base):
     """ Table containing interactions between all pdbfam domains in the pdb
     """
     __tablename__ = 'domain_contact'
-    _indexes = get_index_list(
-        __tablename__, [
-            (['cath_id_1', 'cath_id_2'], True),
-        ])
-    __table_args__ = _indexes + get_db_specific_value('schema_version_tuple')
+    _indexes = [
+        (['cath_id_1', 'cath_id_2'], True),
+        (['cath_id_2', 'cath_id_1'], True),
+    ]
+    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
     
     domain_contact_id = Column(Integer, primary_key=True)
     cath_id_1 = Column(
-        String(SHORT, collation=get_db_specific_value('BINARY_COLLATION')), 
-        index=True, nullable=False)
+        None, ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'), nullable=False)
     cath_id_2 = Column(
-        String(SHORT, collation=get_db_specific_value('BINARY_COLLATION')), 
-        index=True, nullable=False)
+        None, ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'), nullable=False)
+#    cath_id_2 = Column(
+#        String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
+#        nullable=False)
     min_interchain_distance = Column(Float)
     contact_volume = Column(Float)
     contact_surface_area = Column(Float)
@@ -177,7 +187,7 @@ class DomainContact(Base):
     # Relationships
     domain_1 = relationship(
         Domain, primaryjoin=cath_id_1==Domain.cath_id, cascade='expunge', lazy='joined')
-    # the second domain may be a ligand or a peptide, and so the foreign key constraint does not work
+#    # the second domain may be a ligand or a peptide, and so the foreign key constraint does not work
     domain_2 = relationship(
         Domain, primaryjoin=cath_id_2==Domain.cath_id, cascade='expunge', lazy='joined')
 
@@ -187,9 +197,7 @@ class UniprotSequence(Base):
     additional sequences that were added to the database.
     """
     __tablename__ = 'uniprot_sequence'
-    __table_args__ = (
-        get_db_specific_value('uniprot_kb_schema_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, [], ['uniprot_kb_schema_tuple'])
 
     db = Column(String(SHORT), nullable=False)
     uniprot_id = Column(String(SHORT), primary_key=True)
@@ -204,9 +212,7 @@ class UniprotSequence(Base):
 
 class Provean(Base):
     __tablename__ = 'provean'
-    __table_args__ = (
-        get_db_specific_value('schema_version_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, [], ['schema_version_tuple'])
 
     uniprot_id = Column(
         None, ForeignKey(
@@ -229,20 +235,24 @@ class Provean(Base):
 class UniprotDomain(Base):
     __tablename__ = 'uniprot_domain'
     if 'training' in DB_SCHEMA:
-        compound_indexes = [
-            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], True),
+        # The database used for storing training data has an extra column `max_seq_identity`,
+        # because we want to make homology models at different sequence identities.
+        max_seq_identity = Column(Integer)
+        _indexes = [
+            (['uniprot_id', 'alignment_def', 'max_seq_identity'], True),
         ]
-        _indexes = get_index_list(__tablename__, compound_indexes)
+        _create_uniprot_id_index = False
     else:
-        _indexes = ()
-    __table_args__ = _indexes + get_db_specific_value('schema_version_tuple')
+        _indexes = []
+        _create_uniprot_id_index = True
+    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
     
     uniprot_domain_id = Column(Integer, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = Column(
         None, ForeignKey(
             UniprotSequence.uniprot_id, 
             onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+        index=_create_uniprot_id_index, nullable=False)
     pdbfam_name = Column(String(LONG), index=True, nullable=False)
     pdbfam_idx = Column(Integer, nullable=False)
     pfam_clan = Column(Text)
@@ -261,25 +271,22 @@ class UniprotDomain(Base):
 class UniprotDomainPair(Base):
     __tablename__ = 'uniprot_domain_pair'
     _indexes = [
-            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], True)
+            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], True),
+            (['uniprot_domain_id_2', 'uniprot_domain_id_1'], True),
     ]
-    __table_args__ = (
-        get_index_list(__tablename__, _indexes) + 
-        get_db_specific_value('schema_version_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
 
-    uniprot_domain_pair_id = Column(
-        Integer, index=True, nullable=False, primary_key=True, autoincrement=True)
+    uniprot_domain_pair_id = Column(Integer, primary_key=True, autoincrement=True)
     uniprot_domain_id_1 = Column(
         None, ForeignKey(
             UniprotDomain.uniprot_domain_id, 
             onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+        nullable=False)
     uniprot_domain_id_2 = Column(
         None, ForeignKey(
             UniprotDomain.uniprot_domain_id, 
             onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+        nullable=False)
     rigids = Column(Text) # Interaction references from iRefIndex
     domain_contact_ids = Column(Text) # interaction references from PDBfam
     path_to_data = Column(Text)
@@ -297,16 +304,7 @@ class UniprotDomainPair(Base):
 
 class UniprotDomainTemplate(Base):
     __tablename__ = 'uniprot_domain_template'
-    _indexes = [
-        ['pdb_id'],
-        ['pdb_pdbfam_name'],
-        ['pdb_id', 'pdb_chain'],
-        (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True),
-    ]
-    __table_args__ = (
-        get_index_list(__tablename__, _indexes) + 
-        get_db_specific_value('schema_version_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, [], ['schema_version_tuple'])
 
     uniprot_domain_id = Column(
         None, ForeignKey(
@@ -319,8 +317,8 @@ class UniprotDomainTemplate(Base):
             Domain.cath_id, 
             onupdate='cascade', ondelete='cascade'), 
         index=True, nullable=False)
-    domain_start = Column(Integer)
-    domain_end = Column(Integer)
+    domain_start = Column(Integer, index=True)
+    domain_end = Column(Integer, index=True)
     domain_def = Column(String(MEDIUM))
     alignment_identity = Column(Float)
     alignment_coverage = Column(Float)
@@ -341,16 +339,7 @@ class UniprotDomainTemplate(Base):
 
 class UniprotDomainModel(Base):
     __tablename__ = 'uniprot_domain_model'
-    _indexes = [
-        ['pdb_id'],
-        ['pdb_pdbfam_name'],
-        ['pdb_id', 'pdb_chain'],
-        (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True),
-    ]
-    __table_args__ = (
-        get_index_list(__tablename__, _indexes) + 
-        get_db_specific_value('schema_version_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, [], ['schema_version_tuple'])
 
     uniprot_domain_id = Column(
         None, ForeignKey(
@@ -366,6 +355,7 @@ class UniprotDomainModel(Base):
     model_domain_def = Column(String(MEDIUM))
     m_date_modified = Column(DateTime, default=datetime.datetime.utcnow,
                              onupdate=datetime.datetime.utcnow, nullable=False)
+                             
     # Relationships
     template = relationship(
         UniprotDomainTemplate, uselist=False, cascade='expunge', lazy='joined',
@@ -376,15 +366,9 @@ class UniprotDomainModel(Base):
 class UniprotDomainMutation(Base):
     __tablename__ = 'uniprot_domain_mutation'
     _indexes = [
-        ['pdb_id'],
-        ['pdb_pdbfam_name'],
-        ['pdb_id', 'pdb_chain'],
-        (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True),
+        ['uniprot_id', 'mutation'],
     ]
-    __table_args__ = (
-        get_index_list(__tablename__, _indexes) + 
-        get_db_specific_value('schema_version_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
 
     uniprot_id = Column(
         None, ForeignKey(
@@ -395,7 +379,7 @@ class UniprotDomainMutation(Base):
         None, ForeignKey(
             UniprotDomainModel.uniprot_domain_id, 
             onupdate='cascade', ondelete='cascade'),
-        nullable=False, primary_key=True)
+        nullable=False, primary_key=True, index=True)
     mutation = Column(String(SHORT), index=True, nullable=False, primary_key=True)
     mutation_errors = Column(Text)
     model_filename_wt = Column(String(MEDIUM))
@@ -414,10 +398,11 @@ class UniprotDomainMutation(Base):
     secondary_structure_mut = Column(Text)
     solvent_accessibility_mut = Column(Float)
     provean_score = Column(Float)
-    ddg = Column(Float)
+    ddg = Column(Float, index=True)
     mut_date_modified = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, 
         nullable=False)
+        
     # Relationships
     model = relationship(
         UniprotDomainModel, cascade='expunge', uselist=False, lazy='joined',
@@ -428,15 +413,10 @@ class UniprotDomainMutation(Base):
 class UniprotDomainPairTemplate(Base):
     __tablename__ = 'uniprot_domain_pair_template'
     _indexes = [
-        ['pdb_id'],
-        ['pdb_pdbfam_name'],
-        ['pdb_id', 'pdb_chain'],
-        (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True),
+        ['cath_id_1', 'cath_id_2'],
+        ['cath_id_2', 'cath_id_1'],
     ]
-    __table_args__ = (
-        get_index_list(__tablename__, _indexes) + 
-        get_db_specific_value('schema_version_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
 
     uniprot_domain_pair_id = Column(
         None, ForeignKey(
@@ -452,12 +432,12 @@ class UniprotDomainPairTemplate(Base):
         None, ForeignKey(
             Domain.cath_id, 
             onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+        nullable=False)
     cath_id_2 = Column(
         None, ForeignKey(
             Domain.cath_id, 
             onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+        nullable=False)
 
     identical_1 = Column(Float)
     conserved_1 = Column(Float)
@@ -503,18 +483,10 @@ class UniprotDomainPairTemplate(Base):
         primaryjoin=(cath_id_2==Domain.cath_id)) # many to one
 
 
+
 class UniprotDomainPairModel(Base):
     __tablename__ = 'uniprot_domain_pair_model'
-    _indexes = [
-        ['pdb_id'],
-        ['pdb_pdbfam_name'],
-        ['pdb_id', 'pdb_chain'],
-        (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True),
-    ]
-    __table_args__ = (
-        get_index_list(__tablename__, _indexes) + 
-        get_db_specific_value('schema_version_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, [], ['schema_version_tuple'])
 
     uniprot_domain_pair_id = Column(
         None, ForeignKey(
@@ -544,30 +516,24 @@ class UniprotDomainPairModel(Base):
     template = relationship(
         UniprotDomainPairTemplate, uselist=False, cascade='expunge', lazy='joined',
         backref=backref('model', uselist=False, cascade='expunge', lazy='joined')) # one to one
-
+        
 
 
 class UniprotDomainPairMutation(Base):
     __tablename__ = 'uniprot_domain_pair_mutation'
     _indexes = [
-        ['pdb_id'],
-        ['pdb_pdbfam_name'],
-        ['pdb_id', 'pdb_chain'],
-        (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True),
+        ['uniprot_id', 'mutation'],
     ]
-    __table_args__ = (
-        get_index_list(__tablename__, _indexes) + 
-        get_db_specific_value('schema_version_tuple')
-    )
+    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
 
     uniprot_id = Column(None, ForeignKey(
         UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False, primary_key=True)
+        nullable=False, primary_key=True)
     uniprot_domain_pair_id = Column(None, ForeignKey(
         UniprotDomainPairModel.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False, primary_key=True)
     mutation = Column(String(SHORT),
-        index=True, nullable=False, primary_key=True)
+        nullable=False, primary_key=True)
     mutation_errors = Column(Text)
     model_filename_wt = Column(String(MEDIUM))
     model_filename_mut = Column(String(MEDIUM))
@@ -589,7 +555,7 @@ class UniprotDomainPairMutation(Base):
     contact_distance_wt = Column(Float)
     contact_distance_mut = Column(Float)
     provean_score = Column(Float)
-    ddg = Column(Float)
+    ddg = Column(Float, index=False)
     mut_date_modified = Column(DateTime, default=datetime.datetime.utcnow,
                                onupdate=datetime.datetime.utcnow, nullable=False)
     # Relationships
@@ -608,7 +574,8 @@ Session = sessionmaker(expire_on_commit=False)
 class MyDatabase(object):
     """
     """
-    def __init__(self, configs, logger=None):
+    
+    def __init__(self, configs=conf.configs, logger=None):
         """
         """
         if logger is None:
@@ -620,26 +587,42 @@ class MyDatabase(object):
         
         # Choose which database to use
         if configs['db_type'] == 'sqlite':
+            self.logger.info(
+                "Connecting to an {dt_type} database in the following location: {sqlite_db_path}..."
+                .format(**configs)
+            )
             autocommit = True
             autoflush = True
             engine = create_engine(
-                '{db_type}:///{path_to_sqlite_db}'.format(**configs),
-                isolation_level='READ UNCOMMITTED')
+                '{db_type}:///{sqlite_db_path}'.format(**configs),
+                isolation_level='READ UNCOMMITTED'
+            )
         elif configs['db_type'] in ['postgresql', 'mysql']:
+            self.logger.info(
+                "Connecting to a {db_type} database ..."
+                .format(**configs)
+            )
             autocommit = False
             autoflush = False
             engine = create_engine(
                 '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_schema}'
-                .format(**configs)) # echo=True
+                .format(**configs)
+            ) # echo=True
         else:
             raise Exception("Only mysql, postgresql, and sqlite are currently supported!")
-
+                      
         Session.configure(bind=engine, autocommit=autocommit, autoflush=autoflush)
         self.Session = Session
+        self.engine = engine
         self.autocommit = autocommit
         self.db_is_immutable = configs['db_is_immutable']
         self.temp_path = configs['temp_path']
         self.path_to_archive = configs['path_to_archive']
+        
+        self.logger.info(
+            "Using precalculated data from the following folder: '{path_to_archive}'"
+            .format(**configs)
+        )
 
 
     @contextmanager
@@ -659,9 +642,40 @@ class MyDatabase(object):
         finally:
             session.close()
 
+    
+    def create_database_tables(self, clear_schema=False, keep_uniprot_sequence=True):
+        """
+        Create a new database in the schema specified by the ``schema_version`` global variable.
+        If ``clear_schema`` == True, remove all the tables in the schema first.
+        
+        DANGER!!! 
+        Using this function with an existing database can lead to loss of data.
+        Make sure that you know what you are doing.
+        
+        Parameters
+        ----------
+        engine : sa.Engine
+            SQLAlchemy engine connected to the database of interest.
+        clear_schema : bool
+            Whether or not to drop all the tables in the database before creating new tables.
+        keep_uniprot_sequence : bool
+            Whether or not to keep the `uniprot_sequence` table. 
+            Only relevant if `clear_schema` is `True`.
+        """
+        metadata_tables = Base.metadata.tables.copy()
+        if keep_uniprot_sequence:
+            uniprot_sequence_table = [c for c in metadata_tables.keys() if 'uniprot_sequence' in c]
+            assert len(uniprot_sequence_table) == 1
+            del metadata_tables[uniprot_sequence_table[0]]
+        if clear_schema:
+            Base.metadata.drop_all(self.engine, metadata_tables.values())
+            self.logger.debug('Database schema was cleared successfully.')
+        Base.metadata.create_all(self.engine, metadata_tables.values())
+        self.logger.debug('Database schema was created successfully.')
+
+
 
     #%% Get objects from the database
-
     def get_rows_by_ids(self, row_object, row_object_identifiers, row_object_identifier_values):
         """ Get the rows from the table *row_object* identified by keys
         *row_object_identifiers* with values *row_object_identifier_values*
@@ -1337,7 +1351,7 @@ class MyDatabase(object):
             self.session.commit()
             self.logger.debug('Committed changes\n\n\n')
 
- 
+
 
 #%% Elaspic-specific helper functions
 def get_uniprot_base_path(d):
@@ -1411,3 +1425,13 @@ def scinet_cleanup(folder, destination, name=None):
         print('error_message:', error_message)
     return
 
+
+def pickle_dump(obj, filename):
+    mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH
+    umask_original = os.umask(0)
+    try:
+        handle = os.fdopen(os.open(filename, os.O_WRONLY | os.O_CREAT, mode), 'wb')
+    finally:
+        os.umask(umask_original)
+    pickle.dump(obj, handle, pickle.HIGHEST_PROTOCOL)
+    handle.close()
