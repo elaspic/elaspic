@@ -88,20 +88,27 @@ class FoldX(object):
         self.__write_runfile(self.pdb_filename, self.chain_id, whatToRun, mutCodes)
         self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
-            return self.__read_result(self.foldx_path + 'Interaction_AnalyseComplex_resultFile.txt', self.pdb_filename, whatToRun)
+            return self.__read_result(
+                self.foldx_path + 'Interaction_AnalyseComplex_resultFile.txt', 
+                self.pdb_filename, whatToRun)
         elif whatToRun == 'Stability':
-            return self.__read_result(self.foldx_path + 'Stability.txt', self.pdb_filename, whatToRun)
+            return self.__read_result(
+                self.foldx_path + 'Stability.txt', self.pdb_filename, whatToRun)
         elif whatToRun == 'RepairPDB':
             return self.foldx_path + 'RepairPDB_' + self.pdb_filename
         elif whatToRun == 'BuildModel':
             # see the FoldX manual for the naming of the generated structures
-            if self.buildModel_runs == '1':
+            if self.buildModel_runs == 1:
                 mutants = [self.foldx_path + self.pdb_filename[:-4] + '_1.pdb', ]
                 wiltype = [self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1.pdb', ]
                 results = [wiltype, mutants]
             else:
-                mutants = [ self.foldx_path + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' for x in range(0,int(self.buildModel_runs)) ]
-                wiltype = [ self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' for x in range(0,int(self.buildModel_runs)) ]
+                mutants = [
+                    self.foldx_path + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' 
+                    for x in range(0,self.buildModel_runs) ]
+                wiltype = [
+                    self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' 
+                    for x in range(0,self.buildModel_runs) ]
                 results = [wiltype, mutants]
             return results
 

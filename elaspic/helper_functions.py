@@ -157,32 +157,33 @@ def row2dict(row):
 
 #%% Helper functions for different subprocess commands
 
-def popen_py2i3(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True):
+def popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True):
     child_process = subprocess.Popen(system_command, stdout=stdout, stderr=stderr, shell=shell)
     result, error_message = child_process.communicate()
+    return_code = child_process.returncode
     if six.PY3:
         result = result.decode()
         error_message = error_message.decode()
-    return result, error_message
+    return result, error_message, return_code
 
 
 def get_username():
-    username, __ = popen_py2i3('whoami')
+    username, __, __ = popen('whoami')
     return username.strip()
 
 
 def get_hostname():
-    hostname, __ = popen_py2i3('hostname | cut -d. -f1')
+    hostname, __, __ = popen('hostname | cut -d. -f1')
     return hostname.strip()
 
 
 def get_echo(system_constant):
-    system_constant_value, __ = popen_py2i3('echo ' + system_constant)
+    system_constant_value, __, __ = popen('echo ' + system_constant)
     return system_constant_value.strip()
 
 
 def get_which(bin_name):
-    bin_filename, __ = popen_py2i3('which ' + bin_name)
+    bin_filename, __, __ = popen('which ' + bin_name)
     return bin_filename.strip()
 
 

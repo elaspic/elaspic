@@ -1331,10 +1331,7 @@ class MyDatabase(object):
         ]
 
         for d in data:
-            childProcess = hf.popen_py2i3('ls ' + self.path_to_archive + d[0])
-            result, __ = childProcess.communicate()
-            if six.PY3:
-                result = str(result, encoding='utf-8')
+            result, __, __ = hf.popen('ls ' + self.path_to_archive + d[0])
             filenames = [fname for fname in result.split('\n') if fname != '']
             for filename in filenames:
                 with open(filename, 'r') as fh:
@@ -1416,12 +1413,8 @@ def scinet_cleanup(folder, destination, name=None):
 #    copy = 'cp ' + output_name + ' /home/niklas/tmp/' + output_name
     system_command = 'tar -acf ' + output_name + ' * && ' + copy
 
-    childProcess = hf.popen_py2i3(system_command)
-    result, error_message = childProcess.communicate()
-    if six.PY3:
-        result = str(result, encoding='utf-8')
-        error_message = str(error_message, encoding='utf-8')
-    if childProcess.returncode != 0:
+    result, error_message, return_code = hf.popen(system_command)
+    if return_code != 0:
         print('error_message:', error_message)
     return
 
