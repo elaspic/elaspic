@@ -11,8 +11,6 @@ import subprocess
 from configparser import SafeConfigParser
 from Bio.SubsMat import MatrixInfo
 
-from . import sql_db
-
 
 #%%
 try:
@@ -25,7 +23,7 @@ except:
 configs = dict()
 
 def read_configuration_file(config_file):
-
+    
     configParser = SafeConfigParser(
         defaults={
             'global_temp_path': '/tmp/',
@@ -49,7 +47,9 @@ def read_configuration_file(config_file):
 
     # From [DATABASE]
     configs['db_type'] = configParser.get('DATABASE', 'db_type')
-    sql_db.DB_TYPE = configs['db_type']
+    configs['db_database'] = configParser.get('DATABASE', 'db_database')
+    configs['db_schema'] = configParser.get('DATABASE', 'db_schema')
+    configs['db_schema_uniprot'] = configParser.get('DATABASE', 'db_schema_uniprot')
     if configs['db_type'] == 'sqlite':
         configs['sqlite_db_path'] = configParser.get('DATABASE', 'sqlite_db_path')
         configs['db_is_immutable'] = True
@@ -57,7 +57,7 @@ def read_configuration_file(config_file):
         configs['db_username'] = configParser.get('DATABASE', 'db_username')
         configs['db_password'] = configParser.get('DATABASE', 'db_password')
         configs['db_url'] = configParser.get('DATABASE', 'db_url')
-        configs['db_schema'] = configParser.get('DATABASE', 'db_schema')
+        configs['db_port'] = configParser.get('DATABASE', 'db_port')
         configs['db_is_immutable'] = False
     else:
         raise Exception("Only 'mysql', 'postgresql', and 'sqlite' databases are supported!")
@@ -91,3 +91,5 @@ def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
     temp_path = os.path.join(os.environ.get('TMPDIR', global_temp_path), temp_path_suffix)
     subprocess.check_call('mkdir -p ' + temp_path, shell=True)
     return temp_path
+    
+    

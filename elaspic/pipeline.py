@@ -21,11 +21,12 @@ import six
 
 from . import conf
 from . import errors
-from . import sql_db
-from . import domain_alignment
-from . import domain_model
-from . import domain_mutation
 from . import helper_functions as hf
+
+sql_db = None
+domain_alignment = None
+domain_model = None
+domain_mutation = None
 
 
 class Pipeline(object):
@@ -35,8 +36,19 @@ class Pipeline(object):
         It should be possible to initialize one pipeline and call it in parallel using different
         mutations as input
         """
+        global sql_db
+        global domain_alignment
+        global domain_model
+        global domain_mutation
+        
         # Read the configuration file and set the variables
         conf.read_configuration_file(config_file)
+        
+        # Can imort sql_db only after the configuration file has been read
+        from . import sql_db
+        from . import domain_alignment
+        from . import domain_model
+        from . import domain_mutation
 
         # Make sure that the temp path was created successfully
         # In particular, a local temporary folder must be used on cluasters with limited local storage
@@ -154,7 +166,7 @@ class Pipeline(object):
         self.unique = tempfile.mkdtemp(prefix='', dir=conf.configs['temp_path']).split('/')[-1]
         self.unique_temp_folder = conf.configs['temp_path'] + self.unique + '/'
         self.logger.info(self.unique_temp_folder)
-        self.logger.info(conf.configs['schema_version'])
+        self.logger.info(conf.configs['db_schema'])
 
         # Switch to the root of the unique tmp directory
         os.chdir(self.unique_temp_folder)
@@ -171,20 +183,7 @@ class Pipeline(object):
         ### themselves.
 
         # Initialise the sql database for accessing all information
-        self.logger.info(
-            "Connecting to a '{}' database and copying files from the '{}' data folder..."
-            .format(conf.configs['db_type'], conf.configs['path_to_archive']))
-        if conf.configs['db_type'].lower() == 'sqlite_file':
-            self.logger.info('Path to the sqlite database: {}'.format(conf.configs['sqlite_db_path']))
-        self.db = sql_db.MyDatabase(
-            path_to_archive=conf.configs['path_to_archive'],
-            path_to_sqlite_db=conf.configs['sqlite_db_path'],
-            sql_flavour=conf.configs['db_type'],
-            schema_version=conf.configs['schema_version'],
-            temp_path=conf.configs['temp_path'],
-            is_immutable=conf.configs['db_is_immutable'],
-            logger=self.logger
-        )
+        self.db = sql_db.MyDatabase(conf.configs, logger=self.logger)
 
         # Obtain all domains and interactions for a given uniprot
         self.logger.info('Obtaining protein domain information...')
