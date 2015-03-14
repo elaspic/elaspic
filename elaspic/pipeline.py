@@ -83,12 +83,8 @@ class Pipeline(object):
         if not os.path.isfile(conf.configs['temp_path'] + db_filename):
             system_command = 'cp -u ' + conf.configs['temp_path'] + ' ' + conf.configs['sqlite_db_path'] + '/'
             self.logger.debug(system_command)
-            childProcess = hf.popen_py2i3(system_command)
-            result, error_message = childProcess.communicate()
-            if six.PY3:
-                result = str(result, encoding='utf-8')
-                error_message = str(error_message, encoding='utf-8')
-            if childProcess.returncode != 0:
+            result, error_message, return_code = hf.popen(system_command)
+            if return_code != 0:
                 self.logger.error(result)
                 self.logger.error(error_message)
                 raise Exception('Could not copy the sqlite3 database!')
@@ -134,19 +130,12 @@ class Pipeline(object):
 
         # Try running the system command several times in case it doesn't work the first time
         n_tries = 0
-        childProcess = hf.popen_py2i3(system_command)
-        result, error_message = childProcess.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
-        rc = childProcess.returncode
-        while rc != 0 and n_tries < 10:
+        result, error_message, return_code = hf.popen(system_command)
+        while return_code != 0 and n_tries < 10:
             self.logger.info("Couldn't copy the blast database. Retrying...")
             time.sleep(15)
-            childProcess = hf.popen_py2i3(system_command)
-        if rc != 0:
-            result = str(result, encoding='utf-8')
-            error_message = str(result, encoding='utf-8')
+            result, error_message, return_code = hf.popen(system_command)
+        if return_code != 0:
             self.logger.error(result)
             self.logger.error(error_message)
             raise Exception(
