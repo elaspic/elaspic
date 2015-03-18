@@ -1,7 +1,7 @@
-code
-====
+elaspic
+=======
 
 .. toctree::
    :maxdepth: 4
 
-   code
+   elaspic
