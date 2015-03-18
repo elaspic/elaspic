@@ -114,15 +114,16 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
     # Create indexes over several columns
     for columns in index_columns:
         if type(columns) == tuple:
-            column_names, unique = columns
+            column_names, kwargs = columns
         elif type(columns) == list:
             column_names = columns
-            unique = False
+            kwargs = {}
+            kwargs['unique'] = False
         index_name = (
             'ix_{table_name}_{column_0_name}'
             .format(table_name=table_name, column_0_name=column_names[0])[:255]
         )
-        table_args.append(Index(index_name, *column_names, unique=unique))
+        table_args.append(Index(index_name, *column_names, **kwargs))
     # Other table parameters, such as schemas, etc.
     for db_specific_param in db_specific_params:
         table_args.append(get_db_specific_param(db_specific_param))
@@ -138,18 +139,25 @@ class Domain(Base):
     """ Table containing pdbfam domain definitions for all pdbs()
     """
     __tablename__ = 'domain'
-    _indexes = [
-        (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], True),
-    ]
+    if DB_TYPE != 'mysql':
+        # MySQL can't handle long indexes
+        _indexes = [
+            (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], {'unique': True}),
+            (['pdb_pdbfam_name'], {'mysql_length': 255})
+        ]
+    else:
+        _indexes = [
+            ['pdb_id', 'pdb_chain'],
+            (['pdb_pdbfam_name'], {'mysql_length': 255}),
+        ]
     __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
-    
     cath_id = Column(
         String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
         primary_key=True)
     pdb_id = Column(String(SHORT), nullable=False)
     pdb_chain = Column(String(SHORT), nullable=False)
     pdb_domain_def = Column(String(MEDIUM), nullable=False)
-    pdb_pdbfam_name = Column(String(LONG), nullable=False, index=True)
+    pdb_pdbfam_name = Column(String(LONG), nullable=False)   
     pdb_pdbfam_idx = Column(Integer)
     domain_errors = Column(Text)
 
@@ -159,8 +167,8 @@ class DomainContact(Base):
     """
     __tablename__ = 'domain_contact'
     _indexes = [
-        (['cath_id_1', 'cath_id_2'], True),
-        (['cath_id_2', 'cath_id_1'], True),
+        (['cath_id_1', 'cath_id_2'], {'unique': True}),
+        (['cath_id_2', 'cath_id_1'], {'unique': True}),
     ]
     __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
     
@@ -239,7 +247,8 @@ class UniprotDomain(Base):
         # because we want to make homology models at different sequence identities.
         max_seq_identity = Column(Integer)
         _indexes = [
-            (['uniprot_id', 'alignment_def', 'max_seq_identity'], True),
+            (['uniprot_id', 'alignment_def', 'max_seq_identity'], {'unique': True}),
+            (['pdbfam_name'], {'mysql_length': 255})
         ]
         _create_uniprot_id_index = False
     else:
@@ -253,7 +262,7 @@ class UniprotDomain(Base):
             UniprotSequence.uniprot_id, 
             onupdate='cascade', ondelete='cascade'),
         index=_create_uniprot_id_index, nullable=False)
-    pdbfam_name = Column(String(LONG), index=True, nullable=False)
+    pdbfam_name = Column(String(LONG), nullable=False)
     pdbfam_idx = Column(Integer, nullable=False)
     pfam_clan = Column(Text)
     alignment_def = Column(String(MEDIUM))
@@ -271,8 +280,8 @@ class UniprotDomain(Base):
 class UniprotDomainPair(Base):
     __tablename__ = 'uniprot_domain_pair'
     _indexes = [
-            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], True),
-            (['uniprot_domain_id_2', 'uniprot_domain_id_1'], True),
+            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {'unique': True}),
+            (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {'unique': True}),
     ]
     __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
 
@@ -588,7 +597,7 @@ class MyDatabase(object):
         # Choose which database to use
         if configs['db_type'] == 'sqlite':
             self.logger.info(
-                "Connecting to an {dt_type} database in the following location: {sqlite_db_path}..."
+                "Connecting to an {db_type} database in the following location: {sqlite_db_path}..."
                 .format(**configs)
             )
             autocommit = True
@@ -605,7 +614,7 @@ class MyDatabase(object):
             autocommit = False
             autoflush = False
             engine = create_engine(
-                '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_schema}'
+                '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_database}'
                 .format(**configs)
             ) # echo=True
         else:
