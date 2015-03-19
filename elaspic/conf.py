@@ -8,7 +8,7 @@ from __future__ import unicode_literals
 
 import os
 import subprocess
-from configparser import SafeConfigParser
+from configparser import SafeConfigParser, NoOptionError
 from Bio.SubsMat import MatrixInfo
 
 
@@ -33,6 +33,7 @@ def read_configuration_file(config_file):
             'remake_provean_supset': 'False',
             'n_cores': '1',
             'web_server': 'False',
+            'provean_temp_path': '',
         })
     configParser.read(config_file)
 
@@ -44,27 +45,39 @@ def read_configuration_file(config_file):
     configs['remake_provean_supset'] = configParser.getboolean('DEFAULT', 'remake_provean_supset')
     configs['n_cores'] = configParser.getint('DEFAULT', 'n_cores')
     configs['web_server'] = configParser.get('DEFAULT', 'web_server')
+    configs['provean_temp_path'] = configParser.get('DEFAULT', 'provean_temp_path')
 
     # From [DATABASE]
     configs['db_type'] = configParser.get('DATABASE', 'db_type')
-    configs['db_database'] = configParser.get('DATABASE', 'db_database')
-    configs['db_schema'] = configParser.get('DATABASE', 'db_schema')
-    configs['db_schema_uniprot'] = configParser.get('DATABASE', 'db_schema_uniprot')
+    configs['db_schema'] = configParser.get('DATABASE', 'db_schema')  
+     
     if configs['db_type'] == 'sqlite':
         configs['sqlite_db_path'] = configParser.get('DATABASE', 'sqlite_db_path')
         configs['db_is_immutable'] = True
     elif configs['db_type'] in ['mysql', 'postgresql']:
+        try:
+            configs['db_database'] = configParser.get('DATABASE', 'db_database')
+        except NoOptionError:
+            configs['db_database'] = configs['db_schema']
+        try:
+            configs['db_schema_uniprot'] = configParser.get('DATABASE', 'db_schema_uniprot')
+        except NoOptionError:
+            configs['db_schema_uniprot'] = configs['db_schema']
         configs['db_username'] = configParser.get('DATABASE', 'db_username')
         configs['db_password'] = configParser.get('DATABASE', 'db_password')
         configs['db_url'] = configParser.get('DATABASE', 'db_url')
         configs['db_port'] = configParser.get('DATABASE', 'db_port')
         configs['db_is_immutable'] = False
     else:
-        raise Exception("Only 'mysql', 'postgresql', and 'sqlite' databases are supported!")
+        raise Exception("Only `MySQL`, `PostgreSQL`, and `SQLite` databases are supported!")
         
     # From [SETTINGS]
     configs['path_to_archive'] = configParser.get('SETTINGS', 'path_to_archive')
     configs['blast_db_path'] = configParser.get('SETTINGS', 'blast_db_path')
+    try:
+        configs['remote_blast_db_path'] = configParser.get('SETTINGS', 'remote_blast_db_path')
+    except NoOptionError:
+        configs['remote_blast_db_path'] = ''
     configs['pdb_path'] = configParser.get('SETTINGS', 'pdb_path')
     configs['bin_path'] = configParser.get('SETTINGS', 'bin_path')
 

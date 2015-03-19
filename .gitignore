@@ -18,8 +18,9 @@ docs/_*
 *.pyc
 *.o
 
-# Logs and databases
+# Logs, backups, and databases
 *.log
+*.bak
 *.sql
 
 # Documentation
@@ -28,3 +29,7 @@ docs/_*
 
 # Git Windows configuration file
 .gitattributes
+
+# Configuration files with private information
+config/*.ini
+

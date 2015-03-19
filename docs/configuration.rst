@@ -7,6 +7,7 @@ Configuration file
 Modify the ELASPIC configuration file ``./config/config_file.ini`` to match your system. Important options are described below.
 
 
+
 Configuration options
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -44,6 +45,51 @@ Configuration options
    
   Whether or not the ELASPIC pipeline is being run as part of a webserver. Default = False.
 
+.. option:: provean_temp_path
+  
+  Location to store provean temporary files if working on any note other than `beagle` or `banting`.
+  For internal use only. Default = ''.
+
+
+[DATABASE]
+``````````
+.. option:: db_type
+
+  The database that you are using. Supported databases are `MySQL`, `PostgreSQL`, and `SQLite`.
+  
+.. option:: sqlite_db_path
+
+  Location of the SQLite database. Required only if :option:`db_type` is `SQLite`.
+
+.. option:: db_schema
+
+  The name of the schema that holds all elaspic data.
+
+.. option:: db_schema_uniprot
+
+  The name of the database schema that holds uniprot sequences. Defaults to :option:`db_schema`.
+
+.. option:: db_database
+
+  The name of the database that contains :option:`db_schema` and :option:`db_schema_uniprot`.
+  Required only if :option:`db_type` is `PostgreSQL`. Defaults to :option:`db_schema`. 
+
+.. option:: db_username
+
+  The username for the database. Required only if :option:`db_type` is `MySQL` or `PostgreSQL`. 
+
+.. option:: db_password
+
+  The password for the database. Required only if :option:`db_type` is `MySQL` or `PostgreSQL`. 
+
+.. option:: db_url
+
+  The IP address of the database. Required only if :option:`db_type` is `MySQL` or `PostgreSQL`. 
+
+.. option:: db_port
+
+  The listening port of the database. Required only if :option:`db_type` is `MySQL` or `PostgreSQL`. 
+
 
 [SETTINGS]
 ``````````
@@ -54,11 +100,7 @@ Configuration options
 .. option:: blast_db_path
 
   Location of the blast **nr** and **pdbaa** databases.
-  
-.. option:: sqlite_db_path
 
-  Location of the SQLite database with the precalculated data. Optional.
-  
 .. option:: pdb_path 
 
   Location of all pdb structures, equivalent to the "data/data/structures/divided/pdb/" folder in the PDB ftp site. Optional.
@@ -79,14 +121,22 @@ Configuration options
 ``````````````
 .. option:: foldx_water
 
-  If "-CRYSTAL" uses the X-ray waters bridging two protein atoms. If "-PREDICT", waters that make 2 or more hydrogen bonds to the protein are predicted. If "-COMPARE" it compares the predicted water bridges with the X-ray ones. (Source: http://foldx.crg.es/manual3.jsp). Default = "-IGNORE"
+  ``-CRYSTAL``: use water molecules in the crystal structure to bridge two protein atoms. 
+  
+  ``-PREDICT``: predict water molecules that make 2 or more hydrogen bonds to the protein. 
+  
+  ``-COMPARE``: compare predicted water bridges with bridges observed in the crystal structure.
+  
+  ``-IGNORE``: don't predict water molecules. Default.
+  
+  Source: http://foldx.crg.es/manual3.jsp.
   
 .. option:: foldx_num_of_runs
-   
+  
   Number of times that FoldX should evaluate a given mutation. Default = 1.
   
 .. option:: matrix_type
-   
+  
   Substitution matrix for calculating the mutation conservation score. Default = "blosum80".
   
 .. option:: gap_start 

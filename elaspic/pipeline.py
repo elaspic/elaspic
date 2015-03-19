@@ -45,6 +45,7 @@ class Pipeline(object):
         conf.read_configuration_file(config_file)
         
         # Can imort sql_db only after the configuration file has been read
+        # Otherwise classes in `sql_db` won't be properly configured
         from . import sql_db
         from . import domain_alignment
         from . import domain_model
@@ -96,38 +97,18 @@ class Pipeline(object):
             os.path.isfile(conf.configs['global_temp_path'] + 'blast/db/pdbaa.pal')):
                 self.logger.info('The blast database already exists.')
                 return
-
-        username  = hf.get_username()
-        hostname = hf.get_hostname()
-        if username == 'strokach' and (('beagle' in hostname) or ('grendel' in hostname)):
-            ### The blast database should already have been copied to the local temp folder
-#            raise Exception(
-#                'Could not find the blast database even though it should be '
-#                'present on these nodes.'
-#            )
-            self.logger.info(
-                'Creating a simlink to the blast folder, even though the blast database '
-                'should already exist on these nodes.'
-            )
-            system_command = (
-                'mkdir -p ' + conf.configs['global_temp_path'] + 'blast/ && ' +
-                'ln -sf ' + conf.configs['blast_db_path'] + 'db ' +  conf.configs['global_temp_path'] + 'blast/'
-            )
-        elif username == 'strokach' or username == 'alexey':
-            # Use a symbolic link to the blast database and use the home folder for temporary storage
-            system_command = (
-                #'rm -rf ' + conf.configs['global_temp_path'] + 'blast/ && ' +
-                'mkdir -p ' + conf.configs['global_temp_path'] + 'blast/ && ' +
-                #'ln -sf ' + conf.configs['blast_db_path'] + 'pdbaa_db ' + conf.configs['global_temp_path'] + 'blast/ && ' +
-                'ln -sf ' + conf.configs['blast_db_path'] + 'db ' +  conf.configs['global_temp_path'] + 'blast/')
-        elif username == 'witvliet' or username == 'kimadmin' or username == 'www-data':
-            system_command = (
-                'rm -rf ' + conf.configs['global_temp_path'] + 'blast/ && ' +
-                'mkdir -p ' + conf.configs['global_temp_path'] + 'blast/ && ' +
-                'ln -sf ' + conf.configs['blast_db_path'] + 'pdbaa_db ' + conf.configs['global_temp_path'] + 'blast/ && ' +
-                'ln -sf ' + conf.configs['blast_db_path'] + 'db ' +  conf.configs['global_temp_path'] + 'blast/')
-        self.logger.debug(system_command)
-
+        
+        # Make a symbolic link from the remote blast database location to a local path
+        self.logger.info(
+            'Creating a simbolic link to the blast database folder...\n'
+            'To speed up Provean, you may want to rsync blast databases to the temporary folder, '
+            'rather than creating symbolic links.'
+        )
+        system_command = (
+            'mkdir -p ' + conf.configs['global_temp_path'] + 'blast/ && ' +
+            'ln -sf ' + conf.configs['blast_db_path'] + 'db ' +  conf.configs['global_temp_path'] + 'blast/'
+        )
+        
         # Try running the system command several times in case it doesn't work the first time
         n_tries = 0
         result, error_message, return_code = hf.popen(system_command)
@@ -138,9 +119,6 @@ class Pipeline(object):
         if return_code != 0:
             self.logger.error(result)
             self.logger.error(error_message)
-            raise Exception(
-                'Couldn\'t copy the blast database on {hostname} as {username}!'
-                .format(hostname=hostname, username=username))
 
 
     def __call__(self, uniprot_id, mutations, run_type=1, number_of_tries=[]):
@@ -617,13 +595,21 @@ class Pipeline(object):
 
 
     def __prepare_provean_temp_folder(self):
-        username  = hf.get_username()
+        """
+        Some nodes on the cluster have a very limited amount of memory for temp storage.
+        When working on those nodes, you sould use a remote location for temp storage. This is slow,
+        but at least it ensures that you don't crush the nodes by filling up the hard drive.
+        However, the most serious problem should be fixed with an up-to-date version of cd-hit.
+        (Older versions could go into an infinite loop and generate huge temp files).
+        """
         hostname = hf.get_hostname()
-        if username == 'strokach' and not (('beagle' in hostname) or ('grendel' in hostname)):
+        if conf.configs['provean_temp_path'] and not (('beagle' in hostname) or ('grendel' in hostname)):
             # Can't use /tmp for temporary storage on banting because I run out
             # of space and crash the node
-            self.logger.debug('Using a temp folder on kimstg for provean temp files. This may lead to poor performace...')
-            provean_temp_path = '/home/kimlab1/strokach/tmp/elaspic/' + self.unique + '/provean_temp/'
+            self.logger.debug(
+                "Using a temp folder '{provean_temp_path}' for provean temp files. "
+                "This may lead to poor performace...")
+            provean_temp_path = conf.configs['provean_temp_path']
         else:
             provean_temp_path = self.unique_temp_folder + 'provean_temp/'
         subprocess.check_call('mkdir -p ' + provean_temp_path, shell=True)
