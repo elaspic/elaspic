@@ -95,7 +95,24 @@ class Pipeline(object):
         if (os.path.isdir(conf.configs['global_temp_path'] + 'blast/db/') and
             os.path.isfile(conf.configs['global_temp_path'] + 'blast/db/nr.pal') and
             os.path.isfile(conf.configs['global_temp_path'] + 'blast/db/pdbaa.pal')):
-                self.logger.info('The blast database already exists.')
+                system_command = (
+                    'if [[ -L {global_temp_path}blast/db ]]; '
+                    'then echo "True"; '
+                    'else echo "False"; '
+                    'fi'
+                )
+                system_command = system_command.format(**conf.configs)
+                result, error_message, return_code = hf.popen(system_command)
+                if result.strip() == 'False':
+                    self.logger.warning(
+                        'A symlink to the blast database already exists, but you can speed up '
+                        'Provean by manually copying the blast databases to the temp folder!')
+                elif result.strip() == 'True':
+                    self.logger.info('A local copy of the blast database already exists. Good!')
+                else:
+                    raise Exception(
+                        "Unexpected output '{result}' from system command '{system_command}`."
+                        .format(result=result, system_command=system_command))
                 return
         
         # Make a symbolic link from the remote blast database location to a local path

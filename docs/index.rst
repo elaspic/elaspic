@@ -6,12 +6,6 @@
 Welcome to ELASPIC's documentation!
 ===================================
 
-
-.. autodoc_mock_imports::
-
-   sphinx-paramlinks
-
-
 Contents:
 
 .. toctree::
