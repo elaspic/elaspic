@@ -184,7 +184,7 @@ def build_provean_supporting_set(
         save_supporting_set=True, check_mem_usage=True)
 
     if return_code != 0:
-        configs['logger'].error(error_message)
+        logger.error(error_message)
         raise errors.ProveanError(error_message)
 
     for line in result.split('\n'):
