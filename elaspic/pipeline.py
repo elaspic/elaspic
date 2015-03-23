@@ -67,6 +67,8 @@ class Pipeline(object):
 
 
     def __validate_temp_path(self, configs):
+        """TODO: remove so error message does not appear in a production release
+        """
         hostname = hf.get_hostname()
         no_job_specific_folder = (
             configs['temp_path'].startswith(
