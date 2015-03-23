@@ -58,7 +58,7 @@ def read_configuration_file(config_file):
         try:
             configs['db_database'] = configParser.get('DATABASE', 'db_database')
         except NoOptionError:
-            configs['db_database'] = configs['db_schema']
+            configs['db_database'] = ''
         try:
             configs['db_schema_uniprot'] = configParser.get('DATABASE', 'db_schema_uniprot')
         except NoOptionError:

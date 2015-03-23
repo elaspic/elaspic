@@ -113,10 +113,13 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
             column_names = columns
             kwargs = {}
             kwargs['unique'] = False
-        index_name = (
-            'ix_{table_name}_{column_0_name}'
-            .format(table_name=table_name, column_0_name=column_names[0])[:255]
-        )
+        if 'index_name' in kwargs:
+            index_name = kwargs.pop('index_name')
+        else:
+            index_name = (
+                'ix_{table_name}_{column_0_name}'
+                .format(table_name=table_name, column_0_name=column_names[0])[:255]
+            )
         table_args.append(sa.Index(index_name, *column_names, **kwargs))
     # Other table parameters, such as schemas, etc.
     for db_specific_param in db_specific_params:
@@ -236,26 +239,15 @@ class Provean(Base):
 
 class UniprotDomain(Base):
     __tablename__ = 'uniprot_domain'
-    if 'training' in DB_SCHEMA:
-        # The database used for storing training data has an extra column `max_seq_identity`,
-        # because we want to make homology models at different sequence identities.
-        max_seq_identity = sa.Column(sa.Integer)
-        _indexes = [
-            (['uniprot_id', 'alignment_def', 'max_seq_identity'], {'unique': True}),
-            (['pdbfam_name'], {'mysql_length': 255})
-        ]
-        _create_uniprot_id_index = False
-    else:
-        _indexes = []
-        _create_uniprot_id_index = True
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
+    
+    IS_TRAINING_SCHEMA = 'training' in DB_SCHEMA
     
     uniprot_domain_id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = sa.Column(
         None, sa.ForeignKey(
             UniprotSequence.uniprot_id, 
             onupdate='cascade', ondelete='cascade'),
-        index=_create_uniprot_id_index, nullable=False)
+        index=True, nullable=False)
     pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
     pdbfam_idx = sa.Column(sa.Integer, nullable=False)
     pfam_clan = sa.Column(sa.Text)
@@ -263,6 +255,21 @@ class UniprotDomain(Base):
     pfam_names = sa.Column(sa.String(LONG))
     alignment_subdefs = sa.Column(sa.Text)
     path_to_data = sa.Column(sa.Text)
+
+    if IS_TRAINING_SCHEMA:
+        # The database used for storing training data has an extra column `max_seq_identity`,
+        # because we want to make homology models at different sequence identities.
+        max_seq_identity = sa.Column(sa.Integer, index=True)
+        _indexes = [
+            (['uniprot_id', 'alignment_def', 'max_seq_identity'], 
+             {'unique': True, 'index_name': 'ix_uniprot_id_unique'}),
+            (['pdbfam_name'], {'mysql_length': 255}), 
+        ]
+    else:
+        _indexes = [
+            (['pdbfam_name'], {'mysql_length': 255}),   
+        ]
+    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
     
     # Relationships
     uniprot_sequence = sa.orm.relationship(
@@ -355,9 +362,9 @@ class UniprotDomainModel(Base):
     chain = sa.Column(sa.String(SHORT))
     norm_dope = sa.Column(sa.Float)
     sasa_score = sa.Column(sa.Text)
-    model_domain_def = sa.Column(sa.String(MEDIUM))
     m_date_modified = sa.Column(sa.DateTime, default=datetime.datetime.utcnow,
                              onupdate=datetime.datetime.utcnow, nullable=False)
+    model_domain_def = sa.Column(sa.String(MEDIUM))
                              
     # Relationships
     template = sa.orm.relationship(
@@ -509,11 +516,11 @@ class UniprotDomainPairModel(Base):
     interface_dg = sa.Column(sa.Float)
     interacting_aa_1 = sa.Column(sa.Text)
     interacting_aa_2 = sa.Column(sa.Text)
-    model_domain_def_1 = sa.Column(sa.String(MEDIUM))
-    model_domain_def_2 = sa.Column(sa.String(MEDIUM))
     m_date_modified = sa.Column(
         sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, 
         nullable=False)
+    model_domain_def_1 = sa.Column(sa.String(MEDIUM))
+    model_domain_def_2 = sa.Column(sa.String(MEDIUM))
         
     # Relationships
     template = sa.orm.relationship(
