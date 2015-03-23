@@ -49,9 +49,11 @@ class TestUniprotDomain(object):
         )
         
         self.pipeline.logger.info(
+            ('\n' + '#' * 80 +
             '\nResult index: {result_index}'
             '\nTesting `uniprot_domain`'
             '\nuniprot_domain_id: {uniprot_domain_id}, uniprot_id: {uniprot_id}, mutation: {mutation}'
+            '\n' + '#' * 80)
             .format(**self.configs)
         )
         
@@ -175,9 +177,11 @@ class TestUniprotDomainPair(object):
         )
         
         self.pipeline.logger.info(
+            ('\n' + '#' * 80 +
             '\nResult index: {result_index}'
             '\nTesting `uniprot_domain pair`'
             '\nuniprot_domain_pair_id: {uniprot_domain_pair_id}, uniprot_id: {uniprot_id}, mutation: {mutation}'
+            '\n' + '#' * 80)
             .format(**self.configs)
         )
         
