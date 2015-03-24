@@ -11,12 +11,12 @@ Configuration options
 ---------------------
 
 [DEFAULT]
-^^^^^^^^^
+~~~~~~~~~
 .. option:: global_temp_path
    
   Location for storing temporary files. It will be used only if the :envvar:`TMPDIR` environmental variable is not set. Default = "/tmp/".
   
-.. option:: temp_path
+.. option:: temp_path string
    
   A folder in the `global_temp_path` that will contain all the files that are relevant to ELASPIC. A unique folder will be created inside :option:`temp_path` for each job. Default = "elaspic/".
   
@@ -51,7 +51,7 @@ Configuration options
 
 
 [DATABASE]
-^^^^^^^^^^
+~~~~~~~~~~
 .. option:: db_type
 
   The database that you are using. Supported databases are `MySQL`, `PostgreSQL`, and `SQLite`.
@@ -91,7 +91,7 @@ Configuration options
 
 
 [SETTINGS]
-^^^^^^^^^^
+~~~~~~~~~~
 .. option:: path_to_archive
 
   Location for storing and retreiving precalculated data.
@@ -110,14 +110,14 @@ Configuration options
 
 
 [GET_MODEL]
-^^^^^^^^^^^
+~~~~~~~~~~~
 .. option:: modeller_runs
 
   Number of models that MODELLER should make before choosing the best one. Not implemented! Default = 1.
 
 
 [GET_MUTATION]
-^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~
 .. option:: foldx_water
 
   ``-CRYSTAL``: use water molecules in the crystal structure to bridge two protein atoms. 
