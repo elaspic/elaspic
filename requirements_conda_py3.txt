@@ -24,7 +24,7 @@ scikit-learn=0.15.2=np19py34_0
 scipy=0.15.1=np19py34_0
 setuptools=14.3=py34_0
 six=1.9.0=py34_0
-sphinx=1.2.3=py34_0
+sphinx=1.2.2=py34_0
 sqlalchemy=0.9.9=py34_0
 sqlite=3.8.4.1=0
 system=5.8=1
