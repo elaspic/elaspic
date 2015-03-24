@@ -1,33 +1,28 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Feb 27 16:57:30 2015
-
-@author: Alexey Strokach
-"""
-#%% Inports
 from __future__ import print_function
 from builtins import object
 import pandas as pd
-from elaspic import pipeline
+from elaspic import pipeline, sql_db
 
 
 #%%
 class TestUniprotDomain(object):
 
-    def setup_class(self, config_file, engine, db_schema, db_schema_uniprot, result_index=0):
+    def setup_class(self, configs):
         """
         Source: http://pytest.org/latest/xunit_setup.html?highlight=class#class-level-setup-teardown
-        """
-        self.engine = engine
-        self.pipeline = pipeline.Pipeline(config_file)
-        self.db_schema = db_schema
-        self.db_schema_uniprot = db_schema_uniprot
         
-        self.configs = {
-            'db_schema': db_schema,
-            'db_schema_uniprot': db_schema_uniprot,
-            'result_index': result_index,
-        }
+        Parameters
+        ----------
+        configs : dict
+            Has the following keys: 
+            - db_schema : database schema containing elaspic data
+            - db_schema_uniprot : database schema containing uniprot sequences
+            - result_index : index of the row which will be deleted and re-analysed
+        """
+        self.configs = configs.copy()
+        self.engine = sql_db.get_engine(configs)
+        self.pipeline = pipeline.Pipeline(configs)
         
         domain_query = """
         select
@@ -40,7 +35,7 @@ class TestUniprotDomain(object):
         join {db_schema}.uniprot_domain_mutation udmut using (uniprot_domain_id)
         join {db_schema_uniprot}.uniprot_sequence us on (ud.uniprot_id = us.uniprot_id)
         where ddg is not null
-        limit {result_index},1;
+        limit 1 offset {result_index};
         """.format(**self.configs)
         
         self.domain_for_test = pd.read_sql_query(domain_query, self.engine)
@@ -145,17 +140,23 @@ class TestUniprotDomain(object):
 #%%
 class TestUniprotDomainPair(object):
 
-    def setup_class(self, config_file, engine, db_schema, db_schema_uniprot, result_index=0):
+    def setup_class(self, configs):
+        """
+        Source: http://pytest.org/latest/xunit_setup.html?highlight=class#class-level-setup-teardown
+        
+        Parameters
+        ----------
+        configs : dict
+            Has the following keys: 
+            - db_schema : database schema containing elaspic data
+            - db_schema_uniprot : database schema containing uniprot sequences
+            - result_index : index of the row which will be deleted and re-analysed
+        """
         # Load data
-        self.engine = engine
-        self.pipeline = pipeline.Pipeline(config_file)
-        
-        self.configs = {
-            'db_schema': db_schema,
-            'db_schema_uniprot': db_schema_uniprot,
-            'result_index': result_index,
-        }
-        
+        self.configs = configs.copy()
+        self.engine = sql_db.get_engine(self.configs)
+        self.pipeline = pipeline.Pipeline(self.configs)
+                
         domain_pair_query = """
         select
         udpmut.uniprot_domain_pair_id,
@@ -167,7 +168,7 @@ class TestUniprotDomainPair(object):
         join {db_schema}.uniprot_domain_pair_mutation udpmut using (uniprot_domain_pair_id)
         join {db_schema_uniprot}.uniprot_sequence us on (us.uniprot_id = udpmut.uniprot_id)
         where ddg is not null
-        limit {result_index},1;
+        limit 1 offset {result_index};
         """.format(**self.configs)
         
         self.domain_pair_for_test = pd.read_sql_query(domain_pair_query, self.engine)
@@ -237,37 +238,5 @@ class TestUniprotDomainPair(object):
 
 
 
-#%%
-if __name__ == '__main__':
-    import os
-    import random
-    import sqlalchemy as sa
-    
-    
-    #%% Parameters
-    # Randomly chose the result so that we don't always check on the same domains
-    result_index = random.randint(0, 100)
-    print('Result index: {}\n'.format(result_index))
-
-    try:
-        base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
-    except:
-        base_path = os.path.join(os.getcwd(), '../')
-    code_path = os.path.join(base_path, 'elaspic/')
-    print('base_path: {}'.format(base_path))
-    
-    engine = sa.create_engine('mysql://elaspic:elaspic@192.168.6.19/elaspic')
-
-
-    #%%
-    config_file = os.path.join(base_path, 'config/config_file_mysql.ini')
-
-    test_uniprot_domain = TestUniprotDomain()
-    test_uniprot_domain.setup_class(config_file, engine, result_index)
-    test_uniprot_domain.test()
-
-    test_uniprot_domain_pair = TestUniprotDomainPair()
-    test_uniprot_domain_pair.setup_class(config_file, engine, result_index)
-    test_uniprot_domain.test()
 
 

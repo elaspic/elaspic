@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Mar  4 11:04:40 2013
-
-@author: kimlab
-"""
 from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import absolute_import
@@ -232,7 +227,7 @@ def kill_child_process(child_process):
 def set_process_group(parent_process_group_id):
     """ This function is used to set the group id of the child process to be
     the same as the group id of the parent process. This way when you delete the
-    parent process you also delete all the children
+    parent process you also delete all the children.
     """
     child_process_id = os.getpid() #
     os.setpgid(child_process_id, parent_process_group_id)

@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sat Dec 22 18:58:50 2012
-
-@author: kimlab
-"""
 from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import absolute_import
@@ -140,7 +135,7 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
         Biopython pdb structure
     tmp_path : str, optional, default='/tmp/'
         Path to the folder for storing temporary files
-    pdb_type : {'ent', 'pdb', 'cif'}, optional, default='ent'
+    pdb_type : 'ent'/'pdb'/'cif', optional, default='ent'
         The extension of the pdb to use
 
     Raises
@@ -212,7 +207,7 @@ def get_chain_seqres_sequence(chain, aa_only=False):
     ----------
     aa_only : bool
         If aa_only is set to `False`, selenomethionines will be included in the sequence.
-        see: `http://biopython.org/DIST/docs/api/Bio.PDB.Polypeptide-module.html`
+        See: http://biopython.org/DIST/docs/api/Bio.PDB.Polypeptide-module.html.
     """
     sequence = Seq('', IUPAC.protein)
     for pb in PPBuilder().build_peptides(chain, aa_only=aa_only):
@@ -307,8 +302,9 @@ def get_structure_sequences(file_or_structure, seqres_sequence=False):
 def convert_aa(aa):
     """Convert amino acids from three letter code to one letter code or vice versa
 
-    .. note:: Deprecated
-        Use ''.join(AAA_DICT[aaa] for aaa in aa) and ''.join(A_DICT[a] for a in aa)
+    .. note:: Deprecated!
+    
+       Use ``''.join(AAA_DICT[aaa] for aaa in aa)`` and ``''.join(A_DICT[a] for a in aa)``.
     """
     if len(aa) == 3:
         try:
@@ -330,8 +326,9 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
     Convert residue numbering that has letters (i.e. 1A, 1B, 1C...) to
     residue numbering without letters (i.e. 1, 2, 3...).
 
-    .. note:: Deprecated
-        Use ``get_chain_sequence_and_numbering``
+    .. note:: Deprecated!
+    
+        Use ``get_chain_sequence_and_numbering()``.
     """
     idx_increment = 0
     while string.ascii_letters.find(resnum[-1]) != -1:

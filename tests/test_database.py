@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Mar 13 21:29:25 2015
-
-@author: alexey
-"""
 import os
 import imp
 import random
@@ -41,17 +36,6 @@ print('base_path: {}'.format(base_path))
 #%%
 
 ###
-def load_configs(db_type, organism_folder, config_filename):
-    """Load a configuration file
-    """
-    conf.read_configuration_file(os.path.join(base_path, 'config/' + config_filename))
-    configs = conf.configs.copy()
-    configs['organism_folder'] = organism_folder
-    return configs
-    
-
-
-###
 def create_clean_schema(configs, clear_schema=True, keep_uniprot_sequence=False, logger=None):
     """Create an empty schema in the database defined by the loaded configuration file
     """
@@ -75,7 +59,6 @@ def create_clean_schema(configs, clear_schema=True, keep_uniprot_sequence=False,
         my_db.create_database_tables(
             clear_schema=clear_schema, keep_uniprot_sequence=keep_uniprot_sequence)
     my_db.logger.info('Done!\n')
-    return my_db
 
 
 
@@ -146,70 +129,82 @@ def load_all_tables_to_db(db_type, configs):
 
 
 ###
-def delete_schema(my_db, configs, clear_schema, keep_uniprot_sequence):
-    if clear_schema:
-        for table_name in reversed(table_names):
-            if table_name == 'uniprot_sequence':
-                continue
-            configs['table_name'] = table_name
-            my_db.engine.execute('drop table {db_schema}.{table_name} cascade')
-        my_db.engine.execute('drop schema {db_schema};'.format(**configs))
-        
-        if not keep_uniprot_sequence:
-            my_db.engine.execute('drop schema {db_schema_uniprot}.uniprot_sequence cascade;'.format(**configs))
-            
-            if configs['db_schema'] != configs['db_schema_uniprot']:
-                my_db.engine.execute('drop schema {db_schema_uniprot} cascade;'.format(**configs))
+def delete_schema(configs, logger, clear_schema, keep_uniprot_sequence):
+    if not clear_schema:
+        return
     
+    configs = configs.copy()
+    my_db = sql_db.MyDatabase(configs, logger)
+    
+    for table_name in reversed(table_names):
+        if table_name == 'uniprot_sequence':
+            continue
+        configs['table_name'] = table_name
+        my_db.engine.execute('drop table {db_schema}.{table_name};'.format(**configs))
+
+    def drop_uniprot_table_and_schema():
+        my_db.engine.execute('drop table {db_schema_uniprot}.uniprot_sequence;'.format(**configs))
+        my_db.engine.execute('drop schema {db_schema_uniprot};'.format(**configs))
+        
+    if configs['db_schema'] != configs['db_schema_uniprot']:
+        my_db.engine.execute('drop schema {db_schema};'.format(**configs))
+        if not keep_uniprot_sequence:
+            drop_uniprot_table_and_schema()
+    else:
+        if not keep_uniprot_sequence:
+            drop_uniprot_table_and_schema()
 
 
 
 #%%
-def test():
-    DB_TYPE = 'mysql'
-    # DB_TYPE = 'postgresql'
-    # DB_TYPE = 'sqlite'
-    
+def test(DB_TYPE='mysql'):
+   
     clear_schema = True
     keep_uniprot_sequence = False
-    result_index = random.randint(0, 100) #87
-    organism_folder = os.path.join(base_path, 'database/Homo_sapiens_test')
-    config_filename = config_filenames[DB_TYPE]
+    config_filename = os.path.join(base_path, 'config/', config_filenames[DB_TYPE])
     logger = hf.get_logger()
+    result_index = random.randint(0, 100) 
+    organism_folder = os.path.join(base_path, 'database/Homo_sapiens_test')
     
     logger.info('*' * 80)
     logger.info('Reading the configuration file...')
-    configs = load_configs(DB_TYPE, organism_folder, config_filename)
+    conf.read_configuration_file(config_filename)
+    configs = conf.configs.copy()
+    configs['organism_folder'] = organism_folder
+    configs['result_index'] = result_index
+    
     logger.info('*' * 80)
     logger.info('Creating an empty database schema...')
-    my_db = create_clean_schema(configs, clear_schema, keep_uniprot_sequence, logger)
+    create_clean_schema(configs, clear_schema, keep_uniprot_sequence, logger)
+    
     logger.info('*' * 80)
     logger.info('Loading data from text files to the empty database...')
     load_all_tables_to_db(DB_TYPE, configs)
     
-    imp.reload(test_elaspic)
     logger.info('*' * 80)
     logger.info('Running a sample domain mutation...')
     test_uniprot_domain = test_elaspic.TestUniprotDomain()
-    test_uniprot_domain.setup_class(
-        base_path + 'config/' + config_filenames[DB_TYPE], 
-        my_db.engine, configs['db_schema'], configs['db_schema_uniprot'], result_index)
+    test_uniprot_domain.setup_class(configs)
     test_uniprot_domain.test()
     
     logger.info('*' * 80)
     logger.info('Running a sample interface mutation...')
     test_uniprot_domain_pair = test_elaspic.TestUniprotDomainPair()
-    test_uniprot_domain_pair.setup_class(
-        base_path + 'config/' + config_filenames[DB_TYPE], 
-        my_db.engine, configs['db_schema'], configs['db_schema_uniprot'], result_index)
+    test_uniprot_domain_pair.setup_class(configs)
     test_uniprot_domain_pair.test()
     
     logger.info('*' * 80)
     logger.info('Removing the schema that we created for testing')
-    delete_schema(my_db, configs, clear_schema, keep_uniprot_sequence)
+    delete_schema(configs, logger, clear_schema, keep_uniprot_sequence)
 
 
 
 #%%
 if __name__ == '__main__':
-    test()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--db_type', type=str, default='mysql')
+    args = parser.parse_args()
+    test(args.db_type)
+    
+    

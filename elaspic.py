@@ -34,7 +34,7 @@ parser.add_argument('-c', '--config_file', required=True)
 parser.add_argument('-i', '--input_file')
 parser.add_argument('-u', '--uniprot_id')
 parser.add_argument('-m', '--mutations', nargs='?', default=['',])
-parser.add_argument('-t', '--run_type', nargs='?', type=int, default=1)
+parser.add_argument('-t', '--run_type', nargs='?', type=int, default=5)
 parser.add_argument('-n', '--n_cores', nargs='?', type=int, default=1)
 args = parser.parse_args()
 

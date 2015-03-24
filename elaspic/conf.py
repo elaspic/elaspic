@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Mar  9 16:40:02 2015
-
-@author: Alexey Strokach
-"""
 from __future__ import unicode_literals
 
 import os

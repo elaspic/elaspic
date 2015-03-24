@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Mar  8 10:29:13 2013
-
-@author: kimlab
-"""
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals

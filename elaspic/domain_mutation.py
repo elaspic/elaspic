@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Thu May  2 17:25:45 2013
-
-@author: kimlab
-"""
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from future import standard_library
@@ -491,7 +486,7 @@ class GetMutation(object):
 #        uniprot_sequence = self.db.get_uniprot_sequence(d.uniprot_id).seq.tostring()
 #        domain_def = sql_db.decode_domain_def(t.domain_def)
 #        uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
-        if isinstance(domain_sequence, str):
+        if isinstance(domain_sequence, six.string_types):
             pass
         elif isinstance(domain_sequence, Seq):
             domain_sequence = str(domain_sequence)

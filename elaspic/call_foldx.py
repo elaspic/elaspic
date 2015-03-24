@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Jan 11 09:49:26 2013
-
-@author: kimlab
-"""
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from builtins import zip
@@ -79,10 +74,18 @@ class FoldX(object):
 
     def __call__(self, whatToRun, mutCodes=[]):
         """
-        Select which action should be performed by FoldX by setting 'whatToRun'
-        Possible values are: 'AnalyseComplex', 'Stability', 'RepairPDB', 'BuildModel'
-        See the FoldX manual for an explanation on what they do
-        c.f. (http://foldx.crg.es/manual3.jsp)
+        Select which action should be performed by FoldX by setting `whatToRun`.
+        
+        Possible values are: 
+        
+            - AnalyseComplex
+            - Stability
+            - RepairPDB
+            - BuildModel
+            
+        See the `FoldX manual`_ for an explanation on what they do.
+        
+        .. _FoldX manual: http://foldx.crg.es/manual3.jsp
         """
         self.logger.debug('Running FoldX {}'.format(whatToRun))
         self.__write_runfile(self.pdb_filename, self.chain_id, whatToRun, mutCodes)

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Homology modeling by the automodel class
-
-@author: kimlab
 """
 from __future__ import absolute_import
 from __future__ import unicode_literals

@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Thu May  2 17:25:45 2013
-
-@author: kimlab
-"""
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -81,8 +76,8 @@ def check_provean_supporting_set(
     list
         [result, error_message, return_code] -- The output from running a provean system command.
 
-    Exceptions
-    ----------
+    Raises
+    ------
     errors.ProveanError
         Can raise this exception only if ``check_mem_usage`` is set to ``True``.
     """
@@ -995,14 +990,24 @@ class GetTemplate(object):
     def do_align(self, uniprot_sequence, pdb_sequence, mode):
         """
         Align the sequences in the seqFile.fasta file and return the alignment
-        and the percentage identity
+        and the percentage identity.
 
-        input
-        seqIDs              type 'list'     ;look like ['P01112', '1FOEB']
-
-
-        alignments[0]       type class 'Bio.Align.MultipleSeqAlignment'
-        score               type 'float'
+        Parameters
+        ----------
+        uniprot_sequence : SeqRecord
+            The sequence of the protein domain to be aligned
+        pdb_sequence : SeqRecord
+            The sequence of the PDB domain to be aligned
+        mode : str
+            The type of alignment to perform.
+            Can be "3dcoffee", "expresso", "t_coffee", "quick".
+            
+        Returns
+        -------
+        Bio.Align.MultipleSeqAlignment
+            The alignment of the uniprot domain with the PDB domain
+        str
+            PDB id of the protein
         """
         # write both sequences to one file
         with open(self.unique_temp_folder + 'seqfiles.fasta', 'w') as seqFiles:
@@ -1028,22 +1033,21 @@ class GetTemplate(object):
 
 
 
-
-
-
-
-
     def pick_sequence(self, alignment, pdb_sequence_id):
         """
         Pick the uniprot and pdb sequences from the alignment
 
-        input:
-        alignment           type class 'Bio.Align.MultipleSeqAlignment'
-        pdb_sequence_id     type 'str'
+        Parameters
+        ----------
+        alignment : list
+            A list of `Bio.Align.MultipleSeqAlignment` objects.
+        pdb_sequence_id : str
+            The ID of the PDB sequence
 
-        return:
-        uniprot_alignment   type class 'Bio.SeqRecord.SeqRecord'
-        pdb_alignemnt       type class 'Bio.SeqRecord.SeqRecord'
+        Returns
+        -------
+        uniprot_alignment : Bio.SeqRecord.SeqRecord
+        pdb_alignemnt : Bio.SeqRecord.SeqRecord
         """
         for align in alignment:
             if align.id != pdb_sequence_id:
@@ -1061,11 +1065,14 @@ class GetTemplate(object):
         Selects the best template based on sequence identity and resolution
         of the pdb structure
 
-        input:
-        templates       type list
+        Parameters
+        ----------
+        domain_template : list
+            A list of structural templates.
 
-        return:
-        compare __call__() method
+        Returns
+        -------
+            The best structural template.
         """
 
         # First sort by identity score:
@@ -1080,7 +1087,7 @@ class GetTemplate(object):
                     % (t.alignment_score, t.domain.cdhit_cluster, t.domain.cdhit_cluster_idx))
                 if t.alignment_score == max_score:
                     best_domain_templates.append(t)
-            best_domain_templates.sort(key=lambda k: k.domain.pdb_resolution, reverse=False)
+            best_domatemplatesin_templates.sort(key=lambda k: k.domain.pdb_resolution, reverse=False)
             for t in best_domain_templates:
                 self.logger.debug('Best alignments:')
                 self.logger.debug('alignment score: %f, cluster id: %i, cluster idx: %i' \
