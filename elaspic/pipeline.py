@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sun Dec 23 18:37:36 2012
-
-@author: kimlab
-"""
 from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import absolute_import
@@ -31,7 +26,7 @@ domain_mutation = None
 
 class Pipeline(object):
 
-    def __init__(self, config_file):
+    def __init__(self, configurations):
         """
         It should be possible to initialize one pipeline and call it in parallel using different
         mutations as input
@@ -42,7 +37,10 @@ class Pipeline(object):
         global domain_mutation
         
         # Read the configuration file and set the variables
-        conf.read_configuration_file(config_file)
+        if isinstance(configurations, six.string_types):
+            conf.read_configuration_file(configurations)
+        elif isinstance(configurations, dict):
+            conf.configs = configurations.copy()
         
         # Can imort sql_db only after the configuration file has been read
         # Otherwise classes in `sql_db` won't be properly configured

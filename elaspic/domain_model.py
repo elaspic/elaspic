@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Thu May  2 17:25:45 2013
-
-@author: kimlab
-"""
 from __future__ import absolute_import
 from __future__ import unicode_literals
 from builtins import zip

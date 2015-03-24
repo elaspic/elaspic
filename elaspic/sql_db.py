@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sat Dec 22 18:58:50 2012
-
-@author: kimlab
-"""
 from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import absolute_import
@@ -21,6 +16,7 @@ import json
 import datetime
 import time
 import pickle
+import six
 from contextlib import contextmanager
 from collections import deque
 
@@ -581,6 +577,23 @@ class UniprotDomainPairMutation(Base):
 Session = sa.orm.sessionmaker(expire_on_commit=False)
 #Session = scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
 
+
+
+def get_engine(configs=conf.configs):
+    assert configs['db_type'] in ['mysql', 'postgresql', 'sqlite']
+    if configs['db_type'] == 'sqlite':
+        engine = sa.create_engine(
+            '{db_type}:///{sqlite_db_path}'.format(**configs),
+            isolation_level='READ UNCOMMITTED'
+        )
+    elif configs['db_type'] in ['postgresql', 'mysql']:
+        engine = sa.create_engine(
+            '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_database}'
+            .format(**configs)
+        ) # echo=True
+    return engine
+
+
 class MyDatabase(object):
     """
     """
@@ -603,10 +616,6 @@ class MyDatabase(object):
             )
             autocommit = True
             autoflush = True
-            engine = sa.create_engine(
-                '{db_type}:///{sqlite_db_path}'.format(**configs),
-                isolation_level='READ UNCOMMITTED'
-            )
         elif configs['db_type'] in ['postgresql', 'mysql']:
             self.logger.info(
                 "Connecting to a {db_type} database ..."
@@ -614,16 +623,12 @@ class MyDatabase(object):
             )
             autocommit = False
             autoflush = False
-            engine = sa.create_engine(
-                '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_database}'
-                .format(**configs)
-            ) # echo=True
         else:
             raise Exception("Only mysql, postgresql, and sqlite are currently supported!")
-                      
-        Session.configure(bind=engine, autocommit=autocommit, autoflush=autoflush)
+        
+        self.engine = get_engine(configs)
+        Session.configure(bind=self.engine, autocommit=autocommit, autoflush=autoflush)
         self.Session = Session
-        self.engine = engine
         self.autocommit = autocommit
         self.db_is_immutable = configs['db_is_immutable']
         self.temp_path = configs['temp_path']
@@ -964,7 +969,7 @@ class MyDatabase(object):
                             (UniprotDomainMutation.uniprot_domain_id == d.uniprot_domain_id) &
                             (UniprotDomainMutation.mutation == mutation))
                         .scalar() )
-        elif isinstance(d, UniprotDomainPair) and isinstance(uniprot_id, str):
+        elif isinstance(d, UniprotDomainPair) and isinstance(uniprot_id, six.string_types):
             with self.session_scope() as session:
                 uniprot_mutation = (
                     session.query(UniprotDomainPairMutation)
@@ -974,6 +979,7 @@ class MyDatabase(object):
                             (UniprotDomainPairMutation.mutation == mutation))
                         .scalar() )
         else:
+            self.logger.debug('d: {}\td type: {}'.format(d, type(d)))
             raise Exception('Not enough arguments, or the argument types are incorrect!')
 
         if copy_data:

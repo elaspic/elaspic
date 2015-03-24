@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sun Feb  3 15:07:51 2013
 
-@author: kimlab
-"""
-
-###############################################################################
-# Tcoffee
+#%% Tcoffee
 
 class TcoffeeError(Exception):
     def __init__(self, result, error, alignInFile, system_command):
@@ -36,8 +30,7 @@ class TcoffeePDBidError(Exception):
         self.result = result
 
 
-###############################################################################
-# Provean
+#%% Provean
 
 class ProveanError(Exception):
     pass
@@ -48,8 +41,8 @@ class ProveanResourceError(Exception):
         self.child_process_group_id = child_process_group_id
 
 
-###############################################################################
-# Finding templates (PDB in uppercase to be consistent with Biopython)
+
+#%% Finding templates (PDB in uppercase to be consistent with Biopython)
 
 class LowIdentity(Exception):
     pass
@@ -75,8 +68,7 @@ class PDBChainError(Exception):
     pass
 
 
-###############################################################################
-# Making models
+#%% Making models
 
 class MSMSError(Exception):
     pass
@@ -103,8 +95,7 @@ class ResourceError(Exception):
     pass
 
 
-###############################################################################
-# Computing mutations
+#%% Computing mutations
 
 class NoSequenceFound(Exception):
     pass
@@ -128,7 +119,7 @@ class PopsError(Exception):
         self.chains = chains
 
 
-###############################################################################
+#%%
 
 class ChainsNotInteractingError(Exception):
     pass

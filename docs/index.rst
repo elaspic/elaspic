@@ -9,10 +9,16 @@ Welcome to ELASPIC's documentation!
 Contents:
 
 .. toctree::
-   :maxdepth: 4
-
-   installation
-   configuration
+   :maxdepth: 2
+   :numbered:
+   
+   install_python
+   install_elaspic
+   install_externals
+   download_data
+   config_file
+   running_tests
+   database_schema
    modules
 
 
