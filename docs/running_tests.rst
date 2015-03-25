@@ -1,4 +1,0 @@
-Running tests
-=============
-
-In progress...

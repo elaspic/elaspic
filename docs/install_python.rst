@@ -1,3 +1,5 @@
+.. _install_python:
+
 Installing Python
 =================
 
@@ -42,7 +44,7 @@ such as numpy / scipy.
 Once you have Python installed in your system, you should set up a virual environment for the elaspic project. 
 The instructions on how to do this can be found on the `virtualenv`_ and `virtuanenvwrapper`_ websites. 
 
-Run ``pip install -r requirements_virtualenv_{py2/py3}.txt`` in the elaspic directory to install 
+Run ``pip install -r requirements_virtualenv.txt`` in the elaspic directory to install 
 the required python packages.
 
 
