@@ -11,16 +11,16 @@ If you install all three programs in your home directory, your ``.bashrc`` file 
 
     # TCOFFEE
     export DIR_4_Tcoffee=$HOME/tcoffee
+    export PATH=$DIR_4_Tcoffee/bin:$PATH
     export MAFFT_BINARIES=$DIR_4_Tcoffee/plugins/linux/
+    export PERL5LIB=$DIR_4_Tcoffee/perl:$PERL5LIB
     export CACHE_4_Tcoffee=$HOME/.t_coffee/cache/
     export TMP_4_Tcoffee=$DIR_4_Tcoffee/tmp/
     export LOCKDIR_4_Tcoffee=$DIR_4_Tcoffee/lck/
-    export PERL5LIB=$DIR_4_Tcoffee/perl:$PERL5LIB
     export EMAIL_4_Tcoffee=tcoffee.msa@gmail.com # your email goes here
-    export PATH=$DIR_4_Tcoffee/bin:$PATH
 
     # MODELLER
-    export PATH=$HOME/modeller9.14/bin/mod9.14:$PATH
+    export PATH=$HOME/modeller9.14/bin:$PATH
     export LD_LIBRARY_PATH=$HOME/modeller9.14/lib/x86_64-intel8:$LD_LIBRARY_PATH
     # For Python 2.7+:
     # export PYTHONPATH=$HOME/modeller9.14/modlib:\

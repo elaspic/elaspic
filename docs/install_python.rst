@@ -1,51 +1,70 @@
 .. _install_python:
 
-Installing Python
-=================
+Installing Python and ELASPIC
+=============================
 
-Using Anaconda
---------------
+Using Anaconda (recommended)
+----------------------------
 
-1. Downlaod and install the `Anaconda Python distribution <http://continuum.io/downloads>`_ for linux. 
+#. Downlaod and install the `Anaconda`_ Python distribution for Linux.
+   
+#. Clone the ELASPIC git repository::
 
-2. Create a new environment containing the required Anaconda binaries::
+    git clone git@bitbucket.org:ostrokach/elaspic.git
 
-    conda -n elaspic --file requirements_conda_{py2/py3}.txt
+#. Create a separate conda environment for ELASPIC, containing all required Python packages::
 
-3. Activate the `elaspic` environment::
+    # Enter the ELASPIC repository folder
+    cd elaspic
 
+    # Create a conda environment `elaspic`
+    conda env create -f environment_{py2/py3}.yml # Use 'py2' for Python2, and 'py3' for Python3
+
+    # Activate the conda environment `elaspic`
     source activate elaspic
 
-4. Install the remaining packages that are only availible through pip::
+#. Install the ELASPC package::
 
-    pip install -r requirements_conda_pip.txt
+    python setup.py install
 
-   Note: If you don't want to install ELASPIC in a separate Anaconda environment, 
-   remove ``-n elaspic`` from step 2, and skip step 3.
+
+.. _Conda: http://conda.pydata.org/
+.. _Anaconda: https://store.continuum.io/cshop/anaconda/
+.. _Miniconda: http://conda.pydata.org/miniconda.html
 
 
 Using Virtualenv
 -----------------
 
-It is recommended that you use Python 2.7+ or Python 3.4+ for this project. If your system comes 
-with an earlier version of Python, you should download and a more recent version of Python and 
-compile it from source. Use ``make altinstall`` instead of ``make install`` to prevent system 
-Python binaries from being overwritten.You must specify the following options when running 
-``./configure`` in order for the required python packages to work::
+#. Make sure that you have Python 2.7+ or Python 3.4+ installed on your system. If your system comes with an older version of Python, download a `recent version of Python`_ and compile it from source. Use ``make altinstall`` instead of ``make install`` to prevent system Python binaries from being overwritten. 
 
-    --enable-unicode=ucs4 
+   You must specify the following options when running ``./configure`` in order for the required python packages to work::
+
+    --enable-unicode=ucs4 # ucs4 is required for numpy / scipy
     --enable-ipv6 
     --with-dbmliborder=gdbm:bdb 
     --with-threads
 
-The ``--enable-unicode=ucs4`` is particularly important, as it is required for third-party packags 
-such as numpy / scipy.
+.. _recent version of Python: https://www.python.org/downloads/
 
-Once you have Python installed in your system, you should set up a virual environment for the elaspic project. 
-The instructions on how to do this can be found on the `virtualenv`_ and `virtuanenvwrapper`_ websites. 
+#. Create a virual environment containing all ELASPIC dependencies. The instructions on how to do this can be found on the `virtualenv`_ and `virtuanenvwrapper`_ websites. 
 
-Run ``pip install -r requirements_virtualenv.txt`` in the elaspic directory to install 
-the required python packages.
+
+#. Install required Python packages::
+
+    # Clone the ELASPIC code repository
+    git clone git@bitbucket.org:ostrokach/elaspic.git
+
+    # Enter the repository folder
+    cd elaspic
+
+    # Install required Python packages
+    pip install -r requirements.txt
+
+
+#. Install the ELASPC package::
+
+    python setup.py install
 
 
 .. _virtualenv: http://virtualenv.readthedocs.org/en/latest/

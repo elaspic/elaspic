@@ -26,8 +26,11 @@ setuptools=14.3=py27_0
 six=1.9.0=py27_0
 sphinx=1.3.1=py27_0
 sqlalchemy=0.9.9=py27_0
-sqlite=3.8.4.1=0
+sqlite=3.8.4.1=1
 system=5.8=1
 tk=8.5.18=0
 xz=5.0.5=0
 zlib=1.2.8=0
+biopython=1.65=np19py27_0
+psycopg2=2.6=py27_0
+fastcache=1.0.2=py27_0
