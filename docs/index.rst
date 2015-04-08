@@ -7,7 +7,12 @@
 Welcome to ELASPIC's documentation!
 ===================================
 
-Description of how to run ELASPIC is provided in the :ref:`run_elaspic` section.
+- Instructions on how to install ELASPIC on a local machine are provided in the :ref:`install_guide`.
+- Instructions on how to run  ELASPIC are provided in the :ref:`run_elaspic` section.
+- Description of the ELASPIC database is provided in the :ref:`database_schema` section.
+- Documentation of the ELASPIC source code is provided in the :ref:`modules` section.
+
+.. centered:: **Enjoy :)**
 
 
 -------------------------------------------------------------------------------------------------

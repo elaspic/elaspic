@@ -1,4 +1,6 @@
-elaspic
+.. _modules:
+
+Modules
 =======
 
 .. toctree::
