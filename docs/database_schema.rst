@@ -1,3 +1,5 @@
+.. _database_schema:
+
 Database schema
 ===============
 
