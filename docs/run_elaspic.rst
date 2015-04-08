@@ -7,78 +7,19 @@ Running ELASPIC
 If you have followed all the instructions in the :ref:`install_guide` section, you can run 
 the ELASPIC pipeline using the ``elaspic`` command::
 
-    elaspic --help
+    elaspic
 
 or by running ``python -m elaspic`` from the root of the elaspic repository folder::
 
-    python -m elaspic --help
+    python -m elaspic
+
+Description of ELASPIC options can be obtained by running ``elaspic --help``:
 
 .. program-output:: elaspic --help
 
 
-elaspic options
+ELASPIC options
 ----------------
-
-.. argparse::
-   :module: elaspic.__main__
-   :func: get_parser
-   :prog: elaspic
-
-
-
-Working with the ELASPIC database
-=================================
-
-In order to make it easier to initialize and upload data to the ELASPIC database, we provide a script
-``elaspic_database.py`` which should streamline the most common database tasks, such as creating 
-a new schema, uploading data to the database, and testing to make sure that everything works correctly.
-If you have followed all the instructions in the :ref:`install_guide` section, you can access
-the ``elaspic_database.py`` script using the ``elaspic_database`` command anywhere on your system::
-
-    elaspic_database --help
-
-or by running the script directly from a local clone of the ELASPIC code repository::
-
-    elaspic ./elaspic/elaspic_database.py --help
-
-
-.. program-output:: elaspic_database --help
-
-elaspic_database options
--------------------------
-
-.. argparse::
-   :module: elaspic.elaspic_database
-   :func: get_parser
-   :prog: elaspic_database
-
-
-
-
-
-
-Command-line options
-====================
-
-To get a list of options accepted by ``elaspic.py``, use the ``--help`` command::
-
-   $ ./elaspic.py --help
-
-   usage: elaspic.py [-h] -c CONFIG_FILE [-i INPUT_FILE] [-u UNIPROT_ID]
-                     [-m [MUTATIONS]] [-t [RUN_TYPE]] [-n [N_CORES]]
-
-   optional arguments:
-     -h, --help            show this help message and exit
-     -c CONFIG_FILE, --config_file CONFIG_FILE
-     -i INPUT_FILE, --input_file INPUT_FILE
-     -u UNIPROT_ID, --uniprot_id UNIPROT_ID
-     -m [MUTATIONS], --mutations [MUTATIONS]
-     -t [RUN_TYPE], --run_type [RUN_TYPE]
-     -n [N_CORES], --n_cores [N_CORES]
-
-
-
--------------------------------------------------------------------------------------------------
 
 .. option:: -c --config_file
    
@@ -105,5 +46,42 @@ To get a list of options accepted by ``elaspic.py``, use the ``--help`` command:
 .. option:: -n --n_cores
    
   Number of cores to use by programs that support multithreading. Not tested. Default = 1. 
+
+
+-------------------------------------------------------------------------------------------------
+
+Working with the ELASPIC database
+=================================
+
+In order to make it easier to initialize and upload data to the ELASPIC database, we provide a script
+``elaspic_database.py`` which should streamline the most common database tasks, such as creating 
+a new schema, uploading data to the database, and testing to make sure that everything works correctly.
+If you have followed all the instructions in the :ref:`install_guide` section, you can access
+the ``elaspic_database.py`` script using the ``elaspic_database`` command anywhere on your system::
+
+    elaspic_database
+
+or by running the script directly from a local clone of the ELASPIC code repository::
+
+    elaspic ./elaspic/elaspic_database.py
+
+
+Description of all availible options can be obtained using the ``--help`` command:
+
+.. program-output:: elaspic_database --help
+
+.. program-output:: elaspic_database create --help
+
+.. program-output:: elaspic_database load_data --help
+
+.. program-output:: elaspic_database test --help
+
+.. program-output:: elaspic_database delete --help
+
+
+
+
+
+
   
 

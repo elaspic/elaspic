@@ -36,8 +36,8 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
     'sphinx.ext.linkcode',
-    'sphinxarg.ext',
-    'sphinxcontrib.autoprogram',
+    # 'sphinxarg.ext',
+    # 'sphinxcontrib.autoprogram',
     'sphinxcontrib.programoutput',
 ]
 
