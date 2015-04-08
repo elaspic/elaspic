@@ -15,6 +15,8 @@ except:
 
 
 #%%
+
+#: Dictionary of configuration values used throughout the ELASPIC pipeline
 configs = dict()
 
 def read_configuration_file(config_file):
@@ -91,7 +93,7 @@ def read_configuration_file(config_file):
 
 
 def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
-    """ If a TMPDIR is given as an environment variable, the tmp directory
+    """ If a :envvar:`TMPDIR` is given as an environment variable, the tmp directory
     is created relative to that. This is useful when running on banting
     (the cluster in the ccbr) and also on Scinet. Make sure that it
     points to '/dev/shm/' on Scinet.

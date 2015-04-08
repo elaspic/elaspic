@@ -4,6 +4,8 @@ Created on Thu Jan  8 17:13:11 2015
 
 @author: alexey
 """
+
+
 #%% Imports ommon to all test files
 from __future__ import print_function
 import os
@@ -70,5 +72,29 @@ def test_2():
     pdb.extract() # chain becomes domain after running ``pdb.extract()``
     pdb.save_structure()
 
-
 pdb_template.get_pdb(pdb_id, constants.pdb_database_path, tmp_path=tmp_path, pdb_type='cif', use_external=True)
+
+
+
+
+#%%
+# Problem when modelling `Q16512` because the template pdb contains a phosphorylated serine
+
+from elaspic import conf, helper_functions, pdb_template
+
+pdb_id = '3qc4'
+chain_ids = ['A', 'B']
+domain_defs = ['76:357', '-5:359']
+
+tmp_path = conf.get_temp_path(temp_path_suffix='test_pdb_template') + '/'
+logger = helper_functions.get_logger()
+pdb_path = '/home/kimlab1/database_data/pdb/data/data/structures/divided/pdb/'
+
+pdb = pdb_template.PDBTemplate(pdb_path, pdb_id, chain_ids, domain_defs, tmp_path, tmp_path, logger)
+pdb.extract()
+pdb.save_sequences()
+pdb.save_structure()
+
+
+#%%
+

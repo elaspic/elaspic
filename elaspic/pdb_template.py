@@ -36,8 +36,12 @@ A_DICT = {
 AAA_DICT = dict([(value,key) for key,value in list(A_DICT.items())])
 AAA_DICT['UNK'] = 'X'
 AAA_DICT['MSE'] = 'M'
-AAA_DICT['SEP'] = 'S'
 AAA_DICT['CSD'] = 'C'
+# Phosphorylated residues
+AAA_DICT['SEP'] = 'S' # PHOSPHOSERINE
+AAA_DICT['TPO'] = 'T' # PHOSPHOTHREONINE
+AAA_DICT['SEP'] = 'Y' # O-PHOSPHOTYROSINE
+
 # Methylated lysines
 AAA_DICT['MLZ'] = 'K'
 AAA_DICT['MLY'] = 'K'
@@ -155,7 +159,10 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
     try:
         structure = parser.get_structure(pdb_id, gzip.open(pdb_path + pdb_path_suffix, 'rt'))
     except IOError:
-        error_message = 'PDB not found! (pdb_id: {}, pdb_path: {}, pdb_type: {})'.format(pdb_id, pdb_path, pdb_type)
+        error_message = (
+            'PDB not found! (pdb_id: {}, pdb_path: {}, pdb_type: {})'
+            .format(pdb_id, pdb_path, pdb_type)
+        )
         if not use_external:
             raise errors.PDBNotFoundError(error_message)
         print('Retrieving pdb from the wwpdb ftp server...')
@@ -354,23 +361,30 @@ class SelectChains(Select):
 
 
 class PDBTemplate(object):
-
+    """
+    Attributes
+    ----------
+    domain_boundaries : list of lists of lists
+        Elements in the outer list correspond to domains in each chain of the
+        pdb. Elements of the inner list contain the start and end of each
+        fragment of each domain. For example, if there is only one chain
+        with pdb domain boundaries 1-10:20-45, this would correspond to
+        domain_boundaries [[[1,10],[20,45]]].
+    
+    """
     def __init__(self, pdb_path, pdb_id, chain_ids, domain_defs, output_path, tmp_path, logger):
         """
         Parameters
         ----------
-        domain_boundaries : list of lists of lists
-            Elements in the outer list correspond to domains in each chain of the
-            pdb. Elements of the inner list contain the start and end of each
-            fragment of each domain. For example, if there is only one chain
-            with pdb domain boundaries 1-10:20-45, this would correspond to
-            domain_boundaries [[[1,10],[20,45]]].
+        
         """
         self.pdb_path = pdb_path
         self.pdb_id = pdb_id
         self.output_path = output_path
         self.structure = get_pdb(self.pdb_id, self.pdb_path, tmp_path).copy()
-        self.chain_ids = chain_ids if chain_ids else [chain.id for chain in self.structure[0].child_list]
+        self.chain_ids = (
+            chain_ids if chain_ids else [chain.id for chain in self.structure[0].child_list]
+        )
         self.logger = logger
         self.r_cutoff = 6 # remove hetatms more than x A away from the main chain(s)
 
@@ -400,7 +414,9 @@ class PDBTemplate(object):
             chain = model[chain_id]
             res_idx = 0
 
-            chain_numbering, domain_start_idxs, domain_end_idxs = self._get_domain_def_idxs_for_chain(chain, chain_idx)
+            chain_numbering, domain_start_idxs, domain_end_idxs = (
+                self._get_domain_def_idxs_for_chain(chain, chain_idx)
+            )
             self.logger.debug(
                 'domain_def: {}, domain_start_idxs: {}, domain_end_idxs: {}'.format(
                 self.domain_boundaries[chain_idx], domain_start_idxs, domain_end_idxs))
@@ -411,20 +427,30 @@ class PDBTemplate(object):
 
                 # Move water to the hetatm chain
                 if res.id[0] == 'W':
-                    self._move_water_to_hetatm_chain(chain, hetatm_chain, res)
+                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=False)
                     continue
 
-                # Convert methylated lysines to regular lysines
-                if res.resname in methylated_lysines:
-                    self._correct_methylated_lysines(res)
-
-                # Move hetatms to the hetatm chain
-                if res.resname not in amino_acids:
-                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res)
+                # Move heteroatoms to the hetatm chain
+                if res.id[0] != ' ':
+                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=True)
                     continue
+                
+                # Now treating all unusual amino acids as hetatms
+#                # Convert methylated lysines to regular lysines
+#                if res.resname in methylated_lysines:
+#                    self._correct_methylated_lysines(res)
+#
+#                # Move hetatms to the hetatm chain
+#                if res.resname not in amino_acids:
+#                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res)
+#                    continue
 
                 # Cut each chain to domain boundaries
-                if self._residue_outside_domain(chain, chain_numbering, domain_start_idxs, domain_end_idxs, res):
+                residue_is_outside_domain = (
+                    self._residue_outside_domain(
+                        chain, chain_numbering, domain_start_idxs, domain_end_idxs, res)
+                )
+                if residue_is_outside_domain:
                     chain.detach_child(original_res_id)
                     continue
 
@@ -497,15 +523,7 @@ class PDBTemplate(object):
                 atom_idx += 1
 
 
-    def _move_water_to_hetatm_chain(self, chain, hetatm_chain, res):
-        # self.logger.debug('Moving water residue {} {} to the hetatm chain'.format(res.resname, res.id))
-        chain.detach_child(res.id)
-        hetatm_res = res
-        hetatm_res.id = (hetatm_res.id[0], len(hetatm_chain)+1, hetatm_res.id[2],)
-        hetatm_chain.add(hetatm_res)
-
-
-    def _move_hetatm_to_hetatm_chain(self, chain, hetatm_chain, res):
+    def _move_hetatm_to_hetatm_chain(self, chain, hetatm_chain, res, echo=False):
         self.logger.debug('Moving hetatm residue {} {} to the hetatm chain'.format(res.resname, res.id))
         chain.detach_child(res.id)
         hetatm_res = res

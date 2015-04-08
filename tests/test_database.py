@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 import os
-import imp
+import six
 import random
 import re
 import sqlalchemy as sa
 
 from elaspic import conf
 from elaspic import helper_functions as hf
-from elaspic import sql_db
-imp.reload(conf)
+from elaspic import test_elaspic
 
-import test_elaspic
-imp.reload(test_elaspic)
-
+if six.PY3:
+    from imp import reload
 
 
 #%%
@@ -34,33 +32,6 @@ print('base_path: {}'.format(base_path))
 
 
 #%%
-
-###
-def create_clean_schema(configs, clear_schema=True, keep_uniprot_sequence=False, logger=None):
-    """Create an empty schema in the database defined by the loaded configuration file
-    """
-    imp.reload(sql_db)
-    my_db = sql_db.MyDatabase(configs, logger)
-    try:
-        my_db.create_database_tables(
-            clear_schema=clear_schema, keep_uniprot_sequence=keep_uniprot_sequence)
-    except (sa.exc.OperationalError, sa.exc.ProgrammingError) as e:
-        my_db.logger.error(str(e))
-        if re.search('schema .* does not exist', str(e)):
-            missing_schema = str(e)[str(e).find('schema "')+8:str(e).find('" does not exist')]
-        elif 'Unknown database ' in str(e):
-            missing_schema = str(e)[str(e).find("Unknown database '")+18:str(e).find("'\")")]
-        else:
-            raise e
-        my_db.logger.warning('Missing schema: {}'.format(missing_schema))
-        sql_command = 'create schema {};'.format(missing_schema)
-        my_db.logger.warning("Creating missing schema with system command: '{}'".format(sql_command))
-        my_db.engine.execute(sql_command)
-        my_db.create_database_tables(
-            clear_schema=clear_schema, keep_uniprot_sequence=keep_uniprot_sequence)
-    my_db.logger.info('Done!\n')
-
-
 
 ###
 mysql_load_table_template = (
@@ -158,13 +129,14 @@ def delete_schema(configs, logger, clear_schema, keep_uniprot_sequence):
 
 #%%
 def test(DB_TYPE='mysql'):
-   
+    from elaspic import sql_db
+    
     clear_schema = True
     keep_uniprot_sequence = False
     config_filename = os.path.join(base_path, 'config/', config_filenames[DB_TYPE])
     logger = hf.get_logger()
     result_index = random.randint(0, 100) 
-    organism_folder = os.path.join(base_path, 'database/Homo_sapiens_test')
+    organism_folder = os.path.join(base_path, 'elaspic_database/Homo_sapiens_test')
     
     logger.info('*' * 80)
     logger.info('Reading the configuration file...')
@@ -175,8 +147,10 @@ def test(DB_TYPE='mysql'):
     
     logger.info('*' * 80)
     logger.info('Creating an empty database schema...')
-    create_clean_schema(configs, clear_schema, keep_uniprot_sequence, logger)
-    
+    reload(sql_db)
+    sql_db.create_database_tables(
+        configs=configs, clear_schema=clear_schema, keep_uniprot_sequence=keep_uniprot_sequence)
+
     logger.info('*' * 80)
     logger.info('Loading data from text files to the empty database...')
     load_all_tables_to_db(DB_TYPE, configs)

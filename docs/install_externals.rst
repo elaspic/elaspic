@@ -1,10 +1,14 @@
 .. _install_externals:
 
 Installing external software
-============================
+=============================
 
-Install `BLAST`_, `Modeller`_, and `Tcoffee`_, and modify the ``.bashrc`` file accordingly. 
-If you install all three programs in your home directory, your ``.bashrc`` file should look something like this::
+Blast, Modeller, Tcoffee
+------------------------
+
+Install `Blast`_, `Modeller`_, and `Tcoffee`_, by following the installation instructions provided 
+by the developers, and modify your ``.bashrc`` file accordingly.
+If you install all three programs in your HOME directory, your ``.bashrc`` file should look something like this::
 
     # BLAST
     export PATH=$HOME/ncbi-blast-2.2.29+/bin:$PATH
@@ -32,11 +36,26 @@ If you install all three programs in your home directory, your ``.bashrc`` file 
                       $PYTHONPATH
 
 
-All other binaries required to run ELASPIC come precompiled in the ``./elaspic/bin`` folder. 
-If you are running a strange flavour of linux, you may have to compile some of those libraries from source. 
-The script ``./elaspic/src/install_required_binaries.sh`` is designed to streamline this process.
+FoldX
+-----
 
-.. _BLAST: ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/
+Download FoldX 3 from the `FoldX website`_, and place the ``foldx3b6`` and ``rotabase.txt`` 
+files in the ``elaspic/bin`` folder, renaming ``foldx3b6`` to ``foldx64Linux``.
+If you are using Ubuntu linux, the ``foldx64Linux`` binary included in ``elaspic/bin`` may already
+work on your system, in which case you can skip this step.
+
+
+Other programs
+--------------
+
+All other programs required to run ELASPIC come precompiled in the ``elaspic/bin`` folder. 
+If you are running a strange flavour of Linux (or Mac), you may have to compile some of those programs from source. 
+Running the script :ref:`install_required_binaries_script`
+from the root folder of ELASPIC should take care
+of this for you, by downloading and compiling the binaries, and moving them to the ``elaspic/bin`` folder.
+   
+
+.. _Blast: ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/
 .. _Modeller: https://salilab.org/modeller/
 .. _Tcoffee: http://www.tcoffee.org/
-
+.. _FoldX website: http://foldx.crg.es/

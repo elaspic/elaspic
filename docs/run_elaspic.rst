@@ -1,12 +1,64 @@
 .. _run_elaspic:
 
-Running ELASPIC
-===============
 
-You can run the ELASPIC pipeline using the ``elaspic.py`` file in the root folder of the repository::
+Running ELASPIC 
+================
 
-    $ ./elaspic.py -c {config_file} -u {uniprot_id} -m {mutation} -t {run_type}
+If you have followed all the instructions in the :ref:`install_guide` section, you can run 
+the ELASPIC pipeline using the ``elaspic`` command::
 
+    elaspic --help
+
+or by running ``python -m elaspic`` from the root of the elaspic repository folder::
+
+    python -m elaspic --help
+
+.. program-output:: elaspic --help
+
+
+elaspic options
+----------------
+
+.. argparse::
+   :module: elaspic.__main__
+   :func: get_parser
+   :prog: elaspic
+
+
+
+Working with the ELASPIC database
+=================================
+
+In order to make it easier to initialize and upload data to the ELASPIC database, we provide a script
+``elaspic_database.py`` which should streamline the most common database tasks, such as creating 
+a new schema, uploading data to the database, and testing to make sure that everything works correctly.
+If you have followed all the instructions in the :ref:`install_guide` section, you can access
+the ``elaspic_database.py`` script using the ``elaspic_database`` command anywhere on your system::
+
+    elaspic_database --help
+
+or by running the script directly from a local clone of the ELASPIC code repository::
+
+    elaspic ./elaspic/elaspic_database.py --help
+
+
+.. program-output:: elaspic_database --help
+
+elaspic_database options
+-------------------------
+
+.. argparse::
+   :module: elaspic.elaspic_database
+   :func: get_parser
+   :prog: elaspic_database
+
+
+
+
+
+
+Command-line options
+====================
 
 To get a list of options accepted by ``elaspic.py``, use the ``--help`` command::
 
@@ -25,7 +77,8 @@ To get a list of options accepted by ``elaspic.py``, use the ``--help`` command:
      -n [N_CORES], --n_cores [N_CORES]
 
 
-The options are described below:
+
+-------------------------------------------------------------------------------------------------
 
 .. option:: -c --config_file
    
