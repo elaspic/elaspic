@@ -19,7 +19,7 @@ ELASPIC options
 
 Description of ELASPIC options can be obtained by running ``elaspic --help``:
 
-.. program-output:: elaspic --help
+.. program-output:: python ./../elaspic/__main__.py --help
 
 
 .. option:: -c --config_file
@@ -70,12 +70,12 @@ the ``elaspic_database.py`` script using the ``elaspic_database`` command anywhe
 
 or by running the script directly from a local clone of the ELASPIC code repository::
 
-    elaspic ./elaspic/elaspic_database.py
+    python ./elaspic/elaspic_database.py
 
 
 Description of all availible options can be obtained using the ``--help`` command:
 
-.. program-output:: elaspic_database --help
+.. program-output:: python ./../elaspic/elaspic_database.py --help
 
 
 .. _create_new_schema:
@@ -83,7 +83,7 @@ Description of all availible options can be obtained using the ``--help`` comman
 Create a new database schema
 ----------------------------
 
-.. program-output:: elaspic_database create --help
+.. program-output:: python ./../elaspic/elaspic_database.py create --help
 
 
 .. _load_data_to_schema:
@@ -91,7 +91,7 @@ Create a new database schema
 Load data to the database
 -------------------------
 
-.. program-output:: elaspic_database load_data --help
+.. program-output:: python ./../elaspic/elaspic_database.py load_data --help
 
 
 .. _test_database:
@@ -99,7 +99,7 @@ Load data to the database
 Test the database schema
 ------------------------
 
-.. program-output:: elaspic_database test --help
+.. program-output:: python ./../elaspic/elaspic_database.py test --help
 
 
 .. _delete_database_schema:
@@ -107,6 +107,6 @@ Test the database schema
 Delete the database schema
 --------------------------
 
-.. program-output:: elaspic_database delete --help
+.. program-output:: python ./../elaspic/elaspic_database.py delete --help
 
 
