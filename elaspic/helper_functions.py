@@ -25,7 +25,8 @@ if six.PY3:
 
 #%%
 uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-
+logger = None
+ 
 
 #%%
 class WritableObject(object):
@@ -72,6 +73,9 @@ def get_path_to_current_file():
 
 
 def get_logger(do_debug=True):
+    global logger
+    if logger is not None:
+        return logger 
     import logging
     reload(logging)
     logger = logging.getLogger(__name__)

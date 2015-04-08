@@ -20,22 +20,31 @@ setup(
     url='http://elaspic.kimlab.org',
     packages=['elaspic', 'tests'],
     long_description=read("README.rst"),
-    install_requires = [
-      'fastcache',
-      # Scientific Python stack
-      'numpy',
-      'pandas',
-      'scikit-learn>=0.15',
-      'sqlalchemy',
-      'biopython>=1.65',
-      # Documentation
-      'sphinx>=1.3',
-      # Testing
-      'pytest',
-      # Py2 / Py3 support
-      'future',
-      'six',
-    ]
+    install_requires=[
+        'fastcache',
+        # Scientific Python stack
+        'numpy',
+        'pandas',
+        'scikit-learn>=0.15',
+        'sqlalchemy',
+        'biopython>=1.65',
+        # Documentation
+        'sphinx>=1.3',
+        # Testing
+        'pytest',
+        # Py2 / Py3 support
+        'future',
+        'six',
+    ],
+    tests_require=[
+        'pytest',
+    ],
+    entry_points={
+          'console_scripts': [
+              'elaspic = elaspic.__main__:main',
+              'elaspic_database = elaspic.elaspic_database:main',
+          ]
+      },
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Topic :: Bioinformatics",

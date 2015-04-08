@@ -35,7 +35,19 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
+    'sphinx.ext.linkcode',
+    'sphinxarg.ext',
+    'sphinxcontrib.autoprogram',
+    'sphinxcontrib.programoutput',
 ]
+
+def linkcode_resolve(domain, info):
+    if domain != 'py':
+        return None
+    if not info['module']:
+        return None
+    filename = info['module'].replace('.', '/')
+    return "https://bitbucket.org/ostrokach/elaspic/src/8ea39c4a4c4552a2cc83d396ffdececc8c434818/%s.py?at=python3" % filename
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -158,6 +170,7 @@ html_static_path = ['_static']
 
 # Custom sidebar templates, maps document names to template names.
 #html_sidebars = {}
+# html_sidebars = { '**': ['localtoc.html', 'relations.html', 'sourcelink.html', 'searchbox.html'], }
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.

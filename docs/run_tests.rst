@@ -1,7 +1,7 @@
 .. _run_tests:
 
 Running tests
-=============
+==============
 
 You can test the ELASPIC pipeline by entering the ``./tests/`` subdirectory and running::
 

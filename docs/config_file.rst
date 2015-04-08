@@ -1,49 +1,62 @@
 .. _config_file:
 
 Updating the configuration file
-===============================
+================================
 
-Modify the ELASPIC configuration file ``./config/default_config_file.ini`` to match your system. 
-Important options are described below.
+Edit the ELASPIC configuration file ``./config/config_file.ini`` to match your system:
+  #. Settings in the :ref:`[SETTINGS]` section should be modified to match the local installation of ELASPIC and other programs and datasets.
 
+  #. Settings in the :ref:`[DATABASE]` section should be modified to match the local MySQL, PostgreSQL, or SQLite database.
+
+  #. Settings in the :ref:`[DEFAULT]`, :ref:`[GET_MODEL]`, and :ref:`[GET_MUTATION]` sections often may be left unchanged, since the default values are appropriate for most systems.
+
+
+-------------------------------------------------------------------------------------------------
 
 Configuration options
----------------------
+----------------------
 
-**[DEFAULT]**
+.. _`[DEFAULT]`:
+
+[DEFAULT]
+~~~~~~~~~
 
 .. glossary::
 
    global_temp_path
-     Location for storing temporary files. It will be used only if the :envvar:`TMPDIR` environmental variable is not set. Default = "/tmp/".
+     Location for storing temporary files. It will be used only if the :envvar:`TMPDIR` environmental variable is not set. **Default = '/tmp/'**.
      
    temp_path string
-     A folder in the :term:`global_temp_path` that will contain all the files that are relevant to ELASPIC. A unique folder will be created inside `temp_path` for each job. Default = "elaspic/".
+     A folder in the :term:`global_temp_path` that will contain all the files that are relevant to ELASPIC. Inside this folder, every job will create its own unique subfolder. **Default = 'elaspic/'**.
      
    debug
-     Whether or not to show detailed debugging information. If True, the logging level will be set to ``logging.DEBUG``. If False, the logging level will be set to ``logging.INFO``. Default = True.
+     Whether or not to show detailed debugging information. If True, the logging level will be set to ``logging.DEBUG``. If False, the logging level will be set to ``logging.INFO``. **Default = True**.
      
    look_for_interactions
-     Whether or not to compute models of protein-protein interactions. Default = True.
+     Whether or not to compute models of protein-protein interactions. **Default = True**.
      
    remake_provean_supset
-     Whether or not to remake the Provean supporting set if one or more sequences cannot be found in the BLAST database. Default = False.
+     Whether or not to remake the Provean supporting set if one or more sequences cannot be found in the BLAST database. **Default = False**.
      
    n_cores
-     Number of cores to use by programs that support multithreading. Default = 1.
+     Number of cores to use by programs that support multithreading. **Default = 1**.
      
    schema_version
-     Database schema to use for storing and retreiving data. Default = "elaspic".
+     Database schema to use for storing and retreiving data. **Default = 'elaspic'**.
      
    web_server
-     Whether or not the ELASPIC pipeline is being run as part of a webserver. Default = False.
+     Whether or not the ELASPIC pipeline is being run as part of a webserver. **Default = False**.
 
    provean_temp_path
      Location to store provean temporary files if working on any note other than `beagle` or `banting`.
-     For internal use only. Default = ''.
+     For internal use only. **Default = ''**.
 
 
-**[DATABASE]**
+
+.. _`[DATABASE]`:
+
+[DATABASE]
+~~~~~~~~~~
 
 .. glossary::
 
@@ -76,7 +89,11 @@ Configuration options
      The listening port of the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
 
 
-**[SETTINGS]**
+
+.. _`[SETTINGS]`:
+
+[SETTINGS]
+~~~~~~~~~~
 
 .. glossary::
 
@@ -93,15 +110,23 @@ Configuration options
      Location of external binary files required by ELASPIC.
 
 
-**[GET_MODEL]**
+
+.. _`[GET_MODEL]`:
+
+[GET_MODEL]
+~~~~~~~~~~~
 
 .. glossary::
 
    modeller_runs
-     Number of models that MODELLER should make before choosing the best one. Not implemented! Default = 1.
+     Number of models that MODELLER should make before choosing the best one. Not implemented! **Default = 1**.
 
 
-**[GET_MUTATION]**
+
+.. _`[GET_MUTATION]`:
+
+[GET_MUTATION]
+~~~~~~~~~~~~~~
 
 .. glossary::
 
@@ -109,26 +134,26 @@ Configuration options
      - ``-CRYSTAL``: use water molecules in the crystal structure to bridge two protein atoms. 
      - ``-PREDICT``: predict water molecules that make 2 or more hydrogen bonds to the protein. 
      - ``-COMPARE``: compare predicted water bridges with bridges observed in the crystal structure.
-     - ``-IGNORE``: don't predict water molecules. Default.
+     - ``-IGNORE``: don't predict water molecules. **Default**.
 
      Source: http://foldx.crg.es/manual3.jsp.
      
    foldx_num_of_runs
-     Number of times that FoldX should evaluate a given mutation. Default = 1.
+     Number of times that FoldX should evaluate a given mutation. **Default = 1**.
      
    matrix_type
-     Substitution matrix for calculating the mutation conservation score. Default = "blosum80".
+     Substitution matrix for calculating the mutation conservation score. **Default = 'blosum80'**.
      
    gap_start 
-     Penalty for starting a gap when calculating the mutation conservation score. Default = -16.
+     Penalty for starting a gap when calculating the mutation conservation score. **Default = -16**.
      
    gap_extend
-     Penalty for extending a gap when calculating the mutation conservation score. Default = -4.
+     Penalty for extending a gap when calculating the mutation conservation score. **Default = -4**.
 
 
 
 Environmental variables
------------------------
+------------------------
 
 .. envvar:: PATH
 

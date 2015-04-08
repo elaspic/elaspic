@@ -148,7 +148,7 @@ class Pipeline(object):
         self.number_of_tries = number_of_tries
 
         self.unique = tempfile.mkdtemp(prefix='', dir=conf.configs['temp_path']).split('/')[-1]
-        self.unique_temp_folder = conf.configs['temp_path'] + self.unique + '/'
+        self.unique_temp_folder = os.path.join(conf.configs['temp_path'], self.unique) + '/'
         self.logger.info(self.unique_temp_folder)
         self.logger.info(conf.configs['db_schema'])
 
@@ -553,14 +553,9 @@ class Pipeline(object):
             subprocess.check_call("cp '{}' '{}'".format(
                 conf.configs['bin_path'] + 'foldx64Linux', self.unique_temp_folder + '/FoldX/'), shell=True)
             subprocess.check_call("cp '{}' '{}'".format(
-                conf.configs['bin_path'] + 'FoldX.linux64', self.unique_temp_folder + '/FoldX/'), shell=True)
-            subprocess.check_call("cp '{}' '{}'".format(
                 conf.configs['bin_path'] + 'rotabase.txt', self.unique_temp_folder + '/FoldX/'), shell=True)
             subprocess.check_call("cp '{}' '{}'".format(
                 conf.configs['bin_path'] + 'libfaketime.so.1', self.unique_temp_folder + '/FoldX/'), shell=True)
-            # Copy dssp into the folder for modelling
-#            cp_command = 'cp ' + conf.configs['bin_path'] + 'mkdssp ' + self.unique_temp_folder + '/FoldX/'
-#            subprocess.check_call(cp_command, shell=True)
 
         # modeller
         if not os.path.isdir(self.unique_temp_folder + '/modeller'):
@@ -575,39 +570,27 @@ class Pipeline(object):
         if not os.path.isdir(self.unique_temp_folder + '/sequence_conservation'):
             mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/sequence_conservation'
             subprocess.check_call(mkdir_command, shell=True)
-            # provean
+            # Provean
             cp_command = 'cp ' + conf.configs['bin_path'] + 'provean ' + self.unique_temp_folder + '/sequence_conservation/'
             subprocess.check_call(cp_command, shell=True)
 
         # analyze_structure
-        if not os.path.isdir(self.unique_temp_folder + '/analyze_structure'):
-            # create workingfolder for analyzing structure sasa and secondary structure
-            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/analyze_structure'
+        analyze_structure_path = os.path.join(self.unique_temp_folder, 'analyze_structure') + '/'
+        if not os.path.isdir(analyze_structure_path):
+            # Create a folder for keeping all files relevant to analysing the strutural model
+            mkdir_command = 'mkdir -p ' + analyze_structure_path
             subprocess.check_call(mkdir_command, shell=True)
             # Pops
-            cp_command = 'cp ' + conf.configs['bin_path'] + 'pops ' + self.unique_temp_folder + '/analyze_structure'
+            cp_command = 'cp ' + conf.configs['bin_path'] + 'pops ' + analyze_structure_path
             subprocess.check_call(cp_command, shell=True)
-            # Dssp
-            # cp_command = 'cp ' + conf.configs['bin_path'] + 'dssp-2.0.4-linux-amd64 ' + self.unique_temp_folder + '/analyze_structure/dssp'
-            # cp_command = 'cp ' + conf.configs['bin_path'] + 'mkdssp ' + self.unique_temp_folder + '/analyze_structure/dssp'
-            # subprocess.check_call(cp_command, shell=True)
-            cp_command = 'cp ' + conf.configs['bin_path'] + 'stride ' + self.unique_temp_folder + '/analyze_structure/stride'
+            # Stride
+            cp_command = 'cp ' + conf.configs['bin_path'] + 'stride ' + analyze_structure_path
             subprocess.check_call(cp_command, shell=True)
-
-#                # Naccess
-#                cp_command = (
-#                    'cp ' + conf.configs['bin_path'] + 'naccess ' + self.unique_temp_folder + '/analyze_structure/ && '
-#                    'cp ' + conf.configs['bin_path'] + 'accall ' + self.unique_temp_folder + '/analyze_structure/ && '
-#                    'cp ' + conf.configs['bin_path'] + 'standard.data ' + self.unique_temp_folder + '/analyze_structure/ && '
-#                    'cp ' + conf.configs['bin_path'] + 'vdw.radii ' + self.unique_temp_folder + '/analyze_structure/')
-#                subprocess.check_call(cp_command, shell=True)
-
             #MSMS
             cp_command = (
-                'cp ' + conf.configs['bin_path'] +  'pdb_to_xyzrn ' +  self.unique_temp_folder + '/analyze_structure/ && '
-                'cp ' + conf.configs['bin_path'] + 'standard.data ' +  self.unique_temp_folder + '/analyze_structure/ && '
-                'cp ' + conf.configs['bin_path'] + 'atmtypenumbers ' +  self.unique_temp_folder + '/analyze_structure/ && '
-                'cp ' + conf.configs['bin_path'] + 'msms.x86_64Linux2.2.6.1 ' + self.unique_temp_folder + '/analyze_structure/')
+                'cp ' + conf.configs['bin_path'] + 'pdb_to_xyzrn ' +  analyze_structure_path + ' && '
+                'cp ' + conf.configs['bin_path'] + 'atmtypenumbers ' +  analyze_structure_path + ' && '
+                'cp ' + conf.configs['bin_path'] + 'msms ' + analyze_structure_path)
             subprocess.check_call(cp_command, shell=True)
 
 
@@ -626,7 +609,7 @@ class Pipeline(object):
             self.logger.debug(
                 "Using a temp folder '{provean_temp_path}' for provean temp files. "
                 "This may lead to poor performace...")
-            provean_temp_path = conf.configs['provean_temp_path']
+            provean_temp_path = os.path.join(conf.configs['provean_temp_path'], self.unique) + '/'
         else:
             provean_temp_path = self.unique_temp_folder + 'provean_temp/'
         subprocess.check_call('mkdir -p ' + provean_temp_path, shell=True)

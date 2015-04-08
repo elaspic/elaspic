@@ -78,8 +78,8 @@ $1=="ATOM"||$1=="atom"||$1=="HETATM"||$1=="hetatm"{
 	#
 	if(substr(aname,1,2) ~ /[Hh][^Gg]/ ) aname="H"
 
-	resnum=substr($0,23,4);
 
+	resnum=substr($0,23,4);
 	chain=substr($0,21,2);
 
 	# trim any blanks
@@ -99,7 +99,7 @@ $1=="ATOM"||$1=="atom"||$1=="HETATM"||$1=="hetatm"{
 		  | "cat 1>&2" # write to stderr
 		print x,y,z,0.01
 		}
-	else printf("%f %f %f %f %d %s_%s_%s_%s\n", x, y, z, \
+	else printf("%f %f %f %f %d %s_%s_%d_%s\n", x, y, z, \
 	  ('$h_select'== 5 ? united_rad[atmnum[pat]]:explicit_rad[atmnum[pat]]), 1, aname, resname, resnum, chain);
 	next;
 	}' $*

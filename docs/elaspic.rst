@@ -68,6 +68,14 @@ elaspic.domain_mutation module
     :undoc-members:
     :show-inheritance:
 
+elaspic.elaspic_database module
+-------------------------------
+
+.. automodule:: elaspic.elaspic_database
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 elaspic.errors module
 ---------------------
 
@@ -104,6 +112,14 @@ elaspic.sql_db module
 ---------------------
 
 .. automodule:: elaspic.sql_db
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+elaspic.test_elaspic module
+---------------------------
+
+.. automodule:: elaspic.test_elaspic
     :members:
     :undoc-members:
     :show-inheritance:

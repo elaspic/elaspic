@@ -8,6 +8,7 @@ from builtins import next
 from builtins import object
 
 import os
+import re
 import stat
 import urllib.request
 import urllib.error
@@ -20,6 +21,7 @@ import six
 from contextlib import contextmanager
 from collections import deque
 
+import pandas as pd
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative as sa_ext_declarative
 import sqlalchemy.ext.serializer as sa_ext_serializer
@@ -572,14 +574,10 @@ class UniprotDomainPairMutation(Base):
 
 
 #%%
-# Get the session that will be used for all future queries
-# Expire on commit so that you keep all the table objects even after the session closes.
-Session = sa.orm.sessionmaker(expire_on_commit=False)
-#Session = scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
-
-
-
 def get_engine(configs=conf.configs):
+    """Get an SQLAlchemy engine that can be used to connect to the database specified by 
+    :py:data:`elaspic.conf.configs`
+    """
     assert configs['db_type'] in ['mysql', 'postgresql', 'sqlite']
     if configs['db_type'] == 'sqlite':
         engine = sa.create_engine(
@@ -592,7 +590,126 @@ def get_engine(configs=conf.configs):
             .format(**configs)
         ) # echo=True
     return engine
+    
+    
+def create_database_tables(
+        configs=conf.configs, clear_schema=False, keep_uniprot_sequence=True, 
+        logger=hf.get_logger()):
+    """
+    Create a new database in the schema specified by the ``schema_version`` global variable.
+    If ``clear_schema`` == True, remove all the tables in the schema first.
+    
+    DANGER!!! 
+    Using this function with an existing database can lead to loss of data.
+    Make sure that you know what you are doing.
+    
+    Parameters
+    ----------
+    engine : sa.Engine
+        SQLAlchemy engine connected to the database of interest.
+    clear_schema : bool
+        Whether or not to drop all the tables in the database before creating new tables.
+    keep_uniprot_sequence : bool
+        Whether or not to keep the `uniprot_sequence` table. 
+        Only relevant if `clear_schema` is `True`.
+    """
+    engine = get_engine(configs)
+    
+    metadata_tables = Base.metadata.tables.copy()
+    if keep_uniprot_sequence:
+        uniprot_sequence_table = [c for c in metadata_tables.keys() if 'uniprot_sequence' in c]
+        assert len(uniprot_sequence_table) == 1
+        del metadata_tables[uniprot_sequence_table[0]]
+    if clear_schema:
+        Base.metadata.drop_all(engine, metadata_tables.values())
+        logger.debug('Database schema was cleared successfully.')
+    try:
+        Base.metadata.create_all(engine, metadata_tables.values())
+    except (sa.exc.OperationalError, sa.exc.ProgrammingError) as e:
+        logger.error(str(e))
+        if re.search('schema .* does not exist', str(e)):
+            missing_schema = str(e)[str(e).find('schema "')+8:str(e).find('" does not exist')]
+        elif 'Unknown database ' in str(e):
+            missing_schema = str(e)[str(e).find("Unknown database '")+18:str(e).find("'\")")]
+        else:
+            raise e
+        logger.warning('Missing schema: {}'.format(missing_schema))
+        sql_command = 'create schema {};'.format(missing_schema)
+        logger.warning("Creating missing schema with system command: '{}'".format(sql_command))
+        engine.execute(sql_command)
+        Base.metadata.create_all(engine, metadata_tables.values())
+    logger.debug('Database schema was created successfully.')
 
+
+class CopyDataToDB:
+    """Class holding methods relevant to loading data to the database 
+    """
+    mysql_load_table_template = (
+        r"""mysql --local-infile --host={db_url} --user={db_username} --password={db_password} """
+        r"""{db_schema} -e "{sql_command}" """
+    )
+    
+    psql_load_table_template = (
+        r"""PGPASSWORD={db_password} psql -h {db_url} -p {db_port} -U {db_username} """
+        r"""-d {db_database} -c "{sql_command}" """
+    )
+    
+    # Need to double up on '\\'
+    mysql_command_template = (
+        r"""load data local infile '{organism_folder}/{table_name}.tsv' """
+        r"""into table {db_schema}.{table_name} """
+        r"""fields terminated by '\t' escaped by '\\\\' lines terminated by '\n'; """
+    )
+    
+    psql_command_template = (
+        r"""\\copy {db_schema}.{table_name} """
+        r"""from '{organism_folder}/{table_name}.tsv' """
+        r"""with csv delimiter E'\t' null '\N' escape '\\'; """
+    )
+    
+    sqlite_table_filename = '{organism_folder}/{table_name}.tsv'
+   
+   
+    @classmethod
+    def copy_table_to_db(self, table_name, configs=conf.configs, logger=hf.get_logger()):
+        """Copy data from a '.tsv' text file to a database
+        """
+        configs = configs.copy()
+        configs['table_name'] = table_name
+        if table_name == 'uniprot_sequence':
+            configs['db_schema'] = configs['db_schema_uniprot']
+        
+        logger.info('Copying {table_name} to {db_type} database...'.format(**configs))
+        if configs['db_type'] == 'sqlite':
+            # Using pandas to load tables to the database
+            # This will be slow for large tables...
+            engine = get_engine(configs)
+            table_df = pd.read_csv(
+                self.sqlite_table_filename.format(**configs), 
+                names=Base.metadata.tables[table_name].columns.keys())
+            table_df.to_sql(table_name, engine)
+            return
+        elif configs['db_type'] == 'mysql':
+            configs['sql_command'] = self.mysql_command_template.format(**configs)
+            system_command = self.mysql_load_table_template.format(**configs)
+        elif configs['db_type'] == 'postgresql':
+            configs['sql_command'] = self.psql_command_template.format(**configs)
+            system_command = self.psql_load_table_template.format(**configs)      
+        else:
+            raise Exception('Unsupported database type: {}'.format(configs['db_type']))
+            
+        result, error_message, return_code = hf.popen(system_command)
+        if return_code != 0:
+            logger.error(result)
+            raise Exception(error_message)
+    
+
+
+#%%
+# Get the session that will be used for all future queries
+# Expire on commit so that you keep all the table objects even after the session closes.
+Session = sa.orm.sessionmaker(expire_on_commit=False)
+#Session = scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
 
 class MyDatabase(object):
     """
@@ -656,38 +773,6 @@ class MyDatabase(object):
             raise
         finally:
             session.close()
-
-    
-    def create_database_tables(self, clear_schema=False, keep_uniprot_sequence=True):
-        """
-        Create a new database in the schema specified by the ``schema_version`` global variable.
-        If ``clear_schema`` == True, remove all the tables in the schema first.
-        
-        DANGER!!! 
-        Using this function with an existing database can lead to loss of data.
-        Make sure that you know what you are doing.
-        
-        Parameters
-        ----------
-        engine : sa.Engine
-            SQLAlchemy engine connected to the database of interest.
-        clear_schema : bool
-            Whether or not to drop all the tables in the database before creating new tables.
-        keep_uniprot_sequence : bool
-            Whether or not to keep the `uniprot_sequence` table. 
-            Only relevant if `clear_schema` is `True`.
-        """
-        metadata_tables = Base.metadata.tables.copy()
-        if keep_uniprot_sequence:
-            uniprot_sequence_table = [c for c in metadata_tables.keys() if 'uniprot_sequence' in c]
-            assert len(uniprot_sequence_table) == 1
-            del metadata_tables[uniprot_sequence_table[0]]
-        if clear_schema:
-            Base.metadata.drop_all(self.engine, metadata_tables.values())
-            self.logger.debug('Database schema was cleared successfully.')
-        Base.metadata.create_all(self.engine, metadata_tables.values())
-        self.logger.debug('Database schema was created successfully.')
-
 
 
     #%% Get objects from the database

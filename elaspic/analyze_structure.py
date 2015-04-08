@@ -8,8 +8,7 @@ from builtins import object
 
 import os
 import time
-import logging
-from collections import OrderedDict, deque
+from collections import OrderedDict
 
 import six
 import pandas as pd
@@ -22,6 +21,39 @@ from . import pdb_template
 from . import helper_functions as hf
 
 
+#%% CONSTANTS
+
+# Standard accessibilities for a ALA-X-ALA tripeptide
+# (obtained from NACCESS)
+STANDARD_DATA = """
+STANDARD ACCESSIBILITES FOR PROBE 1.40 AND RADII vdw.radii 
+ATOM S   2  ALA  107.95   0.0  69.41   0.0   0.00   0.0  69.41   0.0  38.54   0.0  71.38   0.0  36.58   0.0
+ATOM S   2  CYS  134.28   0.0  96.75   0.0   0.00   0.0  96.75   0.0  37.53   0.0  97.93   0.0  36.35   0.0
+ATOM S   2  ASP  140.39   0.0  48.00   0.0  54.69   0.0 102.69   0.0  37.70   0.0  49.24   0.0  91.15   0.0
+ATOM S   2  GLU  172.25   0.0  59.10   0.0  75.64   0.0 134.74   0.0  37.51   0.0  60.29   0.0 111.96   0.0
+ATOM S   2  PHE  199.48   0.0 164.11   0.0   0.00   0.0 164.11   0.0  35.37   0.0 165.25   0.0  34.23   0.0
+ATOM S   2  GLY   80.10   0.0  32.33   0.0   0.00   0.0  32.33   0.0  47.77   0.0  37.55   0.0  42.55   0.0
+ATOM S   2  HIS  182.88   0.0  96.01   0.0  51.07   0.0 147.08   0.0  35.80   0.0  97.15   0.0  85.73   0.0
+ATOM S   2  ILE  175.12   0.0 137.96   0.0   0.00   0.0 137.96   0.0  37.16   0.0 139.14   0.0  35.98   0.0
+ATOM S   2  LYS  200.81   0.0 115.38   0.0  47.92   0.0 163.30   0.0  37.51   0.0 116.57   0.0  84.24   0.0
+ATOM S   2  LEU  178.63   0.0 141.12   0.0   0.00   0.0 141.12   0.0  37.51   0.0 142.31   0.0  36.32   0.0
+ATOM S   2  MET  194.15   0.0 156.64   0.0   0.00   0.0 156.64   0.0  37.51   0.0 157.84   0.0  36.32   0.0
+ATOM S   2  ASN  143.94   0.0  44.98   0.0  61.26   0.0 106.24   0.0  37.70   0.0  46.23   0.0  97.72   0.0
+ATOM S   2  PRO  136.13   0.0 119.90   0.0   0.00   0.0 119.90   0.0  16.23   0.0 120.95   0.0  15.19   0.0
+ATOM S   2  GLN  178.50   0.0  51.03   0.0  89.96   0.0 140.99   0.0  37.51   0.0  52.22   0.0 126.28   0.0
+ATOM S   2  ARG  238.76   0.0  76.60   0.0 124.65   0.0 201.25   0.0  37.51   0.0  77.80   0.0 160.97   0.0
+ATOM S   2  SER  116.50   0.0  46.89   0.0  31.22   0.0  78.11   0.0  38.40   0.0  48.55   0.0  67.95   0.0
+ATOM S   2  THR  139.27   0.0  74.54   0.0  27.17   0.0 101.70   0.0  37.57   0.0  75.72   0.0  63.55   0.0
+ATOM S   2  VAL  151.44   0.0 114.28   0.0   0.00   0.0 114.28   0.0  37.16   0.0 115.47   0.0  35.97   0.0
+ATOM S   2  TRP  249.36   0.0 187.67   0.0  23.60   0.0 211.26   0.0  38.10   0.0 189.67   0.0  59.69   0.0
+ATOM S   2  TYR  212.76   0.0 135.35   0.0  42.03   0.0 177.38   0.0  35.38   0.0 136.50   0.0  76.26   0.0
+"""
+standard_sasa_all = [[l.strip() for l in line.split()] for line in STANDARD_DATA.strip().split('\n')[1:]]
+STANDARD_SASA = {x[3]: float(x[4]) for x in standard_sasa_all}
+
+
+
+#%% STANDALONE FUNCTIONS
 
 def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
     """
@@ -104,6 +136,8 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
     return interactions_between_chains
 
 
+
+#%%
 
 class PhysiChem(object):
 
@@ -261,6 +295,8 @@ class PhysiChem(object):
 
 
 
+#%%
+
 class AnalyzeStructure(object):
     """
     Runs the program pops to calculate the interface size of the complexes
@@ -269,7 +305,7 @@ class AnalyzeStructure(object):
     """
 
     def __init__(self, data_path, working_path, pdb_file, chains, domain_defs, logger):
-        self.data_path = data_path # modeller_path, foldx_path
+        self.data_path = data_path #: folder with the structures (modeller_path, foldx_path, etc,)
         self.working_path = working_path # analyze_structure path with all the binaries
         self.pdb_file = pdb_file
         self.chain_ids = chains
@@ -339,7 +375,7 @@ class AnalyzeStructure(object):
         return structure
 
 
-    ###########################################################################
+    #%%
     def get_seasa(self):
         seasa_by_chain_together, seasa_by_residue_together = self._run_msms(''.join(self.chain_ids) + '.pdb')
         if len(self.chain_ids) > 1:
@@ -361,14 +397,6 @@ class AnalyzeStructure(object):
         using Bio.PDB.ResidueDepth().residue_depth()...
         """
         base_filename = filename[:filename.rfind('.')]
-
-        # Get a list of standard accessibilities for a ALA-X-ALA tripeptide
-        # (obtained from naccess)
-        with open(self.working_path + 'standard.data', 'r') as fh:
-            standard_data = fh.readlines()
-        standard_sasa_all = [ [l.strip() for l in line.split()] for line in standard_data ][1:]
-        standard_sasa = {}
-        deque((standard_sasa.update({x[3]: float(x[4])}) for x in standard_sasa_all), maxlen=0)
 
         # Convert pdb to xyz coordiates
         assert(os.path.isfile(self.working_path + filename))
@@ -395,7 +423,7 @@ class AnalyzeStructure(object):
         # Calculate SASA and SESA (excluded)
         probe_radius = 1.4
         system_command_string = (
-            './msms.x86_64Linux2.2.6.1 '
+            './msms '
             '-probe_radius {1:.1f} '
             '-surface ases '
             '-if {0}.xyzrn '
@@ -435,10 +463,28 @@ class AnalyzeStructure(object):
             file_data = fh.readlines()
         file_data = [ [l.strip() for l in line.split()] for line in file_data]
         del file_data[0]
-        file_data = [[int(x[0]), float(x[1]), float(x[2]), x[3].split('_')[0].strip(), x[3].split('_')[1].strip(), x[3].split('_')[2], x[3].split('_')[3]] for x in file_data]
-        seasa_df = pd.DataFrame(data=file_data, columns=['atom_num', 'abs_sesa', 'abs_sasa', 'atom_id', 'res_name', 'res_num', 'pdb_chain'])
+
+        msms_columns = [
+            'atom_num', 'abs_sesa', 'abs_sasa', 'atom_id', 'res_name', 'res_num', 'pdb_chain'
+        ]        
+        def msms_parse_row(row):
+            parsed_row = [
+                int(row[0]), float(row[1]), float(row[2]), 
+                row[3].split('_')[0].strip(), 
+                row[3].split('_')[1].strip(), 
+                row[3].split('_')[2], 
+                row[3].split('_')[3]
+            ]
+            return parsed_row
+            
+        file_data = [msms_parse_row(row) for row in file_data if row]
+        seasa_df = pd.DataFrame(data=file_data, columns=msms_columns)
         seasa_df['atom_num'] = seasa_df['atom_num'].apply(lambda x: x + 1)
-        seasa_df['rel_sasa'] = [x[0] / standard_sasa.get(x[1], x[0]) * 100 for x in zip(seasa_df['abs_sasa'], seasa_df['res_name'])]
+        seasa_df['rel_sasa'] = [
+            x[0] / STANDARD_SASA.get(x[1], x[0]) * 100 
+            for x in zip(seasa_df['abs_sasa'], seasa_df['res_name'])
+        ]
+            
 #        seasa_df['chain'] = seasa_df['atom_num'].apply(lambda x: atom_to_chain.get(x, None))
 #        seasa_df['res_name'] = seasa_df['atom_num'].apply(lambda x: atom_to_res_name.get(x, None))
 #        seasa_df['res_num'] = seasa_df['atom_num'].apply(lambda x: atom_to_res_num.get(x, None))
@@ -464,7 +510,7 @@ class AnalyzeStructure(object):
         return seasa_by_chain, seasa_by_residue
 
 
-    ###########################################################################
+    #%%
     def get_sasa(self, program_to_use='naccess'):
         if program_to_use == 'naccess':
             run_sasa_atom = self._run_naccess_atom
@@ -574,7 +620,7 @@ class AnalyzeStructure(object):
         return per_residue_sasa_scores
 
 
-###############################################################################
+    #%%
     def get_secondary_structure(self):
         return self.get_stride()
 
@@ -669,7 +715,7 @@ class AnalyzeStructure(object):
         return dssp_ss, dssp_acc
 
 
-    ###########################################################################
+    #%%
     def get_interchain_distances(self, pdb_chain=None, pdb_mutation=None, cutoff=None):
         """
         """
@@ -718,7 +764,7 @@ class AnalyzeStructure(object):
         return shortest_interchain_distances
 
 
-    ###########################################################################
+    #%%
     def get_interface_area(self):
 
         termination, rc, e = self.__run_pops_area(self.working_path + ''.join(self.chain_ids) + '.pdb')
@@ -820,50 +866,7 @@ class AnalyzeStructure(object):
         return [ [ x.strip() for x in item if x != '' ] for item in result ]
 
 
-###############################################################################
-
+#%%
 if __name__ == '__main__':
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-    logger.handlers = []
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.DEBUG)
-    logger.addHandler(handler)
-
-#    pdb_file = 'Q9Y6K1_Q9UBC3.BL00030001.pdb'
-#    data_path = '/home/kimlab1/database_data/elaspic/human/Q9Y/6K/Q9Y6K1/PWWP*291-374/PWWP*224-307/Q9UBC3/'
-#    working_path = '/tmp/elaspic/NUORFs/analyze_structure/'
-#    chain = ['A','B']
-#
-#    analyze_structure = AnalyzeStructure(data_path, working_path, pdb_file, chain, None, logger)
-#    dssp_score = analyze_structure.get_dssp()
-#    sasa_score = analyze_structure.get_sasa()
-#    interchain_distances = analyze_structure.get_interchain_distances('A_Q10N')
-#
-#    print dssp_score[0]['A'][10]
-#    print sasa_score[0]['A'][10]
-#    print interchain_distances['A'][0]
-
-    # Get SASA using pops
-    # Get interacting amino acids and interface area
-    unique_temp_folder = '/tmp/elaspic/NzBMEx/'
-    pdbFile_wt = 'RepairPDB_Q8IWL2_P35247.BL00020001_1.pdb'
-    modeller_chains = ['B']
-    analyze_structure = AnalyzeStructure(unique_temp_folder + 'FoldX/',
-                                         unique_temp_folder + 'analyze_structure/',
-                                         pdbFile_wt, modeller_chains, None, logger)
-
-    contact_distance_wt = analyze_structure_wt.get_interchain_distances(chain_mutation_modeller)[modeller_chains[0]][0]
-
-#    interacting_aa = analyze_structure.get_interchain_distances()
-#    interacting_aa_1 = interacting_aa[modeller_chains[0]]
-#    interacting_aa_1 = ','.join(['%i' % x for x in interacting_aa_1 if x])
-#
-#    interacting_aa_2 = interacting_aa[modeller_chains[1]]
-#    interacting_aa_2 = ','.join(['%i' % x for x in interacting_aa_2 if x])
-
-#    interface_area = analyze_structure.get_interface_area()
-#    interface_area_hydrophobic = interface_area[0]
-#    interface_area_hydrophilic = interface_area[1]
-#    interface_area_total = interface_area[2]
-
+    # Insert debug code here
+    pass
