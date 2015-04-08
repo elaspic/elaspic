@@ -1,0 +1,5 @@
+include bin *
+include config *
+recursive-include database *
+include src *.sh
+recursive-include tests *

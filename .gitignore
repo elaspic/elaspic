@@ -7,6 +7,9 @@ input/
 reports/
 publications/
 docs/_*
+src/*.tar.gz
+src/*.tgz
+src/*/*
 
 # Hidden files in root folder
 ./__init__.py
