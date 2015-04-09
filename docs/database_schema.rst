@@ -17,13 +17,6 @@ Database schema
 The :ref:`domain` and :ref:`domain_contact` tables can be downloaded from the `structural_templates`
 folder in the `ELASPIC downloads page`_. All other tables, for individual organisms and for all
 Uniprot sequences, can be downloaded from the `elaspic` folder in the `ELASPIC downloads page`_.
-
-
-
-.. note::
-   :label: true_say
-
-   This is gangsta shit yall!
     
 
 ---------------------------------------------------------------------------------------------------
