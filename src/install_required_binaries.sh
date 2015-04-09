@@ -28,6 +28,7 @@ cp -f "./mkdssp" "$PATH_TO_BIN/"
 
 
 # MSMS
+# http://mgltools.scripps.edu/
 cd "$PATH_TO_SRC"
 printf '\n\n'
 printf '*%.0s' {1..100}

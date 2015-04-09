@@ -12,10 +12,25 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import sys
 import os
+import sys
+from sphinx.ext import autodoc
+
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
-#numpydoc_show_class_members = False
+
+class SimpleDocumenter(autodoc.ClassDocumenter):
+    objtype = "simple"
+
+    #do not indent the content
+    content_indent = ""
+
+    #do not add a header to the docstring
+    def add_directive_header(self, sig):
+        pass
+
+def setup(app):
+    app.add_autodocumenter(SimpleDocumenter)
+
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -36,6 +51,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
     'sphinx.ext.linkcode',
+    'sphinx.ext.mathjax',
     # 'sphinxarg.ext',
     # 'sphinxcontrib.autoprogram',
     'sphinxcontrib.programoutput',
