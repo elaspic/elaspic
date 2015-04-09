@@ -38,9 +38,9 @@ AAA_DICT['UNK'] = 'X'
 AAA_DICT['MSE'] = 'M'
 AAA_DICT['CSD'] = 'C'
 # Phosphorylated residues
-AAA_DICT['SEP'] = 'S' # PHOSPHOSERINE
-AAA_DICT['TPO'] = 'T' # PHOSPHOTHREONINE
-AAA_DICT['SEP'] = 'Y' # O-PHOSPHOTYROSINE
+#AAA_DICT['SEP'] = 'S' # PHOSPHOSERINE
+#AAA_DICT['TPO'] = 'T' # PHOSPHOTHREONINE
+#AAA_DICT['SEP'] = 'Y' # O-PHOSPHOTYROSINE
 
 # Methylated lysines
 AAA_DICT['MLZ'] = 'K'
@@ -430,20 +430,20 @@ class PDBTemplate(object):
                     self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=False)
                     continue
 
-                # Move heteroatoms to the hetatm chain
-                if res.id[0] != ' ':
-                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=True)
-                    continue
+#                # Move heteroatoms to the hetatm chain
+#                if res.id[0] != ' ':
+#                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=True)
+#                    continue
                 
                 # Now treating all unusual amino acids as hetatms
-#                # Convert methylated lysines to regular lysines
-#                if res.resname in methylated_lysines:
-#                    self._correct_methylated_lysines(res)
-#
-#                # Move hetatms to the hetatm chain
-#                if res.resname not in amino_acids:
-#                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res)
-#                    continue
+                # Convert methylated lysines to regular lysines
+                if res.resname in methylated_lysines:
+                    self._correct_methylated_lysines(res)
+
+                # Move hetatms to the hetatm chain
+                if res.resname not in amino_acids:
+                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res)
+                    continue
 
                 # Cut each chain to domain boundaries
                 residue_is_outside_domain = (

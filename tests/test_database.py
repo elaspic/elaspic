@@ -136,7 +136,7 @@ def test(DB_TYPE='mysql'):
     config_filename = os.path.join(base_path, 'config/', config_filenames[DB_TYPE])
     logger = hf.get_logger()
     result_index = random.randint(0, 100) 
-    organism_folder = os.path.join(base_path, 'elaspic_database/Homo_sapiens_test')
+    organism_folder = os.path.join(base_path, 'database/Homo_sapiens_test')
     
     logger.info('*' * 80)
     logger.info('Reading the configuration file...')
@@ -159,7 +159,7 @@ def test(DB_TYPE='mysql'):
     logger.info('Running a sample domain mutation...')
     test_uniprot_domain = test_elaspic.TestUniprotDomain()
     test_uniprot_domain.setup_class(configs)
-    test_uniprot_domain.test()
+    test_uniprot_domain.test(make_provean=False)
     
     logger.info('*' * 80)
     logger.info('Running a sample interface mutation...')
