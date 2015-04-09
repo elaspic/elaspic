@@ -74,6 +74,28 @@ secondary_structure_to_int = {
 
 
 def format_mutation_features(feature_df, core_or_interface):
+    """
+    Converts columns containing comma-separated lists of FoldX features and physicochemical features 
+    into a DataFrame where each feature has its own column.
+    
+    Parameters
+    ----------
+    feature_df : DataFrame
+        A pandas DataFrame containing a subset of rows from the :ref:`uniprot_domain_mutation`
+        or the :ref:`uniprot_domain_pair_mutation` tables.
+    core_or_interface : int or str
+        If 0 or 'core', the `feature_df` DataFrame contains columns from the 
+        :ref:`uniprot_domain_mutation` table.
+        If 1 or 'interface, the feature_df DataFrame contains columns from the 
+        :ref:`uniprot_domain_pair_mutation` table.
+        
+    Returns
+    -------
+    DataFrame
+        Contains the same data as `feature_df`, but with columns containing comma-separated lists 
+        of features converted to columns containing a single feature each.
+    
+    """
     if core_or_interface == False or core_or_interface == 0 or core_or_interface == 'core':
         foldx_column_name = 'stability_energy'
         foldx_feature_names_wt = call_foldx.names_stability_wt

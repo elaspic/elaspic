@@ -101,6 +101,8 @@ def load_all_tables_to_db(db_type, configs):
 
 ###
 def delete_schema(configs, logger, clear_schema, keep_uniprot_sequence):
+    from elaspic import sql_db
+    
     if not clear_schema:
         return
     
@@ -128,9 +130,7 @@ def delete_schema(configs, logger, clear_schema, keep_uniprot_sequence):
 
 
 #%%
-def test(DB_TYPE='mysql'):
-    from elaspic import sql_db
-    
+def test(DB_TYPE='mysql'):   
     clear_schema = True
     keep_uniprot_sequence = False
     config_filename = os.path.join(base_path, 'config/', config_filenames[DB_TYPE])
@@ -145,6 +145,7 @@ def test(DB_TYPE='mysql'):
     configs['organism_folder'] = organism_folder
     configs['result_index'] = result_index
     
+    from elaspic import sql_db
     logger.info('*' * 80)
     logger.info('Creating an empty database schema...')
     reload(sql_db)
