@@ -7,6 +7,7 @@ standard_library.install_aliases()
 from builtins import object
 
 import os
+import re
 import time
 import subprocess
 import tempfile
@@ -419,7 +420,10 @@ class Pipeline(object):
             for mutation in self.mutations.split(','):
                 self.logger.debug('-' * 80)
                 self.logger.debug('Mutation: {}'.format(mutation))
-
+                mutation_prototype = re.compile("^[A-z][0-9]+[A-z]$")
+                if not mutation_prototype.match(mutation) or int(mutation[1:-1]) == 0:
+                    self.logger.error('The mutation {} is not a supported format! Skiping!'.format(mutation))
+                    continue
                 # Check to see if we have a precalculated mutation. Skip if all
                 # parameters have been calculated; otherwise analyse the remaining
                 # parameters. Create an empty mutation if the mutation has not
