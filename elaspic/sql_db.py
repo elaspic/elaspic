@@ -672,7 +672,7 @@ class UniprotDomainModel(Base):
 class UniprotDomainMutation(Base):
     """
     Characterization of mutations introduced into structures in the :ref:`uniprot_domain_model` table.
-
+    
     Columns:
       uniprot_id
         Uniprot ID of the protein that was mutated. 
@@ -751,8 +751,8 @@ class UniprotDomainMutation(Base):
       mut_date_modified
         Date and time that this row was last modified.
 
-  .. _stride: http://webclu.bio.wzw.tum.de/stride/
-  .. _msms: http://mgltools.scripps.edu/
+    .. _stride: http://webclu.bio.wzw.tum.de/stride/
+    .. _msms: http://mgltools.scripps.edu/
     """
     __tablename__ = 'uniprot_domain_mutation'
     _indexes = [
