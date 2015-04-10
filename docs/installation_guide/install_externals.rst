@@ -39,7 +39,7 @@ If you install all three programs in your HOME directory, your ``.bashrc`` file 
 FoldX
 -----
 
-Download FoldX 3 from the `FoldX website <FoldX>`_, and place the ``foldx3b6`` and ``rotabase.txt`` 
+Download FoldX 3 from the `FoldX`_ website, and place the ``foldx3b6`` and ``rotabase.txt`` 
 files in the ``elaspic/bin`` folder, renaming ``foldx3b6`` to ``foldx64Linux``.
 If you are using Ubuntu linux, the ``foldx64Linux`` binary included in ``elaspic/bin`` may already
 work on your system, in which case you can skip this step.
