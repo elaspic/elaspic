@@ -22,10 +22,11 @@ Table of Contents
 
 .. toctree::
    :maxdepth: 2
+   :includehidden:
 
-   installation_guide
-   getting_started
-   database_schema
+   installation_guide/installation_guide
+   getting_started/getting_started
+   database_schema/database_schema
    modules
 
 

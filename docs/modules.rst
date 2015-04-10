@@ -6,5 +6,5 @@ Modules
 .. toctree::
    :maxdepth: 4
 
-   install_required_binaries_script
+   installation_guide/install_required_binaries_script
    elaspic

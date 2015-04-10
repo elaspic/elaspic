@@ -19,11 +19,10 @@ In order to set up ELASPIC of your local computer:
   #. Run ELASPIC tests to make sure everything installed successfully (:ref:`run_tests`).
 
 
---------------------------------------------------------------------------------------------------
-
 .. toctree::
    :maxdepth: 2
    :numbered:
+   :hidden:
 
    install_python_and_elaspic
    install_externals
