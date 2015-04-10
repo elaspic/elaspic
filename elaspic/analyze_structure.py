@@ -13,7 +13,7 @@ from collections import OrderedDict
 import six
 import pandas as pd
 
-from Bio.PDB import PDBIO, NeighborSearch
+from Bio.PDB import PDBIO
 from Bio.PDB.PDBParser import PDBParser
 
 from . import errors
@@ -61,6 +61,13 @@ def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5)
     interaction is defines as a pair of residues where at least one pair of atom
     is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
     """
+    try:
+        from Bio import NeighborSearch
+    except ImportError as e:
+        print('Importing Biopython NeighborSearch returned an error: {}'.format(e))
+        print('Using the the slow version of the neighbour-finding algorithm...')
+        return get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cutoff)
+        
     # Extract the chains of interest from the model
     chain_1 = None
     chain_2 = None
