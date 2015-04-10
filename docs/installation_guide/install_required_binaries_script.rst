@@ -12,6 +12,6 @@ compiles all programs that are not mentioned explicitly in the :ref:`install_ext
 Source code
 -----------
 
-.. literalinclude:: ../src/install_required_binaries.sh
+.. literalinclude:: ../../src/install_required_binaries.sh
    :language: bash
 
