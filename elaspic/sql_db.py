@@ -1069,7 +1069,7 @@ class UniprotDomainPairMutation(Base):
         Unique id identifying each domain-domain interaction.
 
       mutation
-        Mutation for which the \u0394\u0394G score is being predicted, specified in Uniprot coordinates.
+        Mutation for which the :math:`\Delta \Delta G` score is being predicted, specified in Uniprot coordinates.
 
       mutation_errors
         List of errors obtained when evaluating the impact of the mutation.
@@ -1085,7 +1085,7 @@ class UniprotDomainPairMutation(Base):
         ``model_filename_wt`` and ``model_filename_mut``.
 
       mutation_modeller
-        Mutation for which the \u0394\u0394G score is being predicted, specified in PDB RESNUM coordinates.
+        Mutation for which the :math:`\Delta \Delta G` score is being predicted, specified in PDB RESNUM coordinates.
 
       analyse_complex_energy_wt
         Comma-separated list of FoldX scores describing the effect of the wildtype residue on 
