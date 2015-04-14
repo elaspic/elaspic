@@ -62,7 +62,7 @@ def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=5)
     is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
     """
     try:
-        from Bio import NeighborSearch
+        from Bio.PDB import NeighborSearch
     except ImportError as e:
         print('Importing Biopython NeighborSearch returned an error: {}'.format(e))
         print('Using the the slow version of the neighbour-finding algorithm...')
