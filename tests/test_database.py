@@ -33,29 +33,30 @@ print('base_path: {}'.format(base_path))
 
 #%%
 
-###
-mysql_load_table_template = (
-    r"""mysql --local-infile --host={db_url} --user={db_username} --password={db_password} """
-    r"""{db_schema} -e "{sql_command}" """
-)
-
-psql_load_table_template = (
-    r"""PGPASSWORD={db_password} psql -h {db_url} -p {db_port} -U {db_username} """
-    r"""-d {db_database} -c "{sql_command}" """
-)
+##
 
 # Need to double up on '\\'
-mysql_command_template = (
-    r"""load data local infile '{organism_folder}/{table_name}.tsv' """
-    r"""into table {db_schema}.{table_name} """
-    r"""fields terminated by '\t' escaped by '\\\\' lines terminated by '\n'; """
-)
+mysql_load_table_template = r""" \
+mysql --local-infile --host={db_url} --user={db_username} --password={db_password} {db_schema} \
+-e "{sql_command}"
+"""
 
-psql_command_template = (
-    r"""\\copy {db_schema}.{table_name} """
-    r"""from '{organism_folder}/{table_name}.tsv' """
-    r"""with csv delimiter E'\t' null '\N' escape '\\'; """
-)
+psql_load_table_template = r""" \
+PGPASSWORD={db_password} psql -h {db_url} -p {db_port} -U {db_username} -d {db_database} \
+-c "{sql_command}"
+"""
+
+mysql_command_template = r""" \
+load data local infile '{organism_folder}/{table_name}.tsv' \
+into table {db_schema}.{table_name} \
+fields terminated by '\t' escaped by '\\\\' lines terminated by '\n'; 
+"""
+
+psql_command_template = r""" \
+copy {db_schema}.{table_name} \
+from '{organism_folder}/{table_name}.tsv' \
+with csv delimiter E'\t' null '\N' escape '\\'
+"""
 
 def _format_configs(configs, table_name):
     configs['table_name'] = table_name

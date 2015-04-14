@@ -18,7 +18,7 @@ setup(
     author='kimlab',
     author_email='elaspic@kimlab.org',
     url='http://elaspic.kimlab.org',
-    packages=['elaspic', 'tests'],
+    packages=['elaspic'],
     long_description=read("README.rst"),
     install_requires=[
         'fastcache',

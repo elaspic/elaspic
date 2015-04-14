@@ -15,7 +15,7 @@ from collections import defaultdict
 import six
 
 import Bio
-from Bio.PDB import PDBIO, NeighborSearch, Select
+from Bio.PDB import PDBIO, Select
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB.Polypeptide import PPBuilder
@@ -551,6 +551,11 @@ class PDBTemplate(object):
     def _remove_distant_hatatms(self, new_model, hetatm_chain):
         """Detach hetatms that are more than ``self.r_cutoff`` away from the main chain(s)
         """
+        try:
+            from Bio.PDB import NeighborSearch
+        except ImportError as e:
+            self.logger.error('Importing Biopython NeighborSearch failed with an error: {}'.format(e))
+            raise Exception('Alternative not yet implemented!')
         ns = NeighborSearch(list(new_model.get_atoms()))
         hetatm_chain.id = [c for c in reversed(hf.uppercase) if c not in self.chain_ids][0]
         res_idx = 0
