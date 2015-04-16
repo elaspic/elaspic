@@ -612,7 +612,7 @@ class Pipeline(object):
             # of space and crash the node
             self.logger.debug(
                 "Using a temp folder '{provean_temp_path}' for provean temp files. "
-                "This may lead to poor performace...")
+                "This may lead to poor performace...".format(**conf))
             provean_temp_path = os.path.join(conf.configs['provean_temp_path'], self.unique) + '/'
         else:
             provean_temp_path = self.unique_temp_folder + 'provean_temp/'
