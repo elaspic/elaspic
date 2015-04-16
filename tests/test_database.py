@@ -55,7 +55,7 @@ fields terminated by '\t' escaped by '\\\\' lines terminated by '\n';
 psql_command_template = r""" \
 copy {db_schema}.{table_name} \
 from '{organism_folder}/{table_name}.tsv' \
-with csv delimiter E'\t' null '\N' escape '\\'
+with csv delimiter E'\t' null '\N' escape '\\\\'
 """
 
 def _format_configs(configs, table_name):

@@ -160,8 +160,11 @@ def build_provean_supporting_set(
     """
     """
     # Get the required parameters
-    first_aa = uniprot_sequence[0]
-    domain_mutation = '{0}1{0}'.format(first_aa)
+    any_position = 0
+    while uniprot_sequence[any_position] not in hf.canonical_amino_acids:
+        any_position += 1
+    first_aa = uniprot_sequence[any_position]
+    domain_mutation = '{0}{1}{0}'.format(first_aa, any_position+1)
 
     uniprot_seqrecord = SeqRecord(
         seq=Seq(uniprot_sequence), id=str(uniprot_id), description=uniprot_name)
@@ -182,10 +185,18 @@ def build_provean_supporting_set(
         logger.error(error_message)
         raise errors.ProveanError(error_message)
 
+    provean_supset_length = None
     for line in result.split('\n'):
         if 'Number of supporting sequences used:' in line:
             provean_supset_length = int(line.split()[-1])
-
+    if provean_supset_length is None:
+        logger.error('Provean supporting set length could not be estimated. This is an error!')
+        logger.error('Provean result: {}'.format(result))
+        logger.error('Provean error_message: {}'.format(error_message))
+        logger.error('Provean return_code: {}'.format(return_code))
+        logger.error('Uniprot sequence: {}'.format(uniprot_sequence))
+        logger.error('First amino acid: {}'.format(first_aa))
+        logger.error('Domain mutation: {}'.format(domain_mutation))
     return provean_supset_filename, provean_supset_length
 
 
