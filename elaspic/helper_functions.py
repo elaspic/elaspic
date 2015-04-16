@@ -24,6 +24,7 @@ if six.PY3:
 
 
 #%%
+canonical_amino_acids = 'ARNDCEQGHILKMFPSTWYV'
 uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 logger = None
  
