@@ -612,7 +612,7 @@ class Pipeline(object):
             # of space and crash the node
             self.logger.debug(
                 "Using a temp folder '{provean_temp_path}' for provean temp files. "
-                "This may lead to poor performace...".format(**conf))
+                "This may lead to poor performace...".format(**conf.configs))
             provean_temp_path = os.path.join(conf.configs['provean_temp_path'], self.unique) + '/'
         else:
             provean_temp_path = self.unique_temp_folder + 'provean_temp/'
@@ -622,7 +622,12 @@ class Pipeline(object):
 
     def __clear_provean_temp_files(self):
         self.logger.debug("Clearning provean temporary files from '{}'".format(self.provean_temp_path))
-        subprocess.check_call('rm -rf ' + self.provean_temp_path + 'provean*', shell=True)
-        subprocess.check_call('rm -rf ' + self.provean_temp_path + '*cdhit*', shell=True)
-
+        try:
+            subprocess.check_call('rm -rf ' + self.provean_temp_path + 'provean*', shell=True)
+            subprocess.check_call('rm -rf ' + self.provean_temp_path + '*cdhit*', shell=True)
+        except subprocess.CalledProcessError as e:
+            self.logger.error(
+                'Removing provean temporary files failed with the following error: {}\n'
+                'This is probably because the files are still being used...'
+                .format(e))
 

@@ -14,10 +14,9 @@ In order to set up ELASPIC of your local computer:
      database setting (:ref:`config_file`).
 
   #. Download Profs domain definitions for your organism of interest, and upload the data to a 
-     local database (:ref:`import_precalculated`).
+     local database (:ref:`import_precalculated`). Test your installation to make sure everything
+     works as intended.
      
-  #. Run ELASPIC tests to make sure everything installed successfully (:ref:`run_tests`).
-
 
 .. toctree::
    :maxdepth: 2
@@ -29,8 +28,6 @@ In order to set up ELASPIC of your local computer:
    download_data
    config_file
    import_precalculated
-   run_tests
-
 
 
 

@@ -31,6 +31,6 @@ The general overview of the ELASPIC pipleine is presented in the :download:`figu
    :numbered:
    :hidden:
    
-   run_elaspic
-
+   elaspic_cli
+   elaspic_database_cli
 

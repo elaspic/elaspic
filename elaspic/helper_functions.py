@@ -73,21 +73,30 @@ def get_path_to_current_file():
         return os.path.dirname(str(__file__, encoding))
 
 
-def get_logger(do_debug=True):
+def get_logger(do_debug=True, logger_filename=None):
     global logger
     if logger is not None:
         return logger 
     import logging
     reload(logging)
+    # Initialize logger
     logger = logging.getLogger(__name__)
     if do_debug:
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
-    handler = logging.StreamHandler()
+    logger.handlers = []
+    # Initialize formatter
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.handlers = [handler]
+    # Initialize streamhandler
+    sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
+    logger.addHandler(sh)
+    # Initialize filehandler
+    if logger_filename is not None:
+        fh = logging.FileHandler(logger_filename, mode='w')
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
     return logger
 
 

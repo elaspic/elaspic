@@ -19,6 +19,8 @@ from sphinx.ext import autodoc
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
 class SimpleDocumenter(autodoc.ClassDocumenter):
+    """ Need this class to include column descriptions from the `sql_db` file in the docs.
+    """
     objtype = "simple"
 
     #do not indent the content
@@ -40,7 +42,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-#needs_sphinx = '1.0'
+needs_sphinx = '1.3'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -50,7 +52,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
     'sphinx.ext.napoleon',
-    'sphinx.ext.linkcode',
+    # 'sphinx.ext.linkcode',
     'sphinx.ext.mathjax',
     # 'sphinxarg.ext',
     # 'sphinxcontrib.autoprogram',
