@@ -20,7 +20,9 @@ except:
 configs = dict()
 
 def read_configuration_file(config_file):
-    
+    if not os.path.isfile(config_file):
+        raise Exception("The configuration file '{}' does not exist!".format(config_file))
+        
     configParser = SafeConfigParser(
         defaults={
             'global_temp_path': '/tmp/',
@@ -46,20 +48,19 @@ def read_configuration_file(config_file):
 
     # From [DATABASE]
     configs['db_type'] = configParser.get('DATABASE', 'db_type')
-    configs['db_schema'] = configParser.get('DATABASE', 'db_schema')  
-     
     if configs['db_type'] == 'sqlite':
         configs['sqlite_db_path'] = configParser.get('DATABASE', 'sqlite_db_path')
         configs['db_is_immutable'] = True
     elif configs['db_type'] in ['mysql', 'postgresql']:
-        try:
-            configs['db_database'] = configParser.get('DATABASE', 'db_database')
-        except NoOptionError:
-            configs['db_database'] = ''
+        configs['db_schema'] = configParser.get('DATABASE', 'db_schema')  
         try:
             configs['db_schema_uniprot'] = configParser.get('DATABASE', 'db_schema_uniprot')
         except NoOptionError:
             configs['db_schema_uniprot'] = configs['db_schema']
+        try:
+            configs['db_database'] = configParser.get('DATABASE', 'db_database')
+        except NoOptionError:
+            configs['db_database'] = ''
         configs['db_username'] = configParser.get('DATABASE', 'db_username')
         configs['db_password'] = configParser.get('DATABASE', 'db_password')
         configs['db_url'] = configParser.get('DATABASE', 'db_url')
@@ -76,8 +77,11 @@ def read_configuration_file(config_file):
     except NoOptionError:
         configs['remote_blast_db_path'] = ''
     configs['pdb_path'] = configParser.get('SETTINGS', 'pdb_path')
-    configs['bin_path'] = configParser.get('SETTINGS', 'bin_path')
-
+    try:
+        configs['bin_path'] = configParser.get('SETTINGS', 'bin_path')
+    except NoOptionError:
+        configs['bin_path'] = os.path.join(code_path, '../bin/')
+        
     # From [GET_MODEL]
     configs['modeller_runs'] = configParser.getint('GET_MODEL', 'modeller_runs')
 

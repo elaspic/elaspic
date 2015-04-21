@@ -130,6 +130,13 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
 Base = sa_ext_declarative.declarative_base()
 Base.metadata.naming_conventions = naming_convention
 
+#: Get the session that will be used for all future queries.
+#: `expire_on_commit` so that you keep all the table objects even after the session closes.
+Session = sa.orm.sessionmaker(expire_on_commit=False)
+#Session = scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
+
+
+#%%
 class Domain(Base):
     """
     Profs domain definitions for all proteins in the PDB. 
@@ -274,7 +281,8 @@ class DomainContact(Base):
 
 class UniprotSequence(Base):
     """
-    Protein sequences from the Uniprot KB, obtained by parsing ``uniprot_sprot_fasta.gz``, ``uniprot_trembl_fasta.gz``, and ``homo_sapiens_variation.txt`` files from the `Uniprot ftp site`_.
+    Protein sequences from the Uniprot KB, obtained by parsing ``uniprot_sprot_fasta.gz``, 
+    ``uniprot_trembl_fasta.gz``, and ``homo_sapiens_variation.txt`` files from the `Uniprot ftp site`_.
     
     Columns:
       db
@@ -1192,82 +1200,185 @@ class UniprotDomainPairMutation(Base):
         UniprotDomainPairModel, uselist=False, cascade='expunge', lazy='joined',
         backref=sa.orm.backref('mutations', cascade='expunge')) # many to one
 
-
-
-#%% 
-def get_engine(configs=conf.configs):
-    """Get an SQLAlchemy engine that can be used to connect to the database specified by 
-    :py:data:`elaspic.conf.configs`
+         
+         
+#%%
+def enable_sqlite_foreign_key_checks(engine):
+    from sqlalchemy import event
+    def _fk_pragma_on_connect(dbapi_con, con_record):
+        dbapi_con.execute('pragma foreign_keys=ON')
+    event.listen(engine, 'connect', _fk_pragma_on_connect)
+        
+class MyDatabase(object):
     """
-    assert configs['db_type'] in ['mysql', 'postgresql', 'sqlite']
-    if configs['db_type'] == 'sqlite':
-        engine = sa.create_engine(
-            '{db_type}:///{sqlite_db_path}'.format(**configs),
-            isolation_level='READ UNCOMMITTED'
+    """
+    
+    def __init__(self, configs=conf.configs, logger=hf.get_logger()):
+        """
+        Parameters
+        ----------
+        configs : dict
+            ELASPIC configuration options specified in :py:data:`elaspic.conf.configs`
+        """
+        self.configs = configs.copy()
+        self.logger = logger        
+        self.engine = self.get_engine()
+        self.Session = self.configure_session()
+        
+        self.logger.info(
+            "Using precalculated data from the following folder: '{path_to_archive}'"
+            .format(**self.configs)
         )
-    elif configs['db_type'] in ['postgresql', 'mysql']:
-        engine = sa.create_engine(
-            '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_database}'
-            .format(**configs)
-        ) # echo=True
-    return engine
-    
-    
-def create_database_tables(
-        configs=conf.configs, clear_schema=False, keep_uniprot_sequence=True, 
-        logger=hf.get_logger()):
-    """
-    Create a new database in the schema specified by the ``schema_version`` global variable.
-    If ``clear_schema`` == True, remove all the tables in the schema first.
-    
-    DANGER!!! 
-    Using this function with an existing database can lead to loss of data.
-    Make sure that you know what you are doing.
-    
-    Parameters
-    ----------
-    engine : sa.Engine
-        SQLAlchemy engine connected to the database of interest.
-    clear_schema : bool
-        Whether or not to drop all the tables in the database before creating new tables.
-    keep_uniprot_sequence : bool
-        Whether or not to keep the `uniprot_sequence` table. 
-        Only relevant if `clear_schema` is `True`.
-    """
-    engine = get_engine(configs)
-    
-    metadata_tables = Base.metadata.tables.copy()
-    if keep_uniprot_sequence:
-        uniprot_sequence_table = [c for c in metadata_tables.keys() if 'uniprot_sequence' in c]
-        assert len(uniprot_sequence_table) == 1
-        del metadata_tables[uniprot_sequence_table[0]]
-    if clear_schema:
-        Base.metadata.drop_all(engine, metadata_tables.values())
-        logger.debug('Database schema was cleared successfully.')
-    try:
-        Base.metadata.create_all(engine, metadata_tables.values())
-    except (sa.exc.OperationalError, sa.exc.ProgrammingError) as e:
-        logger.error(str(e))
-        if re.search('schema .* does not exist', str(e)):
-            missing_schema = str(e)[str(e).find('schema "')+8:str(e).find('" does not exist')]
-        elif 'Unknown database ' in str(e):
-            missing_schema = str(e)[str(e).find("Unknown database '")+18:str(e).find("'\")")]
+
+
+    #%%
+    def get_engine(self):
+        """
+        Get an SQLAlchemy engine that can be used to connect to the database.
+        """
+        if self.configs['db_type'] == 'sqlite':
+            info_message = (
+                "Connected to a {db_type} database in the following location: {sqlite_db_path}"
+                .format(**self.configs)
+            )
+            engine = sa.create_engine(
+                '{db_type}:///{sqlite_db_path}'.format(**self.configs),
+                isolation_level='READ UNCOMMITTED'
+            )
+            enable_sqlite_foreign_key_checks(engine)
+        elif self.configs['db_type'] in ['postgresql', 'mysql']:
+            info_message = (
+                "Connected to a {db_type} database at the following url: {db_url}:{db_port}"
+                .format(**self.configs)
+            )
+            engine = sa.create_engine(
+                '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_database}'
+                .format(**self.configs)
+            ) # echo=True
         else:
-            raise e
-        logger.warning('Missing schema: {}'.format(missing_schema))
-        sql_command = 'create schema {};'.format(missing_schema)
-        logger.warning("Creating missing schema with system command: '{}'".format(sql_command))
-        engine.execute(sql_command)
-        Base.metadata.create_all(engine, metadata_tables.values())
-    logger.debug('Database schema was created successfully.')
+            raise Exception("Unsupported `db_type`: '{}'".format(self.configs['db_type']))
+        self.logger.info(info_message)
+        return engine
+    
+    
+    def configure_session(self):
+        """
+        Configure the Session class to use the current engine.
+        
+        `autocommit` and `autoflush` are enabled for the `sqlite` database in order to improve
+        performance.
+        """
+        if self.configs['db_type'] == 'sqlite':
+            autocommit = True
+            autoflush = True
+        elif self.configs['db_type'] in ['postgresql', 'mysql']:
+            autocommit = False
+            autoflush = False
+        Session.configure(bind=self.engine, autocommit=autocommit, autoflush=autoflush)
+        return Session
 
 
-class CopyDataToDB:
-    """Class holding methods relevant to loading data to the database 
-    """
+    @contextmanager
+    def session_scope(self):
+        """ 
+        Provide a transactional scope around a series of operations.
+        Enables the following construct: ``with self.session_scope() as session:``.
+        """
+        session = self.Session()
+        try:
+            yield session
+            if not self.configs['db_is_immutable']:
+                session.commit()
+        except:
+            if not self.configs['db_is_immutable']:
+                session.rollback()
+            raise
+        finally:
+            session.close()
+            
+            
+    #%%    
+    def create_database_tables(self, clear_schema=False, keep_uniprot_sequence=True):
+        """
+        Create a new database in the schema specified by the ``schema_version`` global variable.
+        If ``clear_schema == True``, remove all the tables in the schema first.
+        
+        DANGER!!! 
+        Using this function with an existing database can lead to loss of data.
+        Make sure that you know what you are doing.
+        
+        Parameters
+        ----------
+        clear_schema : bool
+            Whether or not to delete all tables in the database schema before creating new tables.
+        keep_uniprot_sequence : bool
+            Whether or not to keep the `uniprot_sequence` table. 
+            Only relevant if `clear_schema` is `True`.
+        """
+        # 
+        if clear_schema:
+            self.delete_database_tables(drop_schema=False, keep_uniprot_sequence=keep_uniprot_sequence)
+            self.logger.debug('Database schema was cleared successfully.')
+        
+        # Create all tables, creating schema as neccessary
+        for table in Base.metadata.sorted_tables:
+            try:
+                table.create(self.engine, checkfirst=True)
+            except (sa.exc.OperationalError, sa.exc.ProgrammingError) as e:
+                self.logger.error(str(e))
+                if re.search('schema .* does not exist', str(e)):
+                    missing_schema = str(e)[str(e).find('schema "')+8:str(e).find('" does not exist')]
+                elif 'Unknown database ' in str(e):
+                    missing_schema = str(e)[str(e).find("Unknown database '")+18:str(e).find("'\")")]
+                else:
+                    raise e
+                sql_command = 'create schema {};'.format(missing_schema)
+                self.logger.warning("Creating missing schema with system command: '{}'".format(sql_command))
+                self.engine.execute(sql_command)
+                table.create(self.engine, checkfirst=True)
+        self.logger.debug('Database tables were created successfully.')
+    
+    
+    def delete_database_tables(self, drop_schema=False, keep_uniprot_sequence=True):
+        """
+        Parameters
+        ----------
+        drop_schema : bool
+            Whether or not to drop the schema after dropping the tables.
+        keep_uniprot_sequence : bool
+            Wheter or not to keep the table (and schema) containing uniprot sequences.
+        """       
+        if self.configs['db_type'] == 'sqlite':
+            os.remove(self.configs['sqlite_db_path'])
+            self.logger.info("Successfully removed the sqlite database file: {sqlite_db_path}".format(**self.configs))
+            return
+        
+        # Remove tables one by one
+        for table in reversed(Base.metadata.sorted_tables):
+            if table.name != 'uniprot_sequence':
+                self.configs['table_name'] = table.name
+                self.engine.execute('drop table {db_schema}.{table_name};'.format(**self.configs))
+            elif not keep_uniprot_sequence:
+                self.configs['table_name'] = table.name
+                self.engine.execute('drop table {db_schema_uniprot}.{table_name};'.format(**self.configs))
+                
+        # Remove the database schema
+        uniprot_on_diff_schema = self.configs['db_schema'] != self.configs['db_schema_uniprot']
+        if drop_schema and uniprot_on_diff_schema:
+            self.engine.execute('drop schema {db_schema};'.format(**self.configs))
+        if drop_schema and uniprot_on_diff_schema and not keep_uniprot_sequence:
+            self.engine.execute('drop schema {db_schema_uniprot};'.format(**self.configs))
+        if drop_schema and not uniprot_on_diff_schema and not keep_uniprot_sequence:
+            self.engine.execute('drop schema {db_schema};'.format(**self.configs))
+        
+        self.logger.info("Successfully removed the {db_type} database schema: {db_schema}".format(**self.configs))    
+
+
+
+    #%%
     mysql_load_table_template = (
         r"""mysql --local-infile --host={db_url} --user={db_username} --password={db_password} """
-        r"""{db_schema} -e "{sql_command}" """
+        r"""{table_db_schema} -e "{sql_command}" """
     )
     
     psql_load_table_template = (
@@ -1277,123 +1388,67 @@ class CopyDataToDB:
     
     # Need to double up on '\\'
     mysql_command_template = (
-        r"""load data local infile '{organism_folder}/{table_name}.tsv' """
-        r"""into table {db_schema}.{table_name} """
+        r"""load data local infile '{table_folder}/{table_name}.tsv' """
+        r"""into table {table_db_schema}.{table_name} """
         r"""fields terminated by '\t' escaped by '\\\\' lines terminated by '\n'; """
     )
     
     psql_command_template = (
-        r"""\\copy {db_schema}.{table_name} """
-        r"""from '{organism_folder}/{table_name}.tsv' """
+        r"""\\copy {table_db_schema}.{table_name} """
+        r"""from '{table_folder}/{table_name}.tsv' """
         r"""with csv delimiter E'\t' null '\N' escape '\\'; """
     )
     
-    sqlite_table_filename = '{organism_folder}/{table_name}.tsv'
-   
-   
-    @classmethod
-    def copy_table_to_db(self, table_name, configs=conf.configs, logger=hf.get_logger()):
-        """Copy data from a '.tsv' text file to a database
-        """
-        configs = configs.copy()
-        configs['table_name'] = table_name
-        if table_name == 'uniprot_sequence':
-            configs['db_schema'] = configs['db_schema_uniprot']
-        
-        logger.info('Copying {table_name} to {db_type} database...'.format(**configs))
-        if configs['db_type'] == 'sqlite':
-            # Using pandas to load tables to the database
-            # This will be slow for large tables...
-            engine = get_engine(configs)
-            table_df = pd.read_csv(
-                self.sqlite_table_filename.format(**configs), 
-                names=Base.metadata.tables[table_name].columns.keys())
-            table_df.to_sql(table_name, engine)
-            return
-        elif configs['db_type'] == 'mysql':
-            configs['sql_command'] = self.mysql_command_template.format(**configs)
-            system_command = self.mysql_load_table_template.format(**configs)
-        elif configs['db_type'] == 'postgresql':
-            configs['sql_command'] = self.psql_command_template.format(**configs)
-            system_command = self.psql_load_table_template.format(**configs)      
-        else:
-            raise Exception('Unsupported database type: {}'.format(configs['db_type']))
-            
+    sqlite_table_filename = '{table_folder}/{table_name}.tsv'
+
+
+    def _load_data_into_sqlite(self, configs):
+        table_df = pd.read_csv(
+            self.sqlite_table_filename.format(**configs), 
+            sep='\t', na_values='\\N', escapechar='\\',
+            names=Base.metadata.tables[configs['table_name']].columns.keys())
+        table_df.to_sql(configs['table_name'], self.engine, index=False, if_exists='append')
+
+
+    def _run_create_table_system_command(self, system_command):
+        if self.configs['debug']:
+            self.logger.debug(system_command)
         result, error_message, return_code = hf.popen(system_command)
         if return_code != 0:
-            logger.error(result)
+            self.logger.error(result)
             raise Exception(error_message)
-    
-
-
-#%%
-# Get the session that will be used for all future queries
-# Expire on commit so that you keep all the table objects even after the session closes.
-Session = sa.orm.sessionmaker(expire_on_commit=False)
-#Session = scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
-
-class MyDatabase(object):
-    """
-    """
-    
-    def __init__(self, configs=conf.configs, logger=None):
-        """
-        """
-        if logger is None:
-            self.logger = hf.get_logger()
-        else:
-            self.logger = logger
-            
-        self.schema_version = configs['db_schema']
         
-        # Choose which database to use
+        
+    def copy_table_to_db(self, table_name, table_folder):
+        """
+        Copy data from a ``.tsv`` file to a table in the database.
+        """
+        configs = self.configs.copy()
+        configs['table_name'] = table_name
+        configs['table_folder'] = table_folder        
+        
+        def _format_configs():
+            if table_name == 'uniprot_sequence':
+                configs['table_db_schema'] = configs['db_schema_uniprot']
+            else:
+                configs['table_db_schema'] = configs['db_schema']
+        
+        self.logger.info("Copying '{table_name}' to '{db_type}' database...".format(**configs))
         if configs['db_type'] == 'sqlite':
-            self.logger.info(
-                "Connecting to an {db_type} database in the following location: {sqlite_db_path}..."
-                .format(**configs)
-            )
-            autocommit = True
-            autoflush = True
-        elif configs['db_type'] in ['postgresql', 'mysql']:
-            self.logger.info(
-                "Connecting to a {db_type} database ..."
-                .format(**configs)
-            )
-            autocommit = False
-            autoflush = False
+            self._load_data_into_sqlite(configs)
+        elif configs['db_type'] == 'mysql':
+            _format_configs()
+            configs['sql_command'] = self.mysql_command_template.format(**configs)
+            system_command = self.mysql_load_table_template.format(**configs)
+            self._run_create_table_system_command(system_command)
+        elif configs['db_type'] == 'postgresql':
+            _format_configs()
+            configs['sql_command'] = self.psql_command_template.format(**configs)
+            system_command = self.psql_load_table_template.format(**configs)
+            self._run_create_table_system_command(system_command)
         else:
-            raise Exception("Only mysql, postgresql, and sqlite are currently supported!")
-        
-        self.engine = get_engine(configs)
-        Session.configure(bind=self.engine, autocommit=autocommit, autoflush=autoflush)
-        self.Session = Session
-        self.autocommit = autocommit
-        self.db_is_immutable = configs['db_is_immutable']
-        self.temp_path = configs['temp_path']
-        self.path_to_archive = configs['path_to_archive']
-        
-        self.logger.info(
-            "Using precalculated data from the following folder: '{path_to_archive}'"
-            .format(**configs)
-        )
+            raise Exception("Unsupported database type: '{}'".format(configs['db_type']))
 
-
-    @contextmanager
-    def session_scope(self):
-        """ Provide a transactional scope around a series of operations.
-        So you can use: `with self.session_scope() as session:`
-        """
-        session = self.Session()
-        try:
-            yield session
-            if not self.db_is_immutable:
-                session.commit()
-        except:
-            if not self.db_is_immutable:
-                session.rollback()
-            raise
-        finally:
-            session.close()
 
 
     #%% Get objects from the database
@@ -1592,8 +1647,8 @@ class MyDatabase(object):
             d.template.model != None and
             d.template.model.alignment_filename != None and
             d.template.model.model_filename != None):
-                tmp_save_path = self.temp_path + path_to_data
-                archive_save_path = self.path_to_archive + path_to_data
+                tmp_save_path = self.configs['temp_path'] + path_to_data
+                archive_save_path = self.configs['path_to_archive'] + path_to_data
                 path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
                 subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
                 subprocess.check_call("cp -f '{}' '{}'".format(
@@ -1620,8 +1675,8 @@ class MyDatabase(object):
             d.template.model.alignment_filename_1 != None and
             d.template.model.alignment_filename_2 != None and
             d.template.model.model_filename != None):
-                tmp_save_path = self.temp_path + path_to_data
-                archive_save_path = self.path_to_archive + path_to_data
+                tmp_save_path = self.configs['temp_path'] + path_to_data
+                archive_save_path = self.configs['path_to_archive'] + path_to_data
                 path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
                 path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
                 subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
@@ -1649,18 +1704,18 @@ class MyDatabase(object):
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
                         os.path.dirname(
-                            self.temp_path + get_uniprot_base_path(ud) +
+                            self.configs['temp_path'] + get_uniprot_base_path(ud) +
                             ud.uniprot_sequence.provean.provean_supset_filename)),
                     shell=True)
                 subprocess.check_call("cp -f '{}' '{}'".format(
-                    self.path_to_archive + get_uniprot_base_path(ud) +
+                    self.configs['path_to_archive'] + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename,
-                    self.temp_path + get_uniprot_base_path(ud) +
+                    self.configs['temp_path'] + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
                 subprocess.check_call("cp -f '{}' '{}'".format(
-                    self.path_to_archive + get_uniprot_base_path(ud) +
+                    self.configs['path_to_archive'] + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-                    self.temp_path + get_uniprot_base_path(ud) +
+                    self.configs['temp_path'] + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
 
 
@@ -1699,8 +1754,8 @@ class MyDatabase(object):
 
     def _copy_mutation_data(self, mutation, path_to_data):
         if mutation and mutation.model_filename_wt:
-            tmp_save_path = self.temp_path + path_to_data
-            archive_save_path = self.path_to_archive + path_to_data
+            tmp_save_path = self.configs['temp_path'] + path_to_data
+            archive_save_path = self.configs['path_to_archive'] + path_to_data
             path_to_mutation = tmp_save_path + '/'.join(mutation.model_filename_wt.split('/')[:-1]) + '/'
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_mutation), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
@@ -1718,12 +1773,12 @@ class MyDatabase(object):
             with self.session_scope() as session:
                 session.execute(
                     'delete from {0}.uniprot_domain_model where uniprot_domain_id = {1}'
-                    .format(self.schema_version, d.uniprot_domain_id))
+                    .format(self.configs['db_schema'], d.uniprot_domain_id))
         elif isinstance(d, UniprotDomainPair):
             with self.session_scope() as session:
                 session.execute(
                     'delete from {0}.uniprot_domain_pair_model where uniprot_domain_pair_id = {1}'
-                    .format(self.schema_version, d.uniprot_domain_pair_id))
+                    .format(self.configs['db_schema'], d.uniprot_domain_pair_id))
         else:
             raise Exception('Not enough arguments, or the argument types are incorrect!')
 
@@ -1732,7 +1787,7 @@ class MyDatabase(object):
     def merge_row(self, row_instance):
         """Adds a list of rows (`row_instances`) to the database.
         """
-        if not self.db_is_immutable:
+        if not self.configs['db_is_immutable']:
             with self.session_scope() as session:
                 if not isinstance(row_instance, list):
                     session.merge(row_instance)
@@ -1744,18 +1799,18 @@ class MyDatabase(object):
         """Adds provean score to the database.
         """
         if (provean.provean_supset_filename and
-                os.path.isfile(self.temp_path + uniprot_base_path +
+                os.path.isfile(self.configs['temp_path'] + uniprot_base_path +
                     provean.provean_supset_filename) and
-                os.path.isfile(self.temp_path + uniprot_base_path +
+                os.path.isfile(self.configs['temp_path'] + uniprot_base_path +
                     provean.provean_supset_filename + '.fasta') ):
-            self.logger.debug('Moving provean supset to the output folder: {}'.format(self.path_to_archive + uniprot_base_path))
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(self.path_to_archive + uniprot_base_path), shell=True)
+            self.logger.debug('Moving provean supset to the output folder: {}'.format(self.configs['path_to_archive'] + uniprot_base_path))
+            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(self.configs['path_to_archive'] + uniprot_base_path), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
-                self.temp_path + uniprot_base_path + provean.provean_supset_filename,
-                self.path_to_archive + uniprot_base_path + provean.provean_supset_filename), shell=True)
+                self.configs['temp_path'] + uniprot_base_path + provean.provean_supset_filename,
+                self.configs['path_to_archive'] + uniprot_base_path + provean.provean_supset_filename), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
-                self.temp_path + uniprot_base_path + provean.provean_supset_filename + '.fasta',
-                self.path_to_archive + uniprot_base_path + provean.provean_supset_filename + '.fasta'), shell=True)
+                self.configs['temp_path'] + uniprot_base_path + provean.provean_supset_filename + '.fasta',
+                self.configs['path_to_archive'] + uniprot_base_path + provean.provean_supset_filename + '.fasta'), shell=True)
         self.merge_row(provean)
 
 
@@ -1764,8 +1819,8 @@ class MyDatabase(object):
         """
         # Save a copy of the alignment to the export folder
         if path_to_data:
-            tmp_save_path = self.temp_path + path_to_data
-            archive_save_path = self.path_to_archive + path_to_data
+            tmp_save_path = self.configs['temp_path'] + path_to_data
+            archive_save_path = self.configs['path_to_archive'] + path_to_data
             # Save the row corresponding to the model as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path), shell=True)
             # Don't need to dump template. Templates are precalculated
@@ -1798,8 +1853,8 @@ class MyDatabase(object):
         """
         mut.mut_date_modified = datetime.datetime.utcnow()
         if path_to_data and (mut.model_filename_wt is not None):
-            tmp_save_path = self.temp_path + path_to_data
-            archive_save_path = self.path_to_archive + path_to_data
+            tmp_save_path = self.configs['temp_path'] + path_to_data
+            archive_save_path = self.configs['path_to_archive'] + path_to_data
             archive_save_subpath = mut.model_filename_wt.split('/')[0] + '/'
             # Save the row corresponding to the mutation as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
@@ -2007,8 +2062,8 @@ class MyDatabase(object):
         """
         """
 
-        tmp_save_path = self.temp_path + path_to_data
-        archive_save_path = self.path_to_archive + path_to_data
+        tmp_save_path = self.configs['temp_path'] + path_to_data
+        archive_save_path = self.configs['path_to_archive'] + path_to_data
 
         if isinstance(model, UniprotDomainModel):
 
@@ -2042,6 +2097,7 @@ class MyDatabase(object):
 
     def load_db_from_archive(self):
         """
+        TODO: In the future I should move back to using json...
         """
         data = [
             ['human/*/*/*/*/template.json', UniprotDomainTemplate],
@@ -2053,7 +2109,7 @@ class MyDatabase(object):
         ]
 
         for d in data:
-            result, __, __ = hf.popen('ls ' + self.path_to_archive + d[0])
+            result, __, __ = hf.popen('ls ' + self.configs['path_to_archive'] + d[0])
             filenames = [fname for fname in result.split('\n') if fname != '']
             for filename in filenames:
                 with open(filename, 'r') as fh:

@@ -3,7 +3,7 @@
 Updating the configuration file
 ================================
 
-Edit the ELASPIC configuration file ``./config/config_file.ini`` to match your system:
+Edit the ELASPIC configuration file `./config/config_file.ini`_ to match your system:
   #. Settings in the :ref:`[SETTINGS]` section should be modified to match the local installation of ELASPIC and other programs and datasets.
 
   #. Settings in the :ref:`[DATABASE]` section should be modified to match the local MySQL, PostgreSQL, or SQLite database.
@@ -11,7 +11,11 @@ Edit the ELASPIC configuration file ``./config/config_file.ini`` to match your s
   #. Settings in the :ref:`[DEFAULT]`, :ref:`[GET_MODEL]`, and :ref:`[GET_MUTATION]` sections often may be left unchanged, since the default values are appropriate for most systems.
 
 
--------------------------------------------------------------------------------------------------
+.. _`./config/config_file.ini`: https://bitbucket.org/ostrokach/elaspic/src/b7f17ea1bcc704dc3bdcaecd7286b5fedb300151/config/config_file.ini
+
+
+
+---------------------------------------------------------------------------------------------------
 
 Configuration options
 ----------------------

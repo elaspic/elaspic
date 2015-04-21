@@ -6,15 +6,12 @@ Created on Tue Mar 31 13:00:57 2015
 from __future__ import unicode_literals
 
 import os
-import six
 import random
 import argparse
+import subprocess
+from contextlib import contextmanager
 
-import sqlalchemy as sa
-
-if six.PY3:
-    from imp import reload
-
+from elaspic import conf
 
 try:
     base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
@@ -25,225 +22,164 @@ code_path = os.path.join(base_path, 'elaspic/')
 print('base_path: {}'.format(base_path))
     
     
-    
-#%%
 def create_database(args):
-    from elaspic import conf
-    from elaspic import sql_db
-    conf.read_configuration_file(args.config_file)
-    configs = conf.configs.copy()
-    my_db = sql_db.MyDatabase(configs)
-    my_db.create_database_tables(args.clear_schema, args.keep_uniprot_sequence)
-    my_db.logger.info('Done!')
+    from elaspic import sql_db    
+    db = sql_db.MyDatabase()
+    db.create_database_tables(args.clear_schema, args.keep_uniprot_sequence)
+    db.logger.info('Done!')
     
 
+@contextmanager
+def open_gzip(filename):
+    try:
+        print("Gunzipping file '{}'...".format(filename))
+        subprocess.check_call("gunzip '{}'".format(filename), shell=True)
+    except Exception as e:
+        print('Unzipping the file failed with an error: {}'.format(e))
+        raise e
+    else:
+        yield
+    finally:
+        print("Gzipping the file back again...")
+        subprocess.check_call("gzip '{}'".format(filename.rstrip('.gz')), shell=True)
+    
+    
 def load_data_to_database(args):
-    from elaspic import conf
     from elaspic import sql_db
-    conf.read_configuration_file(args.config_file)
-    configs = conf.configs.copy()
-    my_db = sql_db.MyDatabase(configs)
+    db = sql_db.MyDatabase()
+    args.table_folder = args.table_folder.rstrip('/')
+    table_names = args.table_names.split(',') if args.table_names else None
+    dirpath, dirnames, filenames = next(os.walk(args.table_folder))
+    for table in sql_db.Base.metadata.sorted_tables:
+        if table_names is not None and table.name not in table_names:
+            print("Skipping table '{}' because it was not included in the 'table_names' list..."
+                .format(table.name))
+            continue
+        if '{}.tsv'.format(table.name) in filenames:
+            db.copy_table_to_db(table.name, args.table_folder)
+            print("Successfully loaded data from file '{}' to table '{}'"
+                .format('{}.tsv'.format(table.name), table.name))
+        elif '{}.tsv.gz'.format(table.name) in filenames:
+            with open_gzip(os.path.join(args.table_folder, '{}.tsv.gz'.format(table.name))):
+                db.copy_table_to_db(table.name, args.table_folder.rstrip('/'))
+            print("Successfully loaded data from file '{}' to table '{}'"
+                .format('{}.tsv.gz'.format(table.name), table.name))   
 
 
 def test_database(args):
-    pass
+    from elaspic import test_elaspic
+    if args.mutation_type in ['domain', 'both']:
+        print('*' * 80)
+        print('Running a sample domain mutation...')
+        test_uniprot_domain = test_elaspic.TestUniprotDomain()
+        test_uniprot_domain.setup_class(uniprot_domain_id=args.uniprot_domain_id)
+        test_uniprot_domain.test()
+    if args.mutation_type in ['interface', 'both']:   
+        print('*' * 80)
+        print('Running a sample interface mutation...')
+        test_uniprot_domain_pair = test_elaspic.TestUniprotDomainPair()
+        test_uniprot_domain_pair.setup_class(uniprot_domain_pair_id=args.uniprot_domain_pair_id)
+        test_uniprot_domain_pair.test()
 
 
 def delete_database(args):
-    pass
-
-
-
-#%%
-def get_parser():
-    description = """
-    Perform maintenance on the ELASPIC database
-    """
+    from elaspic import sql_db    
+    db = sql_db.MyDatabase()
+    db.delete_database_tables(args.drop_schema, args.keep_uniprot_sequence)
+    db.logger.info('Done!')
     
-    parser = argparse.ArgumentParser(description=description)
-    subparsers = parser.add_subparsers(title='Database action', help='Database action to perform')
+
+def get_parser():
+    parser = argparse.ArgumentParser(
+        prog='ELASPIC database', 
+        description="Perform maintenance tasks on the ELASPIC database.")
+    parser.add_argument(
+        '-c', '--config_file', required=True, 
+        help='ELASPIC configuration file')
+    subparsers = parser.add_subparsers(
+        title='tasks', 
+        help='Maintenance tasks to perform')
     
     
     ### Create an empty database schema
     parser_create = subparsers.add_parser(
-        'create', description='Create an empty database')
+        name='create',
+        description='Create an empty database')
     parser_create.add_argument(
-        '-c', '--config_file', required=True, 
-        help='ELASPIC configuration file')
-    parser_create.add_argument(
-        '--clear_schema', default=False, 
-        help=(
-            'Whether or not to clear the schema if it already exists. '
+        '--clear_schema', type=bool, default=False, 
+        help=('Whether or not to first drop all existing tables from the database schema. \n'
             'WARNING: Choosing `True` will remove all existing data from the schema specified '
             'in your configuration file!!!'))
     parser_create.add_argument(
-        '--keep_uniprot_sequence', default=True, 
-        help=(
-            'Whether or not to leave the `uniprot_sequence` table untouched when clearing the schema.'
-            'Only applicable if `--clear_schema` is set to `True`.'))
+        '--keep_uniprot_sequence', type=bool, default=True, 
+        help=('Whether or not to leave the `uniprot_sequence` table untouched when clearing the schema. \n'
+            'Only applicable if ``--clear_schema`` is set to ``True``.'))
     parser_create.set_defaults(func=create_database)
     
     
     ### Load data to the database
     parser_load_data = subparsers.add_parser(
-        'load_data', description='Load data from text files to the database')
+        name='load_data', 
+        description='Load data from text files to the database.')
     parser_load_data.add_argument(
-        '-c', '--config_file', required=True, 
-        help='ELASPIC configuration file')
+        '--table_folder', default='.', 
+        help='Location of text files to be loaded to the database.')
     parser_load_data.add_argument(
-        '--path_to_data', required=True, 
-        help='Location of the text files that should be loaded to the database')
-    parser_load_data.add_argument(
-        '--import_type', choices=['basic', 'complete'], default='complete', 
-        help=(
-            "Specifies which tables should be loaded. "
-            "If `basic`, only the essential tables will be loaded. "
-            "(i.e. tables 'domain', 'domain_contact', 'uniprot_domain', 'uniprot_domain_contact', "
-            "'uniprot_domain_pair', and 'uniprot_domain_pair_contact'.)"
-            "If `complete`, all tables will be loaded."))
+        '--table_names', default=None, 
+        help=("Names of text files to be loaded to the database. \n"
+            "``all`` : load all tables found in the location specified by ``table_folder``."))
     parser_load_data.set_defaults(func=load_data_to_database)
     
     
     ### Test the created database by running several mutations
     parser_test = subparsers.add_parser(
-        'test', description='Test the database by running some mutations')
+        name='test',
+        description='Test the database by running some mutations. ')
     parser_test.add_argument(
-        '-c', '--config_file', required=True, 
-        help='ELASPIC configuration file')
+        '--mutation_type', choices=['domain', 'interface', 'both'], default='both',
+        help=("The type of mutatation that you want to test. \n"
+            "``domain`` : Test the impact of a mutation on the folding of a domain. \n"
+            "``interface`` : Test the impact of a mutation on the interaction between two domains. \n"
+            "``both`` : Test both a domain mutation and an interface mutation (DEFAULT) "))
     parser_test.add_argument(
-        '--recalculate_existing', default=True,
-        help='Recalculate existing mutations or calculate new mutations?')
+        '--do_provean', type=bool, default=True,
+        help="Whether or not to run Provean when testing the database (DEFAULT True)")
     parser_test.add_argument(
-        '--make_provean', default=True,
-        help=(
-            "Whether or not to run Provean when testing the database. "
-            "Only applicable when `--recalculate_existing` is `True`. "))
+        '--uniprot_domain_id', type=int, default=None,
+        help="Unique ID identifying the domain that you want to mutate. ")
+    parser_test.add_argument(
+        '--uniprot_domain_pair_id', type=int, default=True,
+        help="Unique ID identifying the domain pair that you want to mutate. ")
     parser_test.set_defaults(func=test_database)
     
     
     ### Delete database
-    parser_test = subparsers.add_parser(
-        'delete', description='Test the database by running some mutations')
+    parser_delete = subparsers.add_parser(
+        name='delete',
+        description='Delete the database specified in the configuration file.')
+    parser_delete.add_argument(
+        '--drop_schema', type=bool, default=False, 
+        help=('Whether or not to drop the schema that contains the relevant tables. \n'
+            'WARNING: Choosing ``True`` will remove all existing data from the schema specified '
+            'in your configuration file!!!'))
+    parser_delete.add_argument(
+        '--keep_uniprot_sequence', type=bool, default=True, 
+        help=('Whether or not to leave the ``uniprot_sequence`` table untouched when clearing the schema. \n'
+            'Only applicable if ``--drop_schema`` is set to ``True``.'))
+    parser_delete.set_defaults(func=delete_database)
     
     return parser
-
-
-#%%  
-def create_clean_schema(configs, clear_schema=True, keep_uniprot_sequence=False, logger=None):
-    """Create an empty schema in the database defined by the loaded configuration file
-    """
-    my_db = MyDatabase(configs, logger)
-    clear_schema = True
-    keep_uniprot_sequence = False
-    
-    logger = hf.get_logger()
-    result_index = random.randint(0, 100) 
-    organism_folder = os.path.join(base_path, 'database/Homo_sapiens_test')
-
-
-#%% LOAD_DATA
-
-### Load all tables to the database
-table_names = [
-    'domain', 'domain_contact', 
-    'uniprot_sequence', 'provean', 
-    'uniprot_domain', 'uniprot_domain_template', 'uniprot_domain_model', 'uniprot_domain_mutation',
-    'uniprot_domain_pair', 'uniprot_domain_pair_template', 
-    'uniprot_domain_pair_model', 'uniprot_domain_pair_mutation',
-]
-
-def load_all_tables_to_db(db_type, configs, table_names):
-    for table_name in table_names:
-        print(table_name)
-        sql_db.load_table_to_db(db_type, configs, table_name)
-
-
-
-
-#%% TEST
-
-def test(DB_TYPE='mysql'):
-   
-    clear_schema = True
-    keep_uniprot_sequence = False
-    config_filename = os.path.join(base_path, 'config/', config_filenames[DB_TYPE])
-    logger = hf.get_logger()
-    result_index = random.randint(0, 100) 
-    organism_folder = os.path.join(base_path, 'database/Homo_sapiens_test')
-    
-    logger.info('*' * 80)
-    logger.info('Reading the configuration file...')
-    conf.read_configuration_file(config_filename)
-    configs = conf.configs.copy()
-    configs['organism_folder'] = organism_folder
-    configs['result_index'] = result_index
-    
-    logger.info('*' * 80)
-    logger.info('Creating an empty database schema...')
-    create_clean_schema(configs, clear_schema, keep_uniprot_sequence, logger)
-    
-    logger.info('*' * 80)
-    logger.info('Loading data from text files to the empty database...')
-    load_all_tables_to_db(DB_TYPE, configs)
-    
-    logger.info('*' * 80)
-    logger.info('Running a sample domain mutation...')
-    test_uniprot_domain = test_elaspic.TestUniprotDomain()
-    test_uniprot_domain.setup_class(configs)
-    test_uniprot_domain.test()
-    
-    logger.info('*' * 80)
-    logger.info('Running a sample interface mutation...')
-    test_uniprot_domain_pair = test_elaspic.TestUniprotDomainPair()
-    test_uniprot_domain_pair.setup_class(configs)
-    test_uniprot_domain_pair.test()
-    
-    logger.info('*' * 80)
-    logger.info('Removing the schema that we created for testing')
-    delete_schema(configs, logger, clear_schema, keep_uniprot_sequence)
-
-
-
-#%% DELETE
-
-def _drop_uniprot_table_and_schema(my_db, configs):
-    my_db.engine.execute('drop table {db_schema_uniprot}.uniprot_sequence;'.format(**configs))
-    my_db.engine.execute('drop schema {db_schema_uniprot};'.format(**configs))
-
-
-def delete_schema(configs, logger, clear_schema, keep_uniprot_sequence):
-    if not clear_schema:
-        return
-    
-    configs = configs.copy()
-    my_db = sql_db.MyDatabase(configs, logger)
-    
-    for table_name in reversed(table_names):
-        if table_name == 'uniprot_sequence':
-            continue
-        configs['table_name'] = table_name
-        my_db.engine.execute('drop table {db_schema}.{table_name};'.format(**configs))
-        
-    if configs['db_schema'] != configs['db_schema_uniprot']:
-        my_db.engine.execute('drop schema {db_schema};'.format(**configs))
-        if not keep_uniprot_sequence:
-            _drop_uniprot_table_and_schema()
-    else:
-        if not keep_uniprot_sequence:
-            _drop_uniprot_table_and_schema()
 
 
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    print('Running function {}...'.format(args.func.__name__))
+    if 'func' not in args.__dict__:
+        args = parser.parse_args(['--help'])
+    conf.read_configuration_file(args.config_file)
+    print("Running function '{}'...".format(args.func.__name__))
     args.func(args)
-       
 
-
-
-
-#%%
 
 if __name__ == '__main__':
     main()
