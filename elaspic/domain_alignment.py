@@ -102,7 +102,7 @@ def check_provean_supporting_set(
         .format(domain_mutation, unique_temp_folder), shell=True)
 
     system_command = (
-        './provean ' +
+        'provean ' +
         ' -q ./sequence.fasta ' +
         ' -v ./decoy.var ' +
         ' -d ' + configs['global_temp_path'] + 'blast/db/nr ' +
@@ -1196,45 +1196,4 @@ def split_superdomains_2(superdomain):
                         data_sublist.append(d_1 + '+' + d_2)
     return [d for ddd in data[:] for dd in ddd if dd for d in dd]
 
-
-
-if __name__ == '__main__':
-    db = sql_db.MyDatabase('', path_to_archive='/home/kimlab1/database_data/elaspic/')
-    tmp_path = '/tmp/test_template/'
-    unique = 'Consumer-1'
-    pdb_path = '/home/kimlab1/database_data/pdb/data/data/structures/divided/pdb/'
-    saveAlignments = '/tmp/test_template/Consumer-1/'
-    subprocess.check_call('mkdir -p ' + tmp_path + unique, shell=True)
-    subprocess.check_call('mkdir -p ' + tmp_path + unique + '/sequence_conservation/', shell=True)
-    subprocess.check_call('mkdir -p ' + tmp_path + 'blast/', shell=True)
-    subprocess.check_call(
-        'cd ' + tmp_path + 'blast/ && ln -sf /home/kimlab1/strokach/ncbi-blast-2.2.28+/db', shell=True)
-    subprocess.check_call('cp ' + '/home/kimlab1/strokach/working/pipeline/bin/provean ' +
-        tmp_path + unique + '/sequence_conservation/', shell=True)
-
-    ###########################################################################
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-#    handler = logging.FileHandler(tmp_path + 'templates.log', mode='w', delay=True)
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.DEBUG)
-    logger.addHandler(handler)
-    ###########################################################################
-
-    get_template = GetTemplate(tmp_path, unique, pdb_path, db, logger)
-    temp = Bio.Align.MultipleSeqAlignment([
-        Bio.SeqRecord.SeqRecord(seq=Bio.Seq.Seq('--AGGA-')),
-        Bio.SeqRecord.SeqRecord(seq=Bio.Seq.Seq('MMMGGMM'))])
-    print(get_template.get_coverage(temp, len(temp[0])))
-    print(get_template.get_identity(temp))
-    print(get_template.get_interacting_identity(temp, [4,5], 2))
-
-    p = db.get_uniprot_domain('Q8NEU8') + db.get_uniprot_domain_pair('Q8NEU8')
-    p = [db.get_uniprot_domain_pair('Q8NEU8')[0]]
-#    protein_domains = db.get_uniprot_domain_pair('Q8NEU8')
-    for d, t, m in p:
-        template = get_template(d)
-#        if isinstance(template, sql_db.UniprotDomainTemplate):
-#            print get_template.build_provean_supporting_set(d, template)
 
