@@ -554,12 +554,12 @@ class Pipeline(object):
             # make the directories
             subprocess.check_call("mkdir -p '{}'".format(self.unique_temp_folder + '/FoldX'), shell=True)
             # copy the executables
-            subprocess.check_call("cp '{}' '{}'".format(
-                conf.configs['bin_path'] + 'foldx64Linux', self.unique_temp_folder + '/FoldX/'), shell=True)
-            subprocess.check_call("cp '{}' '{}'".format(
-                conf.configs['bin_path'] + 'rotabase.txt', self.unique_temp_folder + '/FoldX/'), shell=True)
-            subprocess.check_call("cp '{}' '{}'".format(
-                conf.configs['bin_path'] + 'libfaketime.so.1', self.unique_temp_folder + '/FoldX/'), shell=True)
+            #subprocess.check_call("cp '{}' '{}'".format(
+            #    conf.configs['bin_path'] + 'foldx64Linux', self.unique_temp_folder + '/FoldX/'), shell=True)
+            #subprocess.check_call("cp '{}' '{}'".format(
+            #    conf.configs['bin_path'] + 'rotabase.txt', self.unique_temp_folder + '/FoldX/'), shell=True)
+            #subprocess.check_call("cp '{}' '{}'".format(
+            #    conf.configs['bin_path'] + 'libfaketime.so.1', self.unique_temp_folder + '/FoldX/'), shell=True)
 
         # modeller
         if not os.path.isdir(self.unique_temp_folder + '/modeller'):
@@ -567,16 +567,16 @@ class Pipeline(object):
             mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/modeller'
             subprocess.check_call(mkdir_command, shell=True)
             # Copy knot into the same folder as modeller
-            cp_command = 'cp ' + conf.configs['bin_path'] + 'topol ' + self.unique_temp_folder + '/modeller'
-            subprocess.check_call(cp_command, shell=True)
+            #cp_command = 'cp ' + conf.configs['bin_path'] + 'topol ' + self.unique_temp_folder + '/modeller'
+            #subprocess.check_call(cp_command, shell=True)
 
         # sequence conservation
         if not os.path.isdir(self.unique_temp_folder + '/sequence_conservation'):
             mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/sequence_conservation'
             subprocess.check_call(mkdir_command, shell=True)
             # Provean
-            cp_command = 'cp ' + conf.configs['bin_path'] + 'provean ' + self.unique_temp_folder + '/sequence_conservation/'
-            subprocess.check_call(cp_command, shell=True)
+            #cp_command = 'cp ' + conf.configs['bin_path'] + 'provean ' + self.unique_temp_folder + '/sequence_conservation/'
+            #subprocess.check_call(cp_command, shell=True)
 
         # analyze_structure
         analyze_structure_path = os.path.join(self.unique_temp_folder, 'analyze_structure') + '/'
@@ -585,17 +585,17 @@ class Pipeline(object):
             mkdir_command = 'mkdir -p ' + analyze_structure_path
             subprocess.check_call(mkdir_command, shell=True)
             # Pops
-            cp_command = 'cp ' + conf.configs['bin_path'] + 'pops ' + analyze_structure_path
-            subprocess.check_call(cp_command, shell=True)
+            #cp_command = 'cp ' + conf.configs['bin_path'] + 'pops ' + analyze_structure_path
+            #subprocess.check_call(cp_command, shell=True)
             # Stride
-            cp_command = 'cp ' + conf.configs['bin_path'] + 'stride ' + analyze_structure_path
-            subprocess.check_call(cp_command, shell=True)
+            #cp_command = 'cp ' + conf.configs['bin_path'] + 'stride ' + analyze_structure_path
+            #subprocess.check_call(cp_command, shell=True)
             #MSMS
-            cp_command = (
-                'cp ' + conf.configs['bin_path'] + 'pdb_to_xyzrn ' +  analyze_structure_path + ' && '
-                'cp ' + conf.configs['bin_path'] + 'atmtypenumbers ' +  analyze_structure_path + ' && '
-                'cp ' + conf.configs['bin_path'] + 'msms ' + analyze_structure_path)
-            subprocess.check_call(cp_command, shell=True)
+            #cp_command = (
+            #    'cp ' + conf.configs['bin_path'] + 'pdb_to_xyzrn ' +  analyze_structure_path + ' && '
+            #    'cp ' + conf.configs['bin_path'] + 'atmtypenumbers ' +  analyze_structure_path + ' && '
+            #    'cp ' + conf.configs['bin_path'] + 'msms ' + analyze_structure_path)
+            #subprocess.check_call(cp_command, shell=True)
 
 
     def __prepare_provean_temp_folder(self):

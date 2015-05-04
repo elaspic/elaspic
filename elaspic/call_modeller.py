@@ -233,7 +233,7 @@ class Modeller(object):
         """
 
 
-        system_command = './topol ' + pdbFile
+        system_command = 'knot ' + pdbFile
         self.logger.debug('Knot system command: {}'.format(system_command))
         child_process = hf.run_subprocess_locally('./', system_command)
         result, error_message = child_process.communicate()

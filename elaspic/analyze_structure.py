@@ -407,7 +407,7 @@ class AnalyzeStructure(object):
 
         # Convert pdb to xyz coordiates
         assert(os.path.isfile(self.working_path + filename))
-        system_command = './pdb_to_xyzrn {0}.pdb'.format(self.working_path + base_filename)
+        system_command = 'pdb_to_xyzrn {0}.pdb'.format(self.working_path + base_filename)
         self.logger.debug('msms system command 1: %s' % system_command)
         child_process = hf.run_subprocess_locally(self.working_path, system_command)
         result, error_message = child_process.communicate()
@@ -430,7 +430,7 @@ class AnalyzeStructure(object):
         # Calculate SASA and SESA (excluded)
         probe_radius = 1.4
         system_command_string = (
-            './msms '
+            'msms '
             '-probe_radius {1:.1f} '
             '-surface ases '
             '-if {0}.xyzrn '
@@ -532,37 +532,39 @@ class AnalyzeStructure(object):
         return [sasa_score_splitchains, sasa_score_allchains]
 
 
-    def _run_naccess_atom(self, filename):
-        # run naccess
-        system_command = ('./naccess ' + filename)
-        self.logger.debug('naccess system command: %s' % system_command)
-        assert(os.path.isfile(self.working_path + filename))
-        child_process = hf.run_subprocess_locally(self.working_path, system_command)
-        result, error_message = child_process.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
-        return_code = child_process.returncode
-        self.logger.debug('naccess result: {}'.format(result))
-        self.logger.debug('naccess error: {}'.format(error_message))
-        self.logger.debug('naccess rc: {}'.format(return_code))
-        # Collect results
-        sasa_scores = {}
-        with open(self.working_path + filename.split('.')[0] + '.rsa') as fh:
-            for line in fh:
-                row = line.split()
-                if row[0] != 'RES':
-                    continue
-                try:
-                    (line_id, res, chain, num, all_abs, all_rel,
-                    sidechain_abs, sidechain_rel, mainchain_abs, mainchain_rel,
-                    nonpolar_abs, nonpolar_rel, polar_abs, polar_rel) = row
-                except ValueError as e:
-                    print(e)
-                    print(line)
-                    print(row)
-                sasa_scores.setdefault(chain, []).append(sidechain_rel) # percent sasa on sidechain
-        return sasa_scores
+    # NACESS is not used anymore
+    # It is not reliable enough on a PDB-wide scale
+#    def _run_naccess_atom(self, filename):
+#        # run naccess
+#        system_command = ('naccess ' + filename)
+#        self.logger.debug('naccess system command: %s' % system_command)
+#        assert(os.path.isfile(self.working_path + filename))
+#        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+#        result, error_message = child_process.communicate()
+#        if six.PY3:
+#            result = str(result, encoding='utf-8')
+#            error_message = str(error_message, encoding='utf-8')
+#        return_code = child_process.returncode
+#        self.logger.debug('naccess result: {}'.format(result))
+#        self.logger.debug('naccess error: {}'.format(error_message))
+#        self.logger.debug('naccess rc: {}'.format(return_code))
+#        # Collect results
+#        sasa_scores = {}
+#        with open(self.working_path + filename.split('.')[0] + '.rsa') as fh:
+#            for line in fh:
+#                row = line.split()
+#                if row[0] != 'RES':
+#                    continue
+#                try:
+#                    (line_id, res, chain, num, all_abs, all_rel,
+#                    sidechain_abs, sidechain_rel, mainchain_abs, mainchain_rel,
+#                    nonpolar_abs, nonpolar_rel, polar_abs, polar_rel) = row
+#                except ValueError as e:
+#                    print(e)
+#                    print(line)
+#                    print(row)
+#                sasa_scores.setdefault(chain, []).append(sidechain_rel) # percent sasa on sidechain
+#        return sasa_scores
 
 
     def _run_pops_atom(self, chain_id):
@@ -582,7 +584,7 @@ class AnalyzeStructure(object):
 
 
     def __run_pops_atom(self, chain_id):
-        system_command = ('./pops --noHeaderOut --noTotalOut --atomOut --pdb {0}.pdb --popsOut {0}.out'.format(chain_id))
+        system_command = ('pops --noHeaderOut --noTotalOut --atomOut --pdb {0}.pdb --popsOut {0}.out'.format(chain_id))
         child_process = hf.run_subprocess_locally(self.working_path, system_command)
         result, error_message = child_process.communicate()
         if six.PY3:
@@ -633,7 +635,7 @@ class AnalyzeStructure(object):
 
 
     def get_stride(self):
-        system_command = './stride ' + ''.join(self.chain_ids) + '.pdb ' + '-fstride_results.txt'
+        system_command = 'stride ' + ''.join(self.chain_ids) + '.pdb ' + '-fstride_results.txt'
         self.logger.debug('stride system command: %s' % system_command)
         child_process = hf.run_subprocess_locally(self.working_path, system_command)
         result, error_message = child_process.communicate()
@@ -662,7 +664,7 @@ class AnalyzeStructure(object):
             if n_tries > 0:
                 self.logger.debug('Waiting for 1 minute before trying again...')
                 time.sleep(60)
-            system_command = ('./dssp -v -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
+            system_command = ('dssp -v -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
             self.logger.debug('dssp system command: %s' % system_command)
             child_process = hf.run_subprocess_locally(self.working_path, system_command)
             result, error_message = child_process.communicate()
@@ -841,7 +843,7 @@ class AnalyzeStructure(object):
 
 
     def __run_pops_area(self, full_filename):
-        system_command = ('./pops --chainOut'
+        system_command = ('pops --chainOut'
             ' --pdb ' + full_filename +
             ' --popsOut ' + self.working_path + full_filename.split('/')[-1].replace('pdb', 'out'))
         child_process = hf.run_subprocess_locally(self.working_path, system_command)

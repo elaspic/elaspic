@@ -180,7 +180,7 @@ class FoldX(object):
         my_env = environ.copy()
         my_env['LD_PRELOAD'] = self.foldx_path + 'libfaketime.so.1'
         my_env['FAKETIME'] = "2014-12-24 20:30:00"
-        system_command = './foldx64Linux -runfile ' + self.foldx_runfile
+        system_command = 'foldx -runfile ' + self.foldx_runfile
         self.logger.debug('FoldX system command: {}'.format(system_command))
         childProcess = hf.run_subprocess_locally(self.foldx_path, system_command, env=my_env)
         result, error_message = childProcess.communicate()
