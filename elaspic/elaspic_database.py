@@ -6,7 +6,6 @@ Created on Tue Mar 31 13:00:57 2015
 from __future__ import unicode_literals
 
 import os
-import random
 import argparse
 import subprocess
 from contextlib import contextmanager
@@ -67,17 +66,17 @@ def load_data_to_database(args):
 
 
 def test_database(args):
-    from elaspic import test_elaspic
+    from elaspic import elaspic_testing
     if args.mutation_type in ['domain', 'both']:
         print('*' * 80)
         print('Running a sample domain mutation...')
-        test_uniprot_domain = test_elaspic.TestUniprotDomain()
+        test_uniprot_domain = elaspic_testing.TestUniprotDomain()
         test_uniprot_domain.setup_class(uniprot_domain_id=args.uniprot_domain_id)
         test_uniprot_domain.test()
     if args.mutation_type in ['interface', 'both']:   
         print('*' * 80)
         print('Running a sample interface mutation...')
-        test_uniprot_domain_pair = test_elaspic.TestUniprotDomainPair()
+        test_uniprot_domain_pair = elaspic_testing.TestUniprotDomainPair()
         test_uniprot_domain_pair.setup_class(uniprot_domain_pair_id=args.uniprot_domain_pair_id)
         test_uniprot_domain_pair.test()
 
