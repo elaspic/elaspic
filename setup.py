@@ -24,22 +24,8 @@ setup(
     url='http://elaspic.kimlab.org',
     packages=['elaspic'],
     long_description=read("README.rst"),
-    install_requires=[
-        'fastcache',
-        # Scientific Python stack
-        'numpy',
-        'pandas',
-        'scikit-learn>=0.15',
-        'sqlalchemy',
-        'biopython>=1.65',
-        # Documentation
-        'sphinx>=1.3',
-        # Testing
-        'pytest',
-        # Py2 / Py3 support
-        'future',
-        'six',
-    ],
+    # Specify install requirements in the conda `meta.yaml` file
+    # install_requires=[],
     tests_require=[
         'pytest',
     ],
