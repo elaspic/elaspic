@@ -1611,8 +1611,8 @@ class MyDatabase(object):
             uniprot_domain_pairs = (
                 session.query(UniprotDomainPair)
                 .filter(sa.or_(
-                    "uniprot_domain_1.uniprot_id='{}'".format(uniprot_id),
-                    "uniprot_domain_2.uniprot_id='{}'".format(uniprot_id)))
+                    sa.text("uniprot_domain_1.uniprot_id='{}'".format(uniprot_id)),
+                    sa.text("uniprot_domain_2.uniprot_id='{}'".format(uniprot_id))))
                 # .options(sa.orm.joinedload('template').sa.orm.joinedload('model'))
                 .options(sa.orm.joinedload('template', innerjoin=True))
                 .all()
