@@ -12,13 +12,6 @@ from Bio.SubsMat import MatrixInfo
 base_path = op.abspath(op.dirname(__file__))
 data_path = op.join(base_path, 'data')
 
-base_path = op.abspath(op.dirname(__file__))
-data_path = op.join(base_path, 'data')
-try:
-    code_path = os.path.dirname(os.path.abspath(__file__))
-except:
-    code_path = os.path.dirname(os.getcwd())
-
 
 #%%
 
