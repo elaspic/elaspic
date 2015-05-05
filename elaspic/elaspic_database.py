@@ -11,15 +11,6 @@ import subprocess
 from contextlib import contextmanager
 
 from elaspic import conf
-
-try:
-    base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../')
-except:
-    base_path = os.path.join(os.getcwd(), '../')
-code_path = os.path.join(base_path, 'elaspic/')
-
-print('base_path: {}'.format(base_path))
-    
     
 def create_database(args):
     from elaspic import sql_db    

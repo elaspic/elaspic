@@ -2,12 +2,18 @@
 from __future__ import unicode_literals
 
 import os
+import os.path as op
 import subprocess
 from configparser import SafeConfigParser, NoOptionError
 from Bio.SubsMat import MatrixInfo
 
 
 #%%
+base_path = op.abspath(op.dirname(__file__))
+data_path = op.join(base_path, 'data')
+
+base_path = op.abspath(op.dirname(__file__))
+data_path = op.join(base_path, 'data')
 try:
     code_path = os.path.dirname(os.path.abspath(__file__))
 except:
@@ -76,11 +82,7 @@ def read_configuration_file(config_file):
         configs['remote_blast_db_path'] = configParser.get('SETTINGS', 'remote_blast_db_path')
     except NoOptionError:
         configs['remote_blast_db_path'] = ''
-    configs['pdb_path'] = configParser.get('SETTINGS', 'pdb_path')
-    try:
-        configs['bin_path'] = configParser.get('SETTINGS', 'bin_path')
-    except NoOptionError:
-        configs['bin_path'] = os.path.join(code_path, '../bin/')
+    configs['data_path'] = data_path
         
     # From [GET_MODEL]
     configs['modeller_runs'] = configParser.getint('GET_MODEL', 'modeller_runs')
