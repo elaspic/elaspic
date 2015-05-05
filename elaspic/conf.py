@@ -82,6 +82,7 @@ def read_configuration_file(config_file):
         configs['remote_blast_db_path'] = configParser.get('SETTINGS', 'remote_blast_db_path')
     except NoOptionError:
         configs['remote_blast_db_path'] = ''
+    configs['pdb_path'] = configParser.get('SETTINGS', 'pdb_path')
     configs['data_path'] = data_path
         
     # From [GET_MODEL]
