@@ -23,6 +23,7 @@ setup(
     author_email='elaspic@kimlab.org',
     url='http://elaspic.kimlab.org',
     packages=['elaspic'],
+    package_data={'elaspic': ['data/*']},
     long_description=read("README.rst"),
     # Specify install requirements in the conda `meta.yaml` file
     # install_requires=[],
