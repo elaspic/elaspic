@@ -110,9 +110,6 @@ Configuration options
    pdb_path 
      Location of all pdb structures, equivalent to the "data/data/structures/divided/pdb/" folder in the PDB ftp site. Optional.
      
-   bin_path
-     Location of external binary files required by ELASPIC.
-
 
 
 .. _`[GET_MODEL]`:

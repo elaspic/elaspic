@@ -9,6 +9,7 @@ from builtins import range
 from builtins import object
 
 import os
+import os.path as op
 import subprocess
 import pickle as pickle
 import six
@@ -280,7 +281,7 @@ class GetMutation(object):
         self.pdb_path = configs['pdb_path']
         self.db = db # sql database
         self.logger = logger
-        self.bin_path = configs['bin_path']
+        self.data_path = configs['data_path']
         self.foldX_WATER = configs['foldx_water']
         self.build_model_runs = configs['foldx_num_of_runs']
         self.matrix = configs['matrix']
@@ -290,26 +291,26 @@ class GetMutation(object):
         self.provean_temp_path = provean_temp_path
 
         if six.PY2:
-            self.clf_domain = pickle.load(open(self.bin_path + 'ml_clf_core_p1.pickle.py27', 'rb'))
-            self.clf_domain_features = pickle.load(open(self.bin_path + 'ml_features_core_p1.pickle.py27', 'rb'))
-            self.clf_interface = pickle.load(open(self.bin_path + 'ml_clf_interface_p1.pickle.py27', 'rb'))
-            self.clf_interface_features = pd.read_pickle(self.bin_path + 'ml_features_interface_p1.pickle.py27')
+            self.clf_domain = pickle.load(open(op.join(self.data_path + 'ml_clf_core_p1.pickle.py27', 'rb')))
+            self.clf_domain_features = pickle.load(open(op.join(self.data_path + 'ml_features_core_p1.pickle.py27', 'rb')))
+            self.clf_interface = pickle.load(open(op.join(self.data_path + 'ml_clf_interface_p1.pickle.py27', 'rb')))
+            self.clf_interface_features = pd.read_pickle(op.join(self.data_path + 'ml_features_interface_p1.pickle.py27'))
 
-            self.clf_domain_p0 = pickle.load(open(self.bin_path + 'ml_clf_core_p1.pickle.py27', 'rb'))
-            self.clf_domain_features_p0 = pickle.load(open(self.bin_path + 'ml_features_core_p1.pickle.py27', 'rb'))
-            self.clf_interface_p0 = pickle.load(open(self.bin_path + 'ml_clf_interface_p1.pickle.py27', 'rb'))
-            self.clf_interface_features_p0 = pd.read_pickle(self.bin_path + 'ml_features_interface_p1.pickle.py27')
+            self.clf_domain_p0 = pickle.load(open(op.join(self.data_path + 'ml_clf_core_p1.pickle.py27', 'rb')))
+            self.clf_domain_features_p0 = pickle.load(open(op.join(self.data_path + 'ml_features_core_p1.pickle.py27', 'rb')))
+            self.clf_interface_p0 = pickle.load(open(op.join(self.data_path + 'ml_clf_interface_p1.pickle.py27', 'rb')))
+            self.clf_interface_features_p0 = pd.read_pickle(op.join(self.data_path + 'ml_features_interface_p1.pickle.py27'))
 
         else:
-            self.clf_domain = pickle.load(open(self.bin_path + 'ml_clf_core_p1.pickle', 'rb'))
-            self.clf_domain_features = pickle.load(open(self.bin_path + 'ml_features_core_p1.pickle', 'rb'))
-            self.clf_interface = pickle.load(open(self.bin_path + 'ml_clf_interface_p1.pickle', 'rb'))
-            self.clf_interface_features = pd.read_pickle(self.bin_path + 'ml_features_interface_p1.pickle')
+            self.clf_domain = pickle.load(open(op.join(self.data_path + 'ml_clf_core_p1.pickle', 'rb')))
+            self.clf_domain_features = pickle.load(open(op.join(self.data_path + 'ml_features_core_p1.pickle', 'rb')))
+            self.clf_interface = pickle.load(open(op.join(self.data_path + 'ml_clf_interface_p1.pickle', 'rb')))
+            self.clf_interface_features = pd.read_pickle(op.join(self.data_path + 'ml_features_interface_p1.pickle'))
 
-            self.clf_domain_p0 = pickle.load(open(self.bin_path + 'ml_clf_core_p1.pickle', 'rb'))
-            self.clf_domain_features_p0 = pickle.load(open(self.bin_path + 'ml_features_core_p1.pickle', 'rb'))
-            self.clf_interface_p0 = pickle.load(open(self.bin_path + 'ml_clf_interface_p1.pickle', 'rb'))
-            self.clf_interface_features_p0 = pd.read_pickle(self.bin_path + 'ml_features_interface_p1.pickle')
+            self.clf_domain_p0 = pickle.load(open(op.join(self.data_path + 'ml_clf_core_p1.pickle', 'rb')))
+            self.clf_domain_features_p0 = pickle.load(open(op.join(self.data_path + 'ml_features_core_p1.pickle', 'rb')))
+            self.clf_interface_p0 = pickle.load(open(op.join(self.data_path + 'ml_clf_interface_p1.pickle', 'rb')))
+            self.clf_interface_features_p0 = pd.read_pickle(op.join(self.data_path + 'ml_features_interface_p1.pickle'))
 
 
     def get_mutation_data(self, d, uniprot_id_1, mutation):
