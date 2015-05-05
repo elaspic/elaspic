@@ -1,21 +1,9 @@
 # Folders
-bin_centos/
-bin_ubuntu/
-db/
-data/
-input/
-reports/
-publications/
-docs/_*
-src/*.tar.gz
-src/*.tgz
-src/*/*
+elaspic.egg-info
 
-# Hidden files in root folder
-./__init__.py
-
-# Hidden files
+# Hidden files and folders
 .*
+_*
 
 # Compiled source code
 *.pyc
@@ -25,10 +13,6 @@ src/*/*
 *.log
 *.bak
 *.sql
-
-# Documentation
-*.docx
-*.doc
 
 # Git Windows configuration file
 .gitattributes
