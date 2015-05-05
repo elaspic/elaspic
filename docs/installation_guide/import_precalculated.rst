@@ -33,9 +33,9 @@ specified by the :term:`path_to_archive` variable in your :ref:`configuration_fi
  
     mkdir archive # folder specified by the 'path_to_archive' variable in the config file
 
-    tar xzvf provean.tar.gz -C archive/
-    tar xzvf uniprot_domain.tar.gz -C ./archive/
-    tar xzvf uniprot_domain_pair.tar.gz -C ./archive/
+    tar xzf provean.tar.gz -C archive/
+    tar xzf uniprot_domain.tar.gz -C ./archive/
+    tar xzf uniprot_domain_pair.tar.gz -C ./archive/
 
 
 

@@ -123,6 +123,7 @@ class Pipeline(object):
             'rather than creating symbolic links.'
         )
         system_command = (
+            'rm -rf ' + conf.configs['global_temp_path'] + 'blast/ && ' +
             'mkdir -p ' + conf.configs['global_temp_path'] + 'blast/ && ' +
             'ln -sf ' + conf.configs['blast_db_path'] + 'db ' +  conf.configs['global_temp_path'] + 'blast/'
         )
@@ -132,6 +133,8 @@ class Pipeline(object):
         result, error_message, return_code = hf.popen(system_command)
         while return_code != 0 and n_tries < 10:
             self.logger.info("Couldn't copy the blast database. Retrying...")
+            self.logger.debug(result)
+            self.logger.debug(error_message)
             time.sleep(15)
             result, error_message, return_code = hf.popen(system_command)
         if return_code != 0:

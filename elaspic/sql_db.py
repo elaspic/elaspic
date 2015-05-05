@@ -1405,7 +1405,8 @@ class MyDatabase(object):
     def _load_data_into_sqlite(self, configs):
         table_df = pd.read_csv(
             self.sqlite_table_filename.format(**configs), 
-            sep='\t', na_values='\\N', escapechar='\\',
+            sep='\t', na_values='\\N', 
+            # escapechar='\\', # escapes the `na_values` character and causes problems
             names=Base.metadata.tables[configs['table_name']].columns.keys())
         table_df.to_sql(configs['table_name'], self.engine, index=False, if_exists='append')
 
