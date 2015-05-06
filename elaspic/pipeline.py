@@ -555,7 +555,8 @@ class Pipeline(object):
             subprocess.check_call("mkdir -p '{}'".format(self.unique_temp_folder + '/FoldX'), shell=True)
             # FoldX requires `rotabase.txt` to be in the same directory as the PDB
             subprocess.check_call("cp '{}' '{}'".format(
-                conf.configs['data_path'] + 'rotabase.txt', self.unique_temp_folder + '/FoldX/'), shell=True)
+                os.path.join(conf.configs['data_path'], 'rotabase.txt'), 
+                os.path.join(self.unique_temp_folder, 'FoldX', 'rotabase.txt')), shell=True)
 
         # modeller
         if not os.path.isdir(self.unique_temp_folder + '/modeller'):
