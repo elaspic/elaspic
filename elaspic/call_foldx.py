@@ -176,13 +176,11 @@ class FoldX(object):
 
 
     def __run_runfile(self):
+        # TODO: Add a fallback plan using libfaketime
 #        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
-        my_env = environ.copy()
-        my_env['LD_PRELOAD'] = self.foldx_path + 'libfaketime.so.1'
-        my_env['FAKETIME'] = "2014-12-24 20:30:00"
         system_command = 'foldx -runfile ' + self.foldx_runfile
         self.logger.debug('FoldX system command: {}'.format(system_command))
-        childProcess = hf.run_subprocess_locally(self.foldx_path, system_command, env=my_env)
+        childProcess = hf.run_subprocess_locally(self.foldx_path, system_command)
         result, error_message = childProcess.communicate()
         if six.PY3:
             result = str(result, encoding='utf-8')
