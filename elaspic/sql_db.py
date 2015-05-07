@@ -1248,11 +1248,11 @@ class MyDatabase(object):
             enable_sqlite_foreign_key_checks(engine)
         elif self.configs['db_type'] in ['postgresql', 'mysql']:
             info_message = (
-                "Connected to a {db_type} database at the following url: {db_url}:{db_port}"
+                "Connected to a {db_type} database: {db_url}:{db_port}/{db_database}{db_socket}"
                 .format(**self.configs)
             )
             engine = sa.create_engine(
-                '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_database}'
+                '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_database}{db_socket}'
                 .format(**self.configs)
             ) # echo=True
         else:
@@ -1826,7 +1826,7 @@ class MyDatabase(object):
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path), shell=True)
             # Don't need to dump template. Templates are precalculated
             # pickle_dump(sa_ext_serializer.dumps(d.template), archive_save_path + 'template.pickle')
-            pickle_dump(sa_ext_serializer.dumps(d.template.model), archive_save_path + 'model.pickle')
+            # pickle_dump(sa_ext_serializer.dumps(d.template.model), archive_save_path + 'model.pickle')
             # Save the modelled structure
             if d.template.model.model_filename is not None:
                 # Save alignments
@@ -1860,7 +1860,7 @@ class MyDatabase(object):
             # Save the row corresponding to the mutation as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
                 archive_save_path + archive_save_subpath), shell=True)
-            pickle_dump(sa_ext_serializer.dumps(mut), archive_save_path + archive_save_subpath + 'mutation.pickle')
+            # pickle_dump(sa_ext_serializer.dumps(mut), archive_save_path + archive_save_subpath + 'mutation.pickle')
             if mut.model_filename_wt and mut.model_filename_mut:
                 # Save Foldx structures
                 subprocess.check_call("cp -f '{}' '{}'".format(

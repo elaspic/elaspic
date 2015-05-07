@@ -153,8 +153,8 @@ class Pipeline(object):
 
         self.unique = tempfile.mkdtemp(prefix='', dir=conf.configs['temp_path']).split('/')[-1]
         self.unique_temp_folder = os.path.join(conf.configs['temp_path'], self.unique) + '/'
-        self.logger.info(self.unique_temp_folder)
-        self.logger.info(conf.configs['db_schema'])
+        self.logger.info('unique_temp_folder: {}'.format(self.unique_temp_folder))
+        self.logger.info('db_schema: {}'.format(conf.configs.get('db_schema')))
 
         # Switch to the root of the unique tmp directory
         os.chdir(self.unique_temp_folder)
@@ -176,16 +176,18 @@ class Pipeline(object):
         # Obtain all domains and interactions for a given uniprot
         self.logger.info('Obtaining protein domain information...')
         self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
-        if not self.uniprot_domains:
-            self.logger.error('Uniprot {} has no pfam domains'.format(self.uniprot_id))
-            return
         self._update_path_to_data(self.uniprot_domains)
 
         # Mutations
         self.uniprot_mutations = []
 
         # Find provean
-        if run_type in [1, 5]:
+        if not self.uniprot_domains:
+            self.logger.info('Warning! Uniprot {} has no pfam domains!'.format(self.uniprot_id))
+            # You don't want to compute provean for a protein wihtout domains,
+            # but you might want to evaluate mutations (if everything else is 
+            # precalculated and you are running on a cluster).
+        if run_type in [1, 5] and self.uniprot_domains:
             self.logger.info('\n\n\n' + '*' * 110)
             self.logger.info("Computing provean...")
             if self._compute_provean():

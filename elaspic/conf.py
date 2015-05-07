@@ -14,7 +14,6 @@ data_path = op.join(base_path, 'data')
 
 
 #%%
-
 #: Dictionary of configuration values used throughout the ELASPIC pipeline
 configs = dict()
 
@@ -47,9 +46,13 @@ def read_configuration_file(config_file):
 
     # From [DATABASE]
     configs['db_type'] = configParser.get('DATABASE', 'db_type')
+    try:
+        configs['db_is_immutable'] = configParser.get('DATABASE', 'db_is_immutable')
+    except NoOptionError:
+        configs['db_is_immutable'] = False        
+        
     if configs['db_type'] == 'sqlite':
         configs['sqlite_db_path'] = configParser.get('DATABASE', 'sqlite_db_path')
-        configs['db_is_immutable'] = True
     elif configs['db_type'] in ['mysql', 'postgresql']:
         configs['db_schema'] = configParser.get('DATABASE', 'db_schema')  
         try:
@@ -59,12 +62,12 @@ def read_configuration_file(config_file):
         try:
             configs['db_database'] = configParser.get('DATABASE', 'db_database')
         except NoOptionError:
-            configs['db_database'] = ''
+            configs['db_database'] = ''        
         configs['db_username'] = configParser.get('DATABASE', 'db_username')
         configs['db_password'] = configParser.get('DATABASE', 'db_password')
         configs['db_url'] = configParser.get('DATABASE', 'db_url')
         configs['db_port'] = configParser.get('DATABASE', 'db_port')
-        configs['db_is_immutable'] = False
+        configs['db_socket'] = _get_db_socket(configParser, configs)
     else:
         raise Exception("Only `MySQL`, `PostgreSQL`, and `SQLite` databases are supported!")
         
@@ -92,6 +95,26 @@ def read_configuration_file(config_file):
     configs['temp_path'] = get_temp_path(configs['global_temp_path'], configs['temp_path_suffix'])
 
 
+def _get_db_socket(configParser, configs):
+    """
+    # MySQL: ?unix_socket=/usr/local/mysql5/mysqld.sock
+    # PostgreSQL: ?host=/var/lib/postgresql
+    """
+    socket_prefix = {
+        'mysql': '?unix_socket=',
+        'postgresql': '?host=',
+    }
+
+    if configs['db_url'] == 'localhost':
+        try:
+            socket_file = configParser.get('DATABASE', 'db_socket')
+        except NoOptionError:
+            db_socket = ''
+        else:
+            db_socket = socket_prefix[configs['db_type']] + socket_file
+    return db_socket
+
+
 def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
     """ If a :envvar:`TMPDIR` is given as an environment variable, the tmp directory
     is created relative to that. This is useful when running on banting
@@ -101,5 +124,7 @@ def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
     temp_path = os.path.join(os.environ.get('TMPDIR', global_temp_path), temp_path_suffix)
     subprocess.check_call('mkdir -p ' + temp_path, shell=True)
     return temp_path
-    
-    
+
+
+
+

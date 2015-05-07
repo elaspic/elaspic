@@ -64,33 +64,38 @@ Configuration options
 
 .. glossary::
 
-   db_type
-     The database that you are using. Supported databases are `MySQL`, `PostgreSQL`, and `SQLite`.
-     
-   sqlite_db_path
-     Location of the SQLite database. Required only if :term:`db_type` is `SQLite`.
+  db_type
+    The database that you are using. Supported databases are `MySQL`, `PostgreSQL`, and `SQLite`.
 
-   db_schema
-     The name of the schema that holds all elaspic data.
+  sqlite_db_path
+    Location of the SQLite database. Required only if :term:`db_type` is `SQLite`.
 
-   db_schema_uniprot
-     The name of the database schema that holds uniprot sequences. Defaults to :term:`db_schema`.
+  db_schema
+    The name of the schema that holds all elaspic data.
 
-   db_database
-     The name of the database that contains :term:`db_schema` and :term:`db_schema_uniprot`.
-     Required only if :term:`db_type` is `PostgreSQL`. Defaults to :term:`db_schema`. 
+  db_schema_uniprot
+    The name of the database schema that holds uniprot sequences. Defaults to :term:`db_schema`.
 
-   db_username
-     The username for the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
+  db_database
+    The name of the database that contains :term:`db_schema` and :term:`db_schema_uniprot`.
+    Required only if :term:`db_type` is `PostgreSQL`. Defaults to :term:`db_schema`. 
 
-   db_password
-     The password for the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
+  db_username
+    The username for the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
 
-   db_url
-     The IP address of the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
+  db_password
+    The password for the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
 
-   db_port
-     The listening port of the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
+  db_url
+    The IP address of the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
+
+  db_port
+    The listening port of the database. Required only if :term:`db_type` is `MySQL` or `PostgreSQL`. 
+
+  db_socket
+    Path to the socket file, if it is not in the default location.
+    Used only if :term:`db_url` is `localhost`. 
+    For example: ``/usr/local/mysql5/mysqld.sock`` for `MySQL` and ``/var/lib/postgresql`` for `PostgreSQL`.
 
 
 
