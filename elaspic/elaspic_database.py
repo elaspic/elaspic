@@ -112,12 +112,12 @@ def get_parser():
         name='load_data', 
         description='Load data from text files to the database.')
     parser_load_data.add_argument(
-        '--table_folder', default='.', 
+        '--data_folder', default='.', 
         help='Location of text files to be loaded to the database.')
     parser_load_data.add_argument(
-        '--table_names', default=None, 
+        '--data_files', default=None, 
         help=("Names of text files to be loaded to the database. \n"
-            "``all`` : load all tables found in the location specified by ``table_folder``."))
+            "``all`` : load all tables found in the location specified by ``data_folder``."))
     parser_load_data.set_defaults(func=load_data_to_database)
     
     
