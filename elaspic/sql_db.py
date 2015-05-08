@@ -1243,7 +1243,7 @@ class MyDatabase(object):
             )
             engine = sa.create_engine(
                 '{db_type}:///{sqlite_db_path}'.format(**self.configs),
-                isolation_level='READ UNCOMMITTED'
+                # isolation_level='READ UNCOMMITTED'
             )
             enable_sqlite_foreign_key_checks(engine)
         elif self.configs['db_type'] in ['postgresql', 'mysql']:
@@ -1269,8 +1269,8 @@ class MyDatabase(object):
         performance.
         """
         if self.configs['db_type'] == 'sqlite':
-            autocommit = True
-            autoflush = True
+            autocommit = False #True
+            autoflush = False #True
         elif self.configs['db_type'] in ['postgresql', 'mysql']:
             autocommit = False
             autoflush = False
