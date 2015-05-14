@@ -112,6 +112,8 @@ def _get_db_socket(configParser, configs):
             db_socket = ''
         else:
             db_socket = socket_prefix[configs['db_type']] + socket_file
+    else:
+        db_socket = ''
     return db_socket
 
 
