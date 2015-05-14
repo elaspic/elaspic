@@ -812,7 +812,7 @@ class AnalyzeStructure(object):
             elif item[0] == 'total:':
                 total = float(item[1])
         sasa_chain = hydrophobic, hydrophilic, total
-
+        
         # calculate SASA for oppositeChain, i.e. the second part of the complex:
         termination, rc, e = self.__run_pops_area(self.working_path + self.chain_ids[1] + '.pdb')
         if rc != 0:
@@ -868,11 +868,47 @@ class AnalyzeStructure(object):
 
 
     def __read_pops_area(self, filename):
-        # The old way
+        """
+        This function parses POPS output that looks like this::
+        
+            === MOLECULE SASAs ===
+            
+            hydrophobic:    5267.01
+            hydrophilic:    4313.68
+            total:          9580.69
+
+        """
         keep = ['hydrophobic:', 'hydrophilic:', 'total:']
         with open(filename, 'r') as pops:
             result = [ x.split(' ') for x in pops.readlines() if x != '' and x.split(' ')[0] in keep ]
-        return [ [ x.strip() for x in item if x != '' ] for item in result ]
+            result = [ [ x.strip() for x in item if x != '' ] for item in result ]
+        if not result or len(result) != 3:
+            result = self.__read_pops_area_new(filename)
+        return result
+
+
+    def __read_pops_area_new(self, filename):
+        """
+        This function parses POPS output that looks like this::
+        
+            === MOLECULE SASAs ===
+            
+            Phob/A^2		Phil/A^2		Total/A^2
+               5267.01	   4313.68	   9580.69
+
+        """
+        use_next_line = False
+        with open(filename, 'r') as ifh:
+            for line in ifh:
+                if line.strip() == 'Phob/A^2\t\tPhil/A^2\t\tTotal/A^2':
+                    use_next_line = True
+                    continue
+                if use_next_line:
+                    row = line.strip().split()
+                    result = [['hydrophobic:', row[0]], ['hydrophilic:', row[1]], ['total:', row[2]]]
+                    break
+        return result
+
 
 
 #%%
