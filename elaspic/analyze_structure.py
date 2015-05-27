@@ -7,6 +7,7 @@ from builtins import zip
 from builtins import object
 
 import os
+import os.path as op
 import time
 from collections import OrderedDict
 
@@ -325,11 +326,11 @@ class AnalyzeStructure(object):
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         io = PDBIO()
         self.logger.debug('Saving parsed pdbs into the following working path:')
-        self.logger.debug(self.data_path + self.pdb_file)
+        self.logger.debug(op.join(self.data_path, self.pdb_file))
 
         # Save all chains together with correct chain letters
         self.logger.debug('Saving all chains together')
-        structure = parser.get_structure('ID', self.data_path + self.pdb_file)
+        structure = parser.get_structure('ID', op.join(self.data_path, self.pdb_file))
         if len(structure) > 1:
             # Delete all models except for the first (otherwise get errors with naccess)
             del structure[1:]
@@ -685,7 +686,7 @@ class AnalyzeStructure(object):
         dssp_ss = {}
         dssp_acc = {}
         start = False
-        with open(self.working_path + 'dssp_results.txt') as fh:
+        with open(op.join(self.working_path, 'dssp_results.txt')) as fh:
             for l in fh:
                 row = l.split()
                 if not row or len(row) < 2:
@@ -775,14 +776,15 @@ class AnalyzeStructure(object):
 
     #%%
     def get_interface_area(self):
-
-        termination, rc, e = self.__run_pops_area(self.working_path + ''.join(self.chain_ids) + '.pdb')
+        """
+        """
+        termination, rc, e = self.__run_pops_area(op.join(self.working_path, ''.join(self.chain_ids) + '.pdb'))
         if rc != 0:
             if termination != 'Clean termination':
                 self.logger.error('Pops error for pdb: %s:' % self.pdb_file)
                 self.logger.error(e)
-                return '0', '0', '0'
-        result = self.__read_pops_area(self.working_path + ''.join(self.chain_ids) + '.out')
+                return [None, None, None]
+        result = self.__read_pops_area(op.join(self.working_path, ''.join(self.chain_ids) + '.out'))
 
         # Distinguish the surface area by hydrophobic, hydrophilic, and total
         for item in result:
@@ -795,13 +797,13 @@ class AnalyzeStructure(object):
         sasa_complex = hydrophobic, hydrophilic, total
 
         # calculate SASA for chain, i.e. part one of the complex:
-        termination, rc, e = self.__run_pops_area(self.working_path + self.chain_ids[0] + '.pdb')
+        termination, rc, e = self.__run_pops_area(op.join(self.working_path + self.chain_ids[0] + '.pdb'))
         if rc != 0:
             if termination != 'Clean termination':
                 self.logger.error('Error in pops for pdb: %s:' % self.pdb_file)
                 self.logger.error(e)
-                return '0', '0', '0'
-        result = self.__read_pops_area(self.working_path + self.chain_ids[0] + '.out')
+                return [None, None, None]
+        result = self.__read_pops_area(op.join(self.working_path + self.chain_ids[0] + '.out'))
 
         # Distinguish the surface area by hydrophobic, hydrophilic, and total
         for item in result:
@@ -814,13 +816,13 @@ class AnalyzeStructure(object):
         sasa_chain = hydrophobic, hydrophilic, total
         
         # calculate SASA for oppositeChain, i.e. the second part of the complex:
-        termination, rc, e = self.__run_pops_area(self.working_path + self.chain_ids[1] + '.pdb')
+        termination, rc, e = self.__run_pops_area(op.join(self.working_path + self.chain_ids[1] + '.pdb'))
         if rc != 0:
             if termination != 'Clean termination':
                 self.logger.error('Error in pops for pdb: %s:' % self.pdb_file)
                 self.logger.error(e)
-                return '0', '0', '0'
-        result = self.__read_pops_area(self.working_path + self.chain_ids[1] + '.out')
+                return [None, None, None]
+        result = self.__read_pops_area(op.join(self.working_path + self.chain_ids[1] + '.out'))
 
         for item in result:
             if item[0] == 'hydrophobic:':

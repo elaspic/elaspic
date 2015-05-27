@@ -53,8 +53,12 @@ def get_parser():
         '-m', '--mutations', nargs='?', default=['',], 
         help="Mutation(s) that you wish to evaluate (e.g. 'D172E,R173H')")
     parser.add_argument(
+        '-p', '--uniprot_domain_pair_ids', default='',
+        help="List of uniprot_domain_pair_ids to analyse "
+            "(useful if you want to restrict your analysis to only a handful of domains) " )
+    parser.add_argument(
         '-f', '--input_file', 
-        help=("A tab separated file of uniprot_ids and mutations \n"
+        help=("A tab separated file of uniprot_ids, mutations, and optionally, uniprot_domain_pair_ids \n"
             "(optional; to be used instead of `--uniprot_id` and `--mutations`)"))
     parser.add_argument(
         '-t', '--run_type', nargs='?', type=int, default=5, choices=[1,2,3,4,5],
@@ -82,8 +86,12 @@ def validate_args(args):
 
 
 def parse_input_file(input_file):
+    """
+    Does not work! Do not use!
+    """
     uniprot_ids = []
     mutations = []
+    uniprot_domain_pair_ids = []
     with open(input_file, 'r') as fh:
         for line in fh:
             # Can skip lines by adding spaces or tabs before them
@@ -92,13 +100,16 @@ def parse_input_file(input_file):
                 continue
             row = [ l.strip() for l in line.split('\t') ]
             # Specifying the mutation is optional
-            if len(row) > 1:
-                uniprot_id, mutation = row[0], row[1]
+            if len(row) == 2:
+                uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], row[2]
             elif len(row) == 1:
-                uniprot_id, mutation = row[0], ''
+                uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], ''
+            elif len(row) == 1:
+                uniprot_id, mutation, uniprot_domain_pair_id = row[0], '', ''
             uniprot_ids.append(uniprot_id)
             mutations.append(mutation)
-    return uniprot_ids, mutations
+            uniprot_domain_pair_ids.append(uniprot_domain_pair_id)
+    return uniprot_ids, mutations, uniprot_domain_pair_ids
 
 
 def main():
@@ -107,11 +118,23 @@ def main():
     validate_args(args)
     pipeline = Pipeline(args.config_file)
     if args.input_file:
-        uniprot_ids, mutations = parse_input_file(args.input_file)
+        uniprot_ids, mutations, uniprot_domain_pair_ids = parse_input_file(args.input_file)
     else:
         uniprot_ids = [args.uniprot_id,]
-        mutations = args.mutations if args.mutations is not None else ''
-    pipeline(uniprot_ids[0], mutations, args.run_type)
+        mutations = args.mutations if args.mutations else ''
+        uniprot_domain_pair_ids = args.uniprot_domain_pair_ids
+        
+    uniprot_domain_pair_ids_asint = (
+        [int(x) for x in uniprot_domain_pair_ids.split(',') if x]
+        if uniprot_domain_pair_ids 
+        else []
+    )
+    pipeline(
+        uniprot_id=uniprot_ids[0],         
+        mutations=mutations, 
+        run_type=args.run_type, 
+        uniprot_domain_pair_ids=uniprot_domain_pair_ids_asint,
+    )
 
     #~ # Run jobs
     #~ for uniprot_id, mutation in zip(uniprot_ids, mutations):
