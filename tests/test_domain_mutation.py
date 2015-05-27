@@ -5,6 +5,7 @@ Created on Tue Dec 30 13:57:36 2014
 @author: alexey
 """
 from __future__ import print_function
+
 #%% Common to all test files
 from elaspic_tests import Pipeline, default_config_file
 pipeline = Pipeline(default_config_file)
@@ -36,6 +37,10 @@ def test_3():
     mutations = 'E1167K,F1177L,A69T,D72Y,D201G,D1155N,A339T,D1183E'
     results = pipeline(uniprot_id, mutations, 3)
     print('Done!')
+
+
+def test_4():
+     -u P36888 -m G583A -t 3
 
 
 

@@ -37,21 +37,21 @@ def open_gzip(filename):
 def load_data_to_database(args):
     from elaspic import sql_db
     db = sql_db.MyDatabase()
-    args.table_folder = args.table_folder.rstrip('/')
-    table_names = args.table_names.split(',') if args.table_names else None
-    dirpath, dirnames, filenames = next(os.walk(args.table_folder))
+    args.data_folder = args.data_folder.rstrip('/')
+    table_names = args.data_files.split(',') if args.data_files else None
+    dirpath, dirnames, filenames = next(os.walk(args.data_folder))
     for table in sql_db.Base.metadata.sorted_tables:
         if table_names is not None and table.name not in table_names:
             print("Skipping table '{}' because it was not included in the 'table_names' list..."
                 .format(table.name))
             continue
         if '{}.tsv'.format(table.name) in filenames:
-            db.copy_table_to_db(table.name, args.table_folder)
+            db.copy_table_to_db(table.name, args.data_folder)
             print("Successfully loaded data from file '{}' to table '{}'"
                 .format('{}.tsv'.format(table.name), table.name))
         elif '{}.tsv.gz'.format(table.name) in filenames:
-            with open_gzip(os.path.join(args.table_folder, '{}.tsv.gz'.format(table.name))):
-                db.copy_table_to_db(table.name, args.table_folder.rstrip('/'))
+            with open_gzip(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
+                db.copy_table_to_db(table.name, args.data_folder.rstrip('/'))
             print("Successfully loaded data from file '{}' to table '{}'"
                 .format('{}.tsv.gz'.format(table.name), table.name))   
 

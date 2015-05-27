@@ -1241,9 +1241,11 @@ class MyDatabase(object):
                 "Connected to a {db_type} database in the following location: {sqlite_db_path}"
                 .format(**self.configs)
             )
+            # set `isolation_level` to 'READ UNCOMMITTED' so that reads are non-blocking
+            # (required for SCINET)
             engine = sa.create_engine(
                 '{db_type}:///{sqlite_db_path}'.format(**self.configs),
-                # isolation_level='READ UNCOMMITTED'
+                 isolation_level='READ UNCOMMITTED'
             )
             enable_sqlite_foreign_key_checks(engine)
         elif self.configs['db_type'] in ['postgresql', 'mysql']:

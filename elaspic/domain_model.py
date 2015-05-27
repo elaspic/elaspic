@@ -262,10 +262,10 @@ class GetModel(object):
             pdb_filename_wt, [d.template.model.chain_1, d.template.model.chain_2], None, self.logger)
         interface_area = analyze_structure_object.get_interface_area()
         self.logger.debug('interface_area: {}'.format(interface_area))
-        d.template.model.interface_area_hydrophobic = interface_area[0] if not np.isnan(interface_area[0]) else None
-        d.template.model.interface_area_hydrophilic = interface_area[1] if not np.isnan(interface_area[1]) else None
-        d.template.model.interface_area_total = interface_area[2] if not np.isnan(interface_area[2]) else None
-
+        d.template.model.interface_area_hydrophobic = interface_area[0] 
+        d.template.model.interface_area_hydrophilic = interface_area[1]
+        d.template.model.interface_area_total = interface_area[2]
+        
         # Save model_domain_defs, which might be truncated compared to uniprot_domain_template domain defs
         d.template.model.model_domain_def_1 = model_domain_def_1
         d.template.model.model_domain_def_2 = model_domain_def_2
