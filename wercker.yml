@@ -1,0 +1,16 @@
+box: somada141/python-anaconda-py34@0.0.1
+build:
+  steps:
+    - script:
+        name: activate and test Python34 environment
+        code: |
+          source activate py34
+          conda info -e
+    - script:
+        name: install dependencies (conda)
+        code: |
+          conda install --yes nose
+    - script:
+        name: Run my tests
+        code: python test/test_all.py
+
