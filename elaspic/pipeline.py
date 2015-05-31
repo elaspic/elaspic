@@ -362,12 +362,14 @@ class Pipeline(object):
         possible_model_errors = (
             errors.ModellerError,
             errors.PDBChainError,
+            errors.PDBEmptySequenceError,
+            errors.PDBNotFoundError,
             errors.ChainsNotInteractingError,
             errors.MutationOutsideDomainError,
             errors.MutationOutsideInterfaceError,
             errors.NoSequenceFound,
             errors.TcoffeeError,
-            errors.PDBNotFoundError)
+        )
 
         # Go over all domains and domain pairs for a given protein
         for d in self.uniprot_domains + self.uniprot_domain_pairs:
@@ -412,6 +414,7 @@ class Pipeline(object):
                     bad_domain = bad_domains[0]
                     bad_domain.domain_errors = str(d.uniprot_domain_id) + ': ' + str(type(e))
                     self.logger.error(
+                        "Making a homology model failed!!!\n"
                         "Adding error '{0}' to the domain with cath_id {1}..."
                         .format(bad_domain.domain_errors, d.template.cath_id))
                 elif isinstance(d, sql_db.UniprotDomainPair):
@@ -431,6 +434,7 @@ class Pipeline(object):
                     bad_domain = bad_domains[0]
                     bad_domain.domain_contact_errors = str(d.uniprot_domain_pair_id) + ': ' + str(type(e))
                     self.logger.error(
+                        "Making a homology model failed!!!\n"
                         "Adding error '{0}' to the domain pair with cath_id_1 {1} "
                         "and cath_id_2 {2}..."
                         .format(bad_domain.domain_contact_errors, d.template.cath_id_1, d.template.cath_id_2))
@@ -598,15 +602,7 @@ class Pipeline(object):
         if not os.path.isdir(self.unique_temp_folder):
             subprocess.check_call('mkdir -p ' + self.unique_temp_folder, shell=True)
 
-        # t_coffee
-        if not os.path.isdir(self.unique_temp_folder + '/tcoffee'):
-            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/tcoffee && ' + \
-                            'mkdir -p ' + self.unique_temp_folder + '/tcoffee/tmp && ' + \
-                            'mkdir -p ' + self.unique_temp_folder + '/tcoffee/lck && ' + \
-                            'mkdir -p ' + self.unique_temp_folder + '/tcoffee/cache'
-            subprocess.check_call(mkdir_command, shell=True)
-
-        # folx
+        # foldx
         if not os.path.isdir(self.unique_temp_folder + '/FoldX'):
             subprocess.check_call("mkdir -p '{}'".format(self.unique_temp_folder + '/FoldX'), shell=True)
             # FoldX requires `rotabase.txt` to be in the same directory as the PDB
@@ -614,11 +610,6 @@ class Pipeline(object):
                 os.path.join(conf.configs['data_path'], 'rotabase.txt'), 
                 os.path.join(self.unique_temp_folder, 'FoldX', 'rotabase.txt')), shell=True)
 
-        # modeller
-        if not os.path.isdir(self.unique_temp_folder + '/modeller'):
-            # create workingfolder for modeller
-            mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/modeller'
-            subprocess.check_call(mkdir_command, shell=True)
 
         # sequence conservation
         if not os.path.isdir(self.unique_temp_folder + '/sequence_conservation'):

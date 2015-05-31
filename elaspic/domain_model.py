@@ -5,6 +5,8 @@ from builtins import zip
 from builtins import range
 from builtins import object
 
+import os.path as op
+
 import numpy as np
 import subprocess
 
@@ -38,6 +40,27 @@ class GetModel(object):
         self.logger = logger
         self.modeller_runs = configs['modeller_runs']
         self.n_cores = configs['n_cores']
+
+
+    def _prepare_temp_folders(self):
+        """
+        Create temporary folders for `t_coffee` and `modeller`,
+        required for making the homology models.
+        """
+        # t_coffee
+        if not op.isdir(op.join(self.unique_temp_folder + 'tcoffee')):
+            mkdir_command = (
+                "mkdir -p '{0}/tcoffee' && "
+                "mkdir -p '{0}/tcoffee/tmp' && "
+                "mkdir -p '{0}/tcoffee/lck' && "
+                "mkdir -p '{0}/tcoffee/cache' "
+            ).format(self.unique_temp_folder)
+            subprocess.check_call(mkdir_command, shell=True)
+
+        # modeller
+        if not op.isdir(op.join(self.unique_temp_folder + 'modeller')):
+            mkdir_command = "mkdir -p '{}/modeller' ".format(self.unique_temp_folder)
+            subprocess.check_call(mkdir_command, shell=True)
 
 
     def __call__(self, d):

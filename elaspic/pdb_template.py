@@ -458,7 +458,7 @@ class PDBTemplate(object):
             new_model.add(chain)
 
         # Make sure that the new model is not empty
-        if not new_model.get_atoms():
+        if not list(new_model.get_atoms()):
             raise errors.PDBEmptySequenceError(self.unique_id)
 
         # Remove hetatms if they are > 6A away from the chains of interest
