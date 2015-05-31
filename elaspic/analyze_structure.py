@@ -9,6 +9,7 @@ from builtins import object
 import os
 import os.path as op
 import time
+import subprocess
 from collections import OrderedDict
 
 import six
@@ -319,7 +320,15 @@ class AnalyzeStructure(object):
         self.chain_ids = chains
         self.domain_defs = domain_defs
         self.logger = logger
+        self._prepare_temp_folder()
         self.structure = self.__split_pdb_into_chains()
+
+
+    def _prepare_temp_folder(self):
+        # ./analyze_structure
+        if not os.path.isdir(self.working_path):
+            mkdir_command = "mkdir -p '{}'".format(self.working_path)
+            subprocess.check_call(mkdir_command, shell=True)
 
 
     def __split_pdb_into_chains(self):

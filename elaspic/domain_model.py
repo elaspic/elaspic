@@ -40,9 +40,10 @@ class GetModel(object):
         self.logger = logger
         self.modeller_runs = configs['modeller_runs']
         self.n_cores = configs['n_cores']
+        self._prepare_temp_folder()
 
 
-    def _prepare_temp_folders(self):
+    def _prepare_temp_folder(self):
         """
         Create temporary folders for `t_coffee` and `modeller`,
         required for making the homology models.

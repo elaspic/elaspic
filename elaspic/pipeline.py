@@ -610,17 +610,11 @@ class Pipeline(object):
                 os.path.join(conf.configs['data_path'], 'rotabase.txt'), 
                 os.path.join(self.unique_temp_folder, 'FoldX', 'rotabase.txt')), shell=True)
 
-
         # sequence conservation
         if not os.path.isdir(self.unique_temp_folder + '/sequence_conservation'):
             mkdir_command = 'mkdir -p ' + self.unique_temp_folder + '/sequence_conservation'
             subprocess.check_call(mkdir_command, shell=True)
 
-        # analyze_structure
-        analyze_structure_path = os.path.join(self.unique_temp_folder, 'analyze_structure') + '/'
-        if not os.path.isdir(analyze_structure_path):
-            mkdir_command = 'mkdir -p ' + analyze_structure_path
-            subprocess.check_call(mkdir_command, shell=True)
 
 
     def __prepare_provean_temp_folder(self):
