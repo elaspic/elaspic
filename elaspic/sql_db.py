@@ -1410,12 +1410,6 @@ class MyDatabase(object):
             sep='\t', na_values='\\N', 
             # escapechar='\\', # escapes the `na_values` character and causes problems
             names=Base.metadata.tables[configs['table_name']].columns.keys())
-        # Fill in empty `provean_date_modified` values because that column is 
-        # constrained to be NOT NULL
-        table_df.loc[
-            pd.isnull(table_df['provean_date_modified']), 
-            'provean_date_modified'
-        ] = datetime.datetime.now().strftime('%Y-%m-%d %H-%M-%S')
         table_df.to_sql(configs['table_name'], self.engine, index=False, if_exists='append')
 
 
