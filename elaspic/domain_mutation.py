@@ -330,7 +330,6 @@ class GetMutation(object):
                 self.logger.debug('Using template domain definitions')
                 domain_start, domain_end = hf.decode_domain_def(d.template.domain_def)
             alignment, __ = self.db.get_alignment(d.template.model, d.path_to_data)
-#            alignment_id = d.template.model.alignment_id
             chains_pdb = [d.template.domain.pdb_chain, ]
             uniprot_sequences = [self.db.get_uniprot_sequence(uniprot_id_1), ]
             domain_sequences = [uniprot_sequences[0][domain_start-1:domain_end],]
@@ -340,7 +339,13 @@ class GetMutation(object):
         #######################################################################
         # Interface
         elif isinstance(d, sql_db.UniprotDomainPair):
-            if uniprot_id_1 == d.uniprot_domain_1.uniprot_id:
+            mutation_pos = int(mutation[1:-1])
+            interacting_aa_1 = self._get_interacting_aa(d, 1)
+            interacting_aa_2 = self._get_interacting_aa(d, 2)
+            assert uniprot_id_1 in [d.uniprot_domain_1.uniprot_id, d.uniprot_domain_2.uniprot_id]
+            
+            if uniprot_id_1 == d.uniprot_domain_1.uniprot_id and mutation_pos in interacting_aa_1:
+                # Mutation is inside the first domain
                 uniprot_id_2 = d.uniprot_domain_2.uniprot_id
                 d_1, d_2 = d.uniprot_domain_1, d.uniprot_domain_2
                 #
@@ -353,12 +358,12 @@ class GetMutation(object):
                         domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_2.template.domain_def)
 
                 alignment, __ = self.db.get_alignment(d.template.model, d.path_to_data)
-#                alignment_id = d.alignment_id_1
                 chains_pdb = [d.template.domain_1.pdb_chain, d.template.domain_2.pdb_chain]
-                interacting_aa = [int(uniprot_num) for uniprot_num in d.template.model.interacting_aa_1.split(',') if uniprot_num]
+                interacting_aa = interacting_aa_1
                 chains_modeller = [d.template.model.chain_1, d.template.model.chain_2]
 
-            elif uniprot_id_1 == d.uniprot_domain_2.uniprot_id:
+            elif uniprot_id_1 == d.uniprot_domain_2.uniprot_id and mutation_pos in interacting_aa_2:
+                # Mutation is inside the second domain
                 self.logger.debug('Mutated uniprot is uniprot 2. Rearranging...')
                 uniprot_id_2 = d.uniprot_domain_1.uniprot_id
                 d_1, d_2 = d.uniprot_domain_2, d.uniprot_domain_1
@@ -372,10 +377,16 @@ class GetMutation(object):
                         domain_2_start, domain_2_end = hf.decode_domain_def(d.uniprot_domain_1.template.domain_def)
 
                 __, alignment = self.db.get_alignment(d.template.model, d.path_to_data)
-#                alignment_id = d.alignment_id_2
                 chains_pdb = [d.template.domain_2.pdb_chain, d.template.domain_1.pdb_chain]
-                interacting_aa = [int(uniprot_num) for uniprot_num in d.template.model.interacting_aa_2.split(',') if uniprot_num]
+                interacting_aa = interacting_aa_2
                 chains_modeller = [d.template.model.chain_2, d.template.model.chain_1]
+
+            else:
+                # Mutation is outside the interface
+                self.logger.error('Mutation: {}'.format(mutation))
+                self.logger.error('Interacting AA: {}'.format(interacting_aa))
+                raise errors.MutationOutsideInterfaceError('mutated residue not involved in the interaction')
+
 
             self.logger.debug('Analysing interface mutation between uniprots %s and %s' % (uniprot_id_1, uniprot_id_2,))
             uniprot_sequences = [self.db.get_uniprot_sequence(d_1.uniprot_id),
@@ -383,10 +394,6 @@ class GetMutation(object):
             domain_sequences = [uniprot_sequences[0][domain_start-1:domain_end],
                                 uniprot_sequences[1][domain_2_start-1:domain_2_end]]
 
-            if int(mutation[1:-1]) not in interacting_aa:
-                self.logger.error('Mutation: {}'.format(mutation))
-                self.logger.error('Interacting AA: {}'.format(interacting_aa))
-                raise errors.MutationOutsideInterfaceError('mutated residue not involved in the interaction')
 
         #######################################################################
         # Common
@@ -418,8 +425,6 @@ class GetMutation(object):
         # Convert mutation from uniprot domain numbering to pdb domain numbering
         position_domain = int(mutation[1:-1]) - domain_start + 1 # +1 to have the numbering staring with 1
         mutation_domain = mutation[0] + str(position_domain) + mutation[-1]
-#        mutation_structure = map_mutation_to_structure(alignment, alignment_id, mutation_domain, uniprot_id_1)
-#        chain_mutation_structure = chains_pdb[0] + '_' + mutation_structure
 
         self.logger.debug('Modeller pdb file: {}'.format(save_path + pdbFile_wt))
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
@@ -436,7 +441,6 @@ class GetMutation(object):
         mut_data.domain_start = domain_start
         mut_data.domain_end = domain_end
         mut_data.alignment = alignment
-#        mut_data.alignment_id = alignment_id
         mut_data.chains_pdb = chains_pdb
         mut_data.uniprot_sequences = uniprot_sequences
         mut_data.domain_sequences = domain_sequences
@@ -468,8 +472,18 @@ class GetMutation(object):
             self.logger.error('Domain AA: {};\t Mutation AA: {}'.format(mutated_aa_domain, mut_data.mutation_domain[0]))
             raise Exception('Mutated amino acid was not found inside the specified domain!')
 
-        return mut_data
-
+        return mut_data            
+     
+     
+    def _get_interacting_aa(self, d, domain_1or2=1):
+        if domain_1or2 == 1:
+            interacting_aa = d.template.model.interacting_aa_1
+        elif domain_1or2 == 2:
+            interacting_aa = d.template.model.interacting_aa_2
+        else:
+            raise Exception("`domain_1or2` should be either '1' or '2'!")
+        return [int(uniprot_num) for uniprot_num in interacting_aa.split(',') if uniprot_num]
+        
 
     def evaluate_mutation(self, d, mut_data, uniprot_mutation):
         """

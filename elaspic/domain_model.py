@@ -82,10 +82,12 @@ class GetModel(object):
             'Aligning: {}/{}*{}:{}'
             .format(d.uniprot_id, d.pdbfam_name, d.template.domain_def.replace(':', '-'), d.template.cath_id))
 
-        alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offsets = \
+        alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offsets = (
             self.perform_alignments_and_modelling(
                 [d.uniprot_id], [d.uniprot_sequence.uniprot_sequence], [d.template.domain_def],
-                d.template.domain.pdb_id, [d.template.domain.pdb_chain], [d.template.domain.pdb_domain_def], d.path_to_data)
+                d.template.domain.pdb_id, [d.template.domain.pdb_chain], 
+                [d.template.domain.pdb_domain_def], d.path_to_data)
+        )
         self.logger.debug('Finished performing alignments!')
         structure = hf.get_pdb_structure(self.unique_temp_folder + 'modeller/' + pdb_filename_wt)
         model = structure[0]
