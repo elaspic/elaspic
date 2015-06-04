@@ -1207,7 +1207,10 @@ def enable_sqlite_foreign_key_checks(engine):
     from sqlalchemy import event
     def _fk_pragma_on_connect(dbapi_con, con_record):
         dbapi_con.execute('pragma foreign_keys=ON')
+    def _long_timeout(dbapi_con, con_record):
+        dbapi_con.execute("pragma busy_timeout=60000") # 60 sec
     event.listen(engine, 'connect', _fk_pragma_on_connect)
+        
         
 class MyDatabase(object):
     """
