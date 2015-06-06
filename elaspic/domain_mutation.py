@@ -359,7 +359,6 @@ class GetMutation(object):
 
                 alignment, __ = self.db.get_alignment(d.template.model, d.path_to_data)
                 chains_pdb = [d.template.domain_1.pdb_chain, d.template.domain_2.pdb_chain]
-                interacting_aa = interacting_aa_1
                 chains_modeller = [d.template.model.chain_1, d.template.model.chain_2]
 
             elif uniprot_id_1 == d.uniprot_domain_2.uniprot_id and mutation_pos in interacting_aa_2:
@@ -378,13 +377,16 @@ class GetMutation(object):
 
                 __, alignment = self.db.get_alignment(d.template.model, d.path_to_data)
                 chains_pdb = [d.template.domain_2.pdb_chain, d.template.domain_1.pdb_chain]
-                interacting_aa = interacting_aa_2
                 chains_modeller = [d.template.model.chain_2, d.template.model.chain_1]
 
             else:
                 # Mutation is outside the interface
-                self.logger.error('Mutation: {}'.format(mutation))
-                self.logger.error('Interacting AA: {}'.format(interacting_aa))
+                self.logger.error('Uniprot ID: {} \tMutation: {}'.format(
+                    uniprot_id_1, mutation))
+                self.logger.error('Uniprot ID 1: \tInteracting AA 1: {}'.format(
+                    d.uniprot_domain_1.uniprot_id, interacting_aa_1))
+                self.logger.error('Uniprot ID 2: \tInteracting AA 2: {}'.format(
+                    d.uniprot_domain_2.uniprot_id, interacting_aa_2))
                 raise errors.MutationOutsideInterfaceError('mutated residue not involved in the interaction')
 
 
