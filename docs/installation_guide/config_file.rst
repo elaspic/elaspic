@@ -55,6 +55,9 @@ Configuration options
      Location to store provean temporary files if working on any note other than `beagle` or `banting`.
      For internal use only. **Default = ''**.
 
+  copy_data
+    Whether or not to copy calculated data back to the archive. Set to 'False' if you are planning 
+    to copy the data yourself (e.g. from inside a PBS or SGE script). **Default = True**.
 
 
 .. _`[DATABASE]`:
@@ -107,8 +110,8 @@ Configuration options
 .. glossary::
 
    path_to_archive
-     Location for storing and retreiving precalculated data.
-     
+     Location for storing and retrieving precalculated data.
+    
    blast_db_path
      Location of the blast **nr** and **pdbaa** databases.
 

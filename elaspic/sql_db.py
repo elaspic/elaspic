@@ -1595,20 +1595,32 @@ class MyDatabase(object):
                 .all()
             )
 
+        path_to_archive = self.configs['path_to_archive']
         d_idx = 0
         while d_idx < len(uniprot_domains):
             d = uniprot_domains[d_idx]
             if not d.template:
                 self.logger.debug(
                     'Skipping uniprot domain with id {} because it does not '
-                    'have a structural template...'.format(d.uniprot_domain_id))
+                    'have a structural template...'
+                    .format(d.uniprot_domain_id))
                 del uniprot_domains[d_idx]
                 continue
+            # Copy precalculated Provean data
             if copy_data:
                 try:
-                    self._copy_uniprot_domain_data(d, d.path_to_data)
+                    self._copy_provean(d, path_to_archive)
                 except subprocess.CalledProcessError as e:
                     self.logger.error(e)
+                    self.logger.error('Failed to copy provean supporting set!')
+                    d.uniprot_sequence.provean.provean_supset_filename = ''
+            # Copy precalculated homology models
+            if copy_data:
+                try:
+                    self._copy_uniprot_domain_data(d, d.path_to_data, path_to_archive)
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(e)
+                    self.logger.error('Failed to copy the domain alignment and / or homology model!')
                     d.template.model.alignment_filename = None
                     d.template.model.model_filename = None
             d_idx += 1
@@ -1630,20 +1642,36 @@ class MyDatabase(object):
                 .all()
             )
 
+        path_to_archive = self.configs['path_to_archive']
         d_idx = 0
         while d_idx < len(uniprot_domain_pairs):
             d = uniprot_domain_pairs[d_idx]
             if not d.template:
                 self.logger.debug(
                     'Skipping uniprot domain pair with id {} because it does not '
-                    'have a structural template...'.format(d.uniprot_domain_pair_id))
+                    'have a structural template...'
+                    .format(d.uniprot_domain_pair_id))
                 del uniprot_domain_pairs[d_idx]
                 continue
+            # Copy precalculated Provean data
             if copy_data:
+                if d.uniprot_domain_1.uniprot_id == uniprot_id:
+                    ud = d.uniprot_domain_1
+                elif d.uniprot_domain_2.uniprot_id == uniprot_id:
+                    ud = d.uniprot_domain_2
                 try:
-                    self._copy_uniprot_domain_pair_data(d, d.path_to_data, uniprot_id)
+                    self._copy_provean(ud, path_to_archive)
                 except subprocess.CalledProcessError as e:
                     self.logger.error(e)
+                    self.logger.error('Failed to copy provean supporting set!')
+                    d.uniprot_sequence.provean.provean_supset_filename = ''
+            # Copy precalculated homology models
+            if copy_data:
+                try:
+                    self._copy_uniprot_domain_pair_data(d, d.path_to_data, path_to_archive)
+                except subprocess.CalledProcessError as e:
+                    self.logger.error(e)
+                    self.logger.error('Failed to copy domain pair alignments and / or homology model!')
                     d.template.model.alignment_filename_1 = None
                     d.template.model.alignment_filename_2 = None
                     d.template.model.model_filename = None
@@ -1652,7 +1680,7 @@ class MyDatabase(object):
         return uniprot_domain_pairs
 
 
-    def _copy_uniprot_domain_data(self, d, path_to_data):
+    def _copy_uniprot_domain_data(self, d, path_to_data, path_to_archive):
         if path_to_data is None:
             self.logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
@@ -1661,7 +1689,7 @@ class MyDatabase(object):
             d.template.model.alignment_filename != None and
             d.template.model.model_filename != None):
                 tmp_save_path = self.configs['temp_path'] + path_to_data
-                archive_save_path = self.configs['path_to_archive'] + path_to_data
+                archive_save_path = path_to_archive + path_to_data
                 path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
                 subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
                 subprocess.check_call("cp -f '{}' '{}'".format(
@@ -1670,16 +1698,9 @@ class MyDatabase(object):
                 subprocess.check_call("cp -f '{}' '{}'".format(
                     archive_save_path + d.template.model.model_filename,
                     tmp_save_path + d.template.model.model_filename), shell=True)
-        # Copy Provean supporting set
-        try:
-            self._copy_provean(d)
-        except subprocess.CalledProcessError as e:
-            self.logger.error('Failed to copy provean supporting set!')
-            self.logger.error(e)
-            d.uniprot_sequence.provean.provean_supset_filename = ''
 
 
-    def _copy_uniprot_domain_pair_data(self, d, path_to_data, uniprot_id):
+    def _copy_uniprot_domain_pair_data(self, d, path_to_data, path_to_archive):
         if path_to_data is None:
             self.logger.error('Cannot copy uniprot domain pair data because `path_to_data` is None')
             return
@@ -1689,7 +1710,7 @@ class MyDatabase(object):
             d.template.model.alignment_filename_2 != None and
             d.template.model.model_filename != None):
                 tmp_save_path = self.configs['temp_path'] + path_to_data
-                archive_save_path = self.configs['path_to_archive'] + path_to_data
+                archive_save_path = path_to_archive + path_to_data
                 path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
                 path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
                 subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
@@ -1703,14 +1724,9 @@ class MyDatabase(object):
                 subprocess.check_call("cp -f '{}' '{}'".format(
                     archive_save_path + d.template.model.model_filename,
                     tmp_save_path + d.template.model.model_filename), shell=True)
-        # Copy Provean supporting set
-        if d.uniprot_domain_1.uniprot_id == uniprot_id:
-            self._copy_provean(d.uniprot_domain_1)
-        elif d.uniprot_domain_2.uniprot_id == uniprot_id:
-            self._copy_provean(d.uniprot_domain_2)
 
 
-    def _copy_provean(self, ud):
+    def _copy_provean(self, ud, path_to_archive):
         if (ud.uniprot_sequence and
             ud.uniprot_sequence.provean and
             ud.uniprot_sequence.provean.provean_supset_filename):
@@ -1721,12 +1737,12 @@ class MyDatabase(object):
                             ud.uniprot_sequence.provean.provean_supset_filename)),
                     shell=True)
                 subprocess.check_call("cp -f '{}' '{}'".format(
-                    self.configs['path_to_archive'] + get_uniprot_base_path(ud) +
+                    path_to_archive + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename,
                     self.configs['temp_path'] + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
                 subprocess.check_call("cp -f '{}' '{}'".format(
-                    self.configs['path_to_archive'] + get_uniprot_base_path(ud) +
+                    path_to_archive + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
                     self.configs['temp_path'] + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
@@ -1758,17 +1774,17 @@ class MyDatabase(object):
 
         if copy_data:
             try:
-                self._copy_mutation_data(uniprot_mutation, d.path_to_data)
+                self._copy_mutation_data(uniprot_mutation, d.path_to_data, self.configs['path_to_archive'])
             except subprocess.CalledProcessError as e:
                 self.logger.error(e)
                 uniprot_mutation.model_filename_wt = None
         return uniprot_mutation
 
 
-    def _copy_mutation_data(self, mutation, path_to_data):
+    def _copy_mutation_data(self, mutation, path_to_data, path_to_archive):
         if mutation and mutation.model_filename_wt:
             tmp_save_path = self.configs['temp_path'] + path_to_data
-            archive_save_path = self.configs['path_to_archive'] + path_to_data
+            archive_save_path = path_to_archive + path_to_data
             path_to_mutation = tmp_save_path + '/'.join(mutation.model_filename_wt.split('/')[:-1]) + '/'
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_mutation), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
@@ -1808,22 +1824,28 @@ class MyDatabase(object):
                     deque( (session.merge(row) for row in row_instance), maxlen=0 )
 
 
-    def merge_provean(self, provean, uniprot_base_path):
+    def merge_provean(self, provean, uniprot_base_path=False):
         """Adds provean score to the database.
         """
-        if (provean.provean_supset_filename and
-                os.path.isfile(self.configs['temp_path'] + uniprot_base_path +
-                    provean.provean_supset_filename) and
-                os.path.isfile(self.configs['temp_path'] + uniprot_base_path +
-                    provean.provean_supset_filename + '.fasta') ):
-            self.logger.debug('Moving provean supset to the output folder: {}'.format(self.configs['path_to_archive'] + uniprot_base_path))
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(self.configs['path_to_archive'] + uniprot_base_path), shell=True)
+        if (uniprot_base_path and
+            provean.provean_supset_filename and
+            os.path.isfile(self.configs['temp_path'] + uniprot_base_path +
+                provean.provean_supset_filename) and
+            os.path.isfile(self.configs['temp_path'] + uniprot_base_path +
+                provean.provean_supset_filename + '.fasta')):
+            # ...
+            path_to_archive = self.configs['path_to_archive']
+            self.logger.debug(
+                'Moving provean supset to the output folder: {}'
+                .format(path_to_archive + uniprot_base_path))
+            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
+                path_to_archive + uniprot_base_path), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
                 self.configs['temp_path'] + uniprot_base_path + provean.provean_supset_filename,
-                self.configs['path_to_archive'] + uniprot_base_path + provean.provean_supset_filename), shell=True)
+                path_to_archive + uniprot_base_path + provean.provean_supset_filename), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
                 self.configs['temp_path'] + uniprot_base_path + provean.provean_supset_filename + '.fasta',
-                self.configs['path_to_archive'] + uniprot_base_path + provean.provean_supset_filename + '.fasta'), shell=True)
+                path_to_archive + uniprot_base_path + provean.provean_supset_filename + '.fasta'), shell=True)
         self.merge_row(provean)
 
 
@@ -1832,8 +1854,9 @@ class MyDatabase(object):
         """
         # Save a copy of the alignment to the export folder
         if path_to_data:
+            path_to_archive = self.configs['path_to_archive']
+            archive_save_path = path_to_archive + path_to_data
             tmp_save_path = self.configs['temp_path'] + path_to_data
-            archive_save_path = self.configs['path_to_archive'] + path_to_data
             # Save the row corresponding to the model as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path), shell=True)
             # Don't need to dump template. Templates are precalculated
@@ -1866,8 +1889,9 @@ class MyDatabase(object):
         """
         mut.mut_date_modified = datetime.datetime.utcnow()
         if path_to_data and (mut.model_filename_wt is not None):
+            path_to_archive = self.configs['path_to_archive']
+            archive_save_path = path_to_archive + path_to_data
             tmp_save_path = self.configs['temp_path'] + path_to_data
-            archive_save_path = self.configs['path_to_archive'] + path_to_data
             archive_save_subpath = mut.model_filename_wt.split('/')[0] + '/'
             # Save the row corresponding to the mutation as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(

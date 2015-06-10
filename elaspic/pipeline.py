@@ -7,6 +7,7 @@ standard_library.install_aliases()
 from builtins import object
 
 import os
+import os.path as op
 import re
 import time
 import subprocess
@@ -170,9 +171,11 @@ class Pipeline(object):
         self.calculated_mutations = []
         self.run_type = run_type
         self.number_of_tries = number_of_tries
-
-        self.unique = tempfile.mkdtemp(prefix='', dir=conf.configs['temp_path']).split('/')[-1]
-        self.unique_temp_folder = os.path.join(conf.configs['temp_path'], self.unique) + '/'
+        
+        self.unique_temp_folder = tempfile.mkdtemp(prefix='', dir=conf.configs['temp_path'])
+        self.unique = op.basename(self.unique_temp_folder)
+        self.unique_temp_folder = self.unique_temp_folder.rstrip('/') + '/'
+        # TODO: change pipeline so that `self.unique_temp_folder` does not end in '/'     
         
         self.logger.info('uniprot_id: {}'.format(uniprot_id))
         self.logger.info('mutations: {}'.format(mutations))
@@ -180,6 +183,8 @@ class Pipeline(object):
         self.logger.info('uniprot_domain_pair_ids: {}'.format(uniprot_domain_pair_ids))
         self.logger.info('unique_temp_folder: {}'.format(self.unique_temp_folder))
         self.logger.info('db_schema: {}'.format(conf.configs.get('db_schema')))
+        self.logger.info('global_temp_path: {global_temp_path}'.format(**conf.configs))
+        self.logger.info('temp_path: {temp_path}'.format(**conf.configs))
 
         # Switch to the root of the unique tmp directory
         os.chdir(self.unique_temp_folder)
@@ -349,7 +354,7 @@ class Pipeline(object):
                     'The user will probably not see this message...')
 
         self.__clear_provean_temp_files()
-        self.db.merge_provean(provean, sql_db.get_uniprot_base_path(d))
+        self.db.merge_provean(provean, conf.configs['copy_data'] and sql_db.get_uniprot_base_path(d))
         self.logger.info('Finished computing provean for {}\n'.format(d.uniprot_id))
         return provean
 
@@ -446,7 +451,7 @@ class Pipeline(object):
 
             # Add either the empty model or the calculated model to the database
             self.logger.info('Adding model...')
-            self.db.merge_model(d, d.path_to_data)
+            self.db.merge_model(d, conf.configs['copy_data'] and d.path_to_data)
         self.logger.info('Finished processing all models for {} {}'.format(self.uniprot_id, self.mutations))
 
 
@@ -470,7 +475,6 @@ class Pipeline(object):
                 continue
             elif d.template.model == None or d.template.model.model_filename == None:
                 self.logger.debug('d.template.model: {}'.format(d.template.model))
-                self.logger.debug('dir(d.template.model): {}'.format(dir(d.template.model)))
                 self.logger.debug('d.template.model.model_filename: {}'.format(
                     getattr(d.template.model, 'model_filename', 'does not exist!')))
                 self.logger.debug('Skipping because no model...')
@@ -567,7 +571,7 @@ class Pipeline(object):
                             .format(attr, attr_type, type(attr_field.decode())))
                         setattr(uniprot_mutation, attr, attr_field.decode())
                 self.calculated_mutations.append(uniprot_mutation)
-                self.db.merge_mutation(uniprot_mutation, d.path_to_data)
+                self.db.merge_mutation(uniprot_mutation, conf.configs['copy_data'] and d.path_to_data)
                 self.uniprot_mutations.append(uniprot_mutation)
         self.logger.info('Finished processing all mutations for {} {}'.format(self.uniprot_id, self.mutations))
 
