@@ -38,6 +38,9 @@ setup(
       },
     classifiers=[
         "Development Status :: 3 - Alpha",
+        "Programming Language :: Python :: 2",
+        "Programming Language :: Python :: 3",
+        "Topic :: Structural Biology",
         "Topic :: Bioinformatics",
     ],
 )

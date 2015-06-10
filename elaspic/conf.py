@@ -31,11 +31,12 @@ def read_configuration_file(config_file):
             'n_cores': '1',
             'web_server': 'False',
             'provean_temp_path': '',
+            'copy_data': 'True',
         })
     configParser.read(config_file)
 
     # From [DEFAULT]
-    configs['global_temp_path'] = configParser.get('DEFAULT', 'global_temp_path')
+    configs['global_temp_path'] = configParser.get('DEFAULT', 'global_temp_path').strip('/') + '/'
     configs['temp_path_suffix'] = configParser.get('DEFAULT', 'temp_path_suffix').strip('/') + '/'
     configs['debug'] = configParser.getboolean('DEFAULT', 'debug')
     configs['look_for_interactions'] = configParser.getboolean('DEFAULT', 'look_for_interactions')
@@ -43,26 +44,18 @@ def read_configuration_file(config_file):
     configs['n_cores'] = configParser.getint('DEFAULT', 'n_cores')
     configs['web_server'] = configParser.get('DEFAULT', 'web_server')
     configs['provean_temp_path'] = configParser.get('DEFAULT', 'provean_temp_path')
-
+    configs['copy_data'] = configParser.getboolean('DEFAULT', 'copy_data')
+    
     # From [DATABASE]
     configs['db_type'] = configParser.get('DATABASE', 'db_type')
-    try:
-        configs['db_is_immutable'] = configParser.get('DATABASE', 'db_is_immutable')
-    except NoOptionError:
-        configs['db_is_immutable'] = False        
+    configs['db_is_immutable'] = configParser.get('DATABASE', 'db_is_immutable', fallback=False)
         
     if configs['db_type'] == 'sqlite':
         configs['sqlite_db_path'] = configParser.get('DATABASE', 'sqlite_db_path')
     elif configs['db_type'] in ['mysql', 'postgresql']:
         configs['db_schema'] = configParser.get('DATABASE', 'db_schema')  
-        try:
-            configs['db_schema_uniprot'] = configParser.get('DATABASE', 'db_schema_uniprot')
-        except NoOptionError:
-            configs['db_schema_uniprot'] = configs['db_schema']
-        try:
-            configs['db_database'] = configParser.get('DATABASE', 'db_database')
-        except NoOptionError:
-            configs['db_database'] = ''        
+        configs['db_schema_uniprot'] = configParser.get('DATABASE', 'db_schema_uniprot', fallback=configs['db_schema'])
+        configs['db_database'] = configParser.get('DATABASE', 'db_database', fallback='')   
         configs['db_username'] = configParser.get('DATABASE', 'db_username')
         configs['db_password'] = configParser.get('DATABASE', 'db_password')
         configs['db_url'] = configParser.get('DATABASE', 'db_url')
@@ -74,10 +67,7 @@ def read_configuration_file(config_file):
     # From [SETTINGS]
     configs['path_to_archive'] = configParser.get('SETTINGS', 'path_to_archive')
     configs['blast_db_path'] = configParser.get('SETTINGS', 'blast_db_path')
-    try:
-        configs['remote_blast_db_path'] = configParser.get('SETTINGS', 'remote_blast_db_path')
-    except NoOptionError:
-        configs['remote_blast_db_path'] = ''
+    configs['remote_blast_db_path'] = configParser.get('SETTINGS', 'remote_blast_db_path', fallback='')
     configs['pdb_path'] = configParser.get('SETTINGS', 'pdb_path')
     configs['data_path'] = data_path
         

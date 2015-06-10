@@ -627,8 +627,8 @@ class GetMutation(object):
             result = str(result, encoding='utf-8')
             error_message = str(error_message, encoding='utf-8')
         if childProcess.returncode != 0:
-            self.logger.error('cp result: {}'.format(result.decode()))
-            self.logger.error('cp error: {}'.format(error_message.decode()))
+            self.logger.error('cp result: {}'.format(result))
+            self.logger.error('cp error: {}'.format(error_message))
 
         #######################################################################
         ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
