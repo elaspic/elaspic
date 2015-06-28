@@ -207,6 +207,7 @@ class Pipeline(object):
         # Obtain all domains and interactions for a given uniprot
         if conf.configs['look_for_interactions'] == 2:
             self.logger.info('Skipping protein domain information...')
+            self.uniprot_domains = []
         else:
             self.logger.info('Obtaining protein domain information...')
             self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
