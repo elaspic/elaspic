@@ -233,8 +233,7 @@ class Pipeline(object):
         # Get interactions
         if conf.configs['look_for_interactions']:
             self.logger.info('Obtaining protein domain pair information...')
-            uniprot_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id, True, uniprot_domain_pair_ids)
-            self.uniprot_domain_pairs = self._filter_uniprot_domain_pairs(uniprot_domain_pairs, uniprot_domain_pair_ids)
+            self.uniprot_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id, True, uniprot_domain_pair_ids)
             self._update_path_to_data(self.uniprot_domain_pairs)
 
         # Make models
@@ -252,30 +251,6 @@ class Pipeline(object):
             self.logger.info('\n\n\n' + '*' * 110)
             self.logger.info("Analyzing mutations...")
             self._compute_mutations()
-
-
-    def _filter_uniprot_domain_pairs(self, uniprot_domain_pairs, uniprot_domain_pair_ids):
-        """Filter to include only the required uniprot_domain_pairs
-        """        
-        if not uniprot_domain_pairs or not uniprot_domain_pair_ids:
-            return uniprot_domain_pairs
-        
-        counter = 0
-        select_uniprot_domain_pairs = []
-        for d in uniprot_domain_pairs:
-            if d.uniprot_domain_pair_id in uniprot_domain_pair_ids:
-                select_uniprot_domain_pairs.append(d)
-            else:
-                counter += 1
-        self.logger.info(
-            'Removed {} uniprot domain pairs because they were not included in the list of uniprot_domain_pair_ids.'
-            .format(counter)
-        )
-        if not select_uniprot_domain_pairs:
-            raise Exception(
-                'After filtering for select uniprot_domain_pair_ids we have nothing left!'                    
-            )
-        return select_uniprot_domain_pairs
 
 
     def _update_path_to_data(self, d_list):

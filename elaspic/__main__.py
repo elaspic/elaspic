@@ -53,7 +53,7 @@ def get_parser():
         '-m', '--mutations', nargs='?', default=['',], 
         help="Mutation(s) that you wish to evaluate (e.g. 'D172E,R173H')")
     parser.add_argument(
-        '-p', '--uniprot_domain_pair_ids', default='',
+        '-p', '--uniprot_domain_pair_ids',  nargs='?', default='',
         help="List of uniprot_domain_pair_ids to analyse "
             "(useful if you want to restrict your analysis to only a handful of domains) " )
     parser.add_argument(
