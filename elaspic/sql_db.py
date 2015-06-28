@@ -503,7 +503,7 @@ class MyDatabase(object):
         return uniprot_domains
 
 
-    def get_uniprot_domain_pair(self, uniprot_id, copy_data=False, uniprot_domain_pair_ids=None):
+    def get_uniprot_domain_pair(self, uniprot_id, copy_data=False, uniprot_domain_pair_ids=[]):
         """
         """
         with self.session_scope() as session:
@@ -513,7 +513,7 @@ class MyDatabase(object):
                     sa.text("uniprot_domain_1.uniprot_id='{}'".format(uniprot_id)),
                     sa.text("uniprot_domain_2.uniprot_id='{}'".format(uniprot_id))))
             )
-            if uniprot_domain_pair_ids is not None:
+            if uniprot_domain_pair_ids:
                 uniprot_domain_pairs_query = (
                     uniprot_domain_pairs_query
                     .filter(UniprotDomainPair.uniprot_domain_pair_id.in_(uniprot_domain_pair_ids))
