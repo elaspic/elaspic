@@ -260,7 +260,7 @@ class Pipeline(object):
             if not d.path_to_data or any([len(x) > 255 for x in d.path_to_data.split('/')]):
                 d.path_to_data = sql_db.get_uniprot_base_path(d) + sql_db.get_uniprot_domain_path(d)
                 self.db.merge_row(d)
-            subprocess.check_call('mkdir -p {}'.format(conf.configs['temp_path'] + d.path_to_data), shell=True)
+            subprocess.check_call('mkdir -p {}'.format(conf.configs['temp_archive_path'] + d.path_to_data), shell=True)
 
 
     def _compute_provean(self):
@@ -272,7 +272,7 @@ class Pipeline(object):
         if (d.uniprot_sequence.provean and
             d.uniprot_sequence.provean.provean_supset_filename):
                 path_to_provean_supset = (
-                    conf.configs['temp_path'] + sql_db.get_uniprot_base_path(d) +
+                    conf.configs['temp_archive_path'] + sql_db.get_uniprot_base_path(d) +
                     d.uniprot_sequence.provean.provean_supset_filename)
 #                path_to_provean_supset = (
 #                    conf.configs['path_to_archive'] + sql_db.get_uniprot_base_path(d) +
@@ -573,8 +573,8 @@ class Pipeline(object):
 
     def __prepare_temp_folder(self):
         # base temp directory
-        if not os.path.isdir(conf.configs['temp_path']):
-            subprocess.check_call('mkdir -p ' + conf.configs['temp_path'], shell=True)
+        if not os.path.isdir(conf.configs['temp_archive_path']):
+            subprocess.check_call('mkdir -p ' + conf.configs['temp_archive_path'], shell=True)
 
         # unique_temp_folder
         if not os.path.isdir(self.unique_temp_folder):

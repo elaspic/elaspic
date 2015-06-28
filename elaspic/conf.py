@@ -25,6 +25,7 @@ def read_configuration_file(config_file):
         defaults={
             'global_temp_path': '/tmp/',
             'temp_path_suffix': 'elaspic/',
+            'temp_archive_path_suffix': 'archive/',
             'debug': 'False',
             'look_for_interactions': 'True',
             'remake_provean_supset': 'False',
@@ -38,6 +39,7 @@ def read_configuration_file(config_file):
     # From [DEFAULT]
     configs['global_temp_path'] = configParser.get('DEFAULT', 'global_temp_path').rstrip('/') + '/'
     configs['temp_path_suffix'] = configParser.get('DEFAULT', 'temp_path_suffix').rstrip('/') + '/'
+    configs['temp_archive_path_suffix'] = configParser.get('DEFAULT', 'temp_archive_path_suffix').rstrip('/') + '/'
     configs['debug'] = configParser.getboolean('DEFAULT', 'debug')
     configs['look_for_interactions'] = configParser.getboolean('DEFAULT', 'look_for_interactions')
     configs['remake_provean_supset'] = configParser.getboolean('DEFAULT', 'remake_provean_supset')
@@ -82,7 +84,11 @@ def read_configuration_file(config_file):
     configs['gap_extend'] = configParser.getint('GET_MUTATION', 'gap_extend')
     configs['matrix'] = getattr(MatrixInfo, configs['matrix_type'])
 
-    configs['temp_path'] = get_temp_path(configs['global_temp_path'], configs['temp_path_suffix'])
+    configs['temp_path'] = get_temp_path(
+        configs['global_temp_path'], configs['temp_path_suffix'])
+    configs['temp_archive_path'] = get_temp_archive_path(
+        configs['temp_path'], configs['temp_archive_path_suffix'])
+    
 
 
 def _get_db_socket(configParser, configs):
@@ -114,7 +120,12 @@ def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
     points to '/dev/shm/' on Scinet.
     """
     temp_path = os.path.join(os.environ.get('TMPDIR', global_temp_path), temp_path_suffix)
-    subprocess.check_call('mkdir -p ' + temp_path, shell=True)
+    subprocess.check_call("mkdir -p '{}'".format(temp_path), shell=True)
     return temp_path
 
 
+def get_temp_archive_path(temp_path, temp_archive_path_suffix):
+    temp_archive_path = os.path.join(temp_path, temp_archive_path_suffix)
+    subprocess.check_call("mkdir -p '{}'".format(temp_archive_path), shell=True)
+    return temp_archive_path
+    
