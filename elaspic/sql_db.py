@@ -25,6 +25,8 @@ from collections import deque
 
 import pandas as pd
 import sqlalchemy as sa
+import sqlalchemy.exc as sa_exc
+from retrying import retry
 
 from Bio import SeqIO
 from Bio import AlignIO
@@ -37,39 +39,13 @@ from . import helper_functions as hf
 from . import errors as error
 from .database_tables import (
     Base, 
-    Domain, DomainContact, UniprotSequence,
+    Domain, DomainContact, UniprotSequence, Provean,
     UniprotDomain, UniprotDomainTemplate, UniprotDomainModel, UniprotDomainMutation,
     UniprotDomainPair, UniprotDomainPairTemplate, UniprotDomainPairModel, UniprotDomainPairMutation,
 )
 
 
 #%%
-def retry_on_operation_error(func):
-    """
-    Retry function `func` if it quits with an ``sqlalchemy.exc.OperationError``.
-    Useful for overcoming "database is locked" errors when using SQLite.
-    
-    Source 
-      http://stackoverflow.com/questions/24024966/try-except-every-method-in-class
-    """
-    num_retries = 5
-    @functools.wraps(func)
-    def db_access(*a, **kw):
-        sleep_interval = 5 
-        for i in range(num_retries):
-            try:
-                return func(*a, **kw)
-            except sa.exc.OperationalError as e:
-                print('Caught exception: {}'.format(e))
-                if i < num_retries-1:
-                    print('Waiting for {} seconds before trying again...'.format(sleep_interval))
-                    time.sleep(sleep_interval)
-                    sleep_interval = min(2*sleep_interval, 120)
-                else:
-                    raise e
-    return db_access
-
-
 def decorate_all_methods(decorator):
     """Decorate all methods of a class with `decorator`.
     """
@@ -101,7 +77,7 @@ def enable_sqlite_foreign_key_checks(engine):
 #%%
 #: Get the session that will be used for all future queries.
 #: `expire_on_commit` so that you keep all the table objects even after the session closes.
-Session = decorate_all_methods(retry_on_operation_error)(sa.orm.sessionmaker(expire_on_commit=False))
+Session = sa.orm.sessionmaker(expire_on_commit=False)
 #Session = scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
         
         
@@ -170,11 +146,23 @@ class MyDatabase(object):
         if self.configs['db_type'] == 'sqlite':
             autocommit = False #True
             autoflush = False #True
+            retry_on_failure = True
         elif self.configs['db_type'] in ['postgresql', 'mysql']:
             autocommit = False
             autoflush = False
+            retry_on_failure = True
         Session.configure(bind=self.engine, autocommit=autocommit, autoflush=autoflush)
-        return Session
+        if retry_on_failure:
+            decorator = (
+                decorate_all_methods(
+                    retry(retry_on_exception=lambda exc: isinstance(exc, sa_exc.OperationalError),
+                          wait_exponential_multiplier=1000, # start with one second delay
+                          wait_exponential_max=600000) # go up to 10 minutes
+                )
+            )
+            return decorator(Session)
+        else:
+            return Session
 
 
     @contextmanager
@@ -185,15 +173,9 @@ class MyDatabase(object):
         """
         session = self.Session()
         try:
-            n_tries = 0
-            while n_tries < 10:
-                try:
-                    yield session
-                    if not self.configs['db_is_immutable']:
-                        session.commit()
-                except sa.exc.OperationalError as e:
-                    n_tries += 1
-                    self.logger.error('Databas operation failed with an error: {}'.format(e))
+            yield session
+            if not self.configs['db_is_immutable']:
+                session.commit()
         except:
             if not self.configs['db_is_immutable']:
                 session.rollback()
@@ -521,15 +503,23 @@ class MyDatabase(object):
         return uniprot_domains
 
 
-    def get_uniprot_domain_pair(self, uniprot_id, copy_data=False):
+    def get_uniprot_domain_pair(self, uniprot_id, copy_data=False, uniprot_domain_pair_ids=None):
         """
         """
         with self.session_scope() as session:
-            uniprot_domain_pairs = (
+            uniprot_domain_pairs_query = (
                 session.query(UniprotDomainPair)
                 .filter(sa.or_(
                     sa.text("uniprot_domain_1.uniprot_id='{}'".format(uniprot_id)),
                     sa.text("uniprot_domain_2.uniprot_id='{}'".format(uniprot_id))))
+            )
+            if uniprot_domain_pair_ids is not None:
+                uniprot_domain_pairs_query = (
+                    uniprot_domain_pairs_query
+                    .filter(UniprotDomainPair.uniprot_domain_pair_id.in_(uniprot_domain_pair_ids))
+                )
+            uniprot_domain_pairs = (
+                uniprot_domain_pairs_query
                 # .options(sa.orm.joinedload('template').sa.orm.joinedload('model'))
                 .options(sa.orm.joinedload('template', innerjoin=True))
                 .all()
@@ -581,16 +571,24 @@ class MyDatabase(object):
             d.template.model != None and
             d.template.model.alignment_filename != None and
             d.template.model.model_filename != None):
-                tmp_save_path = self.configs['temp_path'] + path_to_data
-                archive_save_path = path_to_archive + path_to_data
-                path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
-                subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.alignment_filename,
-                    tmp_save_path + d.template.model.alignment_filename), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.model_filename,
-                    tmp_save_path + d.template.model.model_filename), shell=True)
+                if path_to_archive.endswith('.7z'):
+                    # Extract files from a 7zip archive
+                    filenames = [
+                        path_to_data + d.template.model.alignment_filename,
+                        path_to_data + d.template.model.model_filename,
+                    ]
+                    self._extract_files_from_7zip(path_to_archive, filenames)
+                else:
+                    tmp_save_path = self.configs['temp_path'] + path_to_data
+                    archive_save_path = path_to_archive + path_to_data
+                    path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
+                    subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        archive_save_path + d.template.model.alignment_filename,
+                        tmp_save_path + d.template.model.alignment_filename), shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        archive_save_path + d.template.model.model_filename,
+                        tmp_save_path + d.template.model.model_filename), shell=True)
 
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, path_to_archive):
@@ -602,43 +600,93 @@ class MyDatabase(object):
             d.template.model.alignment_filename_1 != None and
             d.template.model.alignment_filename_2 != None and
             d.template.model.model_filename != None):
-                tmp_save_path = self.configs['temp_path'] + path_to_data
-                archive_save_path = path_to_archive + path_to_data
-                path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
-                path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
-                subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
-                subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.alignment_filename_1,
-                    tmp_save_path + d.template.model.alignment_filename_1), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.alignment_filename_2,
-                    tmp_save_path + d.template.model.alignment_filename_2), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.model_filename,
-                    tmp_save_path + d.template.model.model_filename), shell=True)
+                if path_to_archive.endswith('.7z'):
+                    # Extract files from a 7zip archive
+                    filenames = [
+                        path_to_data + d.template.model.alignment_filename_1,
+                        path_to_data + d.template.model.alignment_filename_2,
+                        path_to_data + d.template.model.model_filename,
+                    ]
+                    self._extract_files_from_7zip(path_to_archive, filenames)
+                else:
+                    tmp_save_path = self.configs['temp_path'] + path_to_data
+                    archive_save_path = path_to_archive + path_to_data
+                    path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
+                    path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
+                    subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
+                    subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        archive_save_path + d.template.model.alignment_filename_1,
+                        tmp_save_path + d.template.model.alignment_filename_1), shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        archive_save_path + d.template.model.alignment_filename_2,
+                        tmp_save_path + d.template.model.alignment_filename_2), shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        archive_save_path + d.template.model.model_filename,
+                        tmp_save_path + d.template.model.model_filename), shell=True)
 
 
     def _copy_provean(self, ud, path_to_archive):
         if (ud.uniprot_sequence and
             ud.uniprot_sequence.provean and
             ud.uniprot_sequence.provean.provean_supset_filename):
-                subprocess.check_call(
-                    "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-                        os.path.dirname(
-                            self.configs['temp_path'] + get_uniprot_base_path(ud) +
-                            ud.uniprot_sequence.provean.provean_supset_filename)),
-                    shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    path_to_archive + get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename,
-                    self.configs['temp_path'] + get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    path_to_archive + get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-                    self.configs['temp_path'] + get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
+                if path_to_archive.endswith('.7z'):
+                    # Extract files from a 7zip archive
+                    filenames = [
+                        get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename,
+                        get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+                    ]
+                    self._extract_files_from_7zip(path_to_archive, filenames)
+                else:
+                    # Compy files from the archive folders
+                    subprocess.check_call(
+                        "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
+                            os.path.dirname(
+                                self.configs['temp_path'] + get_uniprot_base_path(ud) +
+                                ud.uniprot_sequence.provean.provean_supset_filename)),
+                        shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        path_to_archive + get_uniprot_base_path(ud) +
+                            ud.uniprot_sequence.provean.provean_supset_filename,
+                        self.configs['temp_path'] + get_uniprot_base_path(ud) +
+                            ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
+                    subprocess.check_call("cp -f '{}' '{}'".format(
+                        path_to_archive + get_uniprot_base_path(ud) +
+                            ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+                        self.configs['temp_path'] + get_uniprot_base_path(ud) +
+                            ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
+
+
+    @retry(retry_on_exception=lambda exc: type(exc) == error.Archive7zipError, # isinstance(exc, error.Archive7zipError)
+           wait_exponential_multiplier=1000, 
+           wait_exponential_max=60000)
+    def _extract_files_from_7zip(self, path_to_archive, filenames):
+        """Extract files to `config['temp_path']`
+        """
+        system_command = "7za x '{path_to_archive}' '{files}' -y".format(
+            path_to_archive=path_to_archive, 
+            files="' '".join(filenames)
+        )
+        self.logger.debug(
+            'Extracting files from 7zip archive using the following system command:\n{}'
+            .format(system_command))
+        result, error_message, return_code = (
+            hf.run_subprocess_locally_full(self.configs['temp_path'], system_command)
+        )
+        
+        def log_error():
+            self.logger.error(
+                '\n result:{}\n error_message:{}\n return_code:{}'
+                .format(result, error_message, return_code)
+            )
+            
+        if 'No files to process' in result:
+            log_error()
+            raise error.Archive7zipFileNotFoundError(result, error_message, return_code)
+        
+        if return_code:
+            log_error()
+            raise error.Archive7zipError(result, error_message, return_code)
 
 
     def get_uniprot_mutation(self, d, mutation, uniprot_id=None, copy_data=False):
@@ -668,7 +716,9 @@ class MyDatabase(object):
         if copy_data:
             try:
                 self._copy_mutation_data(uniprot_mutation, d.path_to_data, self.configs['path_to_archive'])
-            except subprocess.CalledProcessError as e:
+            except (subprocess.CalledProcessError,
+                    error.Archive7zipError,
+                    error.Archive7zipFileNotFoundError) as e:
                 self.logger.error(e)
                 uniprot_mutation.model_filename_wt = None
         return uniprot_mutation
@@ -676,16 +726,24 @@ class MyDatabase(object):
 
     def _copy_mutation_data(self, mutation, path_to_data, path_to_archive):
         if mutation and mutation.model_filename_wt:
-            tmp_save_path = self.configs['temp_path'] + path_to_data
-            archive_save_path = path_to_archive + path_to_data
-            path_to_mutation = tmp_save_path + '/'.join(mutation.model_filename_wt.split('/')[:-1]) + '/'
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_mutation), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_save_path + mutation.model_filename_wt,
-                tmp_save_path + mutation.model_filename_wt), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_save_path + mutation.model_filename_mut,
-                tmp_save_path + mutation.model_filename_mut), shell=True)
+            if path_to_archive.endswith('.7z'):
+                # Extract files from a 7zip archive
+                filenames = [
+                    path_to_data + mutation.model_filename_wt,
+                    path_to_data + mutation.model_filename_mut,
+                ]
+                self._extract_files_from_7zip(path_to_archive, filenames)
+            else:
+                tmp_save_path = self.configs['temp_path'] + path_to_data
+                archive_save_path = path_to_archive + path_to_data
+                path_to_mutation = os.path.dirname(tmp_save_path + mutation.model_filename_wt)
+                subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_mutation), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + mutation.model_filename_wt,
+                    tmp_save_path + mutation.model_filename_wt), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + mutation.model_filename_mut,
+                    tmp_save_path + mutation.model_filename_mut), shell=True)
 
 
     def remove_model(self, d):

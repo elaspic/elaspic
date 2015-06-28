@@ -30,6 +30,7 @@ class TcoffeePDBidError(Exception):
         self.result = result
 
 
+
 #%% Provean
 
 class ProveanError(Exception):
@@ -96,6 +97,15 @@ class ResourceError(Exception):
 
 
 #%% Computing mutations
+
+class Archive7zipError(Exception):
+    def __init__(self, result, error_message, return_code):
+        super(Archive7zipError, self).__init__(result)
+        self.error_message = error_message
+        self.return_code = return_code
+
+class Archive7zipFileNotFoundError(Archive7zipError):
+    pass
 
 class NoSequenceFound(Exception):
     pass
