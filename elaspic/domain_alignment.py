@@ -170,7 +170,7 @@ def build_provean_supporting_set(
         seq=Seq(uniprot_sequence), id=str(uniprot_id), description=uniprot_name)
 
     provean_supset_path = (
-        configs['temp_path'] + sql_db.get_uniprot_base_path(
+        configs['temp_archive_path'] + sql_db.get_uniprot_base_path(
             {'uniprot_id': uniprot_id, 'uniprot_name': uniprot_name}))
     provean_supset_filename = uniprot_id + '_provean_supset_{}'.format(supset_version)
 

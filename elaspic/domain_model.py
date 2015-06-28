@@ -33,7 +33,7 @@ class GetModel(object):
         """
         """
         self.global_temp_path = configs['global_temp_path']
-        self.temp_path = configs['temp_path']
+        self.temp_archive_path = configs['temp_archive_path']
         self.unique_temp_folder = unique_temp_folder
         self.pdb_path = configs['pdb_path']
         self.db = db
@@ -336,7 +336,7 @@ class GetModel(object):
         model_errors = []
 
         # Folder for storing files for export to output
-        save_path = self.temp_path + path_to_data
+        save_path = self.temp_archive_path + path_to_data
         self.logger.debug('Template pdb: {}'.format(pdb_id))
         self.logger.debug('save path: {}'.format(save_path))
         uniprot_domain_seqrecs = self.get_uniprot_domain_seqrecs(uniprot_ids, uniprot_sequences, uniprot_domain_defs)
@@ -492,7 +492,7 @@ class GetModel(object):
             AlignIO.write(alignment, self.unique_temp_folder + 'tcoffee/' + alignment_filename, 'clustal')
         except IndexError as e:
             raise errors.EmptyPDBSequenceError('{}: {}'.format(type(e), e))
-        temp_save_path = self.temp_path + path_to_data
+        temp_save_path = self.temp_archive_path + path_to_data
         subprocess.check_call("mkdir -p '{}'".format(temp_save_path), shell=True)
         subprocess.check_call("cp -f '{}' '{}'".format(
             self.unique_temp_folder + 'tcoffee/' + alignment_filename,

@@ -276,7 +276,7 @@ class GetMutation(object):
 
     def __init__(self, unique_temp_folder, db, logger, provean_temp_path, configs):
         self.global_temp_path = configs['global_temp_path']
-        self.temp_path = configs['temp_path']
+        self.temp_archive_path = configs['temp_archive_path']
         self.unique_temp_folder = unique_temp_folder
         self.pdb_path = configs['pdb_path']
         self.db = db # sql database
@@ -402,7 +402,7 @@ class GetMutation(object):
         if int(mutation[1:-1]) < domain_start or int(mutation[1:-1]) > domain_end:
             raise errors.MutationOutsideDomainError('Mutation falls outside domain')
 
-        save_path = self.temp_path + d.path_to_data
+        save_path = self.temp_archive_path + d.path_to_data
         pdbFile_wt = d.template.model.model_filename
         pdbfam_name = d_1.pdbfam_name
         uniprot_domain_id = d_1.uniprot_domain_id
@@ -411,7 +411,7 @@ class GetMutation(object):
         if (d_1.uniprot_sequence.provean and
             d_1.uniprot_sequence.provean.provean_supset_filename):
                 path_to_provean_supset = (
-                    self.temp_path + sql_db.get_uniprot_base_path(d_1) +
+                    self.temp_archive_path + sql_db.get_uniprot_base_path(d_1) +
                     d_1.uniprot_sequence.provean.provean_supset_filename )
                 if not os.path.isfile(path_to_provean_supset):
                     error_message = (
