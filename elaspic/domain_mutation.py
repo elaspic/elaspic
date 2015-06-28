@@ -685,21 +685,17 @@ class GetMutation(object):
         ## 4th: set up the classes for the wildtype and the mutant structures
         fX_wt_list = list()
         for wPDB in repairedPDB_wt_list:
-            fX_wt_list.append(call_foldx.FoldX(self.unique_temp_folder,
-                                    wPDB,
-                                    mut_data.chains_modeller[0],
-                                    self.build_model_runs,
-                                    self.foldX_WATER,
-                                    self.logger))
+            fX_wt_list.append(
+                call_foldx.FoldX(
+                    self.unique_temp_folder, wPDB, mut_data.chains_modeller[0],
+                    self.build_model_runs, self.foldX_WATER, self.logger))
 
         fX_mut_list = list()
         for mPDB in repairedPDB_mut_list:
-            fX_mut_list.append(call_foldx.FoldX(self.unique_temp_folder,
-                                     mPDB,
-                                     mut_data.chains_modeller[0],
-                                     self.build_model_runs,
-                                     self.foldX_WATER,
-                                     self.logger))
+            fX_mut_list.append(
+                call_foldx.FoldX(
+                    self.unique_temp_folder, mPDB, mut_data.chains_modeller[0],
+                    self.build_model_runs, self.foldX_WATER, self.logger))
 
         #######################################################################
         ## 5th: calculate the energy for the wildtype

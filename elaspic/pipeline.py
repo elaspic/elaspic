@@ -171,6 +171,7 @@ class Pipeline(object):
         self.calculated_mutations = []
         self.run_type = run_type
         self.number_of_tries = number_of_tries
+        self.uniprot_domain_pair_ids = uniprot_domain_pair_ids
         
         self.unique_temp_folder = tempfile.mkdtemp(prefix='', dir=conf.configs['temp_path'])
         self.unique = op.basename(self.unique_temp_folder)
@@ -204,9 +205,12 @@ class Pipeline(object):
         self.db = sql_db.MyDatabase(conf.configs, logger=self.logger)
 
         # Obtain all domains and interactions for a given uniprot
-        self.logger.info('Obtaining protein domain information...')
-        self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
-        self._update_path_to_data(self.uniprot_domains)
+        if conf.configs['look_for_interactions'] == 2:
+            self.logger.info('Skipping protein domain information...')
+        else:
+            self.logger.info('Obtaining protein domain information...')
+            self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
+            self._update_path_to_data(self.uniprot_domains)
 
         # Mutations
         self.uniprot_mutations = []
@@ -214,9 +218,9 @@ class Pipeline(object):
         # Find provean
         if not self.uniprot_domains:
             self.logger.info('Warning! Uniprot {} has no pfam domains!'.format(self.uniprot_id))
-            # You don't want to compute provean for a protein wihtout domains,
-            # but you might want to evaluate mutations (if everything else is 
-            # precalculated and you are running on a cluster).
+        # You don't want to compute provean for a protein wihtout domains,
+        # but you might want to evaluate mutations (if everything else is 
+        # precalculated and you are running on a cluster).
         if run_type in [1, 5] and self.uniprot_domains:
             self.logger.info('\n\n\n' + '*' * 110)
             self.logger.info("Computing provean...")
@@ -233,7 +237,8 @@ class Pipeline(object):
         # Get interactions
         if conf.configs['look_for_interactions']:
             self.logger.info('Obtaining protein domain pair information...')
-            self.uniprot_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id, True, uniprot_domain_pair_ids)
+            self.uniprot_domain_pairs = self.db.get_uniprot_domain_pair(
+                self.uniprot_id, True, self.uniprot_domain_pair_ids)
             self._update_path_to_data(self.uniprot_domain_pairs)
 
         # Make models
@@ -511,8 +516,8 @@ class Pipeline(object):
                         .format(unique_id_string, unique_id, self.number_of_tries))
                     self.db.remove_model(d)
                     self.__call__(
-                        self.uniprot_id, self.mutations, self.run_type, conf.configs['n_cores'],
-                        self.number_of_tries, self.logger
+                        self.uniprot_id, self.mutations, self.run_type, self.number_of_tries, 
+                        self.uniprot_domain_pair_ids,
                     )
                 except (errors.MutationOutsideDomainError,
                         errors.MutationOutsideInterfaceError) as e:

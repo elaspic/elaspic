@@ -627,34 +627,43 @@ class MyDatabase(object):
 
 
     def _copy_provean(self, ud, path_to_archive):
-        if (ud.uniprot_sequence and
-            ud.uniprot_sequence.provean and
-            ud.uniprot_sequence.provean.provean_supset_filename):
-                if path_to_archive.endswith('.7z'):
-                    # Extract files from a 7zip archive
-                    filenames = [
-                        get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename,
-                        get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-                    ]
-                    self._extract_files_from_7zip(path_to_archive, filenames)
-                else:
-                    # Compy files from the archive folders
-                    subprocess.check_call(
-                        "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-                            os.path.dirname(
-                                self.configs['temp_archive_path'] + get_uniprot_base_path(ud) +
-                                ud.uniprot_sequence.provean.provean_supset_filename)),
-                        shell=True)
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        path_to_archive + get_uniprot_base_path(ud) +
-                            ud.uniprot_sequence.provean.provean_supset_filename,
+        if not (ud.uniprot_sequence and
+                ud.uniprot_sequence.provean and
+                ud.uniprot_sequence.provean.provean_supset_filename):
+            self.logger.warning('Provean supset is missing for domain: {}'.format(ud.uniprot_domain_id))
+            if ud.uniprot_sequence:
+                self.logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence))
+                if ud.uniprot_sequence.provean:
+                    self.logger.warning('ud.uniprot_sequence.provean: {}'.format(ud.uniprot_sequence.provean))
+                    if ud.uniprot_sequence.provean.provean_supset_filename:
+                        self.logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence.provean.provean_supset_filename))
+            return
+                
+        if path_to_archive.endswith('.7z'):
+            # Extract files from a 7zip archive
+            filenames = [
+                get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename,
+                get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+            ]
+            self._extract_files_from_7zip(path_to_archive, filenames)
+        else:
+            # Compy files from the archive folders
+            subprocess.check_call(
+                "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
+                    os.path.dirname(
                         self.configs['temp_archive_path'] + get_uniprot_base_path(ud) +
-                            ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        path_to_archive + get_uniprot_base_path(ud) +
-                            ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-                        self.configs['temp_archive_path'] + get_uniprot_base_path(ud) +
-                            ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
+                        ud.uniprot_sequence.provean.provean_supset_filename)),
+                shell=True)
+            subprocess.check_call("cp -f '{}' '{}'".format(
+                path_to_archive + get_uniprot_base_path(ud) +
+                    ud.uniprot_sequence.provean.provean_supset_filename,
+                self.configs['temp_archive_path'] + get_uniprot_base_path(ud) +
+                    ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
+            subprocess.check_call("cp -f '{}' '{}'".format(
+                path_to_archive + get_uniprot_base_path(ud) +
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+                self.configs['temp_archive_path'] + get_uniprot_base_path(ud) +
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
 
 
     @retry(retry_on_exception=lambda exc: type(exc) == error.Archive7zipError, # isinstance(exc, error.Archive7zipError)

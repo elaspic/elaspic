@@ -41,7 +41,7 @@ def read_configuration_file(config_file):
     configs['temp_path_suffix'] = configParser.get('DEFAULT', 'temp_path_suffix').rstrip('/') + '/'
     configs['temp_archive_path_suffix'] = configParser.get('DEFAULT', 'temp_archive_path_suffix').rstrip('/') + '/'
     configs['debug'] = configParser.getboolean('DEFAULT', 'debug')
-    configs['look_for_interactions'] = configParser.getboolean('DEFAULT', 'look_for_interactions')
+    configs['look_for_interactions'] = _parse_look_for_interactions(configParser.get('DEFAULT', 'look_for_interactions'))
     configs['remake_provean_supset'] = configParser.getboolean('DEFAULT', 'remake_provean_supset')
     configs['n_cores'] = configParser.getint('DEFAULT', 'n_cores')
     configs['web_server'] = configParser.get('DEFAULT', 'web_server')
@@ -88,8 +88,16 @@ def read_configuration_file(config_file):
         configs['global_temp_path'], configs['temp_path_suffix'])
     configs['temp_archive_path'] = get_temp_archive_path(
         configs['temp_path'], configs['temp_archive_path_suffix'])
-    
 
+
+def _parse_look_for_interactions(look_for_interactions):
+    if look_for_interactions in ['True', 'False']:
+        return int(look_for_interactions == 'True')
+    elif look_for_interactions.isnumeric():
+        return int(look_for_interactions)
+    else:
+        raise Exception()
+        
 
 def _get_db_socket(configParser, configs):
     """
