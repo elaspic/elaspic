@@ -233,7 +233,7 @@ class Pipeline(object):
         # Get interactions
         if conf.configs['look_for_interactions']:
             self.logger.info('Obtaining protein domain pair information...')
-            uniprot_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id, True)
+            uniprot_domain_pairs = self.db.get_uniprot_domain_pair(self.uniprot_id, True, uniprot_domain_pair_ids)
             self.uniprot_domain_pairs = self._filter_uniprot_domain_pairs(uniprot_domain_pairs, uniprot_domain_pair_ids)
             self._update_path_to_data(self.uniprot_domain_pairs)
 
@@ -500,8 +500,7 @@ class Pipeline(object):
                 if (precalculated_mutation and
                         (precalculated_mutation.provean_score and
                         precalculated_mutation.stability_energy_wt and
-                        precalculated_mutation.ddg != None and
-                        precalculated_mutation.ddg != 1.0)): # TODO: Remove this line
+                        precalculated_mutation.ddg != None)): 
                     self.calculated_mutations.append(precalculated_mutation)
                     self.logger.info('Mutation has already been completely evaluated. Skipping...')
                     continue

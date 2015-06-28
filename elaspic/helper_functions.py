@@ -257,3 +257,16 @@ def run_subprocess_locally(working_path, system_command, **popen_argvars):
         return child_process
 
 
+def run_subprocess_locally_full(working_path, system_command, **popen_argvars):
+    child_process = run_subprocess_locally(working_path, system_command, **popen_argvars)
+    result, error_message = child_process.communicate()
+    if six.PY3:
+        result = str(result, encoding='utf-8')
+        error_message = str(error_message, encoding='utf-8')
+    return_code = child_process.returncode
+    return result, error_message, return_code
+    
+    
+    
+    
+    

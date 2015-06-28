@@ -36,8 +36,8 @@ def read_configuration_file(config_file):
     configParser.read(config_file)
 
     # From [DEFAULT]
-    configs['global_temp_path'] = configParser.get('DEFAULT', 'global_temp_path').strip('/') + '/'
-    configs['temp_path_suffix'] = configParser.get('DEFAULT', 'temp_path_suffix').strip('/') + '/'
+    configs['global_temp_path'] = configParser.get('DEFAULT', 'global_temp_path').rstrip('/') + '/'
+    configs['temp_path_suffix'] = configParser.get('DEFAULT', 'temp_path_suffix').rstrip('/') + '/'
     configs['debug'] = configParser.getboolean('DEFAULT', 'debug')
     configs['look_for_interactions'] = configParser.getboolean('DEFAULT', 'look_for_interactions')
     configs['remake_provean_supset'] = configParser.getboolean('DEFAULT', 'remake_provean_supset')
@@ -116,7 +116,5 @@ def get_temp_path(global_temp_path='/tmp', temp_path_suffix=''):
     temp_path = os.path.join(os.environ.get('TMPDIR', global_temp_path), temp_path_suffix)
     subprocess.check_call('mkdir -p ' + temp_path, shell=True)
     return temp_path
-
-
 
 
