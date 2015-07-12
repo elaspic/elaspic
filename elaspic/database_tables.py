@@ -789,6 +789,8 @@ class UniprotDomainPairTemplate(Base):
         Unique id identifying each domain-domain interaction.
 
       domain_contact_id
+          Unique id of the domain pair in the :ref:`domain_contact` table
+          that was used as a template for the modelled domain pair.
 
       cath_id_1
         Unique id of the structural template for the first domain.
