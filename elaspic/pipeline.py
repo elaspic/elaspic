@@ -442,7 +442,9 @@ class Pipeline(object):
         possible_mutation_errors = (
             errors.PDBError,
             errors.FoldxError,
-            errors.ResourceError,)
+            errors.ResourceError,
+            errors.FoldXAAMismatchError,
+        )
 
         for d in self.uniprot_domains + self.uniprot_domain_pairs:
             self.__print_header(d)
@@ -502,24 +504,6 @@ class Pipeline(object):
                 try:
                     mut_data = self.get_mutation.get_mutation_data(d, self.uniprot_id, mutation)
                     uniprot_mutation = self.get_mutation.evaluate_mutation(d, mut_data, uniprot_mutation)
-                except errors.FoldXAAMismatchError as e:
-                    self.logger.error('{}: {}'.format(type(e), e))
-                    unique_id_string, unique_id = self.__get_unique_id(d)
-                    if self.number_of_tries.count(unique_id) > 3:
-                        self.logger.error(
-                            'An error occured more than three times for {}: {}! It cannot be fixed!'
-                            .format(unique_id_string, unique_id)
-                        )
-                        raise e
-                    self.number_of_tries.append(unique_id)
-                    self.logger.debug(
-                        'Deleting the model for {}: {} and trying to run the pipeline again... number_of_tries: {}'
-                        .format(unique_id_string, unique_id, self.number_of_tries))
-                    self.db.remove_model(d)
-                    self.__call__(
-                        self.uniprot_id, self.mutations, self.run_type, self.number_of_tries, 
-                        self.uniprot_domain_pair_ids,
-                    )
                 except (errors.MutationOutsideDomainError,
                         errors.MutationOutsideInterfaceError) as e:
                     self.logger.debug('{}: {}; OK'.format(type(e), e))
