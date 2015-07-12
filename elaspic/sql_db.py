@@ -190,9 +190,10 @@ class MyDatabase(object):
         Create a new database in the schema specified by the ``schema_version`` global variable.
         If ``clear_schema == True``, remove all the tables in the schema first.
         
-        DANGER!!! 
-        Using this function with an existing database can lead to loss of data.
-        Make sure that you know what you are doing.
+        .. warning::
+        
+            Using this function with an existing database can lead to loss of data.
+            Make sure that you know what you are doing!
         
         Parameters
         ----------

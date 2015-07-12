@@ -27,37 +27,36 @@ Configuration options
 
 .. glossary::
 
-   global_temp_path
-     Location for storing temporary files. It will be used only if the :envvar:`TMPDIR` environmental variable is not set. **Default = '/tmp/'**.
-     
-   temp_path string
-     A folder in the :term:`global_temp_path` that will contain all the files that are relevant to ELASPIC. Inside this folder, every job will create its own unique subfolder. **Default = 'elaspic/'**.
-     
-   debug
-     Whether or not to show detailed debugging information. If True, the logging level will be set to ``logging.DEBUG``. If False, the logging level will be set to ``logging.INFO``. **Default = True**.
-     
-   look_for_interactions
-     Whether or not to compute models of protein-protein interactions. **Default = True**.
-     
-   remake_provean_supset
-     Whether or not to remake the Provean supporting set if one or more sequences cannot be found in the BLAST database. **Default = False**.
-     
-   n_cores
-     Number of cores to use by programs that support multithreading. **Default = 1**.
-     
-   schema_version
-     Database schema to use for storing and retreiving data. **Default = 'elaspic'**.
-     
-   web_server
-     Whether or not the ELASPIC pipeline is being run as part of a webserver. **Default = False**.
+  global_temp_path
+    Location for storing temporary files. It will be used only if the :envvar:`TMPDIR` environmental variable is not set. **Default = '/tmp/'**.
 
-   provean_temp_path
-     Location to store provean temporary files if working on any note other than `beagle` or `banting`.
-     For internal use only. **Default = ''**.
+  temp_path string
+    A folder in the :term:`global_temp_path` that will contain all the files that are relevant to ELASPIC. Inside this folder, every job will create its own unique subfolder. **Default = 'elaspic/'**.
+
+  debug
+    Whether or not to show detailed debugging information. If True, the logging level will be set to ``logging.DEBUG``. If False, the logging level will be set to ``logging.INFO``. **Default = True**.
+
+  look_for_interactions
+    Whether or not to compute models of protein-protein interactions. **Default = True**.
+
+  remake_provean_supset
+    Whether or not to remake the Provean supporting set if one or more sequences cannot be found in the BLAST database. **Default = False**.
+
+  n_cores
+    Number of cores to use by programs that support multithreading. **Default = 1**.
+
+  schema_version
+    Database schema to use for storing and retreiving data. **Default = 'elaspic'**.
+
+  web_server
+    Whether or not the ELASPIC pipeline is being run as part of a webserver. **Default = False**.
+
+  provean_temp_path
+    Location to store provean temporary files if working on any note other than `beagle` or `banting`.
+    For internal use only. **Default = ''**.
 
   copy_data
-    Whether or not to copy calculated data back to the archive. Set to 'False' if you are planning 
-    to copy the data yourself (e.g. from inside a PBS or SGE script). **Default = True**.
+    Whether or not to copy calculated data back to the archive. Set to 'False' if you are planning to copy the data yourself (e.g. from inside a PBS or SGE script). **Default = True**.
 
 
 .. _`[DATABASE]`:
@@ -109,15 +108,15 @@ Configuration options
 
 .. glossary::
 
-   path_to_archive
-     Location for storing and retrieving precalculated data.
-    
-   blast_db_path
-     Location of the blast **nr** and **pdbaa** databases.
+  path_to_archive
+    Location for storing and retrieving precalculated data.
 
-   pdb_path 
-     Location of all pdb structures, equivalent to the "data/data/structures/divided/pdb/" folder in the PDB ftp site. Optional.
-     
+  blast_db_path
+    Location of the blast **nr** and **pdbaa** databases.
+
+  pdb_path 
+    Location of all pdb structures, equivalent to the "data/data/structures/divided/pdb/" folder in the PDB ftp site. Optional.
+
 
 
 .. _`[GET_MODEL]`:
@@ -127,8 +126,8 @@ Configuration options
 
 .. glossary::
 
-   modeller_runs
-     Number of models that MODELLER should make before choosing the best one. Not implemented! **Default = 1**.
+  modeller_runs
+    Number of models that MODELLER should make before choosing the best one. Not implemented! **Default = 1**.
 
 
 
@@ -139,25 +138,25 @@ Configuration options
 
 .. glossary::
 
-   foldx_water
-     - ``-CRYSTAL``: use water molecules in the crystal structure to bridge two protein atoms. 
-     - ``-PREDICT``: predict water molecules that make 2 or more hydrogen bonds to the protein. 
-     - ``-COMPARE``: compare predicted water bridges with bridges observed in the crystal structure.
-     - ``-IGNORE``: don't predict water molecules. **Default**.
+  foldx_water
+    - ``-CRYSTAL``: use water molecules in the crystal structure to bridge two protein atoms. 
+    - ``-PREDICT``: predict water molecules that make 2 or more hydrogen bonds to the protein. 
+    - ``-COMPARE``: compare predicted water bridges with bridges observed in the crystal structure.
+    - ``-IGNORE``: don't predict water molecules. **Default**.
 
-     Source: http://foldx.crg.es/manual3.jsp.
-     
-   foldx_num_of_runs
-     Number of times that FoldX should evaluate a given mutation. **Default = 1**.
-     
-   matrix_type
-     Substitution matrix for calculating the mutation conservation score. **Default = 'blosum80'**.
-     
-   gap_start 
-     Penalty for starting a gap when calculating the mutation conservation score. **Default = -16**.
-     
-   gap_extend
-     Penalty for extending a gap when calculating the mutation conservation score. **Default = -4**.
+    Source: http://foldx.crg.es/manual3.jsp.
+
+  foldx_num_of_runs
+    Number of times that FoldX should evaluate a given mutation. **Default = 1**.
+
+  matrix_type
+    Substitution matrix for calculating the mutation conservation score. **Default = 'blosum80'**.
+
+  gap_start 
+    Penalty for starting a gap when calculating the mutation conservation score. **Default = -16**.
+
+  gap_extend
+    Penalty for extending a gap when calculating the mutation conservation score. **Default = -4**.
 
 
 

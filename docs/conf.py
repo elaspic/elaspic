@@ -51,6 +51,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon',
     # 'sphinx.ext.linkcode',
     'sphinx.ext.mathjax',
@@ -375,3 +376,8 @@ epub_exclude_files = ['search.html']
 
 # If false, no index is generated.
 #epub_use_index = True
+
+intersphinx_mapping = {
+    'http://docs.python.org/': None,
+    'sqlalchemy': ('http://www.sqlalchemy.org/docs/', 'http://docs.sqlalchemy.org/en/latest/objects.inv'),
+}

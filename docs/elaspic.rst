@@ -44,6 +44,14 @@ elaspic.conf module
     :undoc-members:
     :show-inheritance:
 
+elaspic.database_tables module
+------------------------------
+
+.. automodule:: elaspic.database_tables
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 elaspic.domain_alignment module
 -------------------------------
 
@@ -77,7 +85,7 @@ elaspic.elaspic_database module
     :show-inheritance:
 
 elaspic.errors module
----------------------
+----------------------
 
 .. automodule:: elaspic.errors
     :members:
@@ -112,14 +120,6 @@ elaspic.sql_db module
 ---------------------
 
 .. automodule:: elaspic.sql_db
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-elaspic.test_elaspic module
----------------------------
-
-.. automodule:: elaspic.test_elaspic
     :members:
     :undoc-members:
     :show-inheritance:
