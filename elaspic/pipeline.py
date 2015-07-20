@@ -41,7 +41,7 @@ ELASPIC_LOGO = """
 
 class Pipeline(object):
 
-    def __init__(self, configurations):
+    def __init__(self, configurations, logger=None):
         """
         It should be possible to initialize one pipeline and call it in parallel using different
         mutations as input
@@ -69,7 +69,10 @@ class Pipeline(object):
         self.__validate_temp_path(conf.configs)
 
         # Initialize a logger
-        self.logger = hf.get_logger(conf.configs['debug'])
+        if logger is not None:
+            self.logger = logger
+        else:
+            self.logger = hf.get_logger(conf.configs['debug'])
         for line in ELASPIC_LOGO.split('\n'):
             self.logger.info(line)
 

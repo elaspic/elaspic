@@ -1,4 +1,7 @@
 import os
+from distutils.core import setup, Extension
+import distutils.command.bdist_conda
+
 from setuptools import setup
 
 
@@ -17,7 +20,8 @@ def read(fname):
 
 setup(
     name='elaspic',
-    version='0.1.2',
+    # version='0.2.0', # now in meta.yaml
+    
     description='Ensemble Learning Approach for Stability Prediction of Interface and Core mutations',
     author='kimlab',
     author_email='elaspic@kimlab.org',
@@ -25,6 +29,13 @@ setup(
     packages=['elaspic'],
     package_data={'elaspic': ['data/*']},
     long_description=read("README.rst"),
+    
+    # Conda specific features
+    distclass=distutils.command.bdist_conda.CondaDistribution,
+    conda_buildnum=1,
+    conda_features=['mkl'],
+    conda_import_tests=False,
+    
     # Specify install requirements in the conda `meta.yaml` file
     # install_requires=[],
     tests_require=[

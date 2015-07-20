@@ -1,0 +1,85 @@
+package:
+  name: elaspic
+  version: "0.2.0"
+
+#~ source:
+  #~ git_url: https://ostrokach@bitbucket.org/ostrokach/elaspic.git
+  #~ git_tag: develop
+
+build:
+  number: 1
+  entry_points: 
+    - elaspic = elaspic.__main__:main
+    - elaspic_database = elaspic.elaspic_database:main
+
+requirements:
+  run:
+    # System
+    - system
+    - readline
+    - ncurses
+    - openssl
+
+    # Basic python
+    - python
+    - dateutil
+    - python-dateutil
+    - pytz
+    - retrying
+    
+    # Scientific python
+    - fastcache
+    - numpy
+    - scipy
+    - pandas ==0.15.2
+    - psutil
+    - scikit-learn ==0.15.2
+    - cython
+    - biopython
+
+    # Testing
+    - pytest
+    - nose
+
+    # Documentation
+    - docutils
+    - sphinx >=1.3
+    - sphinxcontrib-programoutput
+    - jinja2
+    - markupsafe
+
+    # Python 2 / 3 compatibility
+    - future
+    - six
+
+    # Database access
+    - sqlalchemy
+    - sqlite
+    - mysqlclient
+    - psycopg2
+
+    # Binary files
+    - stride
+    - knot
+    - pops
+    - msms
+    - t_coffee
+    - modeller
+    - cd-hit
+    - provean
+    - foldx
+    - libfaketime
+
+test:
+  requires: 
+    - elaspic
+  imports:
+    - elaspic
+
+about:
+  home: elaspic.readthedocs.org
+  license: GNU General Public License (GPL)
+  summary: Ensemble Learning Approach for Stability Prediction of 
+           Interface and Core mutations.
+
+
