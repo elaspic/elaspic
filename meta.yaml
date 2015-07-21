@@ -7,18 +7,19 @@ package:
   #~ git_tag: develop
 
 build:
-  number: 1
+  number: 2
   entry_points: 
     - elaspic = elaspic.__main__:main
     - elaspic_database = elaspic.elaspic_database:main
 
 requirements:
+  build:
+    - python
+    - setuptools
+    #~ - binstar-build
   run:
     # System
-    - system
-    - readline
     - ncurses
-    - openssl
 
     # Basic python
     - python
@@ -70,16 +71,18 @@ requirements:
     - foldx
     - libfaketime
 
-test:
-  requires: 
-    - elaspic
-  imports:
-    - elaspic
+# Can't get this to work without `elaspic` already being on anaconda.org.
+#~ test:
+  #~ requires:
+    #~ - elaspic
+  #~ imports:
+    #~ - elaspic
+  #~ commands:
+    #~ - elaspic --help
+    #~ - elaspic_database --help
 
 about:
   home: elaspic.readthedocs.org
-  license: GNU General Public License (GPL)
+  license: MIT
   summary: Ensemble Learning Approach for Stability Prediction of 
-           Interface and Core mutations.
-
-
+           Interface and Core mutations (ELASPIC).
