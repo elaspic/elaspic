@@ -381,11 +381,11 @@ class GetMutation(object):
 
             else:
                 # Mutation is outside the interface
-                self.logger.error('Uniprot ID: {} \tMutation: {}'.format(
+                self.logger.error('Uniprot ID: {}\tMutation: {}'.format(
                     uniprot_id_1, mutation))
-                self.logger.error('Uniprot ID 1: \tInteracting AA 1: {}'.format(
+                self.logger.error('Uniprot ID 1: {}\tInteracting AA 1: {}'.format(
                     d.uniprot_domain_1.uniprot_id, interacting_aa_1))
-                self.logger.error('Uniprot ID 2: \tInteracting AA 2: {}'.format(
+                self.logger.error('Uniprot ID 2: {}\tInteracting AA 2: {}'.format(
                     d.uniprot_domain_2.uniprot_id, interacting_aa_2))
                 raise errors.MutationOutsideInterfaceError('mutated residue not involved in the interaction')
 
@@ -491,7 +491,7 @@ class GetMutation(object):
         """
         """
         if (mut_data.path_to_provean_supset and
-            uniprot_mutation.provean_score in {None, 1.0}): # TODO: change back to None
+            uniprot_mutation.provean_score in [None, 0, 0.0, 1.0]): # TODO: change back to None
             self.logger.debug('Calculating the provean score for the mutation...')
             try:
                 provean_mutation, provean_score = self.get_provean_score(
@@ -512,7 +512,7 @@ class GetMutation(object):
 
         if (uniprot_mutation.provean_score and
             uniprot_mutation.stability_energy_wt and
-            uniprot_mutation.ddg in {None, 1.0}): # TODO: Change back to None
+            uniprot_mutation.ddg in [None, 1.0]): # TODO: Change back to None
                 self.logger.debug('Predicting the thermodynamic effect of the mutation...')
                 uniprot_mutation = self.predict_thermodynamic_effect(d, uniprot_mutation)
 
