@@ -25,7 +25,8 @@ from collections import deque
 
 import pandas as pd
 import sqlalchemy as sa
-import sqlalchemy.exc as sa_exc
+import sqlalchemy.orm
+import sqlalchemy.exc
 from retrying import retry
 
 from Bio import SeqIO
@@ -155,7 +156,7 @@ class MyDatabase(object):
         if retry_on_failure:
             decorator = (
                 decorate_all_methods(
-                    retry(retry_on_exception=lambda exc: isinstance(exc, sa_exc.OperationalError),
+                    retry(retry_on_exception=lambda exc: isinstance(exc, sa.exc.OperationalError),
                           wait_exponential_multiplier=1000, # start with one second delay
                           wait_exponential_max=600000) # go up to 10 minutes
                 )
@@ -757,20 +758,38 @@ class MyDatabase(object):
 
 
     def remove_model(self, d):
+        """Remove a model from the database.
+        
+        Do this if you realized that the model you built is incorrect 
+        or that some of the data is missing.
+        
+        Raises
+        ------
+        error.ModelHasMutationsError
+            The model you are trying to delete has precalculated mutations,
+            so it can't be that bad. Delete those mutations and try again.
         """
-        """
-        if isinstance(d, UniprotDomain):
-            with self.session_scope() as session:
+        with self.session_scope() as session:
+            validation_query = (
+                "select count(*) from {0}.uniprot_domain_mutation "
+                "where uniprot_domain_id = {1} "
+                "and ddg is not null;"
+            ).format(self.configs['db_schema'], d.uniprot_domain_id)
+            num_mutations = session.execute(validation_query).fetchone()[0]
+            if num_mutations != 0:
+                raise error.ModelHasMutationsError(
+                    'Domain {} has {} mutations!'
+                    .format(d.uniprot_domain_id, num_mutations))
+            if isinstance(d, UniprotDomain):
                 session.execute(
                     'delete from {0}.uniprot_domain_model where uniprot_domain_id = {1}'
                     .format(self.configs['db_schema'], d.uniprot_domain_id))
-        elif isinstance(d, UniprotDomainPair):
-            with self.session_scope() as session:
+            elif isinstance(d, UniprotDomainPair):
                 session.execute(
                     'delete from {0}.uniprot_domain_pair_model where uniprot_domain_pair_id = {1}'
                     .format(self.configs['db_schema'], d.uniprot_domain_pair_id))
-        else:
-            raise Exception('Not enough arguments, or the argument types are incorrect!')
+            else:
+                raise Exception("'d' is of incorrect type!")
 
 
     #%% Add objects to the database

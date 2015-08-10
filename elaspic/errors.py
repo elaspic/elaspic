@@ -145,3 +145,11 @@ class NoModelFoundError(Exception):
 
 
 
+#%% Database
+
+class ModelHasMutationsError(Exception):
+    """Don't delete a model that has precalculated mutations!
+    """
+    pass
+
+
