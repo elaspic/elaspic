@@ -68,6 +68,8 @@ def read_configuration_file(config_file):
         
     # From [SETTINGS]
     configs['path_to_archive'] = configParser.get('SETTINGS', 'path_to_archive')
+    # Supported archive types are '7zip' and 'extracted'
+    configs['archive_type'] = configParser.get('SETTINGS', 'archive_type', fallback='extracted')
     configs['blast_db_path'] = configParser.get('SETTINGS', 'blast_db_path')
     configs['remote_blast_db_path'] = configParser.get('SETTINGS', 'remote_blast_db_path', fallback='')
     configs['pdb_path'] = configParser.get('SETTINGS', 'pdb_path')

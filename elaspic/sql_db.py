@@ -473,6 +473,7 @@ class MyDatabase(object):
             )
 
         path_to_archive = self.configs['path_to_archive']
+        archive_type = self.configs['archive_type']
         d_idx = 0
         while d_idx < len(uniprot_domains):
             d = uniprot_domains[d_idx]
@@ -486,7 +487,8 @@ class MyDatabase(object):
             # Copy precalculated Provean data
             if copy_data:
                 try:
-                    self._copy_provean(d, path_to_archive)
+                    self._copy_provean(
+                        d, path_to_archive, archive_type)
                 except subprocess.CalledProcessError as e:
                     self.logger.error(e)
                     self.logger.error('Failed to copy provean supporting set!')
@@ -494,7 +496,8 @@ class MyDatabase(object):
             # Copy precalculated homology models
             if copy_data:
                 try:
-                    self._copy_uniprot_domain_data(d, d.path_to_data, path_to_archive)
+                    self._copy_uniprot_domain_data(
+                        d, d.path_to_data, path_to_archive, archive_type)
                 except subprocess.CalledProcessError as e:
                     self.logger.error(e)
                     self.logger.error('Failed to copy the domain alignment and / or homology model!')
@@ -528,6 +531,7 @@ class MyDatabase(object):
             )
 
         path_to_archive = self.configs['path_to_archive']
+        archive_type = self.configs['archive_type']
         d_idx = 0
         while d_idx < len(uniprot_domain_pairs):
             d = uniprot_domain_pairs[d_idx]
@@ -545,7 +549,8 @@ class MyDatabase(object):
                 elif d.uniprot_domain_2.uniprot_id == uniprot_id:
                     ud = d.uniprot_domain_2
                 try:
-                    self._copy_provean(ud, path_to_archive)
+                    self._copy_provean(
+                        ud, path_to_archive, archive_type)
                 except subprocess.CalledProcessError as e:
                     self.logger.error(e)
                     self.logger.error('Failed to copy provean supporting set!')
@@ -553,7 +558,8 @@ class MyDatabase(object):
             # Copy precalculated homology models
             if copy_data:
                 try:
-                    self._copy_uniprot_domain_pair_data(d, d.path_to_data, path_to_archive)
+                    self._copy_uniprot_domain_pair_data(
+                        d, d.path_to_data, path_to_archive, archive_type)
                 except subprocess.CalledProcessError as e:
                     self.logger.error(e)
                     self.logger.error('Failed to copy domain pair alignments and / or homology model!')
@@ -565,7 +571,7 @@ class MyDatabase(object):
         return uniprot_domain_pairs
 
 
-    def _copy_uniprot_domain_data(self, d, path_to_data, path_to_archive):
+    def _copy_uniprot_domain_data(self, d, path_to_data, path_to_archive, archive_type):
         if path_to_data is None:
             self.logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
@@ -573,13 +579,18 @@ class MyDatabase(object):
             d.template.model != None and
             d.template.model.alignment_filename != None and
             d.template.model.model_filename != None):
-                if path_to_archive.endswith('.7z'):
+                if archive_type == '7zip':
                     # Extract files from a 7zip archive
                     filenames = [
                         path_to_data + d.template.model.alignment_filename,
                         path_to_data + d.template.model.model_filename,
                     ]
-                    self._extract_files_from_7zip(path_to_archive, filenames)
+                    path_to_7z = os.path.join(
+                        path_to_archive, 
+                        'uniprot_domain', 
+                        'uniprot_domain.7z'
+                    )
+                    self._extract_files_from_7zip(path_to_7z, filenames)
                 else:
                     tmp_save_path = self.configs['temp_archive_path'] + path_to_data
                     archive_save_path = path_to_archive + path_to_data
@@ -593,7 +604,7 @@ class MyDatabase(object):
                         tmp_save_path + d.template.model.model_filename), shell=True)
 
 
-    def _copy_uniprot_domain_pair_data(self, d, path_to_data, path_to_archive):
+    def _copy_uniprot_domain_pair_data(self, d, path_to_data, path_to_archive, archive_type):
         if path_to_data is None:
             self.logger.error('Cannot copy uniprot domain pair data because `path_to_data` is None')
             return
@@ -602,14 +613,19 @@ class MyDatabase(object):
             d.template.model.alignment_filename_1 != None and
             d.template.model.alignment_filename_2 != None and
             d.template.model.model_filename != None):
-                if path_to_archive.endswith('.7z'):
+                if archive_type == '7zip':
                     # Extract files from a 7zip archive
                     filenames = [
                         path_to_data + d.template.model.alignment_filename_1,
                         path_to_data + d.template.model.alignment_filename_2,
                         path_to_data + d.template.model.model_filename,
                     ]
-                    self._extract_files_from_7zip(path_to_archive, filenames)
+                    path_to_7zip = os.path.join(
+                        path_to_archive, 
+                        'uniprot_domain_pair', 
+                        'uniprot_domain_pair.7z'
+                    )
+                    self._extract_files_from_7zip(path_to_7zip, filenames)
                 else:
                     tmp_save_path = self.configs['temp_archive_path'] + path_to_data
                     archive_save_path = path_to_archive + path_to_data
@@ -628,7 +644,7 @@ class MyDatabase(object):
                         tmp_save_path + d.template.model.model_filename), shell=True)
 
 
-    def _copy_provean(self, ud, path_to_archive):
+    def _copy_provean(self, ud, path_to_archive, archive_type):
         if not (ud.uniprot_sequence and
                 ud.uniprot_sequence.provean and
                 ud.uniprot_sequence.provean.provean_supset_filename):
@@ -641,15 +657,21 @@ class MyDatabase(object):
                         self.logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence.provean.provean_supset_filename))
             return
                 
-        if path_to_archive.endswith('.7z'):
-            # Extract files from a 7zip archive
+        if archive_type == '7zip':
+            self.logger.info("Extract provean files from a 7zip archive...")
             filenames = [
                 get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename,
                 get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
             ]
-            self._extract_files_from_7zip(path_to_archive, filenames)
+            path_to_7zip = os.path.join(
+                path_to_archive, 
+                'provean', 
+                'provean.7z'
+            )
+            self.logger.debug('path_to_7zip: {}'.format(path_to_7zip))
+            self._extract_files_from_7zip(path_to_7zip, filenames)
         else:
-            # Compy files from the archive folders
+            self.logger.info("Copying files from the archive folders...")
             subprocess.check_call(
                 "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
                     os.path.dirname(
@@ -671,11 +693,11 @@ class MyDatabase(object):
     @retry(retry_on_exception=lambda exc: type(exc) == error.Archive7zipError, # isinstance(exc, error.Archive7zipError)
            wait_exponential_multiplier=1000, 
            wait_exponential_max=60000)
-    def _extract_files_from_7zip(self, path_to_archive, filenames):
+    def _extract_files_from_7zip(self, path_to_7zip, filenames):
         """Extract files to `config['temp_archive_path']`
         """
-        system_command = "7za x '{path_to_archive}' '{files}' -y".format(
-            path_to_archive=path_to_archive, 
+        system_command = "7za x '{path_to_7zip}' '{files}' -y".format(
+            path_to_7zip=path_to_7zip, 
             files="' '".join(filenames)
         )
         self.logger.debug(
