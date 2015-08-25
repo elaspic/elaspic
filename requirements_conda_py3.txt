@@ -31,7 +31,11 @@ system=5.8=1
 tk=8.5.18=0
 xz=5.0.5=0
 zlib=1.2.8=0
-
 biopython=1.65=np19py34_0
 psycopg2=2.6=py34_0
 fastcache=1.0.2=py34_0
+blast=2.2.30=1
+cd-hit=4.6.1=1
+p7zip=9.38.1=0
+provean=1.1.5=1
+msms=2.6.1=2
