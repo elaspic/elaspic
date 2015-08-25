@@ -111,6 +111,10 @@ Configuration options
   path_to_archive
     Location for storing and retrieving precalculated data.
 
+  archive_type
+    - extracted: all archive files are contained in an extracted directory tree.
+    - 7zip: archive is made of three compressed 7zip files (provean/provean.7z, uniprot_domain/uniprot_domain.7z, uniprot_domain_pair/uniprot_domain_pair.7z), provided on the `elaspic downloads page <http://elaspic.kimlab.org/static/download/current_release/>`_.
+
   blast_db_path
     Location of the blast **nr** and **pdbaa** databases.
 
