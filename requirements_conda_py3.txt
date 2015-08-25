@@ -39,3 +39,4 @@ cd-hit=4.6.1=1
 p7zip=9.38.1=0
 provean=1.1.5=1
 msms=2.6.1=2
+stride=1.6.4=1
