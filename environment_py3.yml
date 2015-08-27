@@ -35,5 +35,6 @@ dependencies:
 - mysqlclient==1.3.6
 - sphinx>=1.3
 - sphinxcontrib-programoutput
+- t_coffee=11.0.8=py34_1
 - pip:
   - retrying>=1.3.3
