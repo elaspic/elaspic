@@ -36,5 +36,6 @@ dependencies:
 - sphinx>=1.3
 - sphinxcontrib-programoutput
 - t_coffee=11.0.8=py34_1
+- knot=1.0.0=2
 - pip:
   - retrying>=1.3.3
