@@ -162,7 +162,7 @@ class Pipeline(object):
 
 
     def __call__(self, uniprot_id, mutations, run_type=1, number_of_tries=[], uniprot_domain_pair_ids=[]):
-        """ Run the main function of the program and parse errors
+        """Run the main function of the program and parse errors.
         
         Parameters
         ----------
