@@ -22,6 +22,8 @@ from Bio.PDB.PDBParser import PDBParser
 if six.PY3:
     from importlib import reload
 
+logger = logging.getLogger(__name__)
+
 
 #%%
 canonical_amino_acids = 'ARNDCEQGHILKMFPSTWYV'
@@ -107,7 +109,8 @@ def make_tarfile(output_filename, source_dir):
 
 #%% Working with pdb structures
 def get_pdb_structure(path_to_pdb_file):
-    parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
+    # Set QUIET to False to output warnings like incomplete chains etc.
+    parser = PDBParser(get_header=True, QUIET=False) 
     structure = parser.get_structure('ID', path_to_pdb_file)
     return structure
 

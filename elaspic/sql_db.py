@@ -18,7 +18,7 @@ import datetime
 import time
 import pickle
 import six
-import functools
+import logging
 import inspect
 from contextlib import contextmanager
 from collections import deque
@@ -45,6 +45,7 @@ from .database_tables import (
     UniprotDomainPair, UniprotDomainPairTemplate, UniprotDomainPairModel, UniprotDomainPairMutation,
 )
 
+logger = logging.getLogger(__name__)
 
 #%%
 def decorate_all_methods(decorator):
@@ -87,7 +88,7 @@ class MyDatabase(object):
     """
     """
     
-    def __init__(self, configs=conf.configs, logger=hf.get_logger()):
+    def __init__(self, configs=conf.configs):
         """
         Parameters
         ----------
@@ -95,11 +96,10 @@ class MyDatabase(object):
             ELASPIC configuration options specified in :py:data:`elaspic.conf.configs`
         """
         self.configs = configs.copy()
-        self.logger = logger        
         self.engine = self.get_engine()
         self.Session = self.configure_session()
         
-        self.logger.info(
+        logger.info(
             "Using precalculated data from the following folder: '{path_to_archive}'"
             .format(**self.configs)
         )
@@ -133,7 +133,7 @@ class MyDatabase(object):
             ) # echo=True
         else:
             raise Exception("Unsupported `db_type`: '{}'".format(self.configs['db_type']))
-        self.logger.info(info_message)
+        logger.info(info_message)
         return engine
     
     
@@ -207,14 +207,14 @@ class MyDatabase(object):
         # 
         if clear_schema:
             self.delete_database_tables(drop_schema=False, keep_uniprot_sequence=keep_uniprot_sequence)
-            self.logger.debug('Database schema was cleared successfully.')
+            logger.debug('Database schema was cleared successfully.')
         
         # Create all tables, creating schema as neccessary
         for table in Base.metadata.sorted_tables:
             try:
                 table.create(self.engine, checkfirst=True)
             except (sa.exc.OperationalError, sa.exc.ProgrammingError) as e:
-                self.logger.error(str(e))
+                logger.error(str(e))
                 if re.search('schema .* does not exist', str(e)):
                     missing_schema = str(e)[str(e).find('schema "')+8:str(e).find('" does not exist')]
                 elif 'Unknown database ' in str(e):
@@ -222,10 +222,10 @@ class MyDatabase(object):
                 else:
                     raise e
                 sql_command = 'create schema {};'.format(missing_schema)
-                self.logger.warning("Creating missing schema with system command: '{}'".format(sql_command))
+                logger.warning("Creating missing schema with system command: '{}'".format(sql_command))
                 self.engine.execute(sql_command)
                 table.create(self.engine, checkfirst=True)
-        self.logger.debug('Database tables were created successfully.')
+        logger.debug('Database tables were created successfully.')
     
     
     def delete_database_tables(self, drop_schema=False, keep_uniprot_sequence=True):
@@ -239,7 +239,7 @@ class MyDatabase(object):
         """       
         if self.configs['db_type'] == 'sqlite':
             os.remove(self.configs['sqlite_db_path'])
-            self.logger.info("Successfully removed the sqlite database file: {sqlite_db_path}".format(**self.configs))
+            logger.info("Successfully removed the sqlite database file: {sqlite_db_path}".format(**self.configs))
             return
         
         # Remove tables one by one
@@ -260,7 +260,7 @@ class MyDatabase(object):
         if drop_schema and not uniprot_on_diff_schema and not keep_uniprot_sequence:
             self.engine.execute('drop schema {db_schema};'.format(**self.configs))
         
-        self.logger.info("Successfully removed the {db_type} database schema: {db_schema}".format(**self.configs))    
+        logger.info("Successfully removed the {db_type} database schema: {db_schema}".format(**self.configs))    
 
 
 
@@ -302,10 +302,10 @@ class MyDatabase(object):
 
     def _run_create_table_system_command(self, system_command):
         if self.configs['debug']:
-            self.logger.debug(system_command)
+            logger.debug(system_command)
         result, error_message, return_code = hf.popen(system_command)
         if return_code != 0:
-            self.logger.error(result)
+            logger.error(result)
             raise Exception(error_message)
         
         
@@ -323,7 +323,7 @@ class MyDatabase(object):
             else:
                 configs['table_db_schema'] = configs['db_schema']
         
-        self.logger.info("Copying '{table_name}' to '{db_type}' database...".format(**configs))
+        logger.info("Copying '{table_name}' to '{db_type}' database...".format(**configs))
         if configs['db_type'] == 'sqlite':
             self._load_data_into_sqlite(configs)
         elif configs['db_type'] == 'mysql':
@@ -400,7 +400,7 @@ class MyDatabase(object):
                         .distinct().all() )
                 domain_set.update(domain)
         if not domain_set:
-            self.logger.debug('No domain definitions found for pfam: %s' % str(pfam_names))
+            logger.debug('No domain definitions found for pfam: %s' % str(pfam_names))
         return list(domain_set)
 
 
@@ -414,7 +414,7 @@ class MyDatabase(object):
             domain_contact_2 = self._get_domain_contact(pfam_names_2, pfam_names_1, session, subdomains)
 
         if not len(domain_contact_1) and not len(domain_contact_2):
-            self.logger.debug('No domain contact template found for domains %s, %s' % (str(pfam_names_1), str(pfam_names_2),))
+            logger.debug('No domain contact template found for domains %s, %s' % (str(pfam_names_1), str(pfam_names_2),))
 
         return [domain_contact_1, domain_contact_2]
 
@@ -478,7 +478,7 @@ class MyDatabase(object):
         while d_idx < len(uniprot_domains):
             d = uniprot_domains[d_idx]
             if not d.template:
-                self.logger.debug(
+                logger.debug(
                     'Skipping uniprot domain with id {} because it does not '
                     'have a structural template...'
                     .format(d.uniprot_domain_id))
@@ -490,8 +490,8 @@ class MyDatabase(object):
                     self._copy_provean(
                         d, path_to_archive, archive_type)
                 except subprocess.CalledProcessError as e:
-                    self.logger.error(e)
-                    self.logger.error('Failed to copy provean supporting set!')
+                    logger.error(e)
+                    logger.error('Failed to copy provean supporting set!')
                     d.uniprot_sequence.provean.provean_supset_filename = ''
             # Copy precalculated homology models
             if copy_data:
@@ -499,8 +499,8 @@ class MyDatabase(object):
                     self._copy_uniprot_domain_data(
                         d, d.path_to_data, path_to_archive, archive_type)
                 except subprocess.CalledProcessError as e:
-                    self.logger.error(e)
-                    self.logger.error('Failed to copy the domain alignment and / or homology model!')
+                    logger.error(e)
+                    logger.error('Failed to copy the domain alignment and / or homology model!')
                     d.template.model.alignment_filename = None
                     d.template.model.model_filename = None
             d_idx += 1
@@ -536,7 +536,7 @@ class MyDatabase(object):
         while d_idx < len(uniprot_domain_pairs):
             d = uniprot_domain_pairs[d_idx]
             if not d.template:
-                self.logger.debug(
+                logger.debug(
                     'Skipping uniprot domain pair with id {} because it does not '
                     'have a structural template...'
                     .format(d.uniprot_domain_pair_id))
@@ -552,8 +552,8 @@ class MyDatabase(object):
                     self._copy_provean(
                         ud, path_to_archive, archive_type)
                 except subprocess.CalledProcessError as e:
-                    self.logger.error(e)
-                    self.logger.error('Failed to copy provean supporting set!')
+                    logger.error(e)
+                    logger.error('Failed to copy provean supporting set!')
                     d.uniprot_sequence.provean.provean_supset_filename = ''
             # Copy precalculated homology models
             if copy_data:
@@ -561,8 +561,8 @@ class MyDatabase(object):
                     self._copy_uniprot_domain_pair_data(
                         d, d.path_to_data, path_to_archive, archive_type)
                 except subprocess.CalledProcessError as e:
-                    self.logger.error(e)
-                    self.logger.error('Failed to copy domain pair alignments and / or homology model!')
+                    logger.error(e)
+                    logger.error('Failed to copy domain pair alignments and / or homology model!')
                     d.template.model.alignment_filename_1 = None
                     d.template.model.alignment_filename_2 = None
                     d.template.model.model_filename = None
@@ -573,7 +573,7 @@ class MyDatabase(object):
 
     def _copy_uniprot_domain_data(self, d, path_to_data, path_to_archive, archive_type):
         if path_to_data is None:
-            self.logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
+            logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
         if (d.template != None and
             d.template.model != None and
@@ -606,7 +606,7 @@ class MyDatabase(object):
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, path_to_archive, archive_type):
         if path_to_data is None:
-            self.logger.error('Cannot copy uniprot domain pair data because `path_to_data` is None')
+            logger.error('Cannot copy uniprot domain pair data because `path_to_data` is None')
             return
         if (d.template != None and
             d.template.model != None and
@@ -648,17 +648,17 @@ class MyDatabase(object):
         if not (ud.uniprot_sequence and
                 ud.uniprot_sequence.provean and
                 ud.uniprot_sequence.provean.provean_supset_filename):
-            self.logger.warning('Provean supset is missing for domain: {}'.format(ud.uniprot_domain_id))
+            logger.warning('Provean supset is missing for domain: {}'.format(ud.uniprot_domain_id))
             if ud.uniprot_sequence:
-                self.logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence))
+                logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence))
                 if ud.uniprot_sequence.provean:
-                    self.logger.warning('ud.uniprot_sequence.provean: {}'.format(ud.uniprot_sequence.provean))
+                    logger.warning('ud.uniprot_sequence.provean: {}'.format(ud.uniprot_sequence.provean))
                     if ud.uniprot_sequence.provean.provean_supset_filename:
-                        self.logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence.provean.provean_supset_filename))
+                        logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence.provean.provean_supset_filename))
             return
                 
         if archive_type == '7zip':
-            self.logger.info("Extract provean files from a 7zip archive...")
+            logger.info("Extract provean files from a 7zip archive...")
             filenames = [
                 get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename,
                 get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
@@ -668,10 +668,10 @@ class MyDatabase(object):
                 'provean', 
                 'provean.7z'
             )
-            self.logger.debug('path_to_7zip: {}'.format(path_to_7zip))
+            logger.debug('path_to_7zip: {}'.format(path_to_7zip))
             self._extract_files_from_7zip(path_to_7zip, filenames)
         else:
-            self.logger.info("Copying files from the archive folders...")
+            logger.info("Copying files from the archive folders...")
             subprocess.check_call(
                 "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
                     os.path.dirname(
@@ -700,7 +700,7 @@ class MyDatabase(object):
             path_to_7zip=path_to_7zip, 
             files="' '".join(filenames)
         )
-        self.logger.debug(
+        logger.debug(
             'Extracting files from 7zip archive using the following system command:\n{}'
             .format(system_command))
         result, error_message, return_code = (
@@ -708,7 +708,7 @@ class MyDatabase(object):
         )
         
         def log_error():
-            self.logger.error(
+            logger.error(
                 '\n result:{}\n error_message:{}\n return_code:{}'
                 .format(result, error_message, return_code)
             )
@@ -743,7 +743,7 @@ class MyDatabase(object):
                             (UniprotDomainPairMutation.mutation == mutation))
                         .scalar() )
         else:
-            self.logger.debug('d: {}\td type: {}'.format(d, type(d)))
+            logger.debug('d: {}\td type: {}'.format(d, type(d)))
             raise Exception('Not enough arguments, or the argument types are incorrect!')
 
         if copy_data:
@@ -752,7 +752,7 @@ class MyDatabase(object):
             except (subprocess.CalledProcessError,
                     error.Archive7zipError,
                     error.Archive7zipFileNotFoundError) as e:
-                self.logger.error(e)
+                logger.error(e)
                 uniprot_mutation.model_filename_wt = None
         return uniprot_mutation
 
@@ -837,7 +837,7 @@ class MyDatabase(object):
                 provean.provean_supset_filename + '.fasta')):
             # ...
             path_to_archive = self.configs['path_to_archive']
-            self.logger.debug(
+            logger.debug(
                 'Moving provean supset to the output folder: {}'
                 .format(path_to_archive + uniprot_base_path))
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
@@ -935,8 +935,8 @@ class MyDatabase(object):
             uniprot_sequence = uniprot_sequence[0]
 
         elif len(uniprot_sequence) > 1:
-            self.logger.error('Type(uniprot_sequence): {}'.format(type(uniprot_sequence)))
-            self.logger.error('uniprot_sequence: {}'.format(type(uniprot_sequence)))
+            logger.error('Type(uniprot_sequence): {}'.format(type(uniprot_sequence)))
+            logger.error('uniprot_sequence: {}'.format(type(uniprot_sequence)))
             raise Exception('Several uniprot sequences returned!? This should never happen!')
 
         elif len(uniprot_sequence) == 0:
@@ -948,14 +948,14 @@ class MyDatabase(object):
                     .format(uniprot_id))
                 return None
             else:
-                self.logger.debug('Fetching sequence for uniprot {} from an online server'.format(uniprot_id))
+                logger.debug('Fetching sequence for uniprot {} from an online server'.format(uniprot_id))
                 print('Fetching sequence for uniprot {} from an online server'.format(uniprot_id))
                 address = 'http://www.uniprot.org/uniprot/{}.fasta'.format(uniprot_id)
                 try:
                     handle = urllib.request.urlopen(address)
                     sequence = next(SeqIO.parse(handle, "fasta"))
                 except (StopIteration, urllib.error.HTTPError) as e:
-                    self.logger.debug('{}: {}'.format(type(e), str(e)))
+                    logger.debug('{}: {}'.format(type(e), str(e)))
                     print('{}: {}'.format(type(e), str(e)))
                     return None
                 uniprot_sequence = UniprotSequence()
@@ -1156,14 +1156,14 @@ class MyDatabase(object):
                 try:
                     self.session.merge(d[1](**row))
                 except TypeError as e:
-                    self.logger.debug(
+                    logger.debug(
                         'Error merging {}.\n'
                         'Probably from an older version of the database.\n'
                         'Skipping...'.format(filename))
-                    self.logger.debug('\t', e)
-                self.logger.debug('Merged %s' % filename)
+                    logger.debug('\t', e)
+                logger.debug('Merged %s' % filename)
             self.session.commit()
-            self.logger.debug('Committed changes\n\n\n')
+            logger.debug('Committed changes\n\n\n')
 
 
 

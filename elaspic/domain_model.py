@@ -6,6 +6,7 @@ from builtins import range
 from builtins import object
 
 import os.path as op
+import logging
 
 import numpy as np
 import subprocess
@@ -23,13 +24,15 @@ from . import call_tcoffee
 from . import sql_db
 from . import analyze_structure
 
+logger = logging.getLogger(__name__)
+
 
 class GetModel(object):
     """
     Attributes
     ----------
     """
-    def __init__(self, unique_temp_folder, db, logger, configs):
+    def __init__(self, unique_temp_folder, db, configs):
         """
         """
         self.global_temp_path = configs['global_temp_path']
@@ -37,7 +40,6 @@ class GetModel(object):
         self.unique_temp_folder = unique_temp_folder
         self.pdb_path = configs['pdb_path']
         self.db = db
-        self.logger = logger
         self.modeller_runs = configs['modeller_runs']
         self.n_cores = configs['n_cores']
         self._prepare_temp_folder()
@@ -78,7 +80,7 @@ class GetModel(object):
     def get_domain_model(self, d):
         """
         """
-        self.logger.debug(
+        logger.debug(
             'Aligning: {}/{}*{}:{}'
             .format(d.uniprot_id, d.pdbfam_name, d.template.domain_def.replace(':', '-'), d.template.cath_id))
 
@@ -88,8 +90,8 @@ class GetModel(object):
                 d.template.domain.pdb_id, [d.template.domain.pdb_chain], 
                 [d.template.domain.pdb_domain_def], d.path_to_data)
         )
-        self.logger.debug('Finished performing alignments!')
-        structure = hf.get_pdb_structure(self.unique_temp_folder + 'modeller/' + pdb_filename_wt)
+        logger.debug('Finished performing alignments!')
+        structure = hf.get_pdb_structure(op.join(self.unique_temp_folder, 'modeller', pdb_filename_wt))
         model = structure[0]
 
         ###
@@ -105,7 +107,7 @@ class GetModel(object):
         analyze_structure_object = analyze_structure.AnalyzeStructure(
             self.unique_temp_folder + 'modeller/',
             self.unique_temp_folder + 'analyze_structure/',
-            pdb_filename_wt, [d.template.model.chain], None, self.logger)
+            pdb_filename_wt, [d.template.model.chain], None)
         (seasa_by_chain_together, seasa_by_chain_separately,
         seasa_by_residue_together, seasa_by_residue_separately) = analyze_structure_object.get_seasa()
         # Get SASA only for amino acids in the chain of interest
@@ -127,7 +129,7 @@ class GetModel(object):
             domain_def_offsets[0])
 
         if msms_length_mismatch:
-            self.logger.error('msms score length mismatch')
+            logger.error('msms score length mismatch')
             model_errors.append('msms score length mismatch')
 
         # Values common for single domains and interactions
@@ -141,7 +143,7 @@ class GetModel(object):
     def get_domain_pair_model(self, d):
         """
         """
-        self.logger.debug(
+        logger.debug(
             'Aligning: {}/{}*{}:{}/{}*{}:{}/{}'
             .format(
                 d.uniprot_domain_1.uniprot_id,
@@ -207,23 +209,23 @@ class GetModel(object):
         chain_2_interacting_resnum, chain_2_interacting_aa = self._get_unique_resnum_and_sequence(chain_2_interactions)
         __, chain_2_numbering = pdb_template.get_chain_sequence_and_numbering(model[d.template.model.chain_2])
 
-        self.logger.debug('chain_1_interactions:')
-        self.logger.debug(chain_1_interactions)
-        self.logger.debug('chain_1_interacting_resnum:')
-        self.logger.debug(chain_1_interacting_resnum)
-        self.logger.debug('chain_1_interacting_aa:')
-        self.logger.debug(chain_1_interacting_aa)
-#            self.logger.debug('chain_1_numbering:')
-#            self.logger.debug(chain_1_numbering)
+        logger.debug('chain_1_interactions:')
+        logger.debug(chain_1_interactions)
+        logger.debug('chain_1_interacting_resnum:')
+        logger.debug(chain_1_interacting_resnum)
+        logger.debug('chain_1_interacting_aa:')
+        logger.debug(chain_1_interacting_aa)
+#            logger.debug('chain_1_numbering:')
+#            logger.debug(chain_1_numbering)
 
-        self.logger.debug('chain_2_interactions:')
-        self.logger.debug(chain_2_interactions)
-        self.logger.debug('chain_2_interacting_resnum:')
-        self.logger.debug(chain_2_interacting_resnum)
-        self.logger.debug('chain_2_interacting_aa:')
-        self.logger.debug(chain_2_interacting_aa)
-#            self.logger.debug('chain_2_numbering:')
-#            self.logger.debug(chain_2_numbering)
+        logger.debug('chain_2_interactions:')
+        logger.debug(chain_2_interactions)
+        logger.debug('chain_2_interacting_resnum:')
+        logger.debug(chain_2_interacting_resnum)
+        logger.debug('chain_2_interacting_aa:')
+        logger.debug(chain_2_interacting_aa)
+#            logger.debug('chain_2_numbering:')
+#            logger.debug(chain_2_numbering)
 
         model_domain_1_start = hf.decode_domain_def(model_domain_def_1)[0]
         chain_1_interacting_uninum = [
@@ -253,19 +255,19 @@ class GetModel(object):
             uniprot_idx = uninum - 1
             chain_2_interacting_aa_from_uniprot += d.uniprot_domain_2.uniprot_sequence.uniprot_sequence[uniprot_idx]
 
-        self.logger.debug('domain_def_1: {}'.format(d.uniprot_domain_1.template.domain_def))
-        self.logger.debug('model_domain_def_1: {}'.format(model_domain_def_1))
-        self.logger.debug('chain_1_interactions_uniprot: {}'.format(chain_1_interactions_uniprot))
-        self.logger.debug('uniprot_sequence_1: {}'.format(d.uniprot_domain_1.uniprot_sequence.uniprot_sequence))
-        self.logger.debug('chain_1_interacting_aa: {}'.format(chain_1_interacting_aa))
-        self.logger.debug('chain_1_interacting_aa_from_uniprot: {}'.format(chain_1_interacting_aa_from_uniprot))
+        logger.debug('domain_def_1: {}'.format(d.uniprot_domain_1.template.domain_def))
+        logger.debug('model_domain_def_1: {}'.format(model_domain_def_1))
+        logger.debug('chain_1_interactions_uniprot: {}'.format(chain_1_interactions_uniprot))
+        logger.debug('uniprot_sequence_1: {}'.format(d.uniprot_domain_1.uniprot_sequence.uniprot_sequence))
+        logger.debug('chain_1_interacting_aa: {}'.format(chain_1_interacting_aa))
+        logger.debug('chain_1_interacting_aa_from_uniprot: {}'.format(chain_1_interacting_aa_from_uniprot))
 
-        self.logger.debug('domain_def_2: {}'.format(d.uniprot_domain_2.template.domain_def))
-        self.logger.debug('model_domain_def_2: {}'.format(model_domain_def_2))
-        self.logger.debug('chain_2_interactions_uniprot: {}'.format(chain_2_interactions_uniprot))
-        self.logger.debug('uniprot_sequence_2: {}'.format(d.uniprot_domain_2.uniprot_sequence.uniprot_sequence))
-        self.logger.debug('chain_2_interacting_aa: {}'.format(chain_2_interacting_aa))
-        self.logger.debug('chain_2_interacting_aa_from_uniprot: {}'.format(chain_2_interacting_aa_from_uniprot))
+        logger.debug('domain_def_2: {}'.format(d.uniprot_domain_2.template.domain_def))
+        logger.debug('model_domain_def_2: {}'.format(model_domain_def_2))
+        logger.debug('chain_2_interactions_uniprot: {}'.format(chain_2_interactions_uniprot))
+        logger.debug('uniprot_sequence_2: {}'.format(d.uniprot_domain_2.uniprot_sequence.uniprot_sequence))
+        logger.debug('chain_2_interacting_aa: {}'.format(chain_2_interacting_aa))
+        logger.debug('chain_2_interacting_aa_from_uniprot: {}'.format(chain_2_interacting_aa_from_uniprot))
 
         if ((len(chain_1_interacting_uninum) == 0 or
                 len(chain_2_interacting_uninum) == 0)):
@@ -285,9 +287,9 @@ class GetModel(object):
         analyze_structure_object = analyze_structure.AnalyzeStructure(
             self.unique_temp_folder + 'modeller/',
             self.unique_temp_folder + 'analyze_structure/',
-            pdb_filename_wt, [d.template.model.chain_1, d.template.model.chain_2], None, self.logger)
+            pdb_filename_wt, [d.template.model.chain_1, d.template.model.chain_2], None)
         interface_area = analyze_structure_object.get_interface_area()
-        self.logger.debug('interface_area: {}'.format(interface_area))
+        logger.debug('interface_area: {}'.format(interface_area))
         d.template.model.interface_area_hydrophobic = interface_area[0] 
         d.template.model.interface_area_hydrophilic = interface_area[1]
         d.template.model.interface_area_total = interface_area[2]
@@ -337,13 +339,13 @@ class GetModel(object):
 
         # Folder for storing files for export to output
         save_path = self.temp_archive_path + path_to_data
-        self.logger.debug('Template pdb: {}'.format(pdb_id))
-        self.logger.debug('save path: {}'.format(save_path))
+        logger.debug('Template pdb: {}'.format(pdb_id))
+        logger.debug('save path: {}'.format(save_path))
         uniprot_domain_seqrecs = self.get_uniprot_domain_seqrecs(uniprot_ids, uniprot_sequences, uniprot_domain_defs)
         pdb, pdb_domain_seqrecs = self.get_pdb_domain_seqrecs(pdb_id, pdb_chains, pdb_domain_defs)
 
         # Perform the alignments
-        self.logger.debug('Performing alignments...')
+        logger.debug('Performing alignments...')
         alignmnets = []
         alignment_filenames = []
         domain_def_offsets = []
@@ -352,7 +354,7 @@ class GetModel(object):
                 uniprot_domain_seqrecs[i], pdb_domain_seqrecs[i], '3dcoffee', path_to_data)
             domain_def_offset = self._get_alignment_overhangs(alignment)
             if any(domain_def_offset):
-                self.logger.debug('Shortening uniprot domain sequence because the alignment had large overhangs...')
+                logger.debug('Shortening uniprot domain sequence because the alignment had large overhangs...')
                 cut_from_start = domain_def_offset[0] if domain_def_offset[0] else None
                 cut_from_end = -domain_def_offset[1] if domain_def_offset[1] else None
                 uniprot_domain_seqrecs[i] = uniprot_domain_seqrecs[i][cut_from_start:cut_from_end]
@@ -363,7 +365,7 @@ class GetModel(object):
             domain_def_offsets.append(domain_def_offset)
 
         # Join alignments for different chains
-        self.logger.debug('Joining alignments for different chains...')
+        logger.debug('Joining alignments for different chains...')
         target_ids = [al[0].id for al in alignmnets]
         target_id = '_'.join(target_ids)
         target_seq = '/'.join([str(alignmnet[0].seq) for alignmnet in alignmnets])
@@ -373,12 +375,12 @@ class GetModel(object):
         template_seq = '/'.join([str(alignmnet[1].seq) for alignmnet in alignmnets])
 
         # Add '.' in place of every heteroatom in the pdb
-        self.logger.debug('Adding hetatms to alignment...')
+        logger.debug('Adding hetatms to alignment...')
         hetatm_chains = []
         for chain in pdb.structure[0].child_list:
             if chain.id not in pdb_chains:
                 hetatm_chains.append(chain)
-        self.logger.debug('Number of extra chains: {}'.format(len(hetatm_chains)))
+        logger.debug('Number of extra chains: {}'.format(len(hetatm_chains)))
         if len(hetatm_chains) > 1:
             raise Exception('Too many extra chains!')
         if len(hetatm_chains) == 1:
@@ -389,13 +391,14 @@ class GetModel(object):
         # Write the alignment file for modeller
         pir_alignment_filename = self.unique_temp_folder + 'modeller/outFile_wildtype'
         with open(pir_alignment_filename, 'w') as pir_alignment_filehandle:
-            self._write_to_pir_alignment(pir_alignment_filehandle, 'sequence', target_id, target_seq)
-            self._write_to_pir_alignment(pir_alignment_filehandle, 'structure', template_id, template_seq)
+            write_to_pir_alignment(pir_alignment_filehandle, 'sequence', target_id, target_seq)
+            write_to_pir_alignment(pir_alignment_filehandle, 'structure', template_id, template_seq)
 
         # Make the homology model and check if it is knotted
-        norm_dope_wt, pdb_filename_wt, knotted = self._run_modeller(
-            pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder)
-        self.logger.debug('model pdb file: %s, knotted: %s' % (pdb_filename_wt, knotted,))
+        norm_dope_wt, pdb_filename_wt, knotted = run_modeller(
+            pir_alignment_filename, target_ids, template_ids, self.unique_temp_folder,
+            self.modeller_runs)
+        logger.debug('model pdb file: %s, knotted: %s' % (pdb_filename_wt, knotted,))
         if knotted:
             model_errors.append('knotted')
 
@@ -449,11 +452,11 @@ class GetModel(object):
     def get_pdb_domain_seqrecs(self, pdb_id, pdb_chains, pdb_domain_defs):
         """
         """
-        self.logger.debug('Obtaining protein sequence for pdb: {}, chains: {}, domain_defs: {}'
+        logger.debug('Obtaining protein sequence for pdb: {}, chains: {}, domain_defs: {}'
             .format(pdb_id, pdb_chains, pdb_domain_defs))
         pdb = pdb_template.PDBTemplate(
             self.pdb_path, pdb_id, pdb_chains, pdb_domain_defs,
-            self.unique_temp_folder, self.unique_temp_folder, self.logger)
+            self.unique_temp_folder, self.unique_temp_folder)
         pdb.extract()
         pdb.save_structure()
         pdb.save_sequences()
@@ -476,9 +479,9 @@ class GetModel(object):
             self.n_cores,
             self.pdb_path,
             mode,
-            self.logger,
+            logger,
         ]
-        self.logger.debug("Calling t_coffee with parameters:\n" +
+        logger.debug("Calling t_coffee with parameters:\n" +
             ', '.join(['{}'.format(x) for x in t_coffee_parameters]))
         tcoffee = call_tcoffee.tcoffee_alignment(*t_coffee_parameters)
         alignments = tcoffee.align()
@@ -486,7 +489,7 @@ class GetModel(object):
         alignment = alignments[0]
 
         # Save the alignment
-        self.logger.debug(alignment)
+        logger.debug(alignment)
         alignment_filename = alignment[0].id + '_' + alignment[1].id + '.aln'
         try:
             AlignIO.write(alignment, self.unique_temp_folder + 'tcoffee/' + alignment_filename, 'clustal')
@@ -547,63 +550,78 @@ class GetModel(object):
         return alpha * (identity) * (coverage) + (1.0 - alpha) * (coverage)
 
 
-    def _write_to_pir_alignment(self, pir_alignment_filehandle, seq_type, seq_name, seq):
-        """ Write the *.pir alignment compatible with modeller
-        """
-        pir_alignment_filehandle.write('>P1;' + seq_name + '\n')
-        pir_alignment_filehandle.write(seq_type + ':' + seq_name + ':.:.:.:.::::\n')
-        pir_alignment_filehandle.write(seq + '*')
-        pir_alignment_filehandle.write('\n\n')
 
 
-    def _run_modeller(self, pir_alignment_filename, target_ids, template_ids, save_path):
-        """
-        """
-        modeller_target_id = '_'.join(target_ids)
+#%%
+def write_to_pir_alignment(pir_alignment_filehandle, seq_type, seq_name, seq):
+    """ Write the *.pir alignment compatible with modeller.
+    
+    Parameters
+    -----------
+    seq_type : str
+        One of: ['sequence', 'structure'], in that order.
+    seq_name : str
+        Name to appear in the alignment.
+    seq : str
+        Alignment sequence.
+    """
+    pir_alignment_filehandle.write('>P1;' + seq_name + '\n')
+    pir_alignment_filehandle.write(seq_type + ':' + seq_name + ':.:.:.:.::::\n')
+    pir_alignment_filehandle.write(seq + '*')
+    pir_alignment_filehandle.write('\n\n')
 
-        if len(template_ids) == 1:
-            # If you're only modelling one domain
+
+def run_modeller(
+        pir_alignment_filename, target_ids, template_ids, unique_temp_folder, 
+        modeller_runs, new_chains='ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+    """
+    """
+    modeller_target_id = '_'.join(target_ids)
+
+    if len(template_ids) == 1:
+        # If you're only modelling one domain
+        modeller_template_id = template_ids[0]
+    elif len(template_ids) == 2:
+        if template_ids[0][-1] == template_ids[1][-1]:
+            # Modelling two domains using the same chain in the pdb
             modeller_template_id = template_ids[0]
-        elif len(template_ids) == 2:
-            if template_ids[0][-1] == template_ids[1][-1]:
-                # Modelling two domains using the same chain in the pdb
-                modeller_template_id = template_ids[0]
-            else:
-                # Modelling two domains using two chains in the pdb
-                # If more than two chains are used this has to be adjusted
-                modeller_template_id = template_ids[0] + template_ids[1][-1]
+        else:
+            # Modelling two domains using two chains in the pdb
+            # If more than two chains are used this has to be adjusted
+            modeller_template_id = template_ids[0] + template_ids[1][-1]
 
-        modeller_parameters = [
-            [pir_alignment_filename],
-            modeller_target_id,
-            modeller_template_id,
-            save_path, # path to pdb for modeller
-            self.unique_temp_folder, # path to folders with executables
-            self.logger,
-            self.modeller_runs,
-            True # loop refinement
-        ]
-        self.logger.debug(
-            "Calling modeller with parameters:\n" +
-            ', '.join(['{}'.format(x) for x in modeller_parameters]))
-        modeller = call_modeller.Modeller(*modeller_parameters)
-        modeller_path = self.unique_temp_folder + 'modeller/'
-        with hf.switch_paths(modeller_path):
-            normDOPE, pdbFile, knotted = modeller.run()
+    modeller_path = op.join(unique_temp_folder, 'modeller')
 
-        # If there is only one chain in the pdb, label that chain 'A'
+    modeller_parameters = [
+        [pir_alignment_filename],
+        modeller_target_id,
+        modeller_template_id,
+        unique_temp_folder, # path to pdb for modeller
+        modeller_path, # path to folders with executables
+        modeller_runs,
+        True # loop refinement
+    ]
+    logger.debug(
+        "Calling modeller with parameters:\n" +
+        ', '.join(['{}'.format(x) for x in modeller_parameters]))
+    modeller = call_modeller.Modeller(*modeller_parameters)
+
+    with hf.switch_paths(modeller_path):
+        normDOPE, pdbFile, knotted = modeller.run()
+
+    # If there is only one chain in the pdb, label that chain 'A'
+    if new_chains:
         io = PDBIO()
-        structure = hf.get_pdb_structure(modeller_path + pdbFile)
+        structure = hf.get_pdb_structure(op.join(modeller_path, pdbFile))
         model = structure[0]
         chains = model.child_list
-        self.logger.debug(', '.join(['chain id: %s' % chain.id for chain in chains]))
-        new_chains = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        logger.debug(', '.join(['chain id: %s' % chain.id for chain in chains]))
         for i in range(len(chains)):
             chains[i].id = new_chains[i]
-        self.logger.debug(', '.join(['chain id: %s' % chain.id for chain in chains]))
+        logger.debug(', '.join(['chain id: %s' % chain.id for chain in chains]))
         io.set_structure(structure)
-        io.save(modeller_path + pdbFile)
+        io.save(op.join(modeller_path, pdbFile))
 
-        return normDOPE, pdbFile, knotted
+    return normDOPE, pdbFile, knotted
 
 

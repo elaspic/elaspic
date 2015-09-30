@@ -5,12 +5,16 @@ from builtins import zip
 from builtins import range
 from builtins import object
 
-from os import environ
+import os.path as op
 import shutil
 import six
+import logging
 
 from . import errors
 from . import helper_functions as hf
+from .conf import configs
+
+logger = logging.getLogger(__name__)
 
 names_rows_stability = [
     ['dg', 1], # totalEnergy
@@ -56,20 +60,13 @@ names_stability_complex_mut = (
 
 class FoldX(object):
 
-    def __init__(self, tmp_path, pdb_file, chain_id, buildModel_runs, foldX_WATER, logger):
+    def __init__(self, pdb_file, chain_id):
         """
         """
-        # In case the pipeline gets extended to handle more than two chains,
-        # the chainID becomes relevant for the energy calculation. Otherwise
-        # it is OK to simply take the first chain
+        self.pdb_filename = op.basename(pdb_file)
         self.chain_id = chain_id
-#        self.chain_id = 'A'
-        self.foldx_path = tmp_path + 'FoldX/'
-        self.foldx_runfile = self.foldx_path + 'runfile_FoldX.txt'
-        self.pdb_filename = pdb_file.split('/')[-1]
-        self.buildModel_runs = buildModel_runs
-        self.water = foldX_WATER
-        self.logger = logger
+        self.foldx_path = op.join(configs['unique_temp_path'], 'FoldX')
+        self.foldx_runfile = op.join(self.foldx_path, 'runfile_FoldX.txt')
 
 
     def __call__(self, whatToRun, mutCodes=[]):
@@ -87,7 +84,7 @@ class FoldX(object):
         
         .. _FoldX manual: http://foldx.crg.es/manual3.jsp
         """
-        self.logger.debug('Running FoldX {}'.format(whatToRun))
+        logger.debug('Running FoldX {}'.format(whatToRun))
         self.__write_runfile(self.pdb_filename, self.chain_id, whatToRun, mutCodes)
         self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
@@ -101,17 +98,17 @@ class FoldX(object):
             return self.foldx_path + 'RepairPDB_' + self.pdb_filename
         elif whatToRun == 'BuildModel':
             # see the FoldX manual for the naming of the generated structures
-            if self.buildModel_runs == 1:
+            if configs['foldx_num_of_runs'] == 1:
                 mutants = [self.foldx_path + self.pdb_filename[:-4] + '_1.pdb', ]
                 wiltype = [self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1.pdb', ]
                 results = [wiltype, mutants]
             else:
                 mutants = [
                     self.foldx_path + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' 
-                    for x in range(0,self.buildModel_runs) ]
+                    for x in range(0,configs['foldx_num_of_runs']) ]
                 wiltype = [
                     self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' 
-                    for x in range(0,self.buildModel_runs) ]
+                    for x in range(0,configs['foldx_num_of_runs']) ]
                 results = [wiltype, mutants]
             return results
 
@@ -165,8 +162,8 @@ class FoldX(object):
             '<ENDFILE>#;\n').replace(' ', '').format(
                 pdbFile=pdbFile,
                 command_line=command_line,
-                buildModel_runs=self.buildModel_runs,
-                water=self.water,
+                buildModel_runs=configs['foldx_num_of_runs'],
+                water=configs['foldx_water'],
                 output_pdb=output_pdb)
 
         # This just makes copies of the runfiles for debugging...
@@ -176,10 +173,12 @@ class FoldX(object):
 
 
     def __run_runfile(self):
-        # TODO: Add a fallback plan using libfaketime
+        """
+        TODO: Add a fallback plan using libfaketime.
+        """
 #        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
         system_command = 'foldx -runfile ' + self.foldx_runfile
-        self.logger.debug('FoldX system command: {}'.format(system_command))
+        logger.debug('FoldX system command: {}'.format(system_command))
         childProcess = hf.run_subprocess_locally(self.foldx_path, system_command)
         result, error_message = childProcess.communicate()
         if six.PY3:
@@ -187,8 +186,8 @@ class FoldX(object):
             error_message = str(error_message, encoding='utf-8')
         return_code = childProcess.returncode
         if return_code != 0:
-            self.logger.debug('FoldX result: %s' % result)
-            self.logger.debug('FoldX error: %s' % error_message)
+            logger.debug('FoldX result: %s' % result)
+            logger.debug('FoldX error: %s' % error_message)
             if 'Cannot allocate memory' in error_message:
                 raise errors.ResourceError(error_message)
 
@@ -206,35 +205,5 @@ class FoldX(object):
             if whatToRead == 'AnalyseComplex':
                 complex_stability_values = [ line[x[1]].strip() for x in names_rows_stability_complex ]
                 return complex_stability_values
-
-
-if __name__ == '__main__':
-    import logging
-
-    unique = '6OpXOj'
-    mutCodes = ['GGEALGRLLVVYPWT\nGGEALGTLLVVYPWT']
-    repairedPDB_wt = '/tmp/elaspic/6OpXOj/FoldX/RepairPDB_A0N071_P02042.BL00040001.pdb'
-    chains_modeller = [u'C', u'A']
-
-    tmp_path = '/tmp/elaspic/'
-    pdb_path = '/home/kimlab1/database_data/pdb/data/data/structures/divided/pdb/'
-
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-#    handler = logging.FileHandler(tmp_path + 'templates.log', mode='w', delay=True)
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.DEBUG)
-    logger.addHandler(handler)
-
-    foldX_path = tmp_path + unique + 'FoldX/'
-    buildModel_runs = '1'
-    foldX_WATER = '-IGNORE'
-    fX_wt = FoldX(tmp_path + unique + '/', repairedPDB_wt, chains_modeller[0], unique,
-                  buildModel_runs, foldX_WATER, logger)
-    # do the mutation with foldX
-    repairedPDB_wt_list, repairedPDB_mut_list = fX_wt.run('BuildModel', mutCodes)
-    logger.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
-
-
 
 

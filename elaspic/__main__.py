@@ -50,12 +50,15 @@ def get_parser():
         '-u', '--uniprot_id', 
         help="The uniprot_id of the protein that you want to mutate (e.g. 'P28223')")
     parser.add_argument(
+        '-s', '--pdb_id',
+        help="The pdb_id of the structure that you want to mutate (e.g. '4dkl')")
+    parser.add_argument(
         '-m', '--mutations', nargs='?', default=['',], 
-        help="Mutation(s) that you wish to evaluate (e.g. 'D172E,R173H')")
+        help="Mutation(s) that you wish to evaluate (e.g. 'D172E,R173H' or 'A_V10I')")
     parser.add_argument(
         '-p', '--uniprot_domain_pair_ids',  nargs='?', default='',
         help="List of uniprot_domain_pair_ids to analyse "
-            "(useful if you want to restrict your analysis to only a handful of domains) " )
+            "(useful if you want to restrict your analysis to only a handful of domains) ")
     parser.add_argument(
         '-f', '--input_file', 
         help=("A tab separated file of uniprot_ids, mutations, and optionally, uniprot_domain_pair_ids \n"

@@ -4,15 +4,21 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 from builtins import zip
 from builtins import object
-import numpy as np
+
+import os.path as op
 import gzip
 import string
 import ftplib
+import logging
 
-from fastcache import clru_cache
+from functools import wraps
 from tempfile import NamedTemporaryFile
 from collections import defaultdict
+
 import six
+from fastcache import clru_cache
+
+import numpy as np
 
 import Bio
 from Bio.PDB import PDBIO, Select
@@ -25,6 +31,7 @@ from Bio.Seq import Seq
 from . import errors
 from . import helper_functions as hf
 
+logger = logging.getLogger(__name__)
 
 A_DICT = {
     'A':'ALA', 'R':'ARG', 'N':'ASN', 'D':'ASP', 'C':'CYS', 'E':'GLU',
@@ -104,26 +111,40 @@ def download_pdb(pdb_id, pdb_path_suffix, tmp_path='/tmp/'):
 
 
 def _get_pdb_path_suffix(pdb_id, pdb_type='ent'):
-    pdb_path_suffix = ''
+    
     if pdb_type == 'ent':
-        # Original PDB structure
+        # Original PDB structure.
         prefix = 'pdb'
         suffix = '.ent.gz'
-
+        return (
+            pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
+        )
+        
     elif pdb_type == 'cif':
-        # mmCIF pdb structure
+        # mmCIF pdb structure.
         prefix = ''
         suffix = '.cif.gz'
-        pdb_path_suffix += '../mmCIF/'
-
+        return (
+            '../mmCIF/' +
+            pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
+        )
+        
     elif pdb_type == 'pdb':
-        # The first biological unit
+        # The first biological unit.
         prefix = ''
         suffix = '.pdb1.gz'
-        pdb_path_suffix += '../../../biounit/coordinates/divided/'
+        return (
+            '../../../biounit/coordinates/divided/' + 
+            pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
+        )
+        
+    elif pdb_type == 'raw':
+        # Just a PDB file in some folder.
+        return ''
+        
+    else:
+        raise Exception
 
-    pdb_path_suffix += pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
-    return pdb_path_suffix
 
 
 @clru_cache(maxsize=128, typed=False)
@@ -149,7 +170,7 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
     """
     pdb_path_suffix = _get_pdb_path_suffix(pdb_id, pdb_type)
 
-    if pdb_type in {'ent', 'pdb'}:
+    if pdb_type in {'ent', 'pdb', 'raw'}:
         parser = PDBParser(QUIET=True)
     elif pdb_type in {'cif'}:
         parser = MMCIFParserMod(tmp_path=tmp_path)
@@ -306,26 +327,44 @@ def get_structure_sequences(file_or_structure, seqres_sequence=False):
 
 
 #%%
-def convert_aa(aa):
+def suppress_logger(fn):
+    @wraps(fn)
+    def fn_quiet(*args, **kwargs):
+        level = logger.level
+        logger.setLevel(logging.WARNING)
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            logger.setLevel(level)
+    return fn_quiet
+
+
+def convert_aa(aa, quiet=False):
     """Convert amino acids from three letter code to one letter code or vice versa
 
     .. note:: Deprecated!
     
        Use ``''.join(AAA_DICT[aaa] for aaa in aa)`` and ``''.join(A_DICT[a] for a in aa)``.
     """
+    if quiet:
+        return suppress_logger(convert_aa)(aa)
+    
     if len(aa) == 3:
         try:
             return AAA_DICT[aa.upper()]
         except KeyError:
-            print('Not a valid amino acid')
+            if not quiet:
+                logger.debug('Not a valid amino acid: {}'.format(aa))
             return
     if len(aa) == 1:
         try:
             return A_DICT[aa.upper()]
         except KeyError:
-            print('Not a valid amino acid')
+            if not quiet:
+                logger.debug('Not a valid amino acid: {}'.format(aa))
             return
-    print('Not a valid amino acid')
+    if not quiet:
+        logger.debug('Not a valid amino acid: {}'.format(aa))
 
 
 def convert_resnum_alphanumeric_to_numeric(resnum):
@@ -349,6 +388,283 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 
 #%%################################################################################################
 
+
+
+
+
+
+#class PDBTemplate(object):
+#    """
+#    Attributes
+#    ----------
+#    domain_boundaries : list of lists of lists
+#        Elements in the outer list correspond to domains in each chain of the
+#        pdb. Elements of the inner list contain the start and end of each
+#        fragment of each domain. For example, if there is only one chain
+#        with pdb domain boundaries 1-10:20-45, this would correspond to
+#        domain_boundaries [[[1,10],[20,45]]].
+#    
+#    """
+#    def __init__(
+#            self, pdb_path, pdb_id, chain_ids, domain_defs, output_path, tmp_path, 
+#            pdb_type='ent'):
+#        """
+#        Parameters
+#        ----------
+#        
+#        """
+#        self.pdb_path = pdb_path
+#        self.pdb_id = pdb_id
+#        self.output_path = output_path
+#        self.structure = get_pdb(self.pdb_id, self.pdb_path, tmp_path).copy()
+#        self.chain_ids = (
+#            chain_ids if chain_ids else [chain.id for chain in self.structure[0].child_list]
+#        )
+#        self.r_cutoff = 6 # remove hetatms more than x A away from the main chain(s)
+#
+#        self.domain_boundaries = []
+#        for domain_def in domain_defs:
+#            self.domain_boundaries.append(
+#                hf.decode_domain_def(domain_def, merge=False, return_string=True))
+#
+#        self.unique_id = (
+#            'pdb_id: {}, pdb_chain: {}, pdb_domain_def: {}'.format(
+#            self.pdb_id, self.chain_ids, self.domain_boundaries) )
+#
+#
+#    def extract(self):
+#        """Extract the wanted chains out of the PDB file. Removes water atoms
+#        and selects the domain regions (i.e. selects only those parts of the
+#        domain that are within the domain boundaries specified).
+#        """
+#        logger.debug('Extracting {}...'.format(self.unique_id))
+#
+#        model = self.structure[0] # assuming that model 0 is always the desired one
+#        new_structure = Bio.PDB.Structure.Structure(self.pdb_id)
+#        new_model = Bio.PDB.Model.Model(0)
+#        hetatm_chain = Bio.PDB.Chain.Chain('Z')
+#
+#        # Loop over every chain and every residue and make sure that everything is ok
+#        for chain_idx, chain_id in enumerate(self.chain_ids):
+#            chain = model[chain_id]
+#            res_idx = 0
+#
+#            chain_numbering, domain_start_idxs, domain_end_idxs = (
+#                self._get_domain_def_idxs_for_chain(chain, chain_idx)
+#            )
+#            logger.debug(
+#                'domain_def: {}, domain_start_idxs: {}, domain_end_idxs: {}'.format(
+#                self.domain_boundaries, domain_start_idxs, domain_end_idxs))
+#
+#            while res_idx < len(chain):
+#                res = chain.child_list[res_idx]
+#                original_res_id = res.id
+#
+#                # Move water to the hetatm chain
+#                if res.id[0] == 'W':
+#                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=False)
+#                    continue
+#
+##                # Move heteroatoms to the hetatm chain
+##                if res.id[0] != ' ':
+##                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=True)
+##                    continue
+#                
+#                # Now treating all unusual amino acids as hetatms
+#                # Convert methylated lysines to regular lysines
+#                if res.resname in methylated_lysines:
+#                    self._correct_methylated_lysines(res)
+#
+#                # Move hetatms to the hetatm chain
+#                if res.resname not in amino_acids:
+#                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res)
+#                    continue
+#
+#                # Cut each chain to domain boundaries
+#                residue_is_outside_domain = (
+#                    self._residue_outside_domain(
+#                        chain, chain_numbering, domain_start_idxs, domain_end_idxs, res)
+#                )
+#                if residue_is_outside_domain:
+#                    chain.detach_child(original_res_id)
+#                    continue
+#
+#                res_idx += 1
+#            new_model.add(chain)
+#
+#        # Make sure that the new model is not empty
+#        if not list(new_model.get_atoms()):
+#            raise errors.PDBEmptySequenceError(self.unique_id)
+#
+#        # Remove hetatms if they are > 6A away from the chains of interest
+#        self._remove_distant_hatatms(new_model, hetatm_chain)
+#
+#        if hetatm_chain:
+#            logger.debug('Adding hetatm chain of length {}'.format(len(hetatm_chain)))
+#            new_model.add(hetatm_chain)
+#
+#        # If the hetatm chain is not empty, add it to the model
+#        new_structure.add(new_model)
+#        self.structure = new_structure
+#
+#        logger.debug('PDB {} extracted successfully\n'.format(self.pdb_id))
+#
+#
+#    def get_chain_sequence_and_numbering(self, chain_id, *args, **varargs):
+#        """Call ``get_chain_sequence_and_numbering`` using chain with id ``chain_id``
+#        """
+#        chain = self.structure[0][chain_id]
+#        return get_chain_sequence_and_numbering(chain, *args, **varargs)
+#
+#
+#    def get_chain_seqres_sequence(self, chain_id, *args, **varargs):
+#        """Call ``get_chain_seqres_sequence`` using chain with id ``chain_id``
+#        """
+#        chain = self.structure[0][chain_id]
+#        return get_chain_seqres_sequence(chain, *args, **varargs)
+#
+#
+#    def _get_domain_def_idxs_for_chain(self, chain, chain_idx):
+#        if not self.domain_boundaries or not self.domain_boundaries[chain_idx]:
+#            return None, None, None 
+#
+#        __, chain_numbering = get_chain_sequence_and_numbering(chain)
+#        try:
+#            domain_start_idxs, domain_end_idxs = [
+#                tuple(chain_numbering.index(resid) for resid in resids)
+#                for resids in zip(*self.domain_boundaries[chain_idx])]
+#        except Exception as e:
+#            print(str(e))
+#            raise errors.PDBDomainDefsError(self.unique_id)
+#
+#        return chain_numbering, domain_start_idxs, domain_end_idxs
+#
+#
+#    def _correct_methylated_lysines(self, res):
+#        new_resname = 'LYS'
+#        new_resid = (' ', res.id[1], res.id[2])
+#        logger.debug(
+#            'Renaming residue {} {} to {} {}'
+#            .format(res.resname, res.id, new_resname, new_resid))
+#        res.resname = new_resname
+#        res.id = new_resid
+#        atom_idx = 0
+#        while atom_idx < len(res):
+#            atom_id = res.child_list[atom_idx].id
+#            if atom_id not in lysine_atoms:
+#                logger.debug('Removing atom {} from residue {} {}.'.format(atom_id, res.resname, res.id))
+#                res.detach_child(atom_id)
+#            else:
+#                atom_idx += 1
+#
+#
+#    def _move_hetatm_to_hetatm_chain(self, chain, hetatm_chain, res, echo=False):
+#        logger.debug('Moving hetatm residue {} {} to the hetatm chain'.format(res.resname, res.id))
+#        chain.detach_child(res.id)
+#        hetatm_res = res
+#        hetatm_res.id = (hetatm_res.id[0], len(hetatm_chain)+1, hetatm_res.id[2],)
+#        hetatm_chain.add(hetatm_res)
+#
+#
+#    def _residue_outside_domain(self, chain, chain_numbering, domain_start_idxs, domain_end_idxs, res):
+#        """Returns `True` if residue ``res`` is outside the domain
+#        """
+#        if domain_start_idxs is None or domain_end_idxs is None:
+#            return False
+#
+#        resid = str(res.id[1]) + res.id[2].strip()
+#        resid_idx = chain_numbering.index(resid)
+#        for domain_start_idx, domain_end_idx in zip(domain_start_idxs, domain_end_idxs):
+#            if resid_idx >= domain_start_idx and resid_idx <= domain_end_idx:
+#                # Residue is inside the domain
+#                return False
+#
+#        # Residue is outside the domain
+#        return True
+#
+#
+#    def _remove_distant_hatatms(self, new_model, hetatm_chain):
+#        """Detach hetatms that are more than ``self.r_cutoff`` away from the main chain(s)
+#        """
+#        try:
+#            from Bio.PDB import NeighborSearch
+#        except ImportError as e:
+#            logger.error('Importing Biopython NeighborSearch failed with an error: {}'.format(e))
+#            raise Exception('Alternative not yet implemented!')
+#        ns = NeighborSearch(list(new_model.get_atoms()))
+#        hetatm_chain.id = [c for c in reversed(hf.uppercase) if c not in self.chain_ids][0]
+#        res_idx = 0
+#        while res_idx < len(hetatm_chain):
+#            res_1 = hetatm_chain.child_list[res_idx]
+#            in_contact = False
+#            for atom_1 in res_1:
+#                interacting_residues = ns.search(atom_1.get_coord(), self.r_cutoff, 'R')
+#                if interacting_residues:
+#                    # logger.debug(res_1.id)
+#                    # logger.debug(interacting_residues)
+#                    in_contact = True
+#            if in_contact:
+#                res_idx += 1
+#                continue
+#            # logger.debug('Detaching child: {}'.format(res_1.id))
+#            hetatm_chain.detach_child(res_1.id)
+#
+#
+#    def _unset_disordered_flags(self):
+#        """Change atom and residue ``disordered`` flag to `False`.
+#        Otherwise, Biopython may crash when saving the PDB structure.
+#        """
+#        logger.debug('Setting all residues and atoms marked as disorded to non-disorded')
+#        for m in self.structure:
+#            for c in m:
+#                for r in c:
+#                    if r.is_disordered() or r.disordered:
+#                        logger.debug(
+#                            'Changing disordered_flag on residue {} from {} to 0'
+#                            .format(r, r.disordered))
+#                        r.disordered = 0
+#                    for a in r:
+#                        if a.is_disordered() or a.disordered_flag:
+#                            logger.debug(
+#                                'Changing disordered_flag on atom {} from {} to 0'
+#                                .format(a, a.disordered_flag))
+#                            a.disordered_flag = 0
+#
+#
+#    def save_structure(self, remove_disordered=False):
+#        if remove_disordered:
+#            self._unset_disordered_flags()
+#
+#        io = PDBIO()
+#        io.set_structure(self.structure)
+#        try:
+#            outFile = self.output_path + self.pdb_id + ''.join(self.chain_ids) + '.pdb'
+#            io.save(outFile)
+#            if len(self.chain_ids) > 1:
+#                for chain_id in self.chain_ids:
+#                    outFile = self.output_path + self.pdb_id + chain_id + '.pdb'
+#                    io.save(outFile, select=SelectChains(chain_id))
+#        except AttributeError as e:
+#            if remove_disordered:
+#                raise(e)
+#            self.save_structure(remove_disordered=True)
+#
+#
+#    def save_sequences(self):
+#        self.chain_numbering_extended_dict = {}
+#        self.chain_sequence_dict = {}
+#        for chain_id in self.chain_ids:
+#            chain_sequence, chain_numbering_extended = self.get_chain_sequence_and_numbering(chain_id)
+#            self.chain_numbering_extended_dict[chain_id] = chain_numbering_extended
+#            self.chain_sequence_dict[chain_id] = chain_sequence
+#            with open(self.output_path + self.pdb_id + chain_id + '.seq.txt', 'w') as f:
+#                f.write('>' + self.pdb_id + chain_id + '\n')
+#                f.write(chain_sequence + '\n')
+#                f.write('\n')
+#
+
+
+#%% Additions for `pipeline_structure`
 class SelectChains(Select):
     """Only accept the specified chains when saving.
     """
@@ -357,13 +673,14 @@ class SelectChains(Select):
 
     def accept_chain(self, chain):
         return (chain.get_id() in self.chain_letters)
+        
 
-
-
-class PDBTemplate(object):
+class StructureParser:
     """
     Attributes
     ----------
+    pdb_id : ___
+
     domain_boundaries : list of lists of lists
         Elements in the outer list correspond to domains in each chain of the
         pdb. Elements of the inner list contain the start and end of each
@@ -372,29 +689,34 @@ class PDBTemplate(object):
         domain_boundaries [[[1,10],[20,45]]].
     
     """
-    def __init__(self, pdb_path, pdb_id, chain_ids, domain_defs, output_path, tmp_path, logger):
+    def __init__(self, pdb_file, chain_ids=None):
         """
         Parameters
         ----------
-        
+        pdb_file : str
+            Full path and filename of the structure.
+        output_dir : str
+            Folder where to save extracted structures and sequences.
+        chain_ids : list
+            Chains of the structure that should be kept.
         """
-        self.pdb_path = pdb_path
-        self.pdb_id = pdb_id
-        self.output_path = output_path
-        self.structure = get_pdb(self.pdb_id, self.pdb_path, tmp_path).copy()
+        self.pdb_id = op.basename(pdb_file).rstrip('.pdb')
+        self.pdb_file = pdb_file
+        self.structure = self._get_structure(self.pdb_id, self.pdb_file)
         self.chain_ids = (
             chain_ids if chain_ids else [chain.id for chain in self.structure[0].child_list]
         )
-        self.logger = logger
+        
         self.r_cutoff = 6 # remove hetatms more than x A away from the main chain(s)
-
         self.domain_boundaries = []
-        for domain_def in domain_defs:
-            self.domain_boundaries.append(hf.decode_domain_def(domain_def, merge=False, return_string=True))
+        self.unique_id = ('pdb_id: {}, chain_ids: {}'.format(self.pdb_id, self.chain_ids))
 
-        self.unique_id = (
-            'pdb_id: {}, pdb_chain: {}, pdb_domain_def: {}'.format(
-            self.pdb_id, self.chain_ids, self.domain_boundaries) )
+
+    def _get_structure(self, pdb_id, pdb_file):
+        parser = PDBParser()
+        with open(pdb_file) as ifh:
+            structure = parser.get_structure(pdb_id, ifh)
+        return structure
 
 
     def extract(self):
@@ -402,7 +724,7 @@ class PDBTemplate(object):
         and selects the domain regions (i.e. selects only those parts of the
         domain that are within the domain boundaries specified).
         """
-        self.logger.debug('Extracting {}...'.format(self.unique_id))
+        logger.debug('Extracting {}...'.format(self.unique_id))
 
         model = self.structure[0] # assuming that model 0 is always the desired one
         new_structure = Bio.PDB.Structure.Structure(self.pdb_id)
@@ -417,9 +739,9 @@ class PDBTemplate(object):
             chain_numbering, domain_start_idxs, domain_end_idxs = (
                 self._get_domain_def_idxs_for_chain(chain, chain_idx)
             )
-            self.logger.debug(
+            logger.debug(
                 'domain_def: {}, domain_start_idxs: {}, domain_end_idxs: {}'.format(
-                self.domain_boundaries[chain_idx], domain_start_idxs, domain_end_idxs))
+                self.domain_boundaries, domain_start_idxs, domain_end_idxs))
 
             while res_idx < len(chain):
                 res = chain.child_list[res_idx]
@@ -465,14 +787,14 @@ class PDBTemplate(object):
         self._remove_distant_hatatms(new_model, hetatm_chain)
 
         if hetatm_chain:
-            self.logger.debug('Adding hetatm chain of length {}'.format(len(hetatm_chain)))
+            logger.debug('Adding hetatm chain of length {}'.format(len(hetatm_chain)))
             new_model.add(hetatm_chain)
 
         # If the hetatm chain is not empty, add it to the model
         new_structure.add(new_model)
         self.structure = new_structure
 
-        self.logger.debug('PDB {} extracted successfully\n'.format(self.pdb_id))
+        logger.debug('PDB {} extracted successfully\n'.format(self.pdb_id))
 
 
     def get_chain_sequence_and_numbering(self, chain_id, *args, **varargs):
@@ -489,9 +811,41 @@ class PDBTemplate(object):
         return get_chain_seqres_sequence(chain, *args, **varargs)
 
 
+    def save_structure(self, output_dir='', remove_disordered=False):
+        if remove_disordered:
+            self._unset_disordered_flags()
+
+        io = PDBIO()
+        io.set_structure(self.structure)
+        try:
+            outFile = op.join(output_dir, self.pdb_id + ''.join(self.chain_ids) + '.pdb')
+            io.save(outFile)
+            if len(self.chain_ids) > 1:
+                for chain_id in self.chain_ids:
+                    outFile = op.join(output_dir, self.pdb_id + chain_id + '.pdb')
+                    io.save(outFile, select=SelectChains(chain_id))
+        except AttributeError as e:
+            if remove_disordered:
+                raise(e)
+            self.save_structure(output_dir=output_dir, remove_disordered=True)
+
+
+    def save_sequences(self, output_dir=''):
+        self.chain_numbering_extended_dict = {}
+        self.chain_sequence_dict = {}
+        for chain_id in self.chain_ids:
+            chain_sequence, chain_numbering_extended = self.get_chain_sequence_and_numbering(chain_id)
+            self.chain_numbering_extended_dict[chain_id] = chain_numbering_extended
+            self.chain_sequence_dict[chain_id] = chain_sequence
+            with open(op.join(output_dir, self.pdb_id + chain_id + '.seq.txt'), 'w') as f:
+                f.write('>' + self.pdb_id + chain_id + '\n')
+                f.write(chain_sequence + '\n')
+                f.write('\n')
+
+
     def _get_domain_def_idxs_for_chain(self, chain, chain_idx):
         if not self.domain_boundaries or not self.domain_boundaries[chain_idx]:
-            return None, None
+            return None, None, None 
 
         __, chain_numbering = get_chain_sequence_and_numbering(chain)
         try:
@@ -508,7 +862,7 @@ class PDBTemplate(object):
     def _correct_methylated_lysines(self, res):
         new_resname = 'LYS'
         new_resid = (' ', res.id[1], res.id[2])
-        self.logger.debug(
+        logger.debug(
             'Renaming residue {} {} to {} {}'
             .format(res.resname, res.id, new_resname, new_resid))
         res.resname = new_resname
@@ -517,14 +871,14 @@ class PDBTemplate(object):
         while atom_idx < len(res):
             atom_id = res.child_list[atom_idx].id
             if atom_id not in lysine_atoms:
-                self.logger.debug('Removing atom {} from residue {} {}.'.format(atom_id, res.resname, res.id))
+                logger.debug('Removing atom {} from residue {} {}.'.format(atom_id, res.resname, res.id))
                 res.detach_child(atom_id)
             else:
                 atom_idx += 1
 
 
     def _move_hetatm_to_hetatm_chain(self, chain, hetatm_chain, res, echo=False):
-        self.logger.debug('Moving hetatm residue {} {} to the hetatm chain'.format(res.resname, res.id))
+        logger.debug('Moving hetatm residue {} {} to the hetatm chain'.format(res.resname, res.id))
         chain.detach_child(res.id)
         hetatm_res = res
         hetatm_res.id = (hetatm_res.id[0], len(hetatm_chain)+1, hetatm_res.id[2],)
@@ -554,7 +908,7 @@ class PDBTemplate(object):
         try:
             from Bio.PDB import NeighborSearch
         except ImportError as e:
-            self.logger.error('Importing Biopython NeighborSearch failed with an error: {}'.format(e))
+            logger.error('Importing Biopython NeighborSearch failed with an error: {}'.format(e))
             raise Exception('Alternative not yet implemented!')
         ns = NeighborSearch(list(new_model.get_atoms()))
         hetatm_chain.id = [c for c in reversed(hf.uppercase) if c not in self.chain_ids][0]
@@ -565,13 +919,13 @@ class PDBTemplate(object):
             for atom_1 in res_1:
                 interacting_residues = ns.search(atom_1.get_coord(), self.r_cutoff, 'R')
                 if interacting_residues:
-                    # self.logger.debug(res_1.id)
-                    # self.logger.debug(interacting_residues)
+                    # logger.debug(res_1.id)
+                    # logger.debug(interacting_residues)
                     in_contact = True
             if in_contact:
                 res_idx += 1
                 continue
-            # self.logger.debug('Detaching child: {}'.format(res_1.id))
+            # logger.debug('Detaching child: {}'.format(res_1.id))
             hetatm_chain.detach_child(res_1.id)
 
 
@@ -579,53 +933,55 @@ class PDBTemplate(object):
         """Change atom and residue ``disordered`` flag to `False`.
         Otherwise, Biopython may crash when saving the PDB structure.
         """
-        self.logger.debug('Setting all residues and atoms marked as disorded to non-disorded')
+        logger.debug('Setting all residues and atoms marked as disorded to non-disorded')
         for m in self.structure:
             for c in m:
                 for r in c:
                     if r.is_disordered() or r.disordered:
-                        self.logger.debug(
+                        logger.debug(
                             'Changing disordered_flag on residue {} from {} to 0'
                             .format(r, r.disordered))
                         r.disordered = 0
                     for a in r:
                         if a.is_disordered() or a.disordered_flag:
-                            self.logger.debug(
+                            logger.debug(
                                 'Changing disordered_flag on atom {} from {} to 0'
                                 .format(a, a.disordered_flag))
                             a.disordered_flag = 0
 
 
+
+#%%
+class PDBTemplate(StructureParser):
+    
+    def __init__(
+            self, pdb_path, pdb_id, chain_ids, domain_defs, output_path, tmp_path, pdb_type='ent'):
+        """
+        """
+        self.pdb_path = pdb_path
+        self.pdb_id = pdb_id
+        self.output_path = output_path
+        self.structure = get_pdb(self.pdb_id, self.pdb_path, tmp_path).copy()
+        self.chain_ids = (
+            chain_ids if chain_ids else [chain.id for chain in self.structure[0].child_list]
+        )
+
+        self.domain_boundaries = []
+        for domain_def in domain_defs:
+            self.domain_boundaries.append(
+                hf.decode_domain_def(domain_def, merge=False, return_string=True))
+
+        self.unique_id = (
+            'pdb_id: {}, pdb_chain: {}, pdb_domain_def: {}'.format(
+            self.pdb_id, self.chain_ids, self.domain_boundaries) )
+
+    
     def save_structure(self, remove_disordered=False):
-        if remove_disordered:
-            self._unset_disordered_flags()
-
-        io = PDBIO()
-        io.set_structure(self.structure)
-        try:
-            outFile = self.output_path + self.pdb_id + ''.join(self.chain_ids) + '.pdb'
-            io.save(outFile)
-            if len(self.chain_ids) > 1:
-                for chain_id in self.chain_ids:
-                    outFile = self.output_path + self.pdb_id + chain_id + '.pdb'
-                    io.save(outFile, select=SelectChains(chain_id))
-        except AttributeError as e:
-            if remove_disordered:
-                raise(e)
-            self.save_structure(remove_disordered=True)
-
-
-    def save_sequences(self):
-        self.chain_numbering_extended_dict = {}
-        self.chain_sequence_dict = {}
-        for chain_id in self.chain_ids:
-            chain_sequence, chain_numbering_extended = self.get_chain_sequence_and_numbering(chain_id)
-            self.chain_numbering_extended_dict[chain_id] = chain_numbering_extended
-            self.chain_sequence_dict[chain_id] = chain_sequence
-            with open(self.output_path + self.pdb_id + chain_id + '.seq.txt', 'w') as f:
-                f.write('>' + self.pdb_id + chain_id + '\n')
-                f.write(chain_sequence + '\n')
-                f.write('\n')
+        return super().save_structure(self.output_path, remove_disordered)
+    
+    
+    def save_sequences(self, ):
+        return super().save_sequences(self.output_path)
 
 
 
