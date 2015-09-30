@@ -8,12 +8,16 @@ from builtins import range
 from builtins import object
 
 import six
+import logging
 
 from modeller import * # Load standard Modeller classes
 from modeller.automodel import *	# Load the automodel class
 
 from . import helper_functions as hf
 from . import errors
+from .conf import configs
+
+logger = logging.getLogger(__name__)
 
 class Modeller(object):
     """
@@ -27,7 +31,7 @@ class Modeller(object):
         Name of the sequence (target)
     templateID : string
         Name of the template (structure)
-    path_to_pdb_for_modeller : string
+    filePath : string
         Path to PDB files
     tmpPath : string
         Path for storing tmp files
@@ -36,27 +40,23 @@ class Modeller(object):
     loopRefinement : boolean
         If True, calculate loop refinemnts
     """
-    def __init__(
-            self, alignment, seqID, templateID, path_to_pdb_for_modeller,
-            tmpPath, logger, modeller_runs, loopRefinement=True,):
+    def __init__(self, alignment, seqID, templateID, filePath, loopRefinement=True):
 
         if not isinstance(alignment, list):
-            self.alignment = list()
-            self.alignment.append(alignment)
+            self.alignment = [alignment]
         else:
             self.alignment = alignment
         self.seqID = seqID
         self.templateID = templateID
         self.loopRefinement = loopRefinement
         self.start = 1                # start model
-        self.end = modeller_runs      # end model
+        self.end = configs['modeller_runs']      # end model
         self.loopStart = 1            # start loop refinement model
         self.loopEnd = 4              # end loop refinement model
 
-        # some environment settings
-        self.filePath = path_to_pdb_for_modeller
-        self.tmpPath = tmpPath
-        self.logger = logger
+        # Some environment settings
+        self.filePath = filePath
+        self.tmpPath = configs['unique_temp_folder']
 
 
     def run(self):
@@ -79,7 +79,7 @@ class Modeller(object):
                 try:
                     result, loop, failures = self.__run_modeller(aln, self.loopRefinement)
                 except Exception as e:
-                    self.logger.error('Loop refinement failed with an error: {}'.format(e))
+                    logger.error('Loop refinement failed with an error: {}'.format(e))
                     try:
                         result, loop, failures = self.__run_modeller(aln, False)
                     except ModellerError as e:
@@ -131,7 +131,7 @@ class Modeller(object):
         env.io.hetatm = True # read in HETATM records from template PDBs
         env.io.water = True # read in WATER records (including waters marked as HETATMs)
 
-        self.logger.debug('Performing loop refinement in addition to regular modelling: {}'.format(loopRefinement))
+        logger.debug('Performing loop refinement in addition to regular modelling: {}'.format(loopRefinement))
         if loopRefinement == False:
             a = automodel(
                 env,
@@ -170,7 +170,7 @@ class Modeller(object):
 
         a.max_molpdf = 2e5
 
-        with hf.log_print_statements(self.logger):
+        with hf.log_print_statements(logger):
             a.make() # do the actual homology modeling
 
         # The output produced by modeller is stored in a.loop.outputs or a.outputs
@@ -186,26 +186,26 @@ class Modeller(object):
             if not a.outputs[i]['failure']:
                 model_filename = a.outputs[i]['name']
                 model_dope_score = a.outputs[i]['Normalized DOPE score']
-                self.logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
+                logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
                 result.append((model_filename, model_dope_score))
             else:
                 failure = a.outputs[i]['failure']
-                self.logger.debug('Failure! {}'.format(failure))
+                logger.debug('Failure! {}'.format(failure))
                 failures.append(a.outputs[i]['failure'])
 
         # Add the loop refinement output
         if loopRefinement:
-            self.logger.debug('Modeller loop outputs:')
+            logger.debug('Modeller loop outputs:')
             for i in range(len(a.loop.outputs)):
                 if not a.loop.outputs[i]['failure']:
                     model_filename = a.loop.outputs[i]['name']
                     model_dope_score = a.loop.outputs[i]['Normalized DOPE score']
-                    self.logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
+                    logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
                     result.append((model_filename, model_dope_score))
                     loop = True
                 else:
                     failure = a.loop.outputs[i]['failure']
-                    self.logger.debug('Failure! {}'.format(failure))
+                    logger.debug('Failure! {}'.format(failure))
                     failures.append(failure)
 
         # Return the successfully calculated models and a loop flag indicating
@@ -234,7 +234,7 @@ class Modeller(object):
 
 
         system_command = 'knot ' + pdbFile
-        self.logger.debug('Knot system command: {}'.format(system_command))
+        logger.debug('Knot system command: {}'.format(system_command))
         child_process = hf.run_subprocess_locally('./', system_command)
         result, error_message = child_process.communicate()
         if six.PY3:
@@ -242,8 +242,8 @@ class Modeller(object):
             error_message = str(error_message, encoding='utf-8')
         return_code = child_process.returncode
         if not return_code:
-            self.logger.error('Knot result: {}'.format(result))
-            self.logger.error('Knot error message: {}'.format(error_message))
+            logger.error('Knot result: {}'.format(result))
+            logger.error('Knot error message: {}'.format(error_message))
 
         line = [ x for x in result.split('\n') ]
 

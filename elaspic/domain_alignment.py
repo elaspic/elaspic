@@ -9,15 +9,16 @@ from builtins import object
 from past.utils import old_div
 
 import os
+import os.path as op
 import psutil
 import time
 import subprocess
 import random
+import logging
 
 import six
 import numpy as np
 
-import Bio
 from Bio import SeqIO
 from Bio import AlignIO
 from Bio.Seq import Seq
@@ -28,8 +29,9 @@ from . import errors
 from . import call_tcoffee
 from . import pdb_template
 from . import helper_functions as hf
+from .conf import configs
 
-
+logger = logging.getLogger(__name__)
 
 def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
     if any([isinstance(sequence, string_type) for string_type in six.string_types]):
@@ -46,8 +48,8 @@ def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
 
 
 def check_provean_supporting_set(
-        domain_mutation, sequence, configs, unique_temp_folder, provean_temp_path, logger,
-        sequence_id='id', path_to_provean_supset=None, save_supporting_set=False, check_mem_usage=False):
+        domain_mutation, sequence, sequence_id='id', 
+        path_to_provean_supset=None, save_supporting_set=False, check_mem_usage=False):
     """
 
     Provean results look something like this::
@@ -84,7 +86,7 @@ def check_provean_supporting_set(
 
     if check_mem_usage:
         # Get initial measurements of how much virtual memory and disk space is availible
-        disk_space_availible = psutil.disk_usage(provean_temp_path).free / (1024**3)
+        disk_space_availible = psutil.disk_usage(configs['provean_temp_path']).free / (1024**3)
         logger.debug('Disk space availible: {:.2f} GB'.format(disk_space_availible))
         if disk_space_availible < 5:
             raise errors.ProveanError('Not enough disk space ({:.2f} GB) to run provean'.format(disk_space_availible))
@@ -95,18 +97,20 @@ def check_provean_supporting_set(
 
     # Run provean
     seqrec = convert_basestring_to_seqrecord(sequence, sequence_id)
-    SeqIO.write(seqrec, unique_temp_folder + 'sequence_conservation/sequence.fasta', 'fasta')
+    SeqIO.write(seqrec, op.join(configs['unique_temp_folder'], 'sequence_conservation', 'sequence.fasta'), 'fasta')
 
     subprocess.check_call(
-        'echo {0} > {1}sequence_conservation/decoy.var'
-        .format(domain_mutation, unique_temp_folder), shell=True)
+        'echo {0} > {1}'.format(
+            domain_mutation, 
+            op.join(configs['unique_temp_folder'], 'sequence_conservation', 'decoy.var')
+        ), shell=True)
 
     system_command = (
         'provean ' +
         ' -q ./sequence.fasta ' +
         ' -v ./decoy.var ' +
         ' -d ' + configs['global_temp_path'] + 'blast/db/nr ' +
-        ' --tmp_dir ' + provean_temp_path +
+        ' --tmp_dir ' + configs['provean_temp_path'] +
         ' --num_threads ' + '{}'.format(configs['n_cores']) +
         ' --psiblast ' + hf.get_which('psiblast') +
         ' --blastdbcmd ' + hf.get_which('blastdbcmd') +
@@ -119,7 +123,7 @@ def check_provean_supporting_set(
 
     logger.debug(system_command)
     child_process = hf.run_subprocess_locally(
-        unique_temp_folder + 'sequence_conservation/',
+        op.join(configs['unique_temp_folder'], 'sequence_conservation'),
         system_command)
 
     logger.debug('Parent group id: {}'.format(os.getpgrp()))
@@ -128,7 +132,7 @@ def check_provean_supporting_set(
 
     # Keep an eye on provean to make sure it doesn't do anything crazy
     while check_mem_usage and child_process.poll() is None:
-        disk_space_availible_now = old_div(psutil.disk_usage(provean_temp_path).free, float(1024)**3)
+        disk_space_availible_now = old_div(psutil.disk_usage(configs['provean_temp_path']).free, float(1024)**3)
         if disk_space_availible_now < 5: # less than 5 GB of free disk space left
             raise errors.ProveanResourceError(
                 'Ran out of disk space and provean had to be terminated ({} GB used)'
@@ -152,11 +156,8 @@ def check_provean_supporting_set(
     return result, error_message, return_code
 
 
-
 def build_provean_supporting_set(
-        uniprot_id, uniprot_name, uniprot_sequence, 
-        configs, unique_temp_folder, provean_temp_path, logger, 
-        supset_version=0):
+        uniprot_id, uniprot_name, uniprot_sequence, path_to_provean_supset):
     """
     """
     # Get the required parameters
@@ -169,16 +170,10 @@ def build_provean_supporting_set(
     uniprot_seqrecord = SeqRecord(
         seq=Seq(uniprot_sequence), id=str(uniprot_id), description=uniprot_name)
 
-    provean_supset_path = (
-        configs['temp_archive_path'] + sql_db.get_uniprot_base_path(
-            {'uniprot_id': uniprot_id, 'uniprot_name': uniprot_name}))
-    provean_supset_filename = uniprot_id + '_provean_supset_{}'.format(supset_version)
-
     # Run provean
     result, error_message, return_code = check_provean_supporting_set(
         domain_mutation, uniprot_seqrecord, 
-        configs, unique_temp_folder, provean_temp_path, logger,
-        uniprot_id, provean_supset_path + provean_supset_filename,
+        uniprot_id, path_to_provean_supset,
         save_supporting_set=True, check_mem_usage=True)
 
     if return_code != 0:
@@ -197,7 +192,34 @@ def build_provean_supporting_set(
         logger.error('Uniprot sequence: {}'.format(uniprot_sequence))
         logger.error('First amino acid: {}'.format(first_aa))
         logger.error('Domain mutation: {}'.format(domain_mutation))
-    return provean_supset_filename, provean_supset_length
+    return op.basename(path_to_provean_supset), provean_supset_length
+
+
+def get_path_to_provean_supset(uniprot_id, uniprot_name, supset_version=0):
+    path_to_provean_supset = op.join(
+        _get_provean_supset_path(uniprot_id, uniprot_name),
+        _get_provean_supset_filename(uniprot_id, supset_version)
+    )
+    return path_to_provean_supset
+    
+
+def _get_provean_supset_path(uniprot_id, uniprot_name):
+    provean_supset_path = op.join(
+        configs['temp_archive_path'],
+        sql_db.get_uniprot_base_path({'uniprot_id': uniprot_id, 'uniprot_name': uniprot_name})
+    )
+    return provean_supset_path
+    
+    
+def _get_provean_supset_filename(uniprot_id, supset_version=0):
+    uniprot_id + '_provean_supset_{}'.format(supset_version)
+
+
+
+
+
+
+
 
 
 
@@ -249,16 +271,14 @@ class DomainPairTemplate(object):
     """
 
     def __init__(
-            self, global_temp_path, temp_path, unique, pdb_path, db, logger,
-            n_cores, provean_temp_path, refine=False):
+            self, global_temp_path, temp_path, unique, pdb_path, db,
+            n_cores, refine=False):
         """
         """
         self.global_temp_path = global_temp_path
         self.temp_path = temp_path
-        self.unique_temp_folder = temp_path + unique + '/'
         self.pdb_path = pdb_path
         self.db = db
-        self.logger = logger
         self.refine = refine
         self.n_cores = n_cores
 
@@ -272,8 +292,7 @@ class GetTemplate(object):
     uniprot sequence
     """
     def __init__(
-            self, global_temp_path, tmpPath, unique, pdb_path, db, log, n_cores,
-            provean_temp_path, refine=False):
+            self, global_temp_path, tmpPath, unique, pdb_path, db, log, n_cores, refine=False):
         """
         input:
         tmpPath             type 'str'
@@ -285,13 +304,10 @@ class GetTemplate(object):
         self.global_temp_path = global_temp_path
         self.temp_path = tmpPath
         self.unique = unique
-        self.unique_temp_folder = tmpPath + unique + '/'
         self.pdb_path = pdb_path
         self.db = db
-        self.logger = log
         self.refine = refine
         self.n_cores = n_cores
-        self.provean_temp_path = provean_temp_path
 
 
     def __call__(self, d):
@@ -300,26 +316,26 @@ class GetTemplate(object):
         list_of_templates = self.run(d, None)
         if not list_of_templates:
             raise errors.NoTemplatesFound('Templates present in PDBfam were not usable')
-        self.logger.debug('Number of templates: %i' % len(list_of_templates))
+        logger.debug('Number of templates: %i' % len(list_of_templates))
 
         best_template = self.chose_best_template(list_of_templates)
-        self.logger.debug('The best template: ')
-        self.logger.debug(best_template)
+        logger.debug('The best template: ')
+        logger.debug(best_template)
 
         # Don't need refinement anymore, each template is refined already
         if self.refine:
-            self.logger.debug('Choosing the best templates withing a cluster...')
+            logger.debug('Choosing the best templates withing a cluster...')
             list_of_templates = self.run(d, best_template)
             best_template = self.chose_best_template(list_of_templates)
-            self.logger.debug('The best template in the cluster is: ')
-            self.logger.debug(best_template)
+            logger.debug('The best template in the cluster is: ')
+            logger.debug(best_template)
 
         # Set up the paths and exporting the alignments
         if type(d) == sql_db.UniprotDomain:
             # Save one copy of the allignment for immediate usage in the tmp folder
             tmp_save_path = self.temp_path + d.path_to_data
             subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-            subprocess.check_call('cp ' + self.unique_temp_folder + 'tcoffee/' + best_template.alignment_filename +
+            subprocess.check_call('cp ' + configs['unique_temp_folder'] + 'tcoffee/' + best_template.alignment_filename +
                                     ' ' + tmp_save_path + best_template.alignment_filename, shell=True)
 #            (best_template.provean_supset_filename,
 #            best_template.provean_supset_length) = self.build_provean_supporting_set(d, best_template)
@@ -328,9 +344,9 @@ class GetTemplate(object):
             # Save one copy of the allignment for immediate usage in the tmp folder
             tmp_save_path = self.temp_path + d.path_to_data
             subprocess.check_call('mkdir -p ' + tmp_save_path, shell=True)
-            subprocess.check_call('cp ' + self.unique_temp_folder + 'tcoffee/' + best_template.alignment_filename_1 +
+            subprocess.check_call('cp ' + configs['unique_temp_folder'] + 'tcoffee/' + best_template.alignment_filename_1 +
                                     ' ' + tmp_save_path + best_template.alignment_filename_1, shell=True)
-            subprocess.check_call('cp ' + self.unique_temp_folder + 'tcoffee/' + best_template.alignment_filename_2 +
+            subprocess.check_call('cp ' + configs['unique_temp_folder'] + 'tcoffee/' + best_template.alignment_filename_2 +
                                     ' ' + tmp_save_path + best_template.alignment_filename_2, shell=True)
         return best_template
 
@@ -348,13 +364,13 @@ class GetTemplate(object):
         # Obtain a list of template domains and calculate some of their properties
         if isinstance(d, sql_db.UniprotDomain):
             # Add all partial combinations of superdomains to the set of superdomains
-            self.logger.debug('Finding templates for pfam domain {}...'.format(d.pfam_name))
+            logger.debug('Finding templates for pfam domain {}...'.format(d.pfam_name))
             domain_list = self.db.get_domain([d.pfam_name])
             self._remove_bad_domains(domain_list)
             if not domain_list:
-                self.logger.debug('Did not find any structural templates for {}, trying subdomains...'.format(d.pfam_name))
+                logger.debug('Did not find any structural templates for {}, trying subdomains...'.format(d.pfam_name))
                 pfam_names = self._split_superdomains(d.pfam_name)
-                self.logger.debug('Pfam domain {} has subdomains {}'.format(d.pfam_name, str(pfam_names)))
+                logger.debug('Pfam domain {} has subdomains {}'.format(d.pfam_name, str(pfam_names)))
                 domain_list = self.db.get_domain(pfam_names, subdomains=True)
                 self._remove_bad_domains(domain_list)
             if not domain_list:
@@ -393,18 +409,18 @@ class GetTemplate(object):
                     max_domain_length = domain_length
 
         elif isinstance(d, sql_db.UniprotDomainPair):
-            self.logger.debug('Finding templates for pfam domains {}, {}...'
+            logger.debug('Finding templates for pfam domains {}, {}...'
                 .format(d.uniprot_domain_1.pfam_name, d.uniprot_domain_2.pfam_name))
             domain_list_1, domain_list_2 =  self.db.get_domain_contact(
                 [d.uniprot_domain_1.pfam_name], [d.uniprot_domain_2.pfam_name])
             self._remove_bad_domain_pairs(domain_list_1)
             self._remove_bad_domain_pairs(domain_list_2)
             if not domain_list_1 and not domain_list_2:
-                self.logger.debug('Did not find any templates for domains {} and {}, trying their subdomains...'
+                logger.debug('Did not find any templates for domains {} and {}, trying their subdomains...'
                     .format(d.uniprot_domain_1.pfam_name, d.uniprot_domain_2.pfam_name))
                 pfam_names_1 = self._split_superdomains(d.uniprot_domain_1.pfam_name)
                 pfam_names_2 = self._split_superdomains(d.uniprot_domain_2.pfam_name)
-                self.logger.debug('Pfam domains {} and {} have subdomains {} and {}'
+                logger.debug('Pfam domains {} and {} have subdomains {} and {}'
                     .format(d.uniprot_domain_1.pfam_name, d.uniprot_domain_2.pfam_name, pfam_names_1, pfam_names_2))
                 domain_list_1, domain_list_2 =  self.db.get_domain_contact(pfam_names_1, pfam_names_2, subdomains=True)
                 self._remove_bad_domain_pairs(domain_list_1)
@@ -467,7 +483,7 @@ class GetTemplate(object):
                     and domain.cdhit_cluster_identity > 99.9:
                         continue
                     domain_list_new.append(domain)
-                    self.logger.debug(
+                    logger.debug(
                         'keeping domain with cluster id: %i, cluster idx: %i' %
                         (domain.cdhit_cluster, domain.cdhit_cluster_idx))
                 domain_list = domain_list_new
@@ -488,17 +504,17 @@ class GetTemplate(object):
         # Make and expand alignments for each of the obtained structural domain templates
         list_of_templates = []
         pfam_cluster_ids_visited = dict()
-        self.logger.debug('Found {} structural templates.'.format(len(domain_list)))
+        logger.debug('Found {} structural templates.'.format(len(domain_list)))
         for domain in domain_list:
-            self.logger.debug('-' * 80)
+            logger.debug('-' * 80)
             if isinstance(d, sql_db.UniprotDomain):
                 # Check if we need to evaluate this template
                 pfam_cluster_id = (domain.pfam_name, domain.cdhit_cluster,)
-                self.logger.debug('Pfam cluster id: {}'.format(pfam_cluster_id))
-                self.logger.debug(
+                logger.debug('Pfam cluster id: {}'.format(pfam_cluster_id))
+                logger.debug(
                     'Is {}a canonical domain!'
                     .format('' if canonical_domain else 'not '))
-                self.logger.debug(
+                logger.debug(
                     'Has {}been visited!'
                     .format('' if pfam_cluster_id in pfam_cluster_ids_visited else 'not '))
                 if (not canonical_domain and
@@ -511,10 +527,10 @@ class GetTemplate(object):
                 try:
                     pdb = pdb_template.PDBTemplate(
                         self.pdb_path, domain.pdb_id, [domain.pdb_chain], [pdb_domain_def, ],
-                        self.unique_temp_folder, self.unique_temp_folder, self.logger)
+                        configs['unique_temp_folder'], configs['unique_temp_folder'])
                 except errors.NoPDBFoundError as e:
-                    self.logger.error(str(type(e)) + ': ' + e.__str__())
-                    self.logger.error("Didn't find the pdb file? Check if it is correct. Skipping...")
+                    logger.error(str(type(e)) + ': ' + e.__str__())
+                    logger.error("Didn't find the pdb file? Check if it is correct. Skipping...")
                     continue
                 pdb.extract()
                 chain_sequence, __ = pdb.get_chain_sequence_and_numbering(domain.pdb_chain)
@@ -527,13 +543,13 @@ class GetTemplate(object):
                 score_align = lambda alignment: self.score_align(alignment, max_domain_length, None, None)
 
                 if not len(chain_sequence.seq):
-                    self.logger.error('PB chain is empty!')
-                    self.logger.error('PDB chain 1: {}'.format(chain_sequence.seq))
-                    self.logger.debug('Skipping...')
+                    logger.error('PB chain is empty!')
+                    logger.error('PDB chain 1: {}'.format(chain_sequence.seq))
+                    logger.debug('Skipping...')
                     continue
 
                 try: # Do iterative alignments and catch errors
-                    self.logger.debug(
+                    logger.debug(
                         'Aligning: {}/{}*{}:{}{}'
                         .format(d.uniprot_id, domain.pfam_name, domain.pdb_domain_def, domain.pdb_id, domain.pdb_chain))
                     (template.domain_def,
@@ -544,32 +560,32 @@ class GetTemplate(object):
                         self.calculate_alignment(
                             uniprot_sequence, domain_def, chain_sequence,
                             score_align, refine=True)
-                    self.logger.debug(
+                    logger.debug(
                         'Done aligning: {}:{}'
                         .format(d.uniprot_id, template.alignment_id))
                 except (errors.LowIdentity,
                             errors.EmptyPDBSequenceError) as e:
-                        self.logger.error(e.__str__())
-                        self.logger.debug('Skipping...\n\n')
+                        logger.error(e.__str__())
+                        logger.debug('Skipping...\n\n')
                         continue
                 except self.possible_template_expansion_errors as e:
                     raise e
                     domain.domain_errors = str(type(e)) + ': ' + e.__str__()
-                    self.logger.error(domain.domain_errors)
+                    logger.error(domain.domain_errors)
                     if 'result' in dir(e):
-                        self.logger.error(e.result)
+                        logger.error(e.result)
                     self.db.add_domain(domain)
-                    self.logger.debug('Skipping...\n\n')
+                    logger.debug('Skipping...\n\n')
                     continue
                 if template.alignment_identity < self.alignment_identity_cutoff:
-                    self.logger.debug('Skipping...\n\n')
+                    logger.debug('Skipping...\n\n')
                     continue
 
                 # Save alignment results
                 list_of_templates.append(template)
                 pfam_cluster_ids_visited[pfam_cluster_id] = (domain.cdhit_cluster_idx,)
                 list_of_templates.append(template)
-                self.logger.debug('Adding alignmnet to list...\n\n')
+                logger.debug('Adding alignmnet to list...\n\n')
 
 
             elif isinstance(d, sql_db.UniprotDomainPair):
@@ -577,21 +593,21 @@ class GetTemplate(object):
                 pfam_cluster_id = (
                     domain.domain_1.pfam_name, domain.domain_1.cdhit_cluster,
                     domain.domain_2.pfam_name, domain.domain_2.cdhit_cluster,)
-                self.logger.debug('Pfam cluster id: {}'.format(pfam_cluster_id))
-                self.logger.debug(
+                logger.debug('Pfam cluster id: {}'.format(pfam_cluster_id))
+                logger.debug(
                     'Is {}a canonical domain!'
                     .format('' if canonical_domain else 'not '))
-                self.logger.debug(
+                logger.debug(
                     'Has {}been visited!'
                     .format('' if pfam_cluster_id in pfam_cluster_ids_visited else 'not '))
-                self.logger.debug(
+                logger.debug(
                     'Pfam cluster visited previously had cdhit cluster idxs: {}, {}'
                     .format(*pfam_cluster_ids_visited.get(pfam_cluster_id, [None, None])))
                 if (not canonical_domain and
                         pfam_cluster_id in pfam_cluster_ids_visited and
                         pfam_cluster_ids_visited[pfam_cluster_id][0] <= domain.domain_1.cdhit_cluster_idx and
                         pfam_cluster_ids_visited[pfam_cluster_id][1] <= domain.domain_2.cdhit_cluster_idx):
-                    self.logger.debug('Already covered this cluster pair. Skipping...')
+                    logger.debug('Already covered this cluster pair. Skipping...')
                     continue
 
                 # Get the parameters required to make alignments
@@ -604,10 +620,10 @@ class GetTemplate(object):
                         self.pdb_path,  domain.domain_1.pdb_id,
                         [domain.domain_1.pdb_chain, domain.domain_2.pdb_chain],
                         [pdb_domain_def_1, pdb_domain_def_2],
-                        self.unique_temp_folder, self.unique_temp_folder, self.logger)
+                        self.unique_temp_folder, self.unique_temp_folder)
                 except errors.NoPDBFoundError as e:
-                    self.logger.error(str(type(e)) + ': ' + e.__str__())
-                    self.logger.error("Didn't find the pdb file? Check if it is correct. Skipping...")
+                    logger.error(str(type(e)) + ': ' + e.__str__())
+                    logger.error("Didn't find the pdb file? Check if it is correct. Skipping...")
                     continue
                 pdb.extract()
                 chain_sequence_1, chain_numbering_1 = pdb.get_chain_sequence_and_numbering(domain.domain_1.pdb_chain)
@@ -634,14 +650,14 @@ class GetTemplate(object):
                     alignment, max_domain_length_2, contact_residue_idxs_2, max_contact_length_2)
 
                 if not len(chain_sequence_1.seq) or not len(chain_sequence_2.seq):
-                    self.logger.error('At least one of the pdb chains is empty!')
-                    self.logger.error('PDB chain 1: {}'.format(chain_sequence_1.seq))
-                    self.logger.error('PDB chain 2: {}'.format(chain_sequence_2.seq))
-                    self.logger.debug('Skipping...')
+                    logger.error('At least one of the pdb chains is empty!')
+                    logger.error('PDB chain 1: {}'.format(chain_sequence_1.seq))
+                    logger.error('PDB chain 2: {}'.format(chain_sequence_2.seq))
+                    logger.debug('Skipping...')
                     continue
 
                 try: # Do iterative alignments and catch errors
-                    self.logger.debug(
+                    logger.debug(
                         'Aligning partner 1: {}/{}*{}:{}{}'.format(
                             d.uniprot_domain_1.uniprot_id, domain.domain_1.pfam_name,
                             domain.domain_1.pdb_domain_def,
@@ -654,10 +670,10 @@ class GetTemplate(object):
                         self.calculate_alignment(
                             uniprot_sequence_1, domain_def_1, chain_sequence_1,
                             score_align_1, refine=True)
-                    self.logger.debug(
+                    logger.debug(
                         'Done aligning partner 1: {}:{}'.format(
                             d.uniprot_domain_1.uniprot_id, template.alignment_id_1))
-                    self.logger.debug(
+                    logger.debug(
                         'Aligning partner 2: {}/{}*{}:{}{}'.format(
                             d.uniprot_domain_2.uniprot_id, domain.domain_2.pfam_name,
                             domain.domain_2.pdb_domain_def,
@@ -670,32 +686,32 @@ class GetTemplate(object):
                         self.calculate_alignment(
                             uniprot_sequence_2, domain_def_2, chain_sequence_2,
                             score_align_2, refine=True)
-                    self.logger.debug(
+                    logger.debug(
                         'Done aligning partner 2: {}:{}'.format(
                             d.uniprot_domain_2.uniprot_id, template.alignment_id_2))
                 except (errors.LowIdentity,
                             errors.EmptyPDBSequenceError) as e:
-                        self.logger.error(e.__str__())
-                        self.logger.debug('Skipping...\n\n')
+                        logger.error(e.__str__())
+                        logger.debug('Skipping...\n\n')
                         continue
                 except self.possible_template_expansion_errors as e:
                     raise e
                     domain.domain_contact_errors = str(type(e)) + ': ' + e.__str__()
-                    self.logger.error(domain.domain_contact_errors)
+                    logger.error(domain.domain_contact_errors)
                     if 'result' in dir(e):
-                        self.logger.error(e.result)
+                        logger.error(e.result)
                     self.db.add_domain(domain)
                     continue
                 if (template.alignment_identity_1 < self.alignment_identity_cutoff or
                         template.alignment_identity_2 < self.alignment_identity_cutoff):
-                    self.logger.debug('Skipping...\n\n')
+                    logger.debug('Skipping...\n\n')
                     continue
 
                 # Save alignment results
                 pfam_cluster_ids_visited[pfam_cluster_id] = (
                     domain.domain_1.cdhit_cluster_idx, domain.domain_2.cdhit_cluster_idx,)
                 list_of_templates.append(template)
-                self.logger.debug('Adding alignmnet to list...\n\n')
+                logger.debug('Adding alignmnet to list...\n\n')
 
         # Return templates for either a single domain or a domain pair
         return list_of_templates
@@ -710,19 +726,19 @@ class GetTemplate(object):
         d_idx = 0
         while d_idx < len(domain_list):
             if domain_list[d_idx].domain_errors != None:
-                self.logger.debug('Domain has errors: {}. Skipping...'.format(domain_list[d_idx].domain_errors))
+                logger.debug('Domain has errors: {}. Skipping...'.format(domain_list[d_idx].domain_errors))
                 del domain_list[d_idx]
                 continue
             if domain_list[d_idx].pdb_id in self.bad_pdbs:
-                self.logger.debug('Domain pdb is a known bad pdb. Skipping...')
+                logger.debug('Domain pdb is a known bad pdb. Skipping...')
                 del domain_list[d_idx]
                 continue
             if domain_list[d_idx].cdhit_cluster == None:
-                self.logger.debug('No cdhit cluster information. Skipping...')
+                logger.debug('No cdhit cluster information. Skipping...')
                 del domain_list[d_idx]
                 continue
             if domain_list[d_idx].cdhit_cluster == -1:
-                self.logger.debug('Bad cdhit cluster (-1). Skipping...')
+                logger.debug('Bad cdhit cluster (-1). Skipping...')
                 del domain_list[d_idx]
                 continue
             d_idx += 1
@@ -732,32 +748,32 @@ class GetTemplate(object):
         d_idx = 0
         while d_idx < len(domain_list):
             if domain_list[d_idx].domain_contact_errors != None:
-                self.logger.debug('Domain has errors: {}. Skipping...'.format(domain_list[d_idx].domain_contact_errors))
+                logger.debug('Domain has errors: {}. Skipping...'.format(domain_list[d_idx].domain_contact_errors))
                 del domain_list[d_idx]
                 continue
             if domain_list[d_idx].domain_1.pdb_id in self.bad_pdbs:
-                self.logger.debug('Domain pdb is a known bad pdb. Skipping...')
+                logger.debug('Domain pdb is a known bad pdb. Skipping...')
                 del domain_list[d_idx]
                 continue
             if domain_list[d_idx].domain_1.pdb_chain == domain_list[d_idx].domain_2.pdb_chain:
                 # For now, we are just focusing on interactions between different chains
                 # in the pdb. This may be changed in the future.
-                self.logger.debug('Interacting domains are on the same chain in the pdb. Skipping...')
+                logger.debug('Interacting domains are on the same chain in the pdb. Skipping...')
                 del domain_list[d_idx]
                 continue
             if domain_list[d_idx].domain_1.cdhit_cluster == None\
             or domain_list[d_idx].domain_2.cdhit_cluster == None:
-                self.logger.debug(domain_list[d_idx])
-                self.logger.debug(domain_list[d_idx].domain_1)
-                self.logger.debug(domain_list[d_idx].domain_2)
-                self.logger.debug(domain_list[d_idx].domain_1.cath_id)
-                self.logger.debug(domain_list[d_idx].domain_2.cath_id)
-                self.logger.debug('No cdhit cluster information. Skipping...')
+                logger.debug(domain_list[d_idx])
+                logger.debug(domain_list[d_idx].domain_1)
+                logger.debug(domain_list[d_idx].domain_2)
+                logger.debug(domain_list[d_idx].domain_1.cath_id)
+                logger.debug(domain_list[d_idx].domain_2.cath_id)
+                logger.debug('No cdhit cluster information. Skipping...')
                 del domain_list[d_idx]
                 continue
             if domain_list[d_idx].domain_1.cdhit_cluster == -1 \
             or domain_list[d_idx].domain_2.cdhit_cluster == -1:
-                self.logger.debug('Bad cdhit cluster (-1). Skipping...')
+                logger.debug('Bad cdhit cluster (-1). Skipping...')
                 del domain_list[d_idx]
                 continue
             d_idx += 1
@@ -772,17 +788,17 @@ class GetTemplate(object):
         #----------------------------------------------------------------------
         # Expanding domain boundaries
         uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
-        self.logger.debug(alignment_id)
-        self.logger.debug(uniprot_alignment_sequence.seq)
-        self.logger.debug(pdb_alignment_sequence.seq)
+        logger.debug(alignment_id)
+        logger.debug(uniprot_alignment_sequence.seq)
+        logger.debug(pdb_alignment_sequence.seq)
 
         left_extend_length, right_extend_length = [
             int((random.random() * 2 + 1) * extend_length)
             for extend_length
             in self.count_overhangs_and_gaps(uniprot_alignment_sequence)]
         alignment_score, alignment_identity, interface_score, global_coverage, local_coverage = score_align(alignment)
-        self.logger.debug('Extend left by: %i' % left_extend_length)
-        self.logger.debug('Extend right by: %i' % right_extend_length)
+        logger.debug('Extend left by: %i' % left_extend_length)
+        logger.debug('Extend right by: %i' % right_extend_length)
         if alignment_identity < 0.25:
             raise errors.LowIdentity(
                 'Initial alignment identity using {} as template is too low ({:.2f}).'
@@ -811,13 +827,13 @@ class GetTemplate(object):
             uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
             alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, 'expresso')
             uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
-            self.logger.debug(uniprot_alignment_sequence.seq)
-            self.logger.debug(pdb_alignment_sequence.seq)
+            logger.debug(uniprot_alignment_sequence.seq)
+            logger.debug(pdb_alignment_sequence.seq)
 
             left_extend_length, right_extend_length = [
                 -1 * extend_length for extend_length in self.count_overhangs_and_gaps(pdb_alignment_sequence)]
-            self.logger.debug('Extend left by: %i' % left_extend_length)
-            self.logger.debug('Extend right by: %i' % right_extend_length)
+            logger.debug('Extend left by: %i' % left_extend_length)
+            logger.debug('Extend right by: %i' % right_extend_length)
 
             domain_def[0] -= left_extend_length
             domain_def[1] += right_extend_length
@@ -826,25 +842,25 @@ class GetTemplate(object):
             uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
             alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, 'expresso')
             uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
-            self.logger.debug(uniprot_alignment_sequence.seq)
-            self.logger.debug(pdb_alignment_sequence.seq)
+            logger.debug(uniprot_alignment_sequence.seq)
+            logger.debug(pdb_alignment_sequence.seq)
 
             left_extend_length, right_extend_length = \
                 [int((random.random() * 2 + 1) * extend_length)
                 for extend_length in self.count_overhangs_and_gaps(uniprot_alignment_sequence)]
-            self.logger.debug('Extend left by: %i' % left_extend_length)
-            self.logger.debug('Extend right by: %i' % right_extend_length)
+            logger.debug('Extend left by: %i' % left_extend_length)
+            logger.debug('Extend right by: %i' % right_extend_length)
 
 #        # Removed this part
 #        #----------------------------------------------------------------------
-#        self.logger.debug('Removing final overhangs...')
+#        logger.debug('Removing final overhangs...')
 #        left_extend_length, right_extend_length = [
 #            -1 * extend_length
 #            for extend_length
 #            in self.count_overhangs_and_gaps(pdb_alignment_sequence)]
 #        alignment_score, alignment_identity, interface_score = score_align(alignment)
-#        self.logger.debug('Extend left by: %i' % left_extend_length)
-#        self.logger.debug('Extend right by: %i' % right_extend_length)
+#        logger.debug('Extend left by: %i' % left_extend_length)
+#        logger.debug('Extend right by: %i' % right_extend_length)
 #
 #        domain_def[0] -= left_extend_length
 #        domain_def[1] += right_extend_length
@@ -858,16 +874,16 @@ class GetTemplate(object):
 #            uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
 #            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence)
 #            uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
-#            self.logger.debug(uniprot_alignment_sequence.seq)
-#            self.logger.debug(pdb_alignment_sequence.seq)
+#            logger.debug(uniprot_alignment_sequence.seq)
+#            logger.debug(pdb_alignment_sequence.seq)
 #
 #            left_extend_length, right_extend_length = [
 #                -1 * extend_length
 #                for extend_length
 #                in self.count_overhangs_and_gaps(pdb_alignment_sequence)]
 #            alignment_score, alignment_identity, interface_score = score_align(alignment)
-#            self.logger.debug('Extend left by: %i' % left_extend_length)
-#            self.logger.debug('Extend right by: %i' % right_extend_length)
+#            logger.debug('Extend left by: %i' % left_extend_length)
+#            logger.debug('Extend right by: %i' % right_extend_length)
 #
 #            domain_def[0] -= left_extend_length
 #            domain_def[1] += right_extend_length
@@ -877,11 +893,11 @@ class GetTemplate(object):
         #----------------------------------------------------------------------
         alignment_score, alignment_identity, interface_score, global_coverage, local_coverage = score_align(alignment)
 #        if (alignment_identity < 0.95) and (local_coverage < 0.95):
-#            self.logger.debug('Performing the final, structural alignment...')
+#            logger.debug('Performing the final, structural alignment...')
 #            alignment, alignment_id = self.do_align(uniprot_sequence_domain, chain_sequence, 'expresso')
 #            uniprot_alignment_sequence, pdb_alignment_sequence = self.pick_sequence(alignment, alignment_id)
-#            self.logger.debug(uniprot_alignment_sequence.seq)
-#            self.logger.debug(pdb_alignment_sequence.seq)
+#            logger.debug(uniprot_alignment_sequence.seq)
+#            logger.debug(pdb_alignment_sequence.seq)
 
 
         def get_overhangs(seqrec_1, seqrec_2, do_reversed=False):
@@ -990,9 +1006,9 @@ class GetTemplate(object):
             else:
                 extend_length[direction_flag] = overhang_length[direction_flag]
 
-#        self.logger.debug('Left overhang:\t %i,\t gap:\t %i,\t gap^2:\t %i,\t total:\t %i' % (
+#        logger.debug('Left overhang:\t %i,\t gap:\t %i,\t gap^2:\t %i,\t total:\t %i' % (
 #            overhang_length[0], gap_length[0], second_gap_length[0], extend_length[0]))
-#        self.logger.debug('Right overhang:\t %i,\t gap:\t %i,\t gap^2:\t %i,\t total:\t %i' % (
+#        logger.debug('Right overhang:\t %i,\t gap:\t %i,\t gap^2:\t %i,\t total:\t %i' % (
 #            overhang_length[1], gap_length[1], second_gap_length[1], extend_length[1]))
 
         return (extend_length[0], extend_length[1])
@@ -1026,9 +1042,9 @@ class GetTemplate(object):
 
         seqIDs = [uniprot_sequence.id, pdb_sequence.id]
 
-#        self.logger.debug('Calling tcoffee with parameters:')
-#        self.logger.debug('global_temp_path: {}'.format(self.global_temp_path))
-#        self.logger.debug('unique_temp_path: {}'.format(self.unique_temp_folder))
+#        logger.debug('Calling tcoffee with parameters:')
+#        logger.debug('global_temp_path: {}'.format(self.global_temp_path))
+#        logger.debug('unique_temp_path: {}'.format(self.unique_temp_folder))
         tcoffee = call_tcoffee.tcoffee_alignment(
             self.global_temp_path,
             self.unique_temp_folder,
@@ -1037,7 +1053,7 @@ class GetTemplate(object):
             self.n_cores,
             self.pdb_path,
             mode,
-            self.logger)
+            logger)
         alignments = tcoffee.align()
 
         return alignments[0], pdb_sequence.id
@@ -1090,39 +1106,39 @@ class GetTemplate(object):
         if isinstance(domain_template[0], sql_db.UniprotDomainTemplate):
             domain_template.sort(key=lambda k: k.alignment_score, reverse=True)
             max_score = domain_template[0].alignment_score
-            self.logger.debug('max alignment score: %f' % max_score)
+            logger.debug('max alignment score: %f' % max_score)
             # Collect all templates with the highest alignment score
             best_domain_templates = []
             for t in domain_template:
-                self.logger.debug('alignment score: %f, cluster id: %i, cluster idx: %i' \
+                logger.debug('alignment score: %f, cluster id: %i, cluster idx: %i' \
                     % (t.alignment_score, t.domain.cdhit_cluster, t.domain.cdhit_cluster_idx))
                 if t.alignment_score == max_score:
                     best_domain_templates.append(t)
             best_domatemplatesin_templates.sort(key=lambda k: k.domain.pdb_resolution, reverse=False)
             for t in best_domain_templates:
-                self.logger.debug('Best alignments:')
-                self.logger.debug('alignment score: %f, cluster id: %i, cluster idx: %i' \
+                logger.debug('Best alignments:')
+                logger.debug('alignment score: %f, cluster id: %i, cluster idx: %i' \
                     % (t.alignment_score, t.domain.cdhit_cluster, t.domain.cdhit_cluster_idx))
 
         if isinstance(domain_template[0], sql_db.UniprotDomainPairTemplate):
             domain_template.sort(key=lambda k: k.alignment_score_1 + k.alignment_score_2, reverse=True)
             max_score = domain_template[0].alignment_score_1 + domain_template[0].alignment_score_2
-            self.logger.debug('max alignment score: %f' % max_score)
+            logger.debug('max alignment score: %f' % max_score)
             # Collect all templates with the highest alignment score
             best_domain_templates = []
             for t in domain_template:
-                self.logger.debug('domain 1. alignment score: %f, cluster id: %i, cluster idx: %i' \
+                logger.debug('domain 1. alignment score: %f, cluster id: %i, cluster idx: %i' \
                     % (t.alignment_score_1, t.domain_1.cdhit_cluster, t.domain_1.cdhit_cluster_idx))
-                self.logger.debug('domain 2. alignment score: %f, cluster id: %i, cluster idx: %i' \
+                logger.debug('domain 2. alignment score: %f, cluster id: %i, cluster idx: %i' \
                     % (t.alignment_score_2, t.domain_2.cdhit_cluster, t.domain_2.cdhit_cluster_idx))
                 if t.alignment_score_1 + t.alignment_score_2 == max_score:
                     best_domain_templates.append(t)
             best_domain_templates.sort(key=lambda k: k.domain_1.pdb_resolution, reverse=False)
             for t in best_domain_templates:
-                self.logger.debug('Best alignments:')
-                self.logger.debug('domain 1. alignment score: %f, cluster id: %i, cluster idx: %i' \
+                logger.debug('Best alignments:')
+                logger.debug('domain 1. alignment score: %f, cluster id: %i, cluster idx: %i' \
                     % (t.alignment_score_1, t.domain_1.cdhit_cluster, t.domain_1.cdhit_cluster_idx))
-                self.logger.debug('domain 2. alignment score: %f, cluster id: %i, cluster idx: %i' \
+                logger.debug('domain 2. alignment score: %f, cluster id: %i, cluster idx: %i' \
                     % (t.alignment_score_2, t.domain_2.cdhit_cluster, t.domain_2.cdhit_cluster_idx))
         return best_domain_templates[0]
 
@@ -1139,7 +1155,7 @@ class GetTemplate(object):
         """
         domains = [pdb_domain_def, ]
         pdb = pdb_template.PDBTemplate(self.pdb_path, pdb_code, chain_id, domains,
-                                       self.unique_temp_folder, self.unique_temp_folder, self.logger)
+                                       self.unique_temp_folder, self.unique_temp_folder)
         pdb.extract()
         chain_sequence, chain_numbering_extended = pdb.get_chain_sequence_and_numbering(chain_id)
         chain_seqrecord = SeqRecord(seq=Seq(chain_sequence), id=pdb_code+chain_id)
