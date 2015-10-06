@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
 
+#%% Configurations
+class WrongConfigKeyError(Exception):
+    pass
+
+
 #%% Tcoffee
 
 class TcoffeeError(Exception):
@@ -41,6 +46,8 @@ class ProveanResourceError(Exception):
         Exception.__init__(self, message)
         self.child_process_group_id = child_process_group_id
 
+class MutationMismatchError(Exception):
+    pass
 
 
 #%% Finding templates (PDB in uppercase to be consistent with Biopython)

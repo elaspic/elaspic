@@ -1,13 +1,13 @@
 package:
   name: elaspic
-  version: "0.2.0"
+  version: "1.0.0"
 
 #~ source:
   #~ git_url: https://ostrokach@bitbucket.org/ostrokach/elaspic.git
   #~ git_tag: develop
 
 build:
-  number: 2
+  number: 1
   entry_points: 
     - elaspic = elaspic.__main__:main
     - elaspic_database = elaspic.elaspic_database:main
@@ -82,7 +82,7 @@ requirements:
     #~ - elaspic_database --help
 
 about:
-  home: elaspic.readthedocs.org
+  home: elaspic.kimlab.org
   license: MIT
   summary: Ensemble Learning Approach for Stability Prediction of 
            Interface and Core mutations (ELASPIC).

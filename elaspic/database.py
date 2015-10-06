@@ -20,24 +20,22 @@ import pickle
 import six
 import logging
 import inspect
+
 from contextlib import contextmanager
 from collections import deque
 
 import pandas as pd
 import sqlalchemy as sa
-import sqlalchemy.orm
-import sqlalchemy.exc
-from retrying import retry
 
+from retrying import retry
 from Bio import SeqIO
 from Bio import AlignIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 #import parse_pfamscan
-from . import conf
-from . import helper_functions as hf
-from . import errors as error
+
+from . import helper, errors, conf
 from .database_tables import (
     Base, 
     Domain, DomainContact, UniprotSequence, Provean,
@@ -46,6 +44,8 @@ from .database_tables import (
 )
 
 logger = logging.getLogger(__name__)
+configs = conf.Configs()
+
 
 #%%
 def decorate_all_methods(decorator):
@@ -88,14 +88,13 @@ class MyDatabase(object):
     """
     """
     
-    def __init__(self, configs=conf.configs):
+    def __init__(self):
         """
         Parameters
         ----------
         configs : dict
-            ELASPIC configuration options specified in :py:data:`elaspic.conf.configs`
+            ELASPIC configuration options specified in :py:data:`elaspic.configs`
         """
-        self.configs = configs.copy()
         self.engine = self.get_engine()
         self.Session = self.configure_session()
         
@@ -303,7 +302,7 @@ class MyDatabase(object):
     def _run_create_table_system_command(self, system_command):
         if self.configs['debug']:
             logger.debug(system_command)
-        result, error_message, return_code = hf.popen(system_command)
+        result, error_message, return_code = helper.popen(system_command)
         if return_code != 0:
             logger.error(result)
             raise Exception(error_message)
@@ -690,7 +689,7 @@ class MyDatabase(object):
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
 
 
-    @retry(retry_on_exception=lambda exc: type(exc) == error.Archive7zipError, # isinstance(exc, error.Archive7zipError)
+    @retry(retry_on_exception=lambda exc: type(exc) == errors.Archive7zipError, # isinstance(exc, errors.Archive7zipError)
            wait_exponential_multiplier=1000, 
            wait_exponential_max=60000)
     def _extract_files_from_7zip(self, path_to_7zip, filenames):
@@ -704,7 +703,7 @@ class MyDatabase(object):
             'Extracting files from 7zip archive using the following system command:\n{}'
             .format(system_command))
         result, error_message, return_code = (
-            hf.run_subprocess_locally_full(self.configs['temp_archive_path'], system_command)
+            helper.run_subprocess_locally_full(self.configs['temp_archive_path'], system_command)
         )
         
         def log_error():
@@ -715,11 +714,11 @@ class MyDatabase(object):
             
         if 'No files to process' in result:
             log_error()
-            raise error.Archive7zipFileNotFoundError(result, error_message, return_code)
+            raise errors.Archive7zipFileNotFoundError(result, error_message, return_code)
         
         if return_code:
             log_error()
-            raise error.Archive7zipError(result, error_message, return_code)
+            raise errors.Archive7zipError(result, error_message, return_code)
 
 
     def get_uniprot_mutation(self, d, mutation, uniprot_id=None, copy_data=False):
@@ -750,8 +749,8 @@ class MyDatabase(object):
             try:
                 self._copy_mutation_data(uniprot_mutation, d.path_to_data, self.configs['path_to_archive'])
             except (subprocess.CalledProcessError,
-                    error.Archive7zipError,
-                    error.Archive7zipFileNotFoundError) as e:
+                    errors.Archive7zipError,
+                    errors.Archive7zipFileNotFoundError) as e:
                 logger.error(e)
                 uniprot_mutation.model_filename_wt = None
         return uniprot_mutation
@@ -787,7 +786,7 @@ class MyDatabase(object):
         
         Raises
         ------
-        error.ModelHasMutationsError
+        errors.ModelHasMutationsError
             The model you are trying to delete has precalculated mutations,
             so it can't be that bad. Delete those mutations and try again.
         """
@@ -799,7 +798,7 @@ class MyDatabase(object):
             ).format(self.configs['db_schema'], d.uniprot_domain_id)
             num_mutations = session.execute(validation_query).fetchone()[0]
             if num_mutations != 0:
-                raise error.ModelHasMutationsError(
+                raise errors.ModelHasMutationsError(
                     'Domain {} has {} mutations!'
                     .format(d.uniprot_domain_id, num_mutations))
             if isinstance(d, UniprotDomain):
@@ -940,7 +939,7 @@ class MyDatabase(object):
             raise Exception('Several uniprot sequences returned!? This should never happen!')
 
         elif len(uniprot_sequence) == 0:
-            username = hf.get_username()
+            username = helper.get_username()
             if (username.strip() == 'joan' # on Scinet
                     or not check_external): # don't bother with external sequences
                 print (
@@ -954,7 +953,7 @@ class MyDatabase(object):
                 try:
                     handle = urllib.request.urlopen(address)
                     sequence = next(SeqIO.parse(handle, "fasta"))
-                except (StopIteration, urllib.error.HTTPError) as e:
+                except (StopIteration, urllib.errors.HTTPError) as e:
                     logger.debug('{}: {}'.format(type(e), str(e)))
                     print('{}: {}'.format(type(e), str(e)))
                     return None
@@ -1063,9 +1062,9 @@ class MyDatabase(object):
         else:
             domain = [domain.split('-')[0], domain.split('-')[1]]
         # strip the letters
-        if domain[0][-1] in hf.uppercase:
+        if domain[0][-1] in helper.uppercase:
             domain[0] = domain[0][:-1]
-        if domain[1][-1] in hf.uppercase:
+        if domain[1][-1] in helper.uppercase:
             domain[1] = domain[1][:-1]
         domain = [int(domain[0]), int(domain[1])]
         return domain
@@ -1112,7 +1111,7 @@ class MyDatabase(object):
             elif os.path.isfile(archive_save_path + model.alignment_filename):
                 alignment = AlignIO.read(archive_save_path + model.alignment_filename, 'clustal')
             else:
-                raise error.NoPrecalculatedAlignmentFound(archive_save_path, model.alignment_filename)
+                raise errors.NoPrecalculatedAlignmentFound(archive_save_path, model.alignment_filename)
 
             return [alignment, None]
 
@@ -1129,7 +1128,7 @@ class MyDatabase(object):
                 alignment_1 = AlignIO.read(archive_save_path + model.alignment_filename_1, 'clustal')
                 alignment_2 = AlignIO.read(archive_save_path + model.alignment_filename_2, 'clustal')
             else:
-                raise error.NoPrecalculatedAlignmentFound(archive_save_path, model.alignment_filename_1)
+                raise errors.NoPrecalculatedAlignmentFound(archive_save_path, model.alignment_filename_1)
 
             return [alignment_1, alignment_2]
 
@@ -1148,7 +1147,7 @@ class MyDatabase(object):
         ]
 
         for d in data:
-            result, __, __ = hf.popen('ls ' + self.configs['path_to_archive'] + d[0])
+            result, __, __ = helper.popen('ls ' + self.configs['path_to_archive'] + d[0])
             filenames = [fname for fname in result.split('\n') if fname != '']
             for filename in filenames:
                 with open(filename, 'r') as fh:
@@ -1230,7 +1229,7 @@ def scinet_cleanup(folder, destination, name=None):
 #    copy = 'cp ' + output_name + ' /home/niklas/tmp/' + output_name
     system_command = 'tar -acf ' + output_name + ' * && ' + copy
 
-    result, error_message, return_code = hf.popen(system_command)
+    result, error_message, return_code = helper.popen(system_command)
     if return_code != 0:
         print('error_message:', error_message)
     return

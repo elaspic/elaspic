@@ -3,7 +3,6 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from __future__ import absolute_import
 from builtins import zip
-from builtins import object
 
 import os.path as op
 import gzip
@@ -20,6 +19,9 @@ from fastcache import clru_cache
 
 import numpy as np
 
+from pdbfixer import PDBFixer
+from simtk.openmm.app import PDBFile
+
 import Bio
 from Bio.PDB import PDBIO, Select
 from Bio.PDB.PDBParser import PDBParser
@@ -28,8 +30,7 @@ from Bio.PDB.Polypeptide import PPBuilder
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 
-from . import errors
-from . import helper_functions as hf
+from . import errors, helper
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,6 @@ lysine_atoms = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
 
 #%%################################################################################################
 ### Functions for downloading and parsing pdb files
-
 class MMCIFParserMod(MMCIFParser):
     def __init__(self, tmp_path):
         self.tmp_path = tmp_path
@@ -193,6 +193,7 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
     return structure
 
 
+
 #%%
 def euclidean_distance(a, b):
     """Calculate the Euclidean distance between two lists or tuples of arbitrary length.
@@ -222,6 +223,7 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
     assert(len(a) == 3 and len(b) == 3)
     if cutoff is None or all(abs(p - q) <= cutoff for p, q in zip(a, b)):
         return euclidean_distance(a, b)
+
 
 
 #%%
@@ -269,7 +271,7 @@ def get_chain_sequence_and_numbering(chain, domain_def_tuple=None, include_hetat
         if inside_domain and (include_hetatms or res.resname in amino_acids):
             chain_numbering.append(res.id[1])
             chain_numbering_extended.append(resid)
-            chain_sequence.append(AAA_DICT[res.resname])
+            chain_sequence.append(AAA_DICT.get(res.resname, '.'))
 
         if domain_def_tuple is not None and resid == end_resid:
             inside_domain = False
@@ -387,12 +389,6 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 
 
 #%%################################################################################################
-
-
-
-
-
-
 #class PDBTemplate(object):
 #    """
 #    Attributes
@@ -425,7 +421,7 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 #        self.domain_boundaries = []
 #        for domain_def in domain_defs:
 #            self.domain_boundaries.append(
-#                hf.decode_domain_def(domain_def, merge=False, return_string=True))
+#                helper.decode_domain_def(domain_def, merge=False, return_string=True))
 #
 #        self.unique_id = (
 #            'pdb_id: {}, pdb_chain: {}, pdb_domain_def: {}'.format(
@@ -592,7 +588,7 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 #            logger.error('Importing Biopython NeighborSearch failed with an error: {}'.format(e))
 #            raise Exception('Alternative not yet implemented!')
 #        ns = NeighborSearch(list(new_model.get_atoms()))
-#        hetatm_chain.id = [c for c in reversed(hf.uppercase) if c not in self.chain_ids][0]
+#        hetatm_chain.id = [c for c in reversed(helper.uppercase) if c not in self.chain_ids][0]
 #        res_idx = 0
 #        while res_idx < len(hetatm_chain):
 #            res_1 = hetatm_chain.child_list[res_idx]
@@ -700,13 +696,19 @@ class StructureParser:
         chain_ids : list
             Chains of the structure that should be kept.
         """
-        self.pdb_id = op.basename(pdb_file).rstrip('.pdb')
+        self.pdb_id = op.splitext(op.basename(pdb_file))[0]
         self.pdb_file = pdb_file
-        self.structure = self._get_structure(self.pdb_id, self.pdb_file)
-        self.chain_ids = (
-            chain_ids if chain_ids else [chain.id for chain in self.structure[0].child_list]
-        )
+        self.structure = helper.get_pdb_structure(self.pdb_file, self.pdb_id)
         
+        if chain_ids is None:
+            self.chain_ids = [chain.id for chain in self.structure[0].child_list]
+        elif isinstance(chain_ids, str):
+            self.chain_ids = chain_ids.split(',')
+        elif isinstance(chain_ids, list) or isinstance(chain_ids, tuple):
+            self.chain_ids = list(chain_ids)
+        else:
+            raise Exception
+                    
         self.r_cutoff = 6 # remove hetatms more than x A away from the main chain(s)
         self.domain_boundaries = []
         self.unique_id = ('pdb_id: {}, chain_ids: {}'.format(self.pdb_id, self.chain_ids))
@@ -794,7 +796,7 @@ class StructureParser:
         new_structure.add(new_model)
         self.structure = new_structure
 
-        logger.debug('PDB {} extracted successfully\n'.format(self.pdb_id))
+        logger.debug('PDB {} extracted successfully.\n'.format(self.pdb_id))
 
 
     def get_chain_sequence_and_numbering(self, chain_id, *args, **varargs):
@@ -911,7 +913,7 @@ class StructureParser:
             logger.error('Importing Biopython NeighborSearch failed with an error: {}'.format(e))
             raise Exception('Alternative not yet implemented!')
         ns = NeighborSearch(list(new_model.get_atoms()))
-        hetatm_chain.id = [c for c in reversed(hf.uppercase) if c not in self.chain_ids][0]
+        hetatm_chain.id = [c for c in reversed(helper.uppercase) if c not in self.chain_ids][0]
         res_idx = 0
         while res_idx < len(hetatm_chain):
             res_1 = hetatm_chain.child_list[res_idx]
@@ -969,7 +971,7 @@ class PDBTemplate(StructureParser):
         self.domain_boundaries = []
         for domain_def in domain_defs:
             self.domain_boundaries.append(
-                hf.decode_domain_def(domain_def, merge=False, return_string=True))
+                helper.decode_domain_def(domain_def, merge=False, return_string=True))
 
         self.unique_id = (
             'pdb_id: {}, pdb_chain: {}, pdb_domain_def: {}'.format(
@@ -985,21 +987,26 @@ class PDBTemplate(StructureParser):
 
 
 
+#%%
+def fix_pdb(input_file, output_file):
+    """
+    Run ``export OPENMM_CPU_THREADS=1``
+    if you want this function to only use a single thread.
+    """
+    fixer = PDBFixer(filename=input_file)
+    fixer.findMissingResidues()
+    # Replace non-standard residues with their standard equiv.
+    # (But if atoms have to be added, they get added using the `.addMissingAtoms()` command)
+    fixer.findNonstandardResidues()
+    fixer.replaceNonstandardResidues()
+    # Find missing heavy atoms
+    fixer.findMissingAtoms()
+    fixer.addMissingAtoms()
+    #fixer.removeHeterogens(True)
+    fixer.addMissingHydrogens(7.0)
+    with open(output_file, 'w') as ofh:
+        PDBFile.writeFile(fixer.topology, fixer.positions, ofh, keepIds=True)
+        
+    
 
 #%%
-if __name__ == '__main__':
-    pdbPath = '/home/niklas/pdb_database/structures/divided/pdb/'
-    pdbCode = '1VOK'
-    chains = ['A', 'B']
-    domainBoundaries = [[23, 115], [29, 198]]
-    output_path = './'
-
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-#    handler = logging.FileHandler(tmp_path + 'templates.log', mode='w', delay=True)
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.DEBUG)
-    logger.addHandler(handler)
-
-
