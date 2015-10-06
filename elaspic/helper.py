@@ -6,6 +6,7 @@ from builtins import range
 from builtins import object
 
 import os
+import os.path as op
 import sys
 import shlex
 import subprocess
@@ -14,22 +15,23 @@ import tarfile
 import datetime
 import logging
 import six
+import time
+import json
 
+from functools import wraps
 from contextlib import contextmanager
 
 from Bio.PDB.PDBParser import PDBParser
 
-if six.PY3:
-    from importlib import reload
-
 logger = logging.getLogger(__name__)
+
 
 
 #%%
 canonical_amino_acids = 'ARNDCEQGHILKMFPSTWYV'
 uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-logger = None
  
+
 
 #%%
 class WritableObject(object):
@@ -80,7 +82,6 @@ def get_logger(do_debug=True, logger_filename=None):
     if logger is not None:
         return logger 
     import logging
-    reload(logging)
     # Initialize logger
     logger = logging.getLogger(__name__)
     if do_debug:
@@ -108,10 +109,13 @@ def make_tarfile(output_filename, source_dir):
 
 
 #%% Working with pdb structures
-def get_pdb_structure(path_to_pdb_file):
-    # Set QUIET to False to output warnings like incomplete chains etc.
-    parser = PDBParser(get_header=True, QUIET=False) 
-    structure = parser.get_structure('ID', path_to_pdb_file)
+def get_pdb_structure(path_to_pdb_file, pdb_id=None):
+    """Set QUIET to False to output warnings like incomplete chains etc.
+    """
+    if pdb_id is None:
+        pdb_id = op.splitext(op.basename(path_to_pdb_file))[0]
+    parser = PDBParser(get_header=True, QUIET=False)
+    structure = parser.get_structure(pdb_id, path_to_pdb_file)
     return structure
 
 
@@ -170,12 +174,10 @@ def row2dict(row):
 #%% Helper functions for different subprocess commands
 
 def popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True):
-    child_process = subprocess.Popen(system_command, stdout=stdout, stderr=stderr, shell=shell)
+    child_process = subprocess.Popen(
+        system_command, stdout=stdout, stderr=stderr, shell=shell, universal_newlines=True)
     result, error_message = child_process.communicate()
     return_code = child_process.returncode
-    if six.PY3:
-        result = result.decode()
-        error_message = error_message.decode()
     return result, error_message, return_code
 
 
@@ -235,6 +237,112 @@ def kill_child_process(child_process):
     print('OK')
 
 
+
+
+#%% Function-level locking
+@contextmanager
+def get_lock(name):
+    lock = None
+    def close_lock(lock):
+        if lock is not None:
+            lock.close()
+            os.remove(lock.name)
+
+    while True:
+        try:
+            lock = open(name + '.lock', 'x')
+            yield lock
+            close_lock(lock)
+            break
+        except FileExistsError:
+            time.sleep(60)
+        except:
+            close_lock(lock)
+            raise
+
+
+def lock(fn):
+    """
+    Allow only a single instance of function `fn`, 
+    and save results to a lock file.
+    """
+    @wraps(fn)
+    def locked_fn(self, *args, **kwargs):
+        """
+        
+        Returns
+        -------
+        lock_filename : str
+            Lock file that contains function output in json format.
+        
+        """
+        # Get the lock filename
+        if fn.__name__ == 'calculate_provean':
+            lock_filename = '{}{}_provean.json'.format(self.pdb_id, args[0])
+        elif fn.__name__ == 'calculate_model':
+            lock_filename = '{}_modeller.json'.format(self.pdb_id)
+        elif fn.__name__ == 'calculate_mutation':
+            lock_filename = '{}{}_mutation_{}.json'.format(self.pdb_id, args[0], args[1])
+        else:
+            raise Exception("Function {} is not supported!".format(fn))
+        
+        # Make sure that we can get exclusive rights on the lock
+        try:
+            lock = open(lock_filename, 'x')
+        except FileExistsError:
+            try:
+                results = json.load(open(lock_filename, 'r'))
+                info_message = (
+                    "Results have already been calculated and are in file: '{}'.\n"
+                    .format(lock_filename, results)
+                )
+                logger.info(info_message)
+                return lock_filename, results
+            except ValueError:
+                info_message = (
+                    "Another process is currently running this function.\n"
+                    "If you believe this is an error, delete lock file '{}' and try again."
+                    .format(lock_filename)
+                )
+                logger.info(info_message)
+                return lock_filename, None
+        
+        # Run the function and write results
+        try:
+            results = fn(self, *args, **kwargs)
+            json.dump(results, lock)
+            lock.close()
+            return lock_filename, results
+        except:
+            lock.close()
+            os.remove(lock.name)
+            raise
+
+    return locked_fn
+
+
+
+#%% From Mutation
+def encode_list_as_text(list_of_lists):
+    """
+    Uses the database convention to encode a list of lists, describing domain boundaries of
+    multiple domains, as a string.
+    """
+    return ','.join([':'.join([str(x) for x in xx]) for xx in zip(*list_of_lists)])
+
+
+def decode_text_as_list(list_string):
+    """
+    Uses the database convention to decode a string, describing domain boundaries of
+    multiple domains, as a list of lists.
+    """
+    str2num = lambda x: float(x) if '.' in x else int(x)
+    return list(zip(*[[str2num(x) for x in sublist.split(':')] for sublist in list_string.split(',')]))
+
+
+
+
+#%%
 ###############################################################################
 # The two functions below can be used to set the subproces group id to the same
 # value as the parent process group id. This is a simple way of ensuring that
@@ -256,16 +364,14 @@ def run_subprocess_locally(working_path, system_command, **popen_argvars):
         child_process = subprocess.Popen(
             args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             preexec_fn=lambda: set_process_group(os.getpgrp()),
+            universal_newlines=True,
             **popen_argvars)
         return child_process
 
 
 def run_subprocess_locally_full(working_path, system_command, **popen_argvars):
-    child_process = run_subprocess_locally(working_path, system_command, **popen_argvars)
+    child_process = run_subprocess_locally(working_path, system_command, universal_newlines=True, **popen_argvars)
     result, error_message = child_process.communicate()
-    if six.PY3:
-        result = str(result, encoding='utf-8')
-        error_message = str(error_message, encoding='utf-8')
     return_code = child_process.returncode
     return result, error_message, return_code
     

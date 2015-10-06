@@ -19,11 +19,10 @@ import pandas as pd
 from Bio.PDB import PDBIO
 from Bio.PDB.PDBParser import PDBParser
 
-from . import errors
-from . import pdb_template
-from . import helper_functions as hf
+from . import errors, helper, structure_tools
 
 logger = logging.getLogger(__name__)
+
 
 #%% CONSTANTS
 
@@ -55,8 +54,8 @@ ATOM S   2  TYR  212.76   0.0 135.35   0.0  42.03   0.0 177.38   0.0  35.38   0.
 standard_sasa_all = [[l.strip() for l in line.split()] for line in STANDARD_DATA.strip().split('\n')[1:]]
 STANDARD_SASA = {x[3]: float(x[4]) for x in standard_sasa_all}
 
+R_CUTOFF = 6
 
-R_CUTOFF = 5
 
 #%% STANDALONE FUNCTIONS
 def get_interactions(model, chain_id, r_cutoff=R_CUTOFF):
@@ -99,17 +98,17 @@ def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=R_
     ns = NeighborSearch(list(chain_2.get_atoms()))
     interactions_between_chains = OrderedDict()
     for idx, residue_1 in enumerate(chain_1):
-        if residue_1.resname in pdb_template.amino_acids and residue_1.id[0] == ' ':
+        if residue_1.resname in structure_tools.amino_acids and residue_1.id[0] == ' ':
             resnum_1 = str(residue_1.id[1]) + residue_1.id[2].strip()
-            resaa_1 = pdb_template.convert_aa(residue_1.get_resname(), quiet=True)
+            resaa_1 = structure_tools.convert_aa(residue_1.get_resname(), quiet=True)
             interacting_residues = set()
             for atom_1 in residue_1:
                 interacting_residues.update(ns.search(atom_1.get_coord(), r_cutoff, 'R'))
             interacting_resids = []
             for residue_2 in interacting_residues:
                 resnum_2 = str(residue_2.id[1]) + residue_2.id[2].strip()
-                resaa_2 = pdb_template.convert_aa(residue_2.get_resname(), quiet=True)
-                if residue_2.resname in pdb_template.amino_acids and residue_2.id[0] == ' ':
+                resaa_2 = structure_tools.convert_aa(residue_2.get_resname(), quiet=True)
+                if residue_2.resname in structure_tools.amino_acids and residue_2.id[0] == ' ':
                     interacting_resids.append((resnum_2, resaa_2,))
             if interacting_resids:
                 interacting_resids.sort(key=lambda x: int(''.join([c for c in x[0] if c.isdigit()])))
@@ -136,18 +135,18 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
 
     interactions_between_chains = OrderedDict()
     for idx, residue_1 in enumerate(chain_1):
-        if residue_1.resname in pdb_template.amino_acids and residue_1.id[0] == ' ':
+        if residue_1.resname in structure_tools.amino_acids and residue_1.id[0] == ' ':
             resnum_1 = str(residue_1.id[1]) + residue_1.id[2].strip()
-            resaa_1 = pdb_template.convert_aa(residue_1.get_resname())
+            resaa_1 = structure_tools.convert_aa(residue_1.get_resname())
             interacting_resids = []
             for residue_2 in chain_2:
                 resnum_2 = str(residue_2.id[1]) + residue_2.id[2].strip()
-                resaa_2 = pdb_template.convert_aa(residue_2.get_resname())
+                resaa_2 = structure_tools.convert_aa(residue_2.get_resname())
                 r_min = None
-                if residue_2.resname in pdb_template.amino_acids and residue_2.id[0] == ' ':
+                if residue_2.resname in structure_tools.amino_acids and residue_2.id[0] == ' ':
                     for atom_1 in residue_1:
                         for atom_2 in residue_2:
-                            r = pdb_template.calculate_distance(atom_1, atom_2, r_cutoff)
+                            r = structure_tools.calculate_distance(atom_1, atom_2, r_cutoff)
                             if r is not None:
                                 if r_min and r < r_min:
                                     r_min = r
@@ -161,16 +160,174 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
 
 
 
-#%%
+#%% Init
+class AnalyzeStructure(object):
+    """
+    Runs the program pops to calculate the interface size of the complexes
+    This is done by calculating the surface of the complex and the seperated parts.
+    The interface is then given by the substracting
+    """
 
-class PhysiChem(object):
+    def __init__(self, pdb_file, data_dir, working_dir, vdw_distance=5.0, min_contact_distance=4.0):
+        self.pdb_file = pdb_file
+        #: Folder with input structures (modeller_path, foldx_path, etc,)
+        self.data_dir = data_dir 
+        #: Folder with all the binaries (i.e. ./analyze_structure)
+        self.working_dir = working_dir 
+        self.vdw_distance = vdw_distance
+        self.min_contact_distance = min_contact_distance
+        
+        self._prepare_temp_folder(self.working_dir)
+        
+        self.sp = structure_tools.StructureParser(pdb_file)
+        self.sp.extract()
+        self.sp.save_structure(output_dir=self.working_dir)
+        
+        self.chain_ids = self.sp.chain_ids
 
-    def __init__(self, vdW, d, unique):
-        self.vdW_distance = float(vdW)
-        self.contact_distance = float(d)
+
+    def _prepare_temp_folder(self, temp_folder):
+        # ./analyze_structure
+        os.makedirs(temp_folder, exist_ok=True)
 
 
-    def __call__(self, pdb_filename, mutated_chain_id, mutation):
+    def __split_pdb_into_chains(self):
+        """
+        .. note: deprecated
+        
+            Use structure.StructureParser instead.
+        """
+        parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
+        io = PDBIO()
+        logger.debug('Saving parsed pdbs into the following working path:')
+        logger.debug(op.join(self.data_dir, self.pdb_file))
+
+        # Save all chains together with correct chain letters
+        logger.debug('Saving all chains together')
+        structure = helper.get_pdb_structure(op.join(self.data_dir, self.pdb_file))
+        if len(structure) > 1:
+            # Delete all models except for the first (otherwise get errors with naccess)
+            del structure[1:]
+        model = structure[0]
+        children = model.get_list()
+#        for child in children:
+#            logger.debug('child id before:' + child.id)
+#            if child.id not in self.chain_ids:
+#            logger.debug('child id after:' + child.id)
+        if len(children) == 1 and (children[0].id == '' or children[0].id == ' ' or children[0].id == '0'):
+            children[0].id = self.chain_ids[0]
+        if len(children) == 2 and children[0].id == '0' and children[1].id == '0':
+            children[0].id = 'A'
+            children[1].id = 'B'
+        io.set_structure(structure)
+        outFile = self.working_dir +  self.pdb_file
+        io.save(outFile)
+
+        if len(self.chain_ids) > 1:
+            # Save a structure with only the chains of interest
+            logger.debug('Saving only the chains of interest: %s' % ','.join(self.chain_ids))
+            structure = parser.get_structure('ID', self.data_dir + self.pdb_file)
+            model = structure[0]
+            for child in model.get_list():
+                logger.debug('child id:' + child.id)
+                if child.id not in self.chain_ids:
+                    logger.debug('detaching chain')
+                    model.detach_child(child.id)
+            io.set_structure(structure)
+            outFile = op.join(self.working_dir, ''.join(self.chain_ids) + '.pdb')
+            io.save(outFile)
+
+        # Save a structure for each chain
+        for chain_id in self.chain_ids:
+            logger.debug('Saving chain %s separately' % chain_id)
+            # save chain, i.e. part one of the complex:
+            structure = parser.get_structure('ID', self.data_dir + self.pdb_file)
+            model = structure[0]
+            for child in model.get_list():
+                logger.debug('child id:' + child.id)
+                if child.id != chain_id:
+                    logger.debug('detaching chain %s' % child.id)
+                    model.detach_child(child.id)
+            io.set_structure(structure)
+            outFile = op.join(self.working_dir, chain_id + '.pdb')
+            io.save(outFile)
+
+        # The main class structure is the one that only has the chains of interest
+        structure = helper.get_pdb_structure(op.join(self.working_dir, ''.join(self.chain_ids) + '.pdb'))
+        return structure
+
+
+
+    #%%
+    def __call__(self, chain_id, mutation, chain_id_other=None):
+        """Calculate all properties.
+        """
+        # Solvent accessibility
+        (seasa_by_chain_together, seasa_by_chain_separately,
+         seasa_by_residue_together, seasa_by_residue_separately) = self.get_seasa()
+        seasa_info = (
+            seasa_by_residue_separately[
+                (seasa_by_residue_separately['pdb_chain'] == chain_id) &
+                (seasa_by_residue_separately['res_num'] == mutation[1:-1])
+            ].iloc[0]
+        )
+        self._validate_mutation(seasa_info['res_name'], mutation)
+        solvent_accessibility = seasa_info['rel_sasa']
+
+        # Secondary structure
+        secondary_structure_df = self.get_secondary_structure()
+        secondary_structure_df = (
+            secondary_structure_df[
+                (secondary_structure_df.chain == chain_id) &
+                (secondary_structure_df.idx == int(mutation[1:-1]))
+            ]
+        )
+        assert len(secondary_structure_df) == 1
+        secondary_structure_df = secondary_structure_df.iloc[0]
+        self._validate_mutation(seasa_info['res_name'], mutation)
+        secondary_structure = secondary_structure_df.ss_code
+
+        # Contact distance
+        contact_distance = None
+        if chain_id_other is not None:
+            try:
+                contact_distance = self.get_interchain_distances(chain_id, mutation)
+                contact_distance = contact_distance[chain_id][chain_id_other]
+                logger.debug(
+                    'The shortest interchain distance between chain {} and chain {} is {}'
+                    .format(chain_id, chain_id_other, contact_distance))
+                if not contact_distance:
+                    raise ValueError
+            except (IndexError, KeyError, ValueError) as e:
+                logger.error('Could not calculate the shortest contact distance between two chains!')
+                logger.error(e)
+                logger.error(contact_distance)
+                raise
+                
+        # PhysiChem
+        physchem, physchem_ownchain = self.get_physi_chem(chain_id, mutation)
+        
+        # Compile results
+        results = dict(
+            solvent_accessibility = solvent_accessibility,
+            secondary_structure = secondary_structure,
+            contact_distance = contact_distance,
+            physchem = physchem,
+            physchem_ownchain = physchem_ownchain,
+        )
+        return results
+        
+
+    def get_structure_file(self, chains, ext='.pdb'):
+        """
+        """
+        structure_file = '{}{}{}'.format(op.join(self.working_dir, self.sp.pdb_id), chains, ext)
+        return structure_file
+        
+        
+
+    #%%
+    def get_physi_chem(self, chain_id, mutation):
         """
         Return the atomic contact vector, that is, counting how many interactions
         between charged, polar or "carbon" residues there are. The "carbon"
@@ -184,27 +341,19 @@ class PhysiChem(object):
         if more than two chains are given, the chains not containing the mutation
         are considered as "opposing" chain
         """
-        parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
-        structure = parser.get_structure('ID', pdb_filename)
-        model = structure[0]
-        mutated_chain = model[mutated_chain_id]
-        opposite_chains = [ chain for chain in model.child_list if chain.id != mutated_chain_id ]
+        model = self.sp.structure[0]
+        mutated_chain = model[chain_id]
+        opposite_chains = [ chain for chain in model.child_list if chain.id != chain_id ]
         main_chain_atoms = ['CA', 'C', 'N', 'O']
 
         # Find the mutated residue
-        mutation_position = int(mutation[1:-1])
+        mutation_pos = int(mutation[1:-1])
         residue_counter = 0
         for residue in mutated_chain:
-            if residue.resname in pdb_template.amino_acids and residue.id[0] == ' ':
+            if residue.resname in structure_tools.amino_acids and residue.id[0] == ' ':
                 residue_counter += 1
-                if residue_counter == mutation_position:
-                    if (pdb_template.AAA_DICT[residue.resname] not in
-                            [mutation[0].upper(), mutation[-1].upper()]):
-                        logger.error(residue)
-                        logger.error(pdb_template.AAA_DICT[residue.resname])
-                        logger.error(mutation.upper())
-                        logger.error(mutation_position)
-                        raise Exception('PhysiChem detected mutated amino acid position mismatch!')
+                if residue_counter == mutation_pos:
+                    self._validate_mutation(residue.resname, mutation)
                     mutated_residue = residue
                     break
         mutated_atoms = [atom for atom in mutated_residue if atom.name not in main_chain_atoms]
@@ -248,6 +397,15 @@ class PhysiChem(object):
         return opposite_chain_contact_vector, same_chain_contact_vector
 
 
+    def _validate_mutation(self, resname, mutation):
+        valid_aa = [mutation[0].upper(), mutation[-1].upper()]
+        if structure_tools.AAA_DICT.get(resname, resname) not in valid_aa:
+            logger.error(resname)
+            logger.error(mutation)
+            logger.error(structure_tools.AAA_DICT[resname])
+            raise errors.MutationMismatchError()
+
+
     def _increment_vector(
             self, mutated_residue, mutated_atoms, partner_residue, contact_features_dict):
         # For each residue each atom of the mutated residue has to be checked
@@ -255,7 +413,7 @@ class PhysiChem(object):
             mutated_atom_type = self._get_atom_type(mutated_residue.resname, mutated_atom)
             # And each partner residue and partner atom
             for partner_atom in partner_residue:
-                r = pdb_template.calculate_distance(mutated_atom, partner_atom, self.vdW_distance)
+                r = structure_tools.calculate_distance(mutated_atom, partner_atom, self.vdw_distance)
                 if r is not None:
                     partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
                     if partner_atom_type == 'ignore':
@@ -266,7 +424,7 @@ class PhysiChem(object):
                         # used to keep track of which interactions where
                         # already counted. Does not matter as much for others.
                         contact_features_dict['carbon_contact'].append(tuple(partner_atom.coord))
-                    if r <= self.contact_distance:
+                    if r <= self.min_contact_distance:
                         if mutated_atom_type == 'charged_plus' and partner_atom_type == 'charged_plus':
                             contact_features_dict['equal_charge'].append(tuple(mutated_atom.coord))
                         if mutated_atom_type == 'charged_minus' and partner_atom_type == 'charged_plus':
@@ -317,109 +475,23 @@ class PhysiChem(object):
         return 'ignore'
 
 
-
-#%%
-
-class AnalyzeStructure(object):
-    """
-    Runs the program pops to calculate the interface size of the complexes
-    This is done by calculating the surface of the complex and the seperated parts.
-    The interface is then given by the substracting
-    """
-
-    def __init__(self, data_path, working_path, pdb_file, chains, domain_defs):
-        self.data_path = data_path #: folder with the structures (modeller_path, foldx_path, etc,)
-        self.working_path = working_path # analyze_structure path with all the binaries
-        self.pdb_file = pdb_file
-        self.chain_ids = chains
-        self.domain_defs = domain_defs
-        self._prepare_temp_folder()
-        self.structure = self.__split_pdb_into_chains()
-
-
-    def _prepare_temp_folder(self):
-        # ./analyze_structure
-        if not os.path.isdir(self.working_path):
-            mkdir_command = "mkdir -p '{}'".format(self.working_path)
-            subprocess.check_call(mkdir_command, shell=True)
-
-
-    def __split_pdb_into_chains(self):
-        parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
-        io = PDBIO()
-        logger.debug('Saving parsed pdbs into the following working path:')
-        logger.debug(op.join(self.data_path, self.pdb_file))
-
-        # Save all chains together with correct chain letters
-        logger.debug('Saving all chains together')
-        structure = parser.get_structure('ID', op.join(self.data_path, self.pdb_file))
-        if len(structure) > 1:
-            # Delete all models except for the first (otherwise get errors with naccess)
-            del structure[1:]
-        model = structure[0]
-        children = model.get_list()
-#        for child in children:
-#            logger.debug('child id before:' + child.id)
-#            if child.id not in self.chain_ids:
-#            logger.debug('child id after:' + child.id)
-        if len(children) == 1 and (children[0].id == '' or children[0].id == ' ' or children[0].id == '0'):
-            children[0].id = self.chain_ids[0]
-        if len(children) == 2 and children[0].id == '0' and children[1].id == '0':
-            children[0].id = 'A'
-            children[1].id = 'B'
-        io.set_structure(structure)
-        outFile = self.working_path +  self.pdb_file
-        io.save(outFile)
-
-        if len(self.chain_ids) > 1:
-            # Save a structure with only the chains of interest
-            logger.debug('Saving only the chains of interest: %s' % ','.join(self.chain_ids))
-            structure = parser.get_structure('ID', self.data_path + self.pdb_file)
-            model = structure[0]
-            for child in model.get_list():
-                logger.debug('child id:' + child.id)
-                if child.id not in self.chain_ids:
-                    logger.debug('detaching chain')
-                    model.detach_child(child.id)
-            io.set_structure(structure)
-            outFile = self.working_path + ''.join(self.chain_ids) + '.pdb'
-            io.save(outFile)
-
-        # Save a structure for each chain
-        for chain_id in self.chain_ids:
-            logger.debug('Saving chain %s separately' % chain_id)
-            # save chain, i.e. part one of the complex:
-            structure = parser.get_structure('ID', self.data_path + self.pdb_file)
-            model = structure[0]
-            for child in model.get_list():
-                logger.debug('child id:' + child.id)
-                if child.id != chain_id:
-                    logger.debug('detaching chain %s' % child.id)
-                    model.detach_child(child.id)
-            io.set_structure(structure)
-            outFile = self.working_path + chain_id + '.pdb'
-            io.save(outFile)
-
-        # The main class structure is the one that only has the chains of interest
-        structure = parser.get_structure('ID', self.working_path + ''.join(self.chain_ids) + '.pdb')
-        return structure
-
-
-    #%%
+    #%% SASA New
     def get_seasa(self):
-        seasa_by_chain_together, seasa_by_residue_together = self._run_msms(''.join(self.chain_ids) + '.pdb')
+        structure_file = self.get_structure_file(''.join(self.chain_ids))
+        seasa_by_chain, seasa_by_residue = self._run_msms(structure_file)
         if len(self.chain_ids) > 1:
             seasa_by_chain_separately = []
             seasa_by_residue_separately = []
             for chain_id in self.chain_ids:
-                seasa_by_chain, seasa_by_residue = self._run_msms(chain_id + '.pdb')
+                structure_file = self.get_structure_file(chain_id)
+                seasa_by_chain, seasa_by_residue = self._run_msms(structure_file)
                 seasa_by_chain_separately.append(seasa_by_chain)
                 seasa_by_residue_separately.append(seasa_by_residue)
             seasa_by_chain_separately = pd.concat(seasa_by_chain_separately, ignore_index=True)
             seasa_by_residue_separately = pd.concat(seasa_by_residue_separately, ignore_index=True)
-            return [seasa_by_chain_together, seasa_by_chain_separately, seasa_by_residue_together, seasa_by_residue_separately]
+            return [seasa_by_chain, seasa_by_chain_separately, seasa_by_residue, seasa_by_residue_separately]
         else:
-            return [seasa_by_chain_together, seasa_by_chain_together, seasa_by_residue_together, seasa_by_residue_together]
+            return [None, seasa_by_chain, None, seasa_by_residue]
 
 
     def _run_msms(self, filename):
@@ -429,14 +501,12 @@ class AnalyzeStructure(object):
         base_filename = filename[:filename.rfind('.')]
 
         # Convert pdb to xyz coordiates
-        assert(os.path.isfile(self.working_path + filename))
-        system_command = 'pdb_to_xyzrn {0}.pdb'.format(self.working_path + base_filename)
+        assert(os.path.isfile(op.join(self.working_dir, filename)))
+        
+        system_command = 'pdb_to_xyzrn {0}.pdb'.format(op.join(self.working_dir, base_filename))
         logger.debug('msms system command 1: %s' % system_command)
-        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
         result, error_message = child_process.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
         return_code = child_process.returncode
         if return_code != 0:
             logger.debug('msms result 1:')
@@ -447,7 +517,7 @@ class AnalyzeStructure(object):
             logger.debug(child_process.returncode)
             raise errors.MSMSError(error_message)
         else:
-            with open(self.working_path + base_filename + '.xyzrn', 'w') as ofh:
+            with open(op.join(self.working_dir, base_filename + '.xyzrn'), 'w') as ofh:
                 ofh.writelines(result)
 
         # Calculate SASA and SESA (excluded)
@@ -458,25 +528,19 @@ class AnalyzeStructure(object):
             '-surface ases '
             '-if {0}.xyzrn '
             '-af {0}.area')
-        system_command = system_command_string.format(self.working_path + base_filename, probe_radius)
+        system_command = system_command_string.format(op.join(self.working_dir, base_filename), probe_radius)
         logger.debug('msms system command 2: %s' % system_command)
-        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
         result, error_message = child_process.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
         return_code = child_process.returncode
         number_of_tries = 0
         while return_code != 0 and number_of_tries < 5:
             logger.error('MSMS exited with an error!')
             probe_radius -= 0.1
             logger.debug('Reducing probe radius to {}'.format(probe_radius))
-            system_command = system_command_string.format(self.working_path + base_filename, probe_radius)
-            child_process = hf.run_subprocess_locally(self.working_path, system_command)
+            system_command = system_command_string.format(op.join(self.working_dir, base_filename), probe_radius)
+            child_process = helper.run_subprocess_locally(self.working_dir, system_command)
             result, error_message = child_process.communicate()
-            if six.PY3:
-                result = str(result, encoding='utf-8')
-                error_message = str(error_message, encoding='utf-8')
             return_code = child_process.returncode
             number_of_tries += 1
         if return_code != 0:
@@ -489,7 +553,7 @@ class AnalyzeStructure(object):
             raise errors.MSMSError(error_message)
 
         # Read and parse the output
-        with open(self.working_path + base_filename + '.area', 'r') as fh:
+        with open(op.join(self.working_dir, base_filename + '.area'), 'r') as fh:
             file_data = fh.readlines()
         file_data = [ [l.strip() for l in line.split()] for line in file_data]
         del file_data[0]
@@ -515,23 +579,6 @@ class AnalyzeStructure(object):
             for x in zip(seasa_df['abs_sasa'], seasa_df['res_name'])
         ]
             
-#        seasa_df['chain'] = seasa_df['atom_num'].apply(lambda x: atom_to_chain.get(x, None))
-#        seasa_df['res_name'] = seasa_df['atom_num'].apply(lambda x: atom_to_res_name.get(x, None))
-#        seasa_df['res_num'] = seasa_df['atom_num'].apply(lambda x: atom_to_res_num.get(x, None))
-#        seasa_df['atom_id'] = seasa_df['atom_num'].apply(lambda x: atom_to_atom_id.get(x, None))
-#        seasa_df.dropna(inplace=True)
-
-#        incorrect_assignments = \
-#            [x for x in zip(seasa_df['res_name'], seasa_df['res_name_msms']) if x[0]!=x[1]] + \
-#            [x for x in zip(seasa_df['atom_id'], seasa_df['atom_id_msms']) if x[0]!=x[1]]
-#        if len(incorrect_assignments) > 5:
-#            logger.error('Could not correctly assign msms output to chains!')
-#            logger.error(incorrect_assignments)
-#            raise errors.MSMSError('Could not correctly assign msms output to chains: ' + str(incorrect_assignments))
-#        del seasa_df['atom_id_msms']
-#        del seasa_df['res_name_msms']
-#        del seasa_df['res_num_msms']
-
         seasa_gp_by_chain = seasa_df.groupby(['pdb_chain'])
         seasa_gp_by_residue = seasa_df.groupby(['pdb_chain', 'res_name', 'res_num'])
         seasa_by_chain = seasa_gp_by_chain.sum().reset_index()
@@ -540,8 +587,15 @@ class AnalyzeStructure(object):
         return seasa_by_chain, seasa_by_residue
 
 
-    #%%
-    def get_sasa(self, program_to_use='naccess'):
+    #%% SASA Old
+    def get_sasa(self, program_to_use='pops'):
+        """Get Solvent Accessible Surface Area scores.
+        
+        .. note:: deprecated
+        
+            Use :fn:`get_seasa` instead.
+            
+        """
         if program_to_use == 'naccess':
             run_sasa_atom = self._run_naccess_atom
         elif program_to_use == 'pops':
@@ -555,39 +609,38 @@ class AnalyzeStructure(object):
         return [sasa_score_splitchains, sasa_score_allchains]
 
 
-    # NACESS is not used anymore
-    # It is not reliable enough on a PDB-wide scale
-#    def _run_naccess_atom(self, filename):
-#        # run naccess
-#        system_command = ('naccess ' + filename)
-#        logger.debug('naccess system command: %s' % system_command)
-#        assert(os.path.isfile(self.working_path + filename))
-#        child_process = hf.run_subprocess_locally(self.working_path, system_command)
-#        result, error_message = child_process.communicate()
-#        if six.PY3:
-#            result = str(result, encoding='utf-8')
-#            error_message = str(error_message, encoding='utf-8')
-#        return_code = child_process.returncode
-#        logger.debug('naccess result: {}'.format(result))
-#        logger.debug('naccess error: {}'.format(error_message))
-#        logger.debug('naccess rc: {}'.format(return_code))
-#        # Collect results
-#        sasa_scores = {}
-#        with open(self.working_path + filename.split('.')[0] + '.rsa') as fh:
-#            for line in fh:
-#                row = line.split()
-#                if row[0] != 'RES':
-#                    continue
-#                try:
-#                    (line_id, res, chain, num, all_abs, all_rel,
-#                    sidechain_abs, sidechain_rel, mainchain_abs, mainchain_rel,
-#                    nonpolar_abs, nonpolar_rel, polar_abs, polar_rel) = row
-#                except ValueError as e:
-#                    print(e)
-#                    print(line)
-#                    print(row)
-#                sasa_scores.setdefault(chain, []).append(sidechain_rel) # percent sasa on sidechain
-#        return sasa_scores
+    def _run_naccess_atom(self, filename):
+        """
+        NACESS is not used anymore.
+        It is not reliable enough on a PDB-wide scale.
+        """
+        # run naccess
+        system_command = ('naccess ' + filename)
+        logger.debug('naccess system command: %s' % system_command)
+        assert(os.path.isfile(self.working_dir + filename))
+        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
+        result, error_message = child_process.communicate()
+        return_code = child_process.returncode
+        logger.debug('naccess result: {}'.format(result))
+        logger.debug('naccess error: {}'.format(error_message))
+        logger.debug('naccess rc: {}'.format(return_code))
+        # Collect results
+        sasa_scores = {}
+        with open(self.working_dir + filename.split('.')[0] + '.rsa') as fh:
+            for line in fh:
+                row = line.split()
+                if row[0] != 'RES':
+                    continue
+                try:
+                    (line_id, res, chain, num, all_abs, all_rel,
+                    sidechain_abs, sidechain_rel, mainchain_abs, mainchain_rel,
+                    nonpolar_abs, nonpolar_rel, polar_abs, polar_rel) = row
+                except ValueError as e:
+                    print(e)
+                    print(line)
+                    print(row)
+                sasa_scores.setdefault(chain, []).append(sidechain_rel) # percent sasa on sidechain
+        return sasa_scores
 
 
     def _run_pops_atom(self, chain_id):
@@ -596,7 +649,7 @@ class AnalyzeStructure(object):
         if termination != 'Clean termination':
             logger.error('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
             logger.error(e)
-            raise errors.PopsError(e, self.data_path + self.pdb_file, self.chain_ids)
+            raise errors.PopsError(e, self.data_dir + self.pdb_file, self.chain_ids)
         else:
             logger.warning('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
             logger.warning(e)
@@ -608,11 +661,8 @@ class AnalyzeStructure(object):
 
     def __run_pops_atom(self, chain_id):
         system_command = ('pops --noHeaderOut --noTotalOut --atomOut --pdb {0}.pdb --popsOut {0}.out'.format(chain_id))
-        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
         result, error_message = child_process.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
         return_code = child_process.returncode
         # The returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written
@@ -631,7 +681,7 @@ class AnalyzeStructure(object):
         ignore = ['N', 'C', 'O']
         per_residue_sasa_scores = []
         current_residue_number = None
-        with open(self.working_path + chain_id + '.out', 'r') as fh:
+        with open(self.working_dir + chain_id + '.out', 'r') as fh:
             for line in fh:
                 row = line.split()
                 if len(row) != 11:
@@ -652,34 +702,34 @@ class AnalyzeStructure(object):
         return per_residue_sasa_scores
 
 
-    #%%
+    #%% Secondary Structure
     def get_secondary_structure(self):
         return self.get_stride()
 
 
     def get_stride(self):
-        system_command = 'stride ' + ''.join(self.chain_ids) + '.pdb ' + '-fstride_results.txt'
+        structure_file = self.get_structure_file(''.join(self.chain_ids))
+        stride_results_file = op.splitext(structure_file)[0] + '_stride_results.txt'
+        system_command = 'stride {} -f{}'.format(structure_file, stride_results_file)
         logger.debug('stride system command: %s' % system_command)
-        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
         result, error_message = child_process.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
         return_code = child_process.returncode
         logger.debug('stride return code: %i' % return_code)
         logger.debug('stride result: %s' % result)
         logger.debug('stride error: %s' % error_message)
         # collect results
-        with open(self.working_path + 'stride_results.txt') as fh:
+        with open(stride_results_file) as fh:
             file_data_df = pd.DataFrame(
-                [[pdb_template.AAA_DICT[row.split()[1]], row.split()[2], row.split()[3], int(row.split()[4]), row.split()[5]]
+                [[structure_tools.AAA_DICT[row.split()[1]], row.split()[2], 
+                  row.split()[3], int(row.split()[4]), row.split()[5]]
                 for row in fh.readlines() if row[:3] == 'ASG'],
                 columns=['amino_acid', 'chain', 'resnum', 'idx', 'ss_code'])
         return file_data_df
 
 
     def get_dssp(self):
-        """ Not used because crashes on server
+        """Not used because crashes on server.
         """
         n_tries = 0
         return_code = -1
@@ -689,11 +739,8 @@ class AnalyzeStructure(object):
                 time.sleep(60)
             system_command = ('dssp -v -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
             logger.debug('dssp system command: %s' % system_command)
-            child_process = hf.run_subprocess_locally(self.working_path, system_command)
+            child_process = helper.run_subprocess_locally(self.working_dir, system_command)
             result, error_message = child_process.communicate()
-            if six.PY3:
-                result = str(result, encoding='utf-8')
-                error_message = str(error_message, encoding='utf-8')
             return_code = child_process.returncode
             logger.debug('dssp return code: %i' % return_code)
             logger.debug('dssp result: %s' % result)
@@ -702,13 +749,13 @@ class AnalyzeStructure(object):
         if return_code != 0:
             if 'boost::thread_resource_error' in error_message:
                 system_command = "rsync {0}{1}.pdb /home/kimlab1/strokach/tmp/elaspic_bad_pdbs/"
-                hf.run_subprocess_locally(self.working_path, system_command)
+                helper.run_subprocess_locally(self.working_dir, system_command)
                 raise errors.ResourceError(error_message)
         # collect results
         dssp_ss = {}
         dssp_acc = {}
         start = False
-        with open(op.join(self.working_path, 'dssp_results.txt')) as fh:
+        with open(op.join(self.working_dir, 'dssp_results.txt')) as fh:
             for l in fh:
                 row = l.split()
                 if not row or len(row) < 2:
@@ -758,25 +805,25 @@ class AnalyzeStructure(object):
                 continue # skip chains that we are not interested in
             shortest_interchain_distances[chain_1.id] = {}
             for idx, residue_1 in enumerate(chain_1):
-                if residue_1.resname in pdb_template.amino_acids and residue_1.id[0] == ' ':
+                if residue_1.resname in structure_tools.amino_acids and residue_1.id[0] == ' ':
                     if pdb_mutation:
                         if str(residue_1.id[1]) != pdb_mutation[1:-1]:
                             continue # skip all residues that we are not interested in
-                        if (pdb_template.convert_aa(residue_1.resname) != pdb_mutation[0] and
-                            pdb_template.convert_aa(residue_1.resname) != pdb_mutation[-1]):
+                        if (structure_tools.convert_aa(residue_1.resname) != pdb_mutation[0] and
+                            structure_tools.convert_aa(residue_1.resname) != pdb_mutation[-1]):
                                 logger.debug(pdb_mutation)
-                                logger.debug(pdb_template.convert_aa(residue_1.resname))
+                                logger.debug(structure_tools.convert_aa(residue_1.resname))
                                 logger.debug(residue_1.id)
                                 raise Exception
                     for chain_2 in [chain for chain in model if chain != chain_1]:
                         min_r = cutoff
                         for residue_2 in chain_2:
-                            if (residue_1.resname not in pdb_template.amino_acids or
-                                residue_2.resname not in pdb_template.amino_acids):
+                            if (residue_1.resname not in structure_tools.amino_acids or
+                                residue_2.resname not in structure_tools.amino_acids):
                                     continue
                             for atom_1 in residue_1:
                                 for atom_2 in residue_2:
-                                    r = pdb_template.calculate_distance(atom_1, atom_2, min_r)
+                                    r = structure_tools.calculate_distance(atom_1, atom_2, min_r)
                                     if r and (not min_r or min_r > r):
                                         min_r = r
                         shortest_interchain_distances[chain_1.id][chain_2.id] = min_r
@@ -797,16 +844,18 @@ class AnalyzeStructure(object):
 
 
     #%%
-    def get_interface_area(self):
+    def get_interface_area(self, chain_ids):
         """
         """
-        termination, rc, e = self.__run_pops_area(op.join(self.working_path, ''.join(self.chain_ids) + '.pdb'))
+        assert len(chain_ids) == 2
+        
+        termination, rc, e = self.__run_pops_area(self.get_structure_file(''.join(chain_ids)))
         if rc != 0:
             if termination != 'Clean termination':
                 logger.error('Pops error for pdb: %s:' % self.pdb_file)
                 logger.error(e)
                 return [None, None, None]
-        result = self.__read_pops_area(op.join(self.working_path, ''.join(self.chain_ids) + '.out'))
+        result = self.__read_pops_area(self.get_structure_file(''.join(chain_ids)) + '.out')
 
         # Distinguish the surface area by hydrophobic, hydrophilic, and total
         for item in result:
@@ -819,13 +868,13 @@ class AnalyzeStructure(object):
         sasa_complex = hydrophobic, hydrophilic, total
 
         # calculate SASA for chain, i.e. part one of the complex:
-        termination, rc, e = self.__run_pops_area(op.join(self.working_path + self.chain_ids[0] + '.pdb'))
+        termination, rc, e = self.__run_pops_area(self.get_structure_file(chain_ids[0]))
         if rc != 0:
             if termination != 'Clean termination':
                 logger.error('Error in pops for pdb: %s:' % self.pdb_file)
                 logger.error(e)
                 return [None, None, None]
-        result = self.__read_pops_area(op.join(self.working_path + self.chain_ids[0] + '.out'))
+        result = self.__read_pops_area(self.get_structure_file(chain_ids[0]) + '.out')
 
         # Distinguish the surface area by hydrophobic, hydrophilic, and total
         for item in result:
@@ -838,13 +887,13 @@ class AnalyzeStructure(object):
         sasa_chain = hydrophobic, hydrophilic, total
         
         # calculate SASA for oppositeChain, i.e. the second part of the complex:
-        termination, rc, e = self.__run_pops_area(op.join(self.working_path + self.chain_ids[1] + '.pdb'))
+        termination, rc, e = self.__run_pops_area(self.get_structure_file(chain_ids[1]))
         if rc != 0:
             if termination != 'Clean termination':
                 logger.error('Error in pops for pdb: %s:' % self.pdb_file)
                 logger.error(e)
                 return [None, None, None]
-        result = self.__read_pops_area(op.join(self.working_path + self.chain_ids[1] + '.out'))
+        result = self.__read_pops_area(self.get_structure_file(chain_ids[1]) + '.out')
 
         for item in result:
             if item[0] == 'hydrophobic:':
@@ -869,12 +918,9 @@ class AnalyzeStructure(object):
     def __run_pops_area(self, full_filename):
         system_command = ('pops --chainOut'
             ' --pdb ' + full_filename +
-            ' --popsOut ' + self.working_path + full_filename.split('/')[-1].replace('pdb', 'out'))
-        child_process = hf.run_subprocess_locally(self.working_path, system_command)
+            ' --popsOut ' + self.working_dir + full_filename.split('/')[-1].replace('pdb', 'out'))
+        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
         result, error_message = child_process.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
         return_code = child_process.returncode
         # The returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written

@@ -9,6 +9,7 @@ import sqlalchemy as sa
 import sqlalchemy.ext.declarative as sa_ext_declarative
 
 from . import conf
+configs = conf.Configs()
 
 
 #%% Constants
@@ -28,10 +29,10 @@ naming_convention = {
 
 
 # Some database-specific parameters that SQLAlchemy can't figure out
-DB_TYPE = conf.configs.get('db_type', None)
-DB_DATABASE = conf.configs.get('db_database', 'elaspic')
-DB_SCHEMA = conf.configs.get('db_schema', 'elaspic')
-DB_SCHEMA_UNIPROT = conf.configs.get('db_schema_uniprot', 'elaspic')
+DB_TYPE = configs.get('db_type', None)
+DB_DATABASE = configs.get('db_database', 'elaspic')
+DB_SCHEMA = configs.get('db_schema', 'elaspic')
+DB_SCHEMA_UNIPROT = configs.get('db_schema_uniprot', 'elaspic')
 
 db_specific_properties = {
     'mysql': {
@@ -1177,94 +1178,5 @@ class UniprotDomainPairMutation(Base):
         backref=sa.orm.backref('mutations', cascade='expunge')) # many to one
 
 
-
-
-
-#%% PDB only
-class UserStructureMutation(Base):
-    __tablename__ = 'user_structure_mutation'
-    _indexes = [
-        ['pdb_id', 'pdb_chain', 'pdb_chain_2', 'pdb_mutation'],
-    ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
-    
-    id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
-    
-    ### Input
-    unique = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
-        primary_key=True)
-    pdb_file = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    pdb_id = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    pdb_chains = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    
-    
-    
-    ### Mutation    
-    # Original PDB coordinates
-    pdb_mutation = sa.Column(sa.String(SHORT), nullable=False)
-    # Where 1 is the start of the domain (i.e. chain)
-    domain_mutation = sa.Column(sa.String(SHORT), nullable=False)
-    # Where 1 is the start of the protein (i.e. chain A residue 1)
-    modeller_mutation = sa.Column(sa.String(SHORT), nullable=False)
-    
-    
-    
-    ### Homology Model
-    # Core / Interface
-    model_filename = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    norm_dope = sa.Column(sa.Float)
-    sasa_score = sa.Column(sa.Text)
-        
-    # Interface
-    pdb_chain = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    pdb_chain_2 = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    interface_area_hydrophobic = sa.Column(sa.Float)
-    interface_area_hydrophilic = sa.Column(sa.Float)
-    interface_area_total = sa.Column(sa.Float)
-    interacting_aa_1 = sa.Column(sa.Text)
-    interacting_aa_2 = sa.Column(sa.Text)
-    
-    
-    
-    ### Mutation
-    mutation = sa.Column(sa.String(SHORT), nullable=False)
-    mutation_errors = sa.Column(sa.Text)
-    model_filename_wt = sa.Column(sa.String(MEDIUM))
-    model_filename_mut = sa.Column(sa.String(MEDIUM))
-    chain_modeller = sa.Column(sa.String(SHORT))
-    mutation_modeller = sa.Column(sa.String(SHORT))
-    analyse_complex_energy_wt = sa.Column(sa.Text)
-    stability_energy_wt = sa.Column(sa.Text)
-    analyse_complex_energy_mut = sa.Column(sa.Text)
-    stability_energy_mut = sa.Column(sa.Text)
-    physchem_wt = sa.Column(sa.Text)
-    physchem_wt_ownchain = sa.Column(sa.Text)
-    physchem_mut = sa.Column(sa.Text)
-    physchem_mut_ownchain = sa.Column(sa.Text)
-    matrix_score = sa.Column(sa.Float)
-    secondary_structure_wt = sa.Column(sa.Text)
-    solvent_accessibility_wt = sa.Column(sa.Float)
-    secondary_structure_mut = sa.Column(sa.Text)
-    solvent_accessibility_mut = sa.Column(sa.Float)
-    contact_distance_wt = sa.Column(sa.Float)
-    contact_distance_mut = sa.Column(sa.Float)
-    provean_score = sa.Column(sa.Float)
-    ddg = sa.Column(sa.Float, index=False)
-    mut_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow,
-        onupdate=datetime.datetime.utcnow, nullable=False)
-        
-    
-    ### Relationships
-    model = sa.orm.relationship(
-        UniprotDomainPairModel, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('mutations', cascade='expunge')) # many to one
 
 

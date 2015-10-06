@@ -13,11 +13,11 @@ import logging
 from modeller import * # Load standard Modeller classes
 from modeller.automodel import *	# Load the automodel class
 
-from . import helper_functions as hf
-from . import errors
-from .conf import configs
+from . import conf, errors, helper
+configs = conf.Configs()
 
 logger = logging.getLogger(__name__)
+
 
 class Modeller(object):
     """
@@ -33,8 +33,6 @@ class Modeller(object):
         Name of the template (structure)
     filePath : string
         Path to PDB files
-    tmpPath : string
-        Path for storing tmp files
     modeller_runs : int
        How many rounds of modelling should be done
     loopRefinement : boolean
@@ -56,7 +54,6 @@ class Modeller(object):
 
         # Some environment settings
         self.filePath = filePath
-        self.tmpPath = configs['unique_temp_folder']
 
 
     def run(self):
@@ -170,7 +167,7 @@ class Modeller(object):
 
         a.max_molpdf = 2e5
 
-        with hf.log_print_statements(logger):
+        with helper.log_print_statements(logger):
             a.make() # do the actual homology modeling
 
         # The output produced by modeller is stored in a.loop.outputs or a.outputs
@@ -235,11 +232,8 @@ class Modeller(object):
 
         system_command = 'knot ' + pdbFile
         logger.debug('Knot system command: {}'.format(system_command))
-        child_process = hf.run_subprocess_locally('./', system_command)
+        child_process = helper.run_subprocess_locally('./', system_command)
         result, error_message = child_process.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
         return_code = child_process.returncode
         if not return_code:
             logger.error('Knot result: {}'.format(result))

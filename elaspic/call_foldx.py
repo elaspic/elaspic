@@ -10,9 +10,7 @@ import shutil
 import six
 import logging
 
-from . import errors
-from . import helper_functions as hf
-from .conf import configs
+from . import conf, errors, helper
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +58,16 @@ names_stability_complex_mut = (
 
 class FoldX(object):
 
-    def __init__(self, pdb_file, chain_id):
+    def __init__(self, pdb_file, chain_id, foldx_dir=None):
         """
         """
         self.pdb_filename = op.basename(pdb_file)
         self.chain_id = chain_id
-        self.foldx_path = op.join(configs['unique_temp_path'], 'FoldX')
-        self.foldx_runfile = op.join(self.foldx_path, 'runfile_FoldX.txt')
+        if foldx_dir is None:
+            self.foldx_dir = conf.configs['foldx_dir']
+        else:
+            self.foldx_dir = foldx_dir
+        self.foldx_runfile = op.join(self.foldx_dir, 'runfile_FoldX.txt')
 
 
     def __call__(self, whatToRun, mutCodes=[]):
@@ -89,26 +90,27 @@ class FoldX(object):
         self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
             return self.__read_result(
-                self.foldx_path + 'Interaction_AnalyseComplex_resultFile.txt', 
+                op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'), 
                 self.pdb_filename, whatToRun)
         elif whatToRun == 'Stability':
             return self.__read_result(
-                self.foldx_path + 'Stability.txt', self.pdb_filename, whatToRun)
+                op.join(self.foldx_dir, 'Stability.txt'), 
+                self.pdb_filename, whatToRun)
         elif whatToRun == 'RepairPDB':
-            return self.foldx_path + 'RepairPDB_' + self.pdb_filename
+            return op.join(self.foldx_dir, 'RepairPDB_' + self.pdb_filename)
         elif whatToRun == 'BuildModel':
             # see the FoldX manual for the naming of the generated structures
-            if configs['foldx_num_of_runs'] == 1:
-                mutants = [self.foldx_path + self.pdb_filename[:-4] + '_1.pdb', ]
-                wiltype = [self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1.pdb', ]
+            if conf.configs['foldx_num_of_runs'] == 1:
+                mutants = [op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1.pdb'), ]
+                wiltype = [op.join(self.foldx_dir, 'WT_' + self.pdb_filename[:-4] + '_1.pdb'), ]
                 results = [wiltype, mutants]
             else:
                 mutants = [
-                    self.foldx_path + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' 
-                    for x in range(0,configs['foldx_num_of_runs']) ]
+                    op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
+                    for x in range(0,conf.configs['foldx_num_of_runs']) ]
                 wiltype = [
-                    self.foldx_path + 'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb' 
-                    for x in range(0,configs['foldx_num_of_runs']) ]
+                    op.join(self.foldx_dir, 'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
+                    for x in range(0,conf.configs['foldx_num_of_runs']) ]
                 results = [wiltype, mutants]
             return results
 
@@ -131,7 +133,7 @@ class FoldX(object):
             copy_filename = 'run-build.txt'
             # file_with_mutations = 'mutant_file.txt'
             file_with_mutations = 'individual_list.txt'
-            with open(self.foldx_path + file_with_mutations, 'w') as fh:
+            with open(op.join(self.foldx_dir, file_with_mutations), 'w') as fh:
                 fh.writelines(','.join(mutCodes) + ';\n')
             command_line = '<BuildModel>BuildModel,{file_with_mutations};'\
                 .format(file_with_mutations=file_with_mutations)
@@ -162,14 +164,14 @@ class FoldX(object):
             '<ENDFILE>#;\n').replace(' ', '').format(
                 pdbFile=pdbFile,
                 command_line=command_line,
-                buildModel_runs=configs['foldx_num_of_runs'],
-                water=configs['foldx_water'],
+                buildModel_runs=conf.configs['foldx_num_of_runs'],
+                water=conf.configs['foldx_water'],
                 output_pdb=output_pdb)
 
         # This just makes copies of the runfiles for debugging...
         with open(self.foldx_runfile, 'w') as f:
             f.write(foldX_runfile)
-        shutil.copy(self.foldx_runfile, self.foldx_path + copy_filename)
+        shutil.copy(self.foldx_runfile, op.join(self.foldx_dir, copy_filename))
 
 
     def __run_runfile(self):
@@ -179,11 +181,8 @@ class FoldX(object):
 #        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
         system_command = 'foldx -runfile ' + self.foldx_runfile
         logger.debug('FoldX system command: {}'.format(system_command))
-        childProcess = hf.run_subprocess_locally(self.foldx_path, system_command)
+        childProcess = helper.run_subprocess_locally(self.foldx_dir, system_command)
         result, error_message = childProcess.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
         return_code = childProcess.returncode
         if return_code != 0:
             logger.debug('FoldX result: %s' % result)
