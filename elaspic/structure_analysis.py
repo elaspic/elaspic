@@ -61,14 +61,10 @@ class AnalyzeStructure(object):
     Runs the program pops to calculate the interface size of the complexes
     This is done by calculating the surface of the complex and the seperated parts.
     The interface is then given by the substracting.
-    
-    TODO: Remove `data_dir` and `__split_pdb_into_chains`.
     """
 
-    def __init__(self, pdb_file, data_dir, working_dir, vdw_distance=5.0, min_contact_distance=4.0):
+    def __init__(self, pdb_file, working_dir, vdw_distance=5.0, min_contact_distance=4.0):
         self.pdb_file = pdb_file
-        #: Folder with input structures (modeller_path, foldx_path, etc,)
-        self.data_dir = data_dir 
         #: Folder with all the binaries (i.e. ./analyze_structure)
         self.working_dir = working_dir 
         self.vdw_distance = vdw_distance
@@ -86,72 +82,6 @@ class AnalyzeStructure(object):
     def _prepare_temp_folder(self, temp_folder):
         # ./analyze_structure
         os.makedirs(temp_folder, exist_ok=True)
-
-
-    def __split_pdb_into_chains(self):
-        """
-        .. note: deprecated
-        
-            Use structure.StructureParser instead.
-        """
-        parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
-        io = PDBIO()
-        logger.debug('Saving parsed pdbs into the following working path:')
-        logger.debug(op.join(self.data_dir, self.pdb_file))
-
-        # Save all chains together with correct chain letters
-        logger.debug('Saving all chains together')
-        structure = helper.get_pdb_structure(op.join(self.data_dir, self.pdb_file))
-        if len(structure) > 1:
-            # Delete all models except for the first (otherwise get errors with naccess)
-            del structure[1:]
-        model = structure[0]
-        children = model.get_list()
-#        for child in children:
-#            logger.debug('child id before:' + child.id)
-#            if child.id not in self.chain_ids:
-#            logger.debug('child id after:' + child.id)
-        if len(children) == 1 and (children[0].id == '' or children[0].id == ' ' or children[0].id == '0'):
-            children[0].id = self.chain_ids[0]
-        if len(children) == 2 and children[0].id == '0' and children[1].id == '0':
-            children[0].id = 'A'
-            children[1].id = 'B'
-        io.set_structure(structure)
-        outFile = self.working_dir +  self.pdb_file
-        io.save(outFile)
-
-        if len(self.chain_ids) > 1:
-            # Save a structure with only the chains of interest
-            logger.debug('Saving only the chains of interest: %s' % ','.join(self.chain_ids))
-            structure = parser.get_structure('ID', self.data_dir + self.pdb_file)
-            model = structure[0]
-            for child in model.get_list():
-                logger.debug('child id:' + child.id)
-                if child.id not in self.chain_ids:
-                    logger.debug('detaching chain')
-                    model.detach_child(child.id)
-            io.set_structure(structure)
-            outFile = op.join(self.working_dir, ''.join(self.chain_ids) + '.pdb')
-            io.save(outFile)
-
-        # Save a structure for each chain
-        for chain_id in self.chain_ids:
-            logger.debug('Saving chain %s separately' % chain_id)
-            # save chain, i.e. part one of the complex:
-            structure = parser.get_structure('ID', self.data_dir + self.pdb_file)
-            model = structure[0]
-            for child in model.get_list():
-                logger.debug('child id:' + child.id)
-                if child.id != chain_id:
-                    logger.debug('detaching chain %s' % child.id)
-                    model.detach_child(child.id)
-            io.set_structure(structure)
-            outFile = op.join(self.working_dir, chain_id + '.pdb')
-            io.save(outFile)
-
-        # The main class structure is the one that only has the chains of interest
-        structure = helper.get_pdb_structure(op.join(self.working_dir, ''.join(self.chain_ids) + '.pdb'))
-        return structure
 
 
 
@@ -713,44 +643,45 @@ class AnalyzeStructure(object):
                 # Residue 1
                 for residue_1 in chain_1:
                     if (residue_1.resname not in structure_tools.AMINO_ACIDS or
-                        residue_1.id[0] == ' '):
+                        residue_1.id[0] != ' '):
                             continue
                     # Residue 2
-                    for residue_2 in chain_2:
+                    for residue_2_idx, residue_2 in enumerate(chain_2):
                         if (residue_2.resname not in structure_tools.AMINO_ACIDS or
-                            residue_2.id[0] == ' '):
+                            residue_2.id[0] != ' '):
                                 continue
                         if pdb_mutation:
-                            if str(residue_2.id[1]) != pdb_mutation[1:-1]:
+                            if residue_2_idx != int(pdb_mutation[1:-1])-1:
                                 continue
-                            if (structure_tools.convert_aa(residue_1.resname) != pdb_mutation[0] and
-                                structure_tools.convert_aa(residue_1.resname) != pdb_mutation[-1]):
+                            if (structure_tools.convert_aa(residue_2.resname) != pdb_mutation[0] and
+                                structure_tools.convert_aa(residue_2.resname) != pdb_mutation[-1]):
                                     logger.debug(pdb_mutation)
-                                    logger.debug(structure_tools.convert_aa(residue_1.resname))
-                                    logger.debug(residue_1.id)
+                                    logger.debug(structure_tools.convert_aa(residue_2.resname))
+                                    logger.debug(residue_2.id)
                                     raise errors.MutationMismatchError()
                         # Atom 1
                         for atom_1 in residue_1:
                             # Atom 2
                             for atom_2 in residue_2:
                                 r = structure_tools.calculate_distance(atom_1, atom_2, min_r)
-                                if r and (min_r is None or min_r > r):
+                                if min_r is None or (r is not None and r < min_r):
                                     min_r = r
+                                    
                 shortest_interchain_distances[chain_1_id][chain_2_id] = min_r
 
-        _shortest_interchain_distances_complement = {}
-        for key in shortest_interchain_distances:
-            for key_2, value in shortest_interchain_distances[key].items():
-                _shortest_interchain_distances_complement[key_2][key] = value
-        shortest_interchain_distances.update(_shortest_interchain_distances_complement)
-        
-        
+
         if not shortest_interchain_distances:
             logger.error(
                 'get_interchain_distances({pdb_chain}, {pdb_mutation}, {cutoff}) failed!'
                 .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff)
             )
             raise Exception()
+
+        _shortest_interchain_distances_complement = {}
+        for key in shortest_interchain_distances:
+            for key_2, value in shortest_interchain_distances[key].items():
+                _shortest_interchain_distances_complement.setdefault(key_2, dict())[key] = value
+        shortest_interchain_distances.update(_shortest_interchain_distances_complement)
         
         all_chains = {key for key in shortest_interchain_distances}
         all_chains.update(

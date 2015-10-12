@@ -205,7 +205,7 @@ class Model:
         chain_ids = [self.structure[0].child_list[0].id, self.structure[0].child_list[1].id]
 
         analyze_structure = structure_analysis.AnalyzeStructure(
-            self.modeller_results['model_file'], configs['modeller_dir'], configs['modeller_dir']
+            self.modeller_results['model_file'], configs['modeller_dir']
         )
         self.interface_area_hydrophobic, self.interface_area_hydrophilic, self.interface_area_total = \
             analyze_structure.get_interface_area(chain_ids)
@@ -336,15 +336,13 @@ class Model:
         ## 6: Calculate all other relevant properties
         # (This also verifies that mutations match mutated residues in pdb structures).
         analyze_structure_wt = structure_analysis.AnalyzeStructure(
-            repairedPDB_wt_list[0], 
-            mutation_dir, mutation_dir,
+            repairedPDB_wt_list[0], mutation_dir,
         )
         analyze_structure_results_wt = analyze_structure_wt(chain_id, mutation, partner_chain_id)
             
         analyze_structure_mut = structure_analysis.AnalyzeStructure(
-            repairedPDB_mut_list[0],
-            mutation_dir, mutation_dir,
-        )          
+            repairedPDB_mut_list[0], mutation_dir,
+        )
         analyze_structure_results_mut = analyze_structure_mut(chain_id, mutation, partner_chain_id)
             
         logger.debug('analyze_structure_results_wt: {}'.format(analyze_structure_results_wt))
