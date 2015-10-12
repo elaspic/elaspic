@@ -30,11 +30,6 @@ except:
     code_path = op.abspath(op.dirname(os.getcwd()))
 
 
-#%%
-%load_ext autoreload
-%autoreload 2
-
-
 
 #%%
 PDB_DATABASE_PATH = '/home/kimlab1/database_data/pdb/data/data/structures/divided/pdb/'
@@ -109,6 +104,7 @@ pdb = pdb_template.PDBTemplate(pdb_path, pdb_id, chain_ids, domain_defs, tmp_pat
 pdb.extract()
 pdb.save_sequences()
 pdb.save_structure()
+
 
 
 #%%

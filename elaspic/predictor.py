@@ -124,40 +124,41 @@ def convert_features_to_differences(df, keep_mut=False):
 
 
 #%%
-def _load_predictor(filename):
-    with open(op.join(configs['data_path'], filename), 'rb') as ifh:
-        return pickle.load(ifh)
-
-
 class Predictor:
-    
+
     feature_name_conversion = {
         'normDOPE': 'norm_dope',
         'seq_id_avg': 'alignment_identity'
     }
 
-    if six.PY2:
-        clf_domain = _load_predictor('ml_clf_core_p1.pickle.py27')
-        clf_domain_features = _load_predictor('ml_features_core_p1.pickle.py27')
-        clf_interface = _load_predictor('ml_clf_interface_p1.pickle.py27')
-        clf_interface_features = pd.read_pickle(op.join(configs['data_path'], 'ml_features_interface_p1.pickle.py27'))
-
-        clf_domain_p0 = _load_predictor('ml_clf_core_p1.pickle.py27')
-        clf_domain_features_p0 = _load_predictor('ml_features_core_p1.pickle.py27')
-        clf_interface_p0 = _load_predictor('ml_clf_interface_p1.pickle.py27')
-        clf_interface_features_p0 = pd.read_pickle(op.join(configs['data_path'], 'ml_features_interface_p1.pickle.py27'))
-
-    else:
-        clf_domain = _load_predictor('ml_clf_core_p1.pickle')
-        clf_domain_features = _load_predictor('ml_features_core_p1.pickle')
-        clf_interface = _load_predictor('ml_clf_interface_p1.pickle')
-        clf_interface_features = pd.read_pickle(op.join(configs['data_path'], 'ml_features_interface_p1.pickle'))
-
-        clf_domain_p0 = _load_predictor('ml_clf_core_p1.pickle')
-        clf_domain_features_p0 = _load_predictor('ml_features_core_p1.pickle')
-        clf_interface_p0 = _load_predictor('ml_clf_interface_p1.pickle')
-        clf_interface_features_p0 = _load_predictor('ml_features_interface_p1.pickle')
+    def __init__(self):
+        
+        def _load_predictor(filename):
+            with open(op.join(configs['data_dir'], filename), 'rb') as ifh:
+                return pickle.load(ifh)
+        
+        if six.PY2:
+            self.clf_domain = _load_predictor('ml_clf_core_p1.pickle.py27')
+            self.clf_domain_features = _load_predictor('ml_features_core_p1.pickle.py27')
+            self.clf_interface = _load_predictor('ml_clf_interface_p1.pickle.py27')
+            self.clf_interface_features = _load_predictor('ml_features_interface_p1.pickle.py27')
     
+            self.clf_domain_p0 = _load_predictor('ml_clf_core_p1.pickle.py27')
+            self.clf_domain_features_p0 = _load_predictor('ml_features_core_p1.pickle.py27')
+            self.clf_interface_p0 = _load_predictor('ml_clf_interface_p1.pickle.py27')
+            self.clf_interface_features_p0 = _load_predictor('ml_features_interface_p1.pickle.py27')
+    
+        else:
+            self.clf_domain = _load_predictor('ml_clf_core_p1.pickle')
+            self.clf_domain_features = _load_predictor('ml_features_core_p1.pickle')
+            self.clf_interface = _load_predictor('ml_clf_interface_p1.pickle')
+            self.clf_interface_features = _load_predictor('ml_features_interface_p1.pickle')
+    
+            self.clf_domain_p0 = _load_predictor('ml_clf_core_p1.pickle')
+            self.clf_domain_features_p0 = _load_predictor('ml_features_core_p1.pickle')
+            self.clf_interface_p0 = _load_predictor('ml_clf_interface_p1.pickle')
+            self.clf_interface_features_p0 = _load_predictor('ml_features_interface_p1.pickle')
+        
     
     def __call__(self, df, core_or_interface):
         """

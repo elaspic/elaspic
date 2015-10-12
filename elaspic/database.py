@@ -302,7 +302,7 @@ class MyDatabase(object):
     def _run_create_table_system_command(self, system_command):
         if self.configs['debug']:
             logger.debug(system_command)
-        result, error_message, return_code = helper.popen(system_command)
+        result, error_message, return_code = helper.subprocess_check_output(system_command)
         if return_code != 0:
             logger.error(result)
             raise Exception(error_message)
@@ -1147,7 +1147,9 @@ class MyDatabase(object):
         ]
 
         for d in data:
-            result, __, __ = helper.popen('ls ' + self.configs['path_to_archive'] + d[0])
+            result, __, __ = (
+                helper.subprocess_check_output('ls ' + self.configs['path_to_archive'] + d[0])
+            )
             filenames = [fname for fname in result.split('\n') if fname != '']
             for filename in filenames:
                 with open(filename, 'r') as fh:
@@ -1229,7 +1231,7 @@ def scinet_cleanup(folder, destination, name=None):
 #    copy = 'cp ' + output_name + ' /home/niklas/tmp/' + output_name
     system_command = 'tar -acf ' + output_name + ' * && ' + copy
 
-    result, error_message, return_code = helper.popen(system_command)
+    result, error_message, return_code = helper.subprocess_check_output(system_command)
     if return_code != 0:
         print('error_message:', error_message)
     return

@@ -9,6 +9,7 @@ import os
 import os.path as op
 import logging
 import shutil
+import json
 
 import numpy as np
 import subprocess
@@ -29,23 +30,56 @@ logger = logging.getLogger(__name__)
 class Model:
     
     def __init__(self, sequence_file, structure_file):
-        message = (
-            'Initialising a Model instance with parameters:\n'
-            'sequence_file: {}\n'
-            'structure_file: {}\n'
-            .format(sequence_file, structure_file)
-        )
-        logger.debug(message)
+        logger.debug('Initialising a Model instance with parameters:')
+        logger.debug('sequence_file: {}:'.format(sequence_file))
+        logger.debug('structure_file: {}:'.format(structure_file))
 
-        # Target sequences
+        ### Target sequences
         self.sequence_file = sequence_file
-        self.sequence_seqrecords = list(SeqIO.parse(sequence_file, 'fasta'))
-        for i, seqrec in enumerate(self.sequence_seqrecords):
-            seqrec.id = '{}_{}_sequence'.format(seqrec.id, i+1)
-        self.sequence_id = (
-            ','.join(seqrec.id.rstrip('_sequence') for seqrec in self.sequence_seqrecords) + 
-            '_sequence'
-        )
+        self.sequence_seqrecords = list(SeqIO.parse(self.sequence_file, 'fasta'))
+        self.sequence_id = op.splitext(op.basename(self.sequence_file))[0]
+        self._validate_sequence_seqrecords()
+
+        ### Template structures
+        self.structure_file = structure_file
+        self.structure = helper.get_pdb_structure(self.structure_file)
+        self.structure_id = self.structure.id
+        self.structure_seqrecords = [
+            SeqRecord(
+                id='{}{}'.format(self.structure_id, chain.id),
+                seq=Seq(structure_tools.get_chain_sequence_and_numbering(chain, include_hetatms=True)[0])
+            ) for chain in self.structure[0].child_list
+        ]
+
+        ### Homology modelling
+        if self.sequence_id == self.structure_id:
+            self.sequence_id += '_sequence'
+        self.model_id = '{}-{}'.format(self.sequence_id, self.structure_id)
+
+        # Check for precalculated data
+        modeller_results_file = op.join(configs['model_dir'], self.model_id + '.json')
+        if op.isfile(modeller_results_file):
+            logger.debug(
+                'Loading precalculated modeller results from file: {}'
+                .format(modeller_results_file)
+            )
+            with open(modeller_results_file) as ifh:
+                self.modeller_results = json.load(ifh)
+        else:
+            logger.debug('Creating sequence alignments and building a homology model')
+            self._create_alignments_and_model()
+            # Save model into a json file for faster future use
+            with open(modeller_results_file, 'w') as ofh:
+                json.dump(self.modeller_results, ofh)
+        
+        # Get interacting amino acids and interface area
+        if len(self.sequence_seqrecords) > 1:
+            self._analyse_interface()
+        
+        self.mutations = {}
+        
+    
+    def _validate_sequence_seqrecords(self):
         if len(self.sequence_seqrecords) > 2:
             message = (
                 "ELASPIC is designed to predict the effect of mutations on the folding "
@@ -54,82 +88,10 @@ class Model:
             )
             logger.warning(message)
 
-        # Template structures
-        self.structure_file = structure_file
-        self.structure = helper.get_pdb_structure(structure_file)
-        self.structure_seqrecords = []
-        for chain in self.structure.child_list[0].child_list:
-            chain_id = '{}{}'.format(self.structure.id, chain.id)
-            chain_sequence, __ = structure_tools.get_chain_sequence_and_numbering(chain, include_hetatms=True)
-            chain_seqrecord = SeqRecord(id=chain_id, seq=Seq(chain_sequence))
-            self.structure_seqrecords.append(chain_seqrecord)
-        self.structure_id = '{}{}'.format(
-            self.structure.id, ''.join(chain.id for chain in self.structure.child_list[0].child_list)
-        )
-
-        # Align sequence to structure.
-        self.sequence_seqrecords_aligned, self.structure_seqrecords_aligned = [], []
-        for sequence_seqrec, structure_seqrec in zip(self.sequence_seqrecords, self.structure_seqrecords):
-            if str(sequence_seqrec.seq) != str(structure_seqrec.seq):
-                alignment_output_file = self._align_with_tcoffee(sequence_seqrec, structure_seqrec)
-                alignment = AlignIO.read(alignment_output_file, 'fasta')
-                assert len(alignment) == 2
-                sequence_seqrec, structure_seqrec = alignment[0], alignment[1]
-            self.sequence_seqrecords_aligned.append(sequence_seqrec)
-            self.structure_seqrecords_aligned.append(structure_seqrec)
-        # Add the HETATM chain if necesasry.
-        if len(self.structure_seqrecords) == len(self.structure_seqrecords_aligned) + 1:
-            self.sequence_seqrecords_aligned += self.structure_seqrecords[-1]
-            self.structure_seqrecords_aligned += self.structure_seqrecords[-1]
-            
-        # Write *.pir alignment.
-        self.pir_alignment_filename = self._create_pir_alignment()
-        
-        # Run modeller.
-        self.model_file, self.raw_model_file, self.norm_dope, self.knotted = run_modeller(
-            self.pir_alignment_filename, self.sequence_id, self.structure_id,
-            new_chains=''.join(chain.id for chain in self.structure.child_list[0].child_list)
-        )
-            
-        # Get interacting amino acids and interface area
-        if len(self.sequence_seqrecords) == 2:
-            chain_ids = [self.structure[0].child_list[0].id, self.structure[0].child_list[1].id]
-
-            # Interactions between chains
-            interactions_between_chains = (
-                structure_analysis.get_interactions_between_chains(self.structure[0], chain_ids[0], chain_ids[1])
-            )
-            self.chain_1_interactions = sorted(
-                set([key[:2] for key in list(interactions_between_chains.keys())]),
-                key=lambda x: int(''.join([c for c in x[0] if c.isdigit()])) # Sort by residue for easy reading
-            )
-            self.chain_2_interactions = sorted(
-                set([value[:2] for values in list(interactions_between_chains.values()) for value in values]),
-                key=lambda x: int(''.join([c for c in x[0] if c.isdigit()])) # Sort by residue for easy reading
-            )
-            if not self.chain_1_interactions and not self.chain_2_interactions:
-                message = (
-                    'Chains {} and {} are not interacting!\n' +
-                    'chain_1_interactions: {}\n'.format(self.chain_1_interactions) + 
-                    'chain_2_interactions: {}\n'.format(self.chain_2_interactions)
-                )
-                logger.error(message)
-                raise errors.ChainsNotInteractingError(message)
-    
-            # Interface area
-            analyze_structure = structure_analysis.AnalyzeStructure(
-                self.modeller_results['model_file'],
-                configs['modeller_dir'], configs['modeller_dir']
-            )
-            self.interface_area_hydrophobic, self.interface_area_hydrophilic, self.interface_area_total = \
-                analyze_structure.get_interface_area(chain_ids)
-
-        self.mutations = {}
-
 
     def _align_with_tcoffee(self, sequence_seqrec, structure_seqrec):
         alignment_fasta_file = op.join(
-            configs['model_dir'], 
+            configs['tcoffee_dir'], 
             '{}-{}.fasta'.format(sequence_seqrec.id, structure_seqrec.id)
         )
         with open(alignment_fasta_file, 'w') as ofh:
@@ -140,9 +102,7 @@ class Model:
 
 
     def _create_pir_alignment(self):
-        pir_alignment_filename = op.join(
-            configs['model_dir'], '{}-{}'.format(self.sequence_id, self.structure_id) + '.pir'
-        )
+        pir_alignment_filename = op.join(configs['model_dir'], self.model_id + '.pir')
         with open(pir_alignment_filename, 'w') as ofh:
             write_to_pir_alignment(
                 ofh, 'sequence', self.sequence_id, 
@@ -153,9 +113,106 @@ class Model:
                 '/'.join(str(seqrec.seq) for seqrec in self.structure_seqrecords_aligned)
             )
         return pir_alignment_filename
+        
+
+    def _create_alignments_and_model(self):
+        # Align sequence to structure.
+        alignment_filenames = []
+        self.sequence_seqrecords_aligned, self.structure_seqrecords_aligned = [], []
+        for sequence_seqrec, structure_seqrec in zip(self.sequence_seqrecords, self.structure_seqrecords):
+            if str(sequence_seqrec.seq) != str(structure_seqrec.seq):
+                alignment_output_file = self._align_with_tcoffee(sequence_seqrec, structure_seqrec)
+                alignment_filenames.append(alignment_output_file)
+                alignment = AlignIO.read(alignment_output_file, 'fasta')
+                assert len(alignment) == 2
+                sequence_seqrec, structure_seqrec = alignment[0], alignment[1]
+            self.sequence_seqrecords_aligned.append(sequence_seqrec)
+            self.structure_seqrecords_aligned.append(structure_seqrec)
+        # Add the HETATM chain if necesasry.
+        assert len(self.sequence_seqrecords_aligned) == len(self.structure_seqrecords_aligned)
+        if len(self.structure_seqrecords) == len(self.structure_seqrecords_aligned) + 1:
+            self.sequence_seqrecords_aligned.append(self.structure_seqrecords[-1])
+            self.structure_seqrecords_aligned.append(self.structure_seqrecords[-1])
+            
+        # Write *.pir alignment.
+        self.pir_alignment_filename = self._create_pir_alignment()
+        logger.debug('Created pir alignment: {}'.format(self.pir_alignment_filename))        
+        
+        # Run modeller.
+        self.modeller_results = run_modeller(
+            self.pir_alignment_filename, self.sequence_id, self.structure_id,
+            new_chains=''.join(chain.id for chain in self.structure.child_list[0].child_list)
+        )
+        self.modeller_results['alignment_filenames'] = alignment_filenames
+        
+            
+    def _analyse_interface(self):
+        
+        ### Get a dictionary of interacting residues
+        interacting_residues = structure_tools.get_interacting_residues(self.structure[0])
+        _interacting_residues_complement = dict()
+        for key, values in interacting_residues.items():
+            for value in values:
+                _interacting_residues_complement.setdefault(value, set()).add(key)
+        interacting_residues.update(_interacting_residues_complement)
+        
+        ### Get interacting residues (and interacting resnum) for chain 1 and 2
+        def _get_a2b_contacts(a_idx, b_idx):
+            # 2 if you want to get AA indexes (starting from 0)
+            # 3 if you want to get AA residue numbering            
+            a2b_contacts = set()
+            for key in interacting_residues:
+                if key[0] == a_idx:
+                    for value in interacting_residues[key]:
+                        if value[0] == b_idx:
+                            a2b_contacts.add(tuple(value[2:]))
+            return a2b_contacts
+    
+        def _validate_a2b_contacts(a2b_contacts, chain_idx):
+            logger.debug('Validating chain {} interacting AA...'.format(chain_idx))
+            interface_aa_a = ''.join(list(zip(*a2b_contacts))[2])
+            interface_aa_b = ''.join([
+                str(self.sequence_seqrecords[chain_idx].seq)[i]
+                for i in list(zip(*a2b_contacts))[0]
+            ])
+            if interface_aa_a != interface_aa_b:
+                logger.error('interface_aa_a: {}'.format(interface_aa_a))
+                logger.error('interface_aa_b: {}'.format(interface_aa_b))
+                raise errors.InterfaceMismatchError()
+
+        a2b_contacts = _get_a2b_contacts(0, 1)
+        b2a_contacts = _get_a2b_contacts(1, 0)
+        
+        _validate_a2b_contacts(a2b_contacts, 0)
+        _validate_a2b_contacts(b2a_contacts, 1)
+        
+        self.interacting_residues_1 = sorted(list(zip(*a2b_contacts))[0])
+        self.interacting_residues_2 = sorted(list(zip(*b2a_contacts))[0])
+                
+        self.chain_1_interactions = sorted(list(zip(*a2b_contacts))[1])
+        self.chain_2_interactions = sorted(list(zip(*b2a_contacts))[1])
+               
+        if not self.chain_1_interactions and not self.chain_2_interactions:
+            message = (
+                'Chains {} and {} are not interacting!\n' +
+                'chain_1_interactions: {}\n'.format(self.chain_1_interactions) + 
+                'chain_2_interactions: {}\n'.format(self.chain_2_interactions)
+            )
+            logger.error(message)
+            raise errors.ChainsNotInteractingError(message)
+
+        ### Interface area
+        chain_ids = [self.structure[0].child_list[0].id, self.structure[0].child_list[1].id]
+
+        analyze_structure = structure_analysis.AnalyzeStructure(
+            self.modeller_results['model_file'], configs['modeller_dir'], configs['modeller_dir']
+        )
+        self.interface_area_hydrophobic, self.interface_area_hydrophilic, self.interface_area_total = \
+            analyze_structure.get_interface_area(chain_ids)
 
 
-    def mutate(self, chain, mutation, chain_other=None):
+
+    def mutate(self, sequence_idx, mutation):
         """
         Parameters
         ----------
@@ -165,22 +222,32 @@ class Model:
             Mutation to introduce, in A1B format. 
             Here 'A' is the starting amino acid, 'B' is the mutant amino acid, 
             and '1' is the position of the mutation in the model, starting from 1.
-        chain_other_id : int
+        partner_chain_pos_id : int
             Number of the chain that the mutation is interacting with.
         """
-        if (chain, mutation) in self.mutations:
-            return self.mutations[(chain, mutation)]
+        if (sequence_idx, mutation) in self.mutations:
+            return self.mutations[(sequence_idx, mutation)]
             
-        protein_id = self.sequence_seqrecords[chain-1].id.rstrip('_sequence')
-        if chain_other is None:
-            protein_other_id = ''
-            chain_other_id = None
+        protein_id = self.sequence_seqrecords[sequence_idx].id
+        if len(self.sequence_seqrecords) == 1:
+            partner_protein_id = ''
+            partner_chain_id = None
         else:
-            protein_other_id = self.sequence_seqrecords[chain_other-1].id.rstrip('_sequence')
-            chain_other_id = self.structure.child_list[0].child_list[chain_other-1].id
-            
-        mutation_id = '{}-{}-{}'.format(protein_id, protein_other_id, mutation)        
-        chain_id = self.structure.child_list[0].child_list[chain - 1].id
+            partner_chain_idx = [
+                i for i in range(len(self.sequence_seqrecords)) if i != sequence_idx
+            ][0]
+            partner_protein_id = self.sequence_seqrecords[partner_chain_idx].id
+            partner_chain_id = self.structure.child_list[0].child_list[partner_chain_idx].id
+        
+        mutation_id = '{}-{}-{}'.format(protein_id, partner_protein_id, mutation)
+        chain_id = self.structure.child_list[0].child_list[sequence_idx].id
+        
+        # ...
+        logger.debug('Running mutation with mutation_id: {}'.format(mutation_id))
+        logger.debug('sequence_idx: {}'.format(sequence_idx))
+        logger.debug('partner_chain_idx: {}'.format(partner_chain_idx))
+        logger.debug('chain_id: {}'.format(chain_id))
+        logger.debug('partner_chain_id: {}'.format(partner_chain_id))
         
         
         
@@ -252,7 +319,7 @@ class Model:
             [foldx('Stability') for foldx in fX_mut_list]
         )
 
-        if chain_other is None:
+        if len(self.sequence_seqrecords) == 1:
             complex_stability_values_wt = None
             complex_stability_values_mut = None
         else:
@@ -269,16 +336,16 @@ class Model:
         ## 6: Calculate all other relevant properties
         # (This also verifies that mutations match mutated residues in pdb structures).
         analyze_structure_wt = structure_analysis.AnalyzeStructure(
-            repairedPDB_wt_list[0], # dssp file wildtype
+            repairedPDB_wt_list[0], 
             mutation_dir, mutation_dir,
         )
-        analyze_structure_results_wt = analyze_structure_wt(chain_id, mutation, chain_other_id)
+        analyze_structure_results_wt = analyze_structure_wt(chain_id, mutation, partner_chain_id)
             
         analyze_structure_mut = structure_analysis.AnalyzeStructure(
-            repairedPDB_mut_list[0], # dssp file wildtype
+            repairedPDB_mut_list[0],
             mutation_dir, mutation_dir,
         )          
-        analyze_structure_results_mut = analyze_structure_mut(chain_id, mutation, chain_other_id)
+        analyze_structure_results_mut = analyze_structure_mut(chain_id, mutation, partner_chain_id)
             
         logger.debug('analyze_structure_results_wt: {}'.format(analyze_structure_results_wt))
         logger.debug('analyze_structure_results_mut: {}'.format(analyze_structure_results_mut))
@@ -289,10 +356,9 @@ class Model:
         ## 5th: calculate the energy for the wildtype
         results = dict(
             protein_id = protein_id,
-            chain = chain,
+            sequence_idx = sequence_idx,
             chain_id = chain_id,
-            chain_other = chain_other,
-            chain_other_id = chain_other_id,
+            partner_chain_id = partner_chain_id,
             mutation = mutation,
             mutation_foldx = ','.join(mutCodes),
             model_filename_wt = model_filename_wt,
@@ -307,36 +373,12 @@ class Model:
         for key, value in analyze_structure_results_mut.items():
             results[key + '_mut'] = value
             
-        self.mutations[(chain, mutation)] = results
+        self.mutations[(sequence_idx, mutation)] = results
         return results
                 
 
 
-#%%
-def chain_is_hetatm(chain):
-    """Return True if the chain is made up entirely of HETATMs.
-    """
-    hetatms = [None] * len(chain)
-    for i in range(len(chain.child_list)):
-        res = chain.child_list[i]
-        hetatms[i] = res.resname in structure_tools.AAA_DICT
-    if all(hetatms):
-        return True
-    elif not any(hetatms):
-        return False
-    else:  
-        # Something went wrong.
-        sequence, numbering = structure_tools.get_chain_sequence_and_numbering(chain)
-        message = (
-            'Some but not all residues in chain {} are hetatms!\n'.format(chain.id) + 
-            'sequence: {}\n'.format(sequence) +
-            'numbering: {}\n'.format(numbering)
-        )
-        logger.error(message)
-        raise errors.PDBChainError()
-        
-        
-        
+#%%       
 def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data):
     """
     """
@@ -443,23 +485,33 @@ def run_modeller(pir_alignment_filename, target_id, template_id, new_chains='ABC
         'target_id: {}\n'.format(target_id) +
         'template_id: {}\n'.format(template_id)
     )
-    modeller = call_modeller.Modeller([pir_alignment_filename], target_id, template_id, configs['unique_temp_dir'])
+    modeller = call_modeller.Modeller(
+        [pir_alignment_filename], target_id, template_id, configs['unique_temp_dir'])
+        
     with helper.switch_paths(configs['modeller_dir']):
         norm_dope, pdb_filename, knotted = modeller.run()
+        
     raw_model_file = op.join(configs['modeller_dir'], pdb_filename)
     
     # If there is only one chain in the pdb, label that chain 'A'
     io = PDBIO()
     structure = helper.get_pdb_structure(raw_model_file)
     chains = structure[0].child_list
-    logger.debug(', '.join(['chain id: %s' % chain.id for chain in chains]))
+    logger.debug('Modeller chain ids: ' + ', '.join(chain.id for chain in chains))
     for i in range(len(chains)):
         chains[i].id = new_chains[i]
-    logger.debug(', '.join(['chain id: %s' % chain.id for chain in chains]))
+    logger.debug('Corrected chain ids: ' + ', '.join(chain.id for chain in chains))
     io.set_structure(structure)
     model_file = op.splitext(pir_alignment_filename)[0] + '.pdb'
     io.save(model_file)
-
-    return model_file, raw_model_file, norm_dope, knotted
+    
+    results = {
+        'model_file': model_file,
+        'raw_model_file': raw_model_file,
+        'norm_dope': norm_dope,
+        'knotted': knotted,
+        'pir_alignment_filename': pir_alignment_filename,
+    }
+    return results
 
 

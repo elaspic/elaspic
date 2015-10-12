@@ -157,7 +157,9 @@ class Domain(Base):
         sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
         primary_key=True)
     pdb_id = sa.Column(sa.String(SHORT), nullable=False)
-    pdb_chain = sa.Column(sa.String(SHORT), nullable=False)
+    pdb_chain = sa.Column(
+        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
+        nullable=False)
     pdb_domain_def = sa.Column(sa.String(MEDIUM), nullable=False)
     pdb_pdbfam_name = sa.Column(sa.String(LONG), nullable=False)   
     pdb_pdbfam_idx = sa.Column(sa.Integer)

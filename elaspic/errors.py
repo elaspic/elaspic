@@ -102,6 +102,8 @@ class TemplateInterfaceError(Exception):
 class ResourceError(Exception):
     pass
 
+class InterfaceMismatchError(Exception):
+    pass
 
 #%% Computing mutations
 

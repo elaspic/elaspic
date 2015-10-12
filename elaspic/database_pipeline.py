@@ -513,7 +513,14 @@ class Pipeline(PipelineTemplate):
         logger.debug('Modeller pdb file: {}'.format(save_path + pdbFile_wt))
         parser = PDBParser(QUIET=True) # set QUIET to False to output warnings like incomplete chains etc.
         structure = parser.get_structure('ID', save_path + pdbFile_wt)
-        position_modeller = structure.convert_position_to_resid(structure[0][chains_modeller[0]], [position_domain])
+        
+        def convert_position_to_resid(chain, positions, domain_def_tuple=None):
+            __, chain_numbering = structure_tools.get_chain_sequence_and_numbering(
+                chain, domain_def_tuple)
+            return [chain_numbering[p-1] for p in positions]
+        
+        position_modeller = convert_position_to_resid(
+            structure[0][chains_modeller[0]], [position_domain])
         mutation_modeller = mutation[0] + position_modeller[0] + mutation[-1]
     
         # Save the results
