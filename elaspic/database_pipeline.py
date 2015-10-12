@@ -4,46 +4,36 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 from future import standard_library
 standard_library.install_aliases()
-from builtins import object
 
 import os
 import os.path as op
 import re
-import time
-import subprocess
-import tempfile
-import atexit
 import signal
+import logging
+import json
+from functools import wraps
+
 import six
-import logging 
-
-from functools import wraps 
-
 import pandas as pd
-
+import sqlalchemy as sa
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 from Bio.PDB import PDBParser
 
-from . import conf, errors, helper, structure, structure_analysis
+from . import (
+    conf, errors, helper, structure_tools, structure_analysis, sequence, model, predictor, database
+)
+from .pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
+configs = conf.Configs()
 
 sql_db = None
 domain_alignment = None
 domain_model = None
 domain_mutation = None
 
-ELASPIC_LOGO = """
-
-8888888888 888             d8888  .d8888b.  8888888b. 8888888 .d8888b.  
-888        888            d88888 d88P  Y88b 888   Y88b  888  d88P  Y88b 
-888        888           d88P888 Y88b.      888    888  888  888    888 
-8888888    888          d88P 888  "Y888b.   888   d88P  888  888        
-888        888         d88P  888     "Y88b. 8888888P"   888  888        
-888        888        d88P   888       "888 888         888  888    888 
-888        888       d8888888888 Y88b  d88P 888         888  Y88b  d88P 
-8888888888 88888888 d88P     888  "Y8888P"  888       8888888 "Y8888P"  
-
-"""
 
 from .database_tables import (
     Base, 
@@ -53,77 +43,9 @@ from .database_tables import (
 )
 
 
-#%% 
-class PipelineTemplate(object):
-
-    def __init__(self, configurations):
-        """
-        It should be possible to initialize one pipeline and call it in parallel using different
-        mutations as input
-        """
-        global database, sequence, model, mutation
-        
-        # Read the configuration file and set the variables
-        if isinstance(configurations, six.string_types):
-            conf.read_configuration_file(configurations)
-        elif isinstance(configurations, dict):
-            conf.configs = configurations.copy()
-        
-        # Can imort sql_db only after the configuration file has been read
-        # Otherwise classes in `sql_db` won't be properly configured
-        from . import database, sequence, model, mutation
-
-        # TODO: remove so error message does not appear in a production release.  
-        self._validate_temp_path(conf.configs)
-
-        # Initialize a logger
-        for line in ELASPIC_LOGO.split('\n'):
-            logger.info(line)
-
-        self.PWD = os.getcwd()
-        
-
-    def _validate_temp_path(self, configs):
-        """
-        Make sure that we are using a job specific temporary folder if we are on a cluster.
-        """
-        hostname = helper.get_hostname()
-        no_job_specific_folder = (
-            configs['temp_path'].startswith(
-                os.path.join(configs['global_temp_path'], configs['temp_path_suffix']))
-        )
-        on_node_with_manditory_job_specific_folder = (
-            any([(x.lower() in hostname) for x in ['node', 'behemoth', 'grendel', 'beagle']])
-        )
-        if no_job_specific_folder and on_node_with_manditory_job_specific_folder:
-            raise Exception('You should be using a temp folder that it specific to the particular job!')
-    
-
-    def run(self):
-        raise NotImplementedError()
-                
-    def make_sequence(self):
-        raise NotImplementedError()
-        
-    def mutate_sequence(self):
-        raise NotImplementedError()
-        
-    def make_model(self):
-        raise NotImplementedError()
-        
-    def mutate_model(self):
-        raise NotImplementedError()
-        
-    def predict_ddg(self, protein_id, mutation, sequence, model):
-        raise NotImplementedError()
-
-
-
-
-
 
 #%%
-class Pipeline(PipelineTemplate):
+class XXXPipeline(Pipeline):
 
     def __init__(self, uniprot_id, mutations, configurations, run_type=1, number_of_tries=[], uniprot_domain_pair_ids=[]):
         """Run the main function of the program and parse errors.
@@ -240,7 +162,7 @@ class Pipeline(PipelineTemplate):
 #                path_to_provean_supset = (
 #                    conf.configs['path_to_archive'] + database.get_uniprot_base_path(d) +
 #                    d.uniprot_sequence.provean.provean_supset_filename)
-                if os.path.isfile(path_to_provean_supset):
+                if op.isfile(path_to_provean_supset):
                     if not conf.configs['remake_provean_supset']:
                         logger.debug('The provean supset has already been calculated. Done!\n')
                         return None
@@ -495,14 +417,14 @@ class Pipeline(PipelineTemplate):
                 path_to_provean_supset = (
                     conf.configs['temp_archive_path'] + database.get_uniprot_base_path(d_1) +
                     d_1.uniprot_sequence.provean.provean_supset_filename )
-                if not os.path.isfile(path_to_provean_supset):
+                if not op.isfile(path_to_provean_supset):
                     error_message = (
                         'Provean supporting set sequence does not exist even though it should!\n{}'
                         .format(path_to_provean_supset)
                     )
                     logger.error(error_message)
                     logger.error('d_1: {}'.format(d_1))
-                    logger.error('listdir: {}'.format(os.listdir(os.path.dirname(path_to_provean_supset))))
+                    logger.error('listdir: {}'.format(os.listdir(op.dirname(path_to_provean_supset))))
                     raise Exception(error_message)
     
     
@@ -825,7 +747,7 @@ def lock(fn):
     return locked_fn
 
 
-class PipelineStructure(PipelineTemplate):
+class PipelineStructure(Pipeline):
 
     def __init__(self, pdb_file, pdb_mutations, configurations):
         """
@@ -845,7 +767,7 @@ class PipelineStructure(PipelineTemplate):
         
         ### Load PDB structure and extract required sequences and chains.
         #fix_pdb(self.pdb_file, self.pdb_file)
-        self.sp = structure.StructureParser(self.pdb_file)
+        self.sp = structure_tools.StructureParser(self.pdb_file)
         self.sp.extract()
         self.sp.save_structure()
         self.sp.save_sequences()
@@ -928,7 +850,7 @@ class PipelineStructure(PipelineTemplate):
         
         # If the last chain starts with a HETATM, it should be entirely HETATMs.
         last_chain = self.sp.structure.child_list[0].child_list[-1]
-        if last_chain.child_list[0].resname in structure.AAA_DICT:
+        if last_chain.child_list[0].resname in structure_tools.AAA_DICT:
             chain_sequence, chain_numbering_extended = self.sp.get_chain_sequence_and_numbering(last_chain.id)
             structure_sequence += [chain_sequence]
         else:
@@ -1099,92 +1021,4 @@ class PipelineStructure(PipelineTemplate):
 
         return mutation_contacts
 
-
-
-        
-        
-#%% PDB only
-class UserStructureMutation(Base):
-    __tablename__ = 'user_structure_mutation'
-    _indexes = [
-        ['pdb_id', 'pdb_chain', 'pdb_chain_2', 'pdb_mutation'],
-    ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
-    
-    id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
-    
-    ### Input
-    unique = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
-        primary_key=True)
-    pdb_file = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    pdb_id = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    pdb_chains = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    
-    
-    ### Mutation    
-    # Original PDB coordinates
-    pdb_mutation = sa.Column(sa.String(SHORT), nullable=False)
-    # Where 1 is the start of the domain (i.e. chain)
-    domain_mutation = sa.Column(sa.String(SHORT), nullable=False)
-    # Where 1 is the start of the protein (i.e. chain A residue 1)
-    modeller_mutation = sa.Column(sa.String(SHORT), nullable=False)
-    
-    
-    ### Homology Model
-    # Core / Interface
-    model_filename = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    norm_dope = sa.Column(sa.Float)
-    sasa_score = sa.Column(sa.Text)
-        
-    # Interface
-    pdb_chain = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    pdb_chain_2 = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-    interface_area_hydrophobic = sa.Column(sa.Float)
-    interface_area_hydrophilic = sa.Column(sa.Float)
-    interface_area_total = sa.Column(sa.Float)
-    interacting_aa_1 = sa.Column(sa.Text)
-    interacting_aa_2 = sa.Column(sa.Text)
-    
-    
-    
-    ### Mutation
-    mutation = sa.Column(sa.String(SHORT), nullable=False)
-    mutation_errors = sa.Column(sa.Text)
-    model_filename_wt = sa.Column(sa.String(MEDIUM))
-    model_filename_mut = sa.Column(sa.String(MEDIUM))
-    chain_modeller = sa.Column(sa.String(SHORT))
-    mutation_modeller = sa.Column(sa.String(SHORT))
-    analyse_complex_energy_wt = sa.Column(sa.Text)
-    stability_energy_wt = sa.Column(sa.Text)
-    analyse_complex_energy_mut = sa.Column(sa.Text)
-    stability_energy_mut = sa.Column(sa.Text)
-    physchem_wt = sa.Column(sa.Text)
-    physchem_wt_ownchain = sa.Column(sa.Text)
-    physchem_mut = sa.Column(sa.Text)
-    physchem_mut_ownchain = sa.Column(sa.Text)
-    matrix_score = sa.Column(sa.Float)
-    secondary_structure_wt = sa.Column(sa.Text)
-    solvent_accessibility_wt = sa.Column(sa.Float)
-    secondary_structure_mut = sa.Column(sa.Text)
-    solvent_accessibility_mut = sa.Column(sa.Float)
-    contact_distance_wt = sa.Column(sa.Float)
-    contact_distance_mut = sa.Column(sa.Float)
-    provean_score = sa.Column(sa.Float)
-    ddg = sa.Column(sa.Float, index=False)
-    mut_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow,
-        onupdate=datetime.datetime.utcnow, nullable=False)
-        
-    
-    ### Relationships
-    model = sa.orm.relationship(
-        UniprotDomainPairModel, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('mutations', cascade='expunge')) # many to one
 
