@@ -574,7 +574,7 @@ class AnalyzeStructure(object):
         if return_code != 0:
             if 'boost::thread_resource_error' in error_message:
                 system_command = "rsync {0}{1}.pdb /home/kimlab1/strokach/tmp/elaspic_bad_pdbs/"
-                helper.run_subprocess_locally(self.working_dir, system_command)
+                helper.subprocess_check_output_locally(self.working_dir, system_command)
                 raise errors.ResourceError(error_message)
         # collect results
         dssp_ss = {}

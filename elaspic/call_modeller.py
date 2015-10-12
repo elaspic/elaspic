@@ -7,7 +7,6 @@ from __future__ import unicode_literals
 from builtins import range
 from builtins import object
 
-import six
 import logging
 
 from modeller import * # Load standard Modeller classes

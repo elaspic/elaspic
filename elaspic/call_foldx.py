@@ -181,9 +181,9 @@ class FoldX(object):
 #        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
         system_command = 'foldx -runfile ' + self.foldx_runfile
         logger.debug('FoldX system command: {}'.format(system_command))
-        childProcess = helper.run_subprocess_locally(self.foldx_dir, system_command)
-        result, error_message = childProcess.communicate()
-        return_code = childProcess.returncode
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(self.foldx_dir, system_command)
+        )
         if return_code != 0:
             logger.debug('FoldX result: %s' % result)
             logger.debug('FoldX error: %s' % error_message)
