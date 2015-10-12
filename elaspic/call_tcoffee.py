@@ -59,17 +59,14 @@ class TCoffee(object):
         system_command = (
             "t_coffee -other_pg extract_from_pdb {} > {}".format(pdb_file, pdb_file_new)
         )
-        child_process = helper.run_subprocess_locally(
-            configs['tcoffee_dir'], system_command
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(configs['tcoffee_dir'], system_command)
         )
-        result, error_message = child_process.communicate()
-        if child_process.returncode:
-            logger.error(
-                "Error cleaning pdb!\n" +
-                "System command: '{}'\n".format(system_command) +
-                "Result: '{}'\n".format(result) + 
-                "Error message: '{}'".format(error_message)
-            )
+        if return_code:
+            logger.error("Error cleaning pdb!")
+            logger.error("System command: '{}'".format(system_command))
+            logger.error("Result: '{}'".format(result))
+            logger.error("Error message: '{}'".format(error_message))
         time.sleep(0.2)
         return pdb_id, pdb_file_new
 
@@ -240,8 +237,10 @@ class TCoffee(object):
 
         # Perform t_coffee alignment
         logger.debug("\nTCoffee system command:\n{}".format(system_command))
-        child_process = helper.run_subprocess_locally(configs['tcoffee_dir'], system_command, env=tcoffee_env)
-        result, error_message = child_process.communicate()
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(
+                configs['tcoffee_dir'], system_command, env=tcoffee_env)     
+        )
         logger.debug("t_coffee results:\n{}".format(result.strip()))
         error_message_summary_idx = error_message.find('*                        MESSAGES RECAPITULATION')
         if error_message_summary_idx == -1:
@@ -249,7 +248,6 @@ class TCoffee(object):
         else:
             error_message_summary = error_message[error_message_summary_idx:]
         logger.debug("t_coffee errors:\n{}".format(error_message_summary.strip()))
-        return_code = child_process.returncode
 
         # Check if tcoffee had an unexpected exit and if not, create and return
         # the alignment object
@@ -261,9 +259,10 @@ class TCoffee(object):
             logger.error('Running quickalign alignment instead...')
             system_command, tcoffee_env = self._call_tcoffee_system_command(
                 self.alignment_fasta_file, self.alignment_template_file, alignment_output_file, 'quick')
-            child_process = helper.run_subprocess_locally(configs['tcoffee_dir'], system_command, env=tcoffee_env)
-            result, error_message = child_process.communicate()
-            return_code = child_process.returncode
+            result, error_message, return_code = (
+                helper.subprocess_check_output_locally(
+                    configs['tcoffee_dir'], system_command, env=tcoffee_env)     
+            )
             if return_code == 0:
                 return alignment_output_file
             else:

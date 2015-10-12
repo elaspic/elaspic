@@ -703,7 +703,7 @@ class MyDatabase(object):
             'Extracting files from 7zip archive using the following system command:\n{}'
             .format(system_command))
         result, error_message, return_code = (
-            helper.run_subprocess_locally_full(self.configs['temp_archive_path'], system_command)
+            helper.subprocess_check_output_locally(self.configs['temp_archive_path'], system_command)
         )
         
         def log_error():
