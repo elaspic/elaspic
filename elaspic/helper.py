@@ -172,35 +172,28 @@ def row2dict(row):
 
 
 #%% Helper functions for different subprocess commands
-
-def popen(system_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True):
-    child_process = subprocess.Popen(
-        system_command, stdout=stdout, stderr=stderr, shell=shell, universal_newlines=True)
-    result, error_message = child_process.communicate()
-    return_code = child_process.returncode
-    return result, error_message, return_code
-
-
 def get_username():
-    username, __, __ = popen('whoami')
+    username, __, __ = subprocess_check_output('whoami')
     return username.strip()
 
 
 def get_hostname():
-    hostname, __, __ = popen('hostname | cut -d. -f1')
+    hostname, __, __ = subprocess_check_output('hostname | cut -d. -f1')
     return hostname.strip()
 
 
 def get_echo(system_constant):
-    system_constant_value, __, __ = popen('echo ' + system_constant)
+    system_constant_value, __, __ = subprocess_check_output('echo ' + system_constant)
     return system_constant_value.strip()
 
 
 def get_which(bin_name):
-    bin_filename, __, __ = popen('which ' + bin_name)
+    bin_filename, __, __ = subprocess_check_output('which ' + bin_name)
     return bin_filename.strip()
 
 
+
+#%%
 @contextmanager
 def switch_paths(working_path):
     """
@@ -237,6 +230,68 @@ def kill_child_process(child_process):
     print('OK')
 
 
+
+#%%
+###############################################################################
+# The two functions below can be used to set the subproces group id to the same
+# value as the parent process group id. This is a simple way of ensuring that
+# all the child processes are terminated when the parent quits, but it makes
+# it impossible to terminate the child process group while keeping the parent
+# running....
+def _set_process_group(parent_process_group_id):
+    """ This function is used to set the group id of the child process to be
+    the same as the group id of the parent process. This way when you delete the
+    parent process you also delete all the children.
+    """
+    child_process_id = os.getpid() #
+    os.setpgid(child_process_id, parent_process_group_id)
+
+
+def _try_decoding_bytes_string(bytes_string):
+    try:
+        bytes_string = bytes_string.decode('utf-8')
+    except AttributeError:
+        pass
+    except UnicodeDecodeError:
+        logger.debug("Could not decode bytes string using utf-8 encoding. Trying iso-8859-1...")
+        bytes_string = bytes_string.decode('iso-8859-1')
+    return bytes_string
+
+
+def run_subprocess(system_command, **popen_argvars):
+    args = shlex.split(system_command)
+    child_process = subprocess.Popen(
+        args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        preexec_fn=lambda: _set_process_group(os.getpgrp()),
+        **popen_argvars)
+    return child_process
+
+
+def run_subprocess_locally(working_path, system_command, **popen_argvars):
+    with switch_paths(working_path):
+        child_process = run_subprocess(system_command, **popen_argvars)
+        return child_process
+        
+
+def subprocess_communicate(child_process):
+    result, error_message = child_process.communicate()
+    result = _try_decoding_bytes_string(result)
+    error_message = _try_decoding_bytes_string(error_message)
+    return_code = child_process.returncode
+    return result, error_message, return_code
+    
+
+def subprocess_check_output(system_command, **popen_argvars):
+    child_process = run_subprocess(system_command, **popen_argvars)
+    return subprocess_communicate(child_process)
+    
+
+def subprocess_check_output_locally(working_path, system_command, **popen_argvars):
+    child_process = run_subprocess_locally(working_path, system_command, **popen_argvars)
+    return subprocess_communicate(child_process)
+    
+    
+    
 
 
 #%% Function-level locking
@@ -339,43 +394,3 @@ def decode_text_as_list(list_string):
     str2num = lambda x: float(x) if '.' in x else int(x)
     return list(zip(*[[str2num(x) for x in sublist.split(':')] for sublist in list_string.split(',')]))
 
-
-
-
-#%%
-###############################################################################
-# The two functions below can be used to set the subproces group id to the same
-# value as the parent process group id. This is a simple way of ensuring that
-# all the child processes are terminated when the parent quits, but it makes
-# it impossible to terminate the child process group while keeping the parent
-# running....
-def set_process_group(parent_process_group_id):
-    """ This function is used to set the group id of the child process to be
-    the same as the group id of the parent process. This way when you delete the
-    parent process you also delete all the children.
-    """
-    child_process_id = os.getpid() #
-    os.setpgid(child_process_id, parent_process_group_id)
-
-
-def run_subprocess_locally(working_path, system_command, **popen_argvars):
-    with switch_paths(working_path):
-        args = shlex.split(system_command)
-        child_process = subprocess.Popen(
-            args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            preexec_fn=lambda: set_process_group(os.getpgrp()),
-            universal_newlines=True,
-            **popen_argvars)
-        return child_process
-
-
-def run_subprocess_locally_full(working_path, system_command, **popen_argvars):
-    child_process = run_subprocess_locally(working_path, system_command, universal_newlines=True, **popen_argvars)
-    result, error_message = child_process.communicate()
-    return_code = child_process.returncode
-    return result, error_message, return_code
-    
-    
-    
-    
-    

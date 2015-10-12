@@ -14,7 +14,11 @@ import six
 import logging 
 from functools import wraps
 
-from . import conf, errors, helper, structure_tools, structure_analysis
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+
+from . import conf, errors, helper, structure_tools, structure_analysis, sequence, model, predictor
 
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
@@ -61,6 +65,11 @@ class Pipeline(object):
 
         self.PWD = os.getcwd()
         
+        self.sequences = {}
+        self.models = {}
+        self.predictions = {}
+
+
 
     def _validate_temp_path(self, configs):
         """
@@ -99,21 +108,100 @@ class Pipeline(object):
         raise NotImplementedError()
 
 
+## Header
+#pdb_chain = 'A'
+#mutation = 'M1P'
+#protein_id = pdb_id + pdb_chain
+#chain_sequence, chain_numbering = sp.sp.get_chain_sequence_and_numbering(pdb_chain)
+#sequence_file = op.join(working_dir, protein_id + '.fasta')
+#structure_file = op.join(working_dir, protein_id + '.pdb')
+#
+#seqrecord = SeqRecord(id=protein_id, seq=Seq(chain_sequence))
+#with open(op.join(working_dir, protein_id + '.fasta'), 'w') as ofh:
+#    SeqIO.write(seqrecord, ofh, 'fasta')
+#
+#my_sequence = sequence.Sequence(sequence_file)
+#assert op.isfile(op.join(working_dir, 'sequence', protein_id + '_provean_supset'))
+#assert op.isfile(op.join(working_dir, 'sequence', protein_id + '_provean_supset.fasta'))
+#
+#my_sequence.mutate(mutation)
+#
+#
+#
+##%% Model
+#
+## Header
+#pdb_chain = 'A'
+#mutation = 'M1P'
+#protein_id = pdb_id + pdb_chain
+#chain_sequence, chain_numbering = sp.sp.get_chain_sequence_and_numbering(pdb_chain)
+#sequence_file = op.join(working_dir, protein_id + '.fasta')
+#structure_file = op.join(working_dir, protein_id + '.pdb')
+#
+#my_model = model.Model(sequence_file, structure_file)
+#
+#my_model.mutate(1, mutation)
+#
+#
+#
+##%%
+#from importlib import reload
+#reload(conf)
+#reload(pipeline)
+#reload(structure_tools)
+#reload(structure_analysis)
+#reload(sequence)
+#reload(model)
+#reload(predictor)
+#
+#sequence_data = my_sequence.__dict__
+#structure_data = my_structure.__dict__
+#
+#my_predictor = predictor.Predictor()
+
 
 
 #%%
-class StructurePipeline(Pipeline):
+class DatabasePipeline(Pipeline):
+    
+    def __init__(self, protein_id, configurations=None):
+        """
+        """
+        super().__init__(configurations)
 
-    def __init__(self, pdb_file, configurations=None):
+
+
+
+    def make_sequence(self, sequence_idx):
+        ...
+        
+        
+    def make_model(self):
+        ...
+        
+        
+    def mutate(self):
+        ...
+
+
+
+
+
+
+#%%
+class LocalPipeline(Pipeline):
+
+    def __init__(self, structure_file, sequence_file=None, configurations=None):
         """
         TODO: Add an option to store provean results based on sequence hash.
         """
         super().__init__(configurations)
         
         # Input parameters
-        self.pdb_id = op.basename(pdb_file).rstrip('.pdb')
-        self.pdb_file = pdb_file
-        
+        self.pdb_id = op.splitext(op.basename(structure_file))[0]
+        self.pdb_file = structure_file
+        self.sequence_file = sequence_file
+
         logger.info('pdb_file: {}'.format(self.pdb_file))
         logger.info('pwd: {}'.format(self.PWD))
         
@@ -121,75 +209,157 @@ class StructurePipeline(Pipeline):
         #fix_pdb(self.pdb_file, self.pdb_file)
         self.sp = structure_tools.StructureParser(self.pdb_file)
         self.sp.extract()
-        self.sp.save_structure()
-        self.sp.save_sequences()
+        self.sp.save_structure(configs['unique_temp_dir'])
+        self.sp.save_sequences(configs['unique_temp_dir'])
+            
+        if self.sequence_file is not None:
+            self.seqrecords = list(SeqIO.parse(self.sequence_file, 'fasta'))
+            for i, seqrec in enumerate(self.seqrecords):
+                seqrec.id = '{}_{}'.format(seqrec.id, str(i))
+        else:
+            self.seqrecords = [
+                SeqRecord(
+                    id='{}{}_{}'.format(self.pdb_id, chain_id, i), 
+                    seq=Seq(self.sp.chain_sequence_dict[chain_id]))
+                for (i, chain_id) in enumerate(self.sp.chain_ids)
+            ]
         
-        self.pdb_chains = [chain.id for chain in self.sp.structure[0].child_list]
-    
 
-    def run(self):
+    def run(self, chain, mutation):
         """Run all steps of the pipeline.
         
         Made this a separate method because it makes it easier to test
         :py:func:`compute_provean`, :py:func:`compute_model`, and :py:func:`compute_mutation`.
         """
         ...
-        
+    
+    
+    def precalculate_all(self):
+        """
+        """
+        for chain_id in self.sp.chain_ids:
+            if chain_id == self.sp.hetatm_chain_id:
+                continue
+            chain_pos = self._get_chain_pos(chain_id)
+            self.make_sequence(chain_pos)
+            self.make_model(chain_pos)
+        for chain_idxs in self.sp.interacting_chain_idxs:
+            self.make_model(chain_idxs)
 
-    def calculate_provean(self, pdb_chain):
+
+    def _get_chain_pos(self, chain_id):
+        chain_idx = [i for (i, chain) in enumerate(self.sp.structure[0].child_list) if chain.id == chain_id]
+        if len(chain_idx) == 0:
+            raise errors.PDBChainError(
+                'Chain {} was not found in PDB {}!'.format(chain_id, self.sp.pdb_file))
+        elif len(chain_idx) > 1:
+            raise errors.PDBChainError(
+                'Chain {} was found more than once in PDB {}!'.format(chain_id, self.sp.pdb_file))
+        return chain_idx[0]
+                
+
+    def make_sequence(self, position):
         """
         Raises
         -------
         errors.ProveanError
         errors.ProveanResourceError
         """
-        protein_id, protein_name, provean_supset_file, chain_sequence = (
-            self.get_provean_parameters(pdb_chain)
+        if position in self.sequences:
+            return self.sequences[position]
+        
+        seqrecord = self.seqrecords[position]
+        sequence_file = op.join(
+            configs['sequence_dir'],
+            seqrecord.id + '.fasta'
         )
-        try:
-            provean_supset_filename, provean_supset_length = (
-                domain_alignment.build_provean_supporting_set(
-                    protein_id, protein_name, chain_sequence, conf.configs, 
-                    self.unique_temp_folder, self.provean_temp_path,
-                    provean_supset_file)
-            )
-        except errors.ProveanError as e:
-            logger.error(e)
-            raise
-        except errors.ProveanResourceError as e:
-            logger.error(e)
-            # Send the kill signal to the main process group, killing everything
-            self._clear_provean_temp_files() # these won't get cleaned once the process dies
-            logger.error('Killing group...')
-            os.killpg(e.child_process_group_id, signal.SIGTERM)
-            error_message = (
-                'Provean ran out of resources. Everything has been killed. '
-                'The user will probably not see this message...'
-            )
-            logger.critical(error_message)
-            raise
-        finally:
-            self._clear_provean_temp_files()
-
-        logger.info('Finished computing provean.')
-        provean_dict = {
-            'provean_supset_filename': provean_supset_filename,
-            'provean_supset_length': provean_supset_length,
-        }
-        return provean_dict
-
-
-    def get_provean_parameters(self, pdb_chain):
-        """Information needed to run Provean.
+        with open(sequence_file, 'w') as ofh:
+            SeqIO.write(seqrecord, ofh, 'fasta')
+        self.sequences[position] = sequence.Sequence(sequence_file)
+        
+        
+    def make_model(self, sequences_to_model):
         """
-        protein_id = "{}{}".format(self.pdb_id, pdb_chain)
-        protein_name = "{}.chain{}".format(op.basename(self.pdb_file), pdb_chain)
-        provean_supset_file = op.join(
-            self.pwd, 'sequence_conservation', "{}_provean_supset".format(protein_id))
-        chain_sequence, chain_numbering_extended = self.sp.get_chain_sequence_and_numbering(pdb_chain)
-        return protein_id, protein_name, provean_supset_file, chain_sequence
-       
-   
+        Returns
+        -------
+        model_dict : dict
+            Contains all important values calculated by modeller.
+            
+        Raises
+        -------
+        errors.ModellerError
+        errors.PDBChainError
+        errors.PDBEmptySequenceError
+        errors.PDBNotFoundError
+        """
+        if not hasattr(sequences_to_model, '__getitem__'):
+            positions = (sequences_to_model,)
+        else:
+            positions = tuple(sorted(sequences_to_model))
+            
+        if positions in self.models:
+            return self.models[positions]
+        
+        # Target sequence file
+        seqrecords = [self.seqrecords[pos] for pos in positions]
+        sequence_file = op.join(
+            configs['model_dir'],        
+           '_'.join(seqrec.id for seqrec in seqrecords) + '.fasta'
+        )
+        with open(sequence_file, 'w') as ofh:
+            SeqIO.write(seqrecords, ofh, 'fasta')
+
+        # Template structure file
+        chain_string = ''.join(self.sp.structure[0].child_list[pos].id for pos in positions)
+        structure_file = op.join(configs['unique_temp_dir'], self.pdb_id + chain_string + '.pdb')
+        assert op.isfile(structure_file)
+        
+        self.models[positions] = model.Model(sequence_file, structure_file)
+
+
+
+    def mutate_all(self, sequence_to_mutate, mutation):
+        """
+        Wrapper around `mutate`.            
+        """
+        for chain_idxs in self.sp.interacting_chain_idxs:
+            if sequence_to_mutate in chain_idxs:
+                self.mutate(chain_idxs, sequence_to_mutate, mutation)
+        
+        
+
+    def mutate(self, sequences_to_model, sequence_to_mutate, mutation):
+        """      
+        Raises
+        ------
+        errors.PDBError
+        errors.FoldxError
+        errors.ResourceError
+        errors.FoldXAAMismatchError
+        errors.MutationOutsideDomainError
+        errors.MutationOutsideInterfaceError
+
+        """
+        if not hasattr(sequences_to_model, '__getitem__'):
+            sequences_to_model = (sequences_to_model,)
+        else:
+            sequences_to_model = tuple(sorted(sequences_to_model))
+        assert sequence_to_mutate in sequences_to_model
+        
+        if sequence_to_mutate not in self.sequences:
+            self.make_sequence(sequence_to_mutate)
+            assert sequence_to_mutate in self.sequences
+            
+        if sequences_to_model not in self.models:
+            self.make_model(sequences_to_model)
+            assert sequences_to_model in self.models
+        
+        self.sequences[sequence_to_mutate].mutate(mutation)
+        
+        self.models[sequences_to_model].mutate(sequences_to_model.index(sequence_to_mutate), mutation)
+
+
+
     def get_structure_sequence(self):
         """
         """
@@ -210,66 +380,7 @@ class StructurePipeline(Pipeline):
         structure_sequence = '/'.join(structure_sequence)
         return structure_sequence
     
-    
-    def calculate_model(self):
-        """
-        Returns
-        -------
-        model_dict : dict
-            Contains all important values calculated by modeller.
-            
-        Raises
-        -------
-        errors.ModellerError
-        errors.PDBChainError
-        errors.PDBEmptySequenceError
-        errors.PDBNotFoundError
-        """
-        structure_sequence = self.get_structure_sequence()
-
-        modeller_path = op.join(self.unique_temp_folder, 'modeller')
-        os.makedirs(modeller_path, mode=0o777, exist_ok=True)
-
-        modeller_target_id = self.pdb_id + '_modeller'
-        modeller_template_id = self.pdb_id
-
-        pir_alignment_filename = op.join(modeller_path, modeller_target_id + '.pir')
-        with open(pir_alignment_filename, 'w') as ofh:
-            domain_model.write_to_pir_alignment(ofh, 'sequence', modeller_target_id, structure_sequence)
-            domain_model.write_to_pir_alignment(ofh, 'structure', modeller_template_id, structure_sequence)           
         
-        new_chains = ''.join([chain.id for chain in self.sp.structure[0].child_list])
-        model_norm_dope, model_file, model_knotted = domain_model.run_modeller(
-            pir_alignment_filename, [modeller_target_id], [modeller_template_id], 
-            self.unique_temp_folder, conf.configs['modeller_runs'],
-            new_chains
-        )
-        
-        model_dict = {
-            'model_norm_dope': model_norm_dope,
-            'model_file': model_file,
-            'model_knotted': model_knotted,
-        }
-        return model_dict
-        
-
-    def calculate_mutation(self, pdb_chain, pdb_mutation, provean_results, modeller_results):
-        """
-        Raises
-        ------
-        errors.PDBError
-        errors.FoldxError
-        errors.ResourceError
-        errors.FoldXAAMismatchError
-        errors.MutationOutsideDomainError
-        errors.MutationOutsideInterfaceError
-        """
-        mut_data = self.get_mutation_data(pdb_chain, pdb_mutation, provean_results, modeller_results)
-        mutation.get_provean_score(mut_data)
-        mutation_interactions = self.get_interactions(pdb_chain, pdb_mutation)
-        
-        return mutation_interactions
-
     
     def get_mutation_data(self, pdb_chain, pdb_mutation, provean_results, modeller_results):
         """
@@ -316,18 +427,9 @@ class StructurePipeline(Pipeline):
         
         # Provean results
         mut_data.provean_mutation = None
-        mut_data.provean_score = None
-
-        # Validate results            
-        mut_data.validate()
-               
-        # Print all attributes
-#        for attr in dir(mut_data):
-#            if not attr.startswith('_'):
-#                logger.debug("{}: {}".format(attr, getattr(mut_data, attr)))
-
-        return mut_data            
-    
+        mut_data.provean    
+        
+        
     
     def _mutation_to_modeller(self, pdb_chain, pdb_mutation):
         """
@@ -374,6 +476,7 @@ class StructurePipeline(Pipeline):
 
         
         
+
 #%% PDB only
 #class UserStructureMutation(Base):
 #    __tablename__ = 'user_structure_mutation'

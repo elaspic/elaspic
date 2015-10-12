@@ -51,113 +51,8 @@ ATOM S   2  VAL  151.44   0.0 114.28   0.0   0.00   0.0 114.28   0.0  37.16   0.
 ATOM S   2  TRP  249.36   0.0 187.67   0.0  23.60   0.0 211.26   0.0  38.10   0.0 189.67   0.0  59.69   0.0
 ATOM S   2  TYR  212.76   0.0 135.35   0.0  42.03   0.0 177.38   0.0  35.38   0.0 136.50   0.0  76.26   0.0
 """
-standard_sasa_all = [[l.strip() for l in line.split()] for line in STANDARD_DATA.strip().split('\n')[1:]]
-STANDARD_SASA = {x[3]: float(x[4]) for x in standard_sasa_all}
-
-R_CUTOFF = 6
-
-
-#%% STANDALONE FUNCTIONS
-def get_interactions(model, chain_id, r_cutoff=R_CUTOFF):
-    """
-    """
-    interactions = {}
-    for chain_id_2, chain_2 in model.child_dict.items():
-        if chain_id == chain_id_2:
-            continue
-        interactions[chain_id_2] = (
-            get_interactions_between_chains(model, chain_id, chain_id_2, r_cutoff)
-        )
-    return {k:v for (k,v) in interactions.items() if v}
-
-
-def get_interactions_between_chains(model, pdb_chain_1, pdb_chain_2, r_cutoff=R_CUTOFF):
-    """
-    Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
-    interaction is defines as a pair of residues where at least one pair of atom
-    is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
-    """
-    try:
-        from Bio.PDB import NeighborSearch
-    except ImportError as e:
-        print('Importing Biopython NeighborSearch returned an error: {}'.format(e))
-        print('Using the the slow version of the neighbour-finding algorithm...')
-        return get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cutoff)
-        
-    # Extract the chains of interest from the model
-    chain_1 = None
-    chain_2 = None
-    for child in model.get_list():
-        if child.id == pdb_chain_1:
-            chain_1 = child
-        if child.id == pdb_chain_2:
-            chain_2 = child
-    if chain_1 is None or chain_2 is None:
-        raise Exception('Chains %s and %s were not found in the model' % (pdb_chain_1, pdb_chain_2))
-
-    ns = NeighborSearch(list(chain_2.get_atoms()))
-    interactions_between_chains = OrderedDict()
-    for idx, residue_1 in enumerate(chain_1):
-        if residue_1.resname in structure_tools.amino_acids and residue_1.id[0] == ' ':
-            resnum_1 = str(residue_1.id[1]) + residue_1.id[2].strip()
-            resaa_1 = structure_tools.convert_aa(residue_1.get_resname(), quiet=True)
-            interacting_residues = set()
-            for atom_1 in residue_1:
-                interacting_residues.update(ns.search(atom_1.get_coord(), r_cutoff, 'R'))
-            interacting_resids = []
-            for residue_2 in interacting_residues:
-                resnum_2 = str(residue_2.id[1]) + residue_2.id[2].strip()
-                resaa_2 = structure_tools.convert_aa(residue_2.get_resname(), quiet=True)
-                if residue_2.resname in structure_tools.amino_acids and residue_2.id[0] == ' ':
-                    interacting_resids.append((resnum_2, resaa_2,))
-            if interacting_resids:
-                interacting_resids.sort(key=lambda x: int(''.join([c for c in x[0] if c.isdigit()])))
-                interactions_between_chains[(resnum_1, resaa_1)] = interacting_resids
-    return interactions_between_chains
-
-
-def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
-    """
-    Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
-    interaction is defines as a pair of residues where at least one pair of atom
-    is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
-    """
-    # Extract the chains of interest from the model
-    chain_1 = None
-    chain_2 = None
-    for child in model.get_list():
-        if child.id == pdb_chain_1:
-            chain_1 = child
-        if child.id == pdb_chain_2:
-            chain_2 = child
-    if chain_1 is None or chain_2 is None:
-        raise Exception('Chains %s and %s were not found in the model' % (pdb_chain_1, pdb_chain_2))
-
-    interactions_between_chains = OrderedDict()
-    for idx, residue_1 in enumerate(chain_1):
-        if residue_1.resname in structure_tools.amino_acids and residue_1.id[0] == ' ':
-            resnum_1 = str(residue_1.id[1]) + residue_1.id[2].strip()
-            resaa_1 = structure_tools.convert_aa(residue_1.get_resname())
-            interacting_resids = []
-            for residue_2 in chain_2:
-                resnum_2 = str(residue_2.id[1]) + residue_2.id[2].strip()
-                resaa_2 = structure_tools.convert_aa(residue_2.get_resname())
-                r_min = None
-                if residue_2.resname in structure_tools.amino_acids and residue_2.id[0] == ' ':
-                    for atom_1 in residue_1:
-                        for atom_2 in residue_2:
-                            r = structure_tools.calculate_distance(atom_1, atom_2, r_cutoff)
-                            if r is not None:
-                                if r_min and r < r_min:
-                                    r_min = r
-                                elif not r_min:
-                                    r_min = r
-                if r_min:
-                    interacting_resids.append((resnum_2, resaa_2, r_min,))
-            if interacting_resids:
-                interactions_between_chains[(resnum_1, resaa_1)] = interacting_resids
-    return interactions_between_chains
-
+STANDARD_SASA_ALL = [[l.strip() for l in line.split()] for line in STANDARD_DATA.strip().split('\n')[1:]]
+STANDARD_SASA = {x[3]: float(x[4]) for x in STANDARD_SASA_ALL}
 
 
 #%% Init
@@ -165,7 +60,9 @@ class AnalyzeStructure(object):
     """
     Runs the program pops to calculate the interface size of the complexes
     This is done by calculating the surface of the complex and the seperated parts.
-    The interface is then given by the substracting
+    The interface is then given by the substracting.
+    
+    TODO: Remove `data_dir` and `__split_pdb_into_chains`.
     """
 
     def __init__(self, pdb_file, data_dir, working_dir, vdw_distance=5.0, min_contact_distance=4.0):
@@ -319,10 +216,7 @@ class AnalyzeStructure(object):
         
 
     def get_structure_file(self, chains, ext='.pdb'):
-        """
-        """
-        structure_file = '{}{}{}'.format(op.join(self.working_dir, self.sp.pdb_id), chains, ext)
-        return structure_file
+        return op.join(self.working_dir, self.sp.pdb_id + chains + ext)
         
         
 
@@ -350,7 +244,7 @@ class AnalyzeStructure(object):
         mutation_pos = int(mutation[1:-1])
         residue_counter = 0
         for residue in mutated_chain:
-            if residue.resname in structure_tools.amino_acids and residue.id[0] == ' ':
+            if residue.resname in structure_tools.AMINO_ACIDS and residue.id[0] == ' ':
                 residue_counter += 1
                 if residue_counter == mutation_pos:
                     self._validate_mutation(residue.resname, mutation)
@@ -498,23 +392,23 @@ class AnalyzeStructure(object):
         """ In the future, could add an option to measure residue depth
         using Bio.PDB.ResidueDepth().residue_depth()...
         """
-        base_filename = filename[:filename.rfind('.')]
+        base_filename = op.splitext(filename)[0]
 
         # Convert pdb to xyz coordiates
         assert(os.path.isfile(op.join(self.working_dir, filename)))
         
         system_command = 'pdb_to_xyzrn {0}.pdb'.format(op.join(self.working_dir, base_filename))
         logger.debug('msms system command 1: %s' % system_command)
-        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
-        result, error_message = child_process.communicate()
-        return_code = child_process.returncode
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(self.working_dir, system_command)
+        )
         if return_code != 0:
             logger.debug('msms result 1:')
             logger.debug(result)
             logger.debug('msms error message 1:')
             logger.debug(error_message)
             logger.debug('naccess rc 1:')
-            logger.debug(child_process.returncode)
+            logger.debug(return_code)
             raise errors.MSMSError(error_message)
         else:
             with open(op.join(self.working_dir, base_filename + '.xyzrn'), 'w') as ofh:
@@ -530,18 +424,18 @@ class AnalyzeStructure(object):
             '-af {0}.area')
         system_command = system_command_string.format(op.join(self.working_dir, base_filename), probe_radius)
         logger.debug('msms system command 2: %s' % system_command)
-        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
-        result, error_message = child_process.communicate()
-        return_code = child_process.returncode
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(self.working_dir, system_command)
+        )
         number_of_tries = 0
         while return_code != 0 and number_of_tries < 5:
             logger.error('MSMS exited with an error!')
             probe_radius -= 0.1
             logger.debug('Reducing probe radius to {}'.format(probe_radius))
             system_command = system_command_string.format(op.join(self.working_dir, base_filename), probe_radius)
-            child_process = helper.run_subprocess_locally(self.working_dir, system_command)
-            result, error_message = child_process.communicate()
-            return_code = child_process.returncode
+            result, error_message, return_code = (
+                helper.subprocess_check_output_locally(self.working_dir, system_command)
+            )
             number_of_tries += 1
         if return_code != 0:
             logger.debug('msms result 2:')
@@ -549,7 +443,7 @@ class AnalyzeStructure(object):
             logger.debug('msms error message 2:')
             logger.debug(error_message)
             logger.debug('naccess rc 2:')
-            logger.debug(child_process.returncode)
+            logger.debug(return_code)
             raise errors.MSMSError(error_message)
 
         # Read and parse the output
@@ -618,9 +512,9 @@ class AnalyzeStructure(object):
         system_command = ('naccess ' + filename)
         logger.debug('naccess system command: %s' % system_command)
         assert(os.path.isfile(self.working_dir + filename))
-        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
-        result, error_message = child_process.communicate()
-        return_code = child_process.returncode
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(self.working_dir, system_command)
+        )
         logger.debug('naccess result: {}'.format(result))
         logger.debug('naccess error: {}'.format(error_message))
         logger.debug('naccess rc: {}'.format(return_code))
@@ -649,7 +543,7 @@ class AnalyzeStructure(object):
         if termination != 'Clean termination':
             logger.error('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
             logger.error(e)
-            raise errors.PopsError(e, self.data_dir + self.pdb_file, self.chain_ids)
+            raise errors.PopsError(e, self.pdb_file, self.chain_ids)
         else:
             logger.warning('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
             logger.warning(e)
@@ -661,9 +555,9 @@ class AnalyzeStructure(object):
 
     def __run_pops_atom(self, chain_id):
         system_command = ('pops --noHeaderOut --noTotalOut --atomOut --pdb {0}.pdb --popsOut {0}.out'.format(chain_id))
-        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
-        result, error_message = child_process.communicate()
-        return_code = child_process.returncode
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(self.working_dir, system_command)
+        )
         # The returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:
@@ -681,6 +575,7 @@ class AnalyzeStructure(object):
         ignore = ['N', 'C', 'O']
         per_residue_sasa_scores = []
         current_residue_number = None
+        total_sasa, total_sa = None, None # so pylint stops complaining
         with open(self.working_dir + chain_id + '.out', 'r') as fh:
             for line in fh:
                 row = line.split()
@@ -712,9 +607,9 @@ class AnalyzeStructure(object):
         stride_results_file = op.splitext(structure_file)[0] + '_stride_results.txt'
         system_command = 'stride {} -f{}'.format(structure_file, stride_results_file)
         logger.debug('stride system command: %s' % system_command)
-        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
-        result, error_message = child_process.communicate()
-        return_code = child_process.returncode
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(self.working_dir, system_command)
+        )
         logger.debug('stride return code: %i' % return_code)
         logger.debug('stride result: %s' % result)
         logger.debug('stride error: %s' % error_message)
@@ -739,9 +634,9 @@ class AnalyzeStructure(object):
                 time.sleep(60)
             system_command = ('dssp -v -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
             logger.debug('dssp system command: %s' % system_command)
-            child_process = helper.run_subprocess_locally(self.working_dir, system_command)
-            result, error_message = child_process.communicate()
-            return_code = child_process.returncode
+            result, error_message, return_code = (
+                helper.subprocess_check_output_locally(self.working_dir, system_command)
+            )
             logger.debug('dssp return code: %i' % return_code)
             logger.debug('dssp result: %s' % result)
             logger.debug('dssp error: %s' % error_message)
@@ -767,13 +662,14 @@ class AnalyzeStructure(object):
                     continue
                 if l[9] == ' ':
                     continue # Skip -- missing residue
-                resseq, icode, chainid, aa, ss = int(l[5:10]), l[10], l[11], l[13], l[16]
+                # resseq, icode, chainid, aa, ss = int(l[5:10]), l[10], l[11], l[13], l[16]
+                chainid, ss = l[11], l[16]
                 if ss == ' ':
                     ss = '-'
                 try:
                     acc = int(l[34:38])
-                    phi = float(l[103:109])
-                    psi = float(l[109:115])
+                    #phi = float(l[103:109])
+                    #psi = float(l[109:115])
                 except ValueError as e:
                     # DSSP output breaks its own format when there are >9999
                     # residues, since only 4 digits are allocated to the seq num
@@ -783,8 +679,8 @@ class AnalyzeStructure(object):
                     if l[34] != ' ':
                         shift = l[34:].find(' ')
                         acc = int((l[34+shift:38+shift]))
-                        phi = float(l[103+shift:109+shift])
-                        psi = float(l[109+shift:115+shift])
+                        #phi = float(l[103+shift:109+shift])
+                        #psi = float(l[109+shift:115+shift])
                     else:
                         raise e
                 dssp_ss.setdefault(chainid, []).append(ss) # percent sasa on sidechain
@@ -798,46 +694,83 @@ class AnalyzeStructure(object):
     def get_interchain_distances(self, pdb_chain=None, pdb_mutation=None, cutoff=None):
         """
         """
-        model = self.structure[0]
+        model = self.sp.structure[0]
         shortest_interchain_distances = {}
-        for chain_1 in [chain for chain in model]:
-            if pdb_chain and chain_1.id != pdb_chain:
-                continue # skip chains that we are not interested in
-            shortest_interchain_distances[chain_1.id] = {}
-            for idx, residue_1 in enumerate(chain_1):
-                if residue_1.resname in structure_tools.amino_acids and residue_1.id[0] == ' ':
-                    if pdb_mutation:
-                        if str(residue_1.id[1]) != pdb_mutation[1:-1]:
-                            continue # skip all residues that we are not interested in
-                        if (structure_tools.convert_aa(residue_1.resname) != pdb_mutation[0] and
-                            structure_tools.convert_aa(residue_1.resname) != pdb_mutation[-1]):
-                                logger.debug(pdb_mutation)
-                                logger.debug(structure_tools.convert_aa(residue_1.resname))
-                                logger.debug(residue_1.id)
-                                raise Exception
-                    for chain_2 in [chain for chain in model if chain != chain_1]:
-                        min_r = cutoff
-                        for residue_2 in chain_2:
-                            if (residue_1.resname not in structure_tools.amino_acids or
-                                residue_2.resname not in structure_tools.amino_acids):
-                                    continue
-                            for atom_1 in residue_1:
-                                for atom_2 in residue_2:
-                                    r = structure_tools.calculate_distance(atom_1, atom_2, min_r)
-                                    if r and (not min_r or min_r > r):
-                                        min_r = r
-                        shortest_interchain_distances[chain_1.id][chain_2.id] = min_r
+        # Chain 1
+        for i, chain_1_id in enumerate(self.sp.chain_ids):
+            shortest_interchain_distances[chain_1_id] = {}
+            chain_1 = model[chain_1_id]
+            if pdb_chain:
+                if chain_1_id == pdb_chain:
+                    continue
+                chain_2_ids = [pdb_chain]
+            else:
+                chain_2_ids = self.sp.chain_ids[i+1:]
+            # Chain 2
+            for chain_2_id in chain_2_ids:
+                chain_2 = model[chain_2_id]
+                min_r = cutoff
+                # Residue 1
+                for residue_1 in chain_1:
+                    if (residue_1.resname not in structure_tools.AMINO_ACIDS or
+                        residue_1.id[0] == ' '):
+                            continue
+                    # Residue 2
+                    for residue_2 in chain_2:
+                        if (residue_2.resname not in structure_tools.AMINO_ACIDS or
+                            residue_2.id[0] == ' '):
+                                continue
+                        if pdb_mutation:
+                            if str(residue_2.id[1]) != pdb_mutation[1:-1]:
+                                continue
+                            if (structure_tools.convert_aa(residue_1.resname) != pdb_mutation[0] and
+                                structure_tools.convert_aa(residue_1.resname) != pdb_mutation[-1]):
+                                    logger.debug(pdb_mutation)
+                                    logger.debug(structure_tools.convert_aa(residue_1.resname))
+                                    logger.debug(residue_1.id)
+                                    raise errors.MutationMismatchError()
+                        # Atom 1
+                        for atom_1 in residue_1:
+                            # Atom 2
+                            for atom_2 in residue_2:
+                                r = structure_tools.calculate_distance(atom_1, atom_2, min_r)
+                                if r and (min_r is None or min_r > r):
+                                    min_r = r
+                shortest_interchain_distances[chain_1_id][chain_2_id] = min_r
 
-        if (not shortest_interchain_distances or
-            (pdb_chain and not shortest_interchain_distances[pdb_chain])):
-                logger.error(
-                    'Could not calculate the shortest interchain distance for chain {} residue {}'
-                    .format(pdb_chain, pdb_mutation))
-                raise Exception()
+        _shortest_interchain_distances_complement = {}
+        for key in shortest_interchain_distances:
+            for key_2, value in shortest_interchain_distances[key].items():
+                _shortest_interchain_distances_complement[key_2][key] = value
+        shortest_interchain_distances.update(_shortest_interchain_distances_complement)
+        
+        
+        if not shortest_interchain_distances:
+            logger.error(
+                'get_interchain_distances({pdb_chain}, {pdb_mutation}, {cutoff}) failed!'
+                .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff)
+            )
+            raise Exception()
+        
+        all_chains = {key for key in shortest_interchain_distances}
+        all_chains.update(
+            {key_2 for key in shortest_interchain_distances 
+             for key_2 in shortest_interchain_distances[key]}
+        )
+
+        if set(all_chains) != set(self.sp.chain_ids):
+            logger.error(
+                'get_interchain_distances({pdb_chain}, {pdb_mutation}, {cutoff}) failed!'
+                .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff)
+            )
+            logger.error('Did not calculate chain distances for all chain pairs!')
+            logger.error('all_chains: {}'.format(all_chains))
+            logger.error('self.sp.chain_ids: {}'.format(self.sp.chain_ids))
+            raise Exception()
 
         for key_1, value_1 in shortest_interchain_distances.items():
             logger.debug(
-                'Calculated interchain distances between chain {} and chains {}'
+                'Calculated interchain distances between chain {} and chains {}.'
                 .format(key_1, ', '.join(list(value_1.keys()))))
 
         return shortest_interchain_distances
@@ -918,10 +851,10 @@ class AnalyzeStructure(object):
     def __run_pops_area(self, full_filename):
         system_command = ('pops --chainOut'
             ' --pdb ' + full_filename +
-            ' --popsOut ' + self.working_dir + full_filename.split('/')[-1].replace('pdb', 'out'))
-        child_process = helper.run_subprocess_locally(self.working_dir, system_command)
-        result, error_message = child_process.communicate()
-        return_code = child_process.returncode
+            ' --popsOut ' + full_filename + '.out')
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally(self.working_dir, system_command)
+        )
         # The returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:
@@ -979,9 +912,3 @@ class AnalyzeStructure(object):
                     break
         return result
 
-
-
-#%%
-if __name__ == '__main__':
-    # Insert debug code here
-    pass

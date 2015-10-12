@@ -176,7 +176,8 @@ def read_configuration_file(config_file, unique_temp_dir=None):
             fallback=tempfile.mkdtemp(prefix='', dir=configs['temp_dir'])
         )
     configs['unique'] = op.basename(configs['unique_temp_dir'])
-    
+    configs['data_dir'] = configParser.get('SETTINGS', 'data_dir', fallback=DATA_DIR)
+
     ### [DATABASE]
     if configParser.has_section('DATABASE'):
         read_database_configs(configParser)
@@ -219,7 +220,6 @@ def read_database_configs(configParser):
     configs['archive_dir'] = configParser.get('DATABASE', 'archive_dir')
     # supported archive types are 'directory' and 'archive'
     configs['pdb_dir'] = configParser.get('DATABASE', 'pdb_dir')
-    configs['data_dir'] = configParser.get('DATABASE', 'data_dir', fallback=DATA_DIR)
 
     configs['archive_temp_dir'] = op.join(configs['temp_dir'], 'archive')
         

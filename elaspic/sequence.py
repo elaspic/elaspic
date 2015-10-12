@@ -218,17 +218,15 @@ class Sequence:
                 raise errors.ProveanError('Not enough memory ({:.2f} GB) to run provean'.format(memory_availible))
     
         # Create a file with mutation
-        subprocess.check_call(
-            'echo {} > {}'.format(
-                mutation, 
-                op.join(configs['sequence_dir'], '{}.var'.format(mutation))
-            ), shell=True)
-    
+        mutation_file = op.join(configs['sequence_dir'], '{}.var'.format(mutation))
+        with open(mutation_file, 'w') as ofh:
+            ofh.write(mutation)
+        
         # Run provean
         system_command = (
             'provean ' +
-            ' -q ./{}.fasta '.format(self.protein_id) +
-            ' -v ./{}.var '.format(mutation) +
+            ' -q {} '.format(self.sequence_file) +
+            ' -v {} '.format(mutation_file) +
             ' -d ' + op.join(configs['blast_db_dir'], 'nr') +
             ' --tmp_dir {} '.format(configs['provean_temp_dir']) +
             ' --num_threads {} '.format(configs['n_cores']) +
@@ -267,8 +265,7 @@ class Sequence:
             time.sleep(60) # Wait for 1 minute before checking again
     
         # Collect the results and check for errors
-        result, error_message = child_process.communicate()
-        return_code = child_process.returncode
+        result, error_message, return_code = helper.subprocess_communicate(child_process)
         logger.debug(result)
         
         # Extract provean score from the results message
