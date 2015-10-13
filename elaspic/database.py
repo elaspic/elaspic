@@ -8,6 +8,7 @@ from builtins import next
 from builtins import object
 
 import os
+import os.path as op
 import re
 import stat
 import urllib.request
@@ -99,8 +100,8 @@ class MyDatabase(object):
         self.Session = self.configure_session()
         
         logger.info(
-            "Using precalculated data from the following folder: '{path_to_archive}'"
-            .format(**self.configs)
+            "Using precalculated data from the following folder: '{archive_dir}'"
+            .format(**configs)
         )
 
 
@@ -109,29 +110,29 @@ class MyDatabase(object):
         """
         Get an SQLAlchemy engine that can be used to connect to the database.
         """
-        if self.configs['db_type'] == 'sqlite':
+        if configs['db_type'] == 'sqlite':
             info_message = (
                 "Connected to a {db_type} database in the following location: {sqlite_db_path}"
-                .format(**self.configs)
+                .format(**configs)
             )
             # set `isolation_level` to 'READ UNCOMMITTED' so that reads are non-blocking
             # (required for SCINET)
             engine = sa.create_engine(
-                '{db_type}:///{sqlite_db_path}'.format(**self.configs),
+                '{db_type}:///{sqlite_db_path}'.format(**configs),
                  isolation_level='READ UNCOMMITTED'
             )
             enable_sqlite_foreign_key_checks(engine)
-        elif self.configs['db_type'] in ['postgresql', 'mysql']:
+        elif configs['db_type'] in ['postgresql', 'mysql']:
             info_message = (
                 "Connected to a {db_type} database: {db_url}:{db_port}/{db_database}{db_socket}"
-                .format(**self.configs)
+                .format(**configs)
             )
             engine = sa.create_engine(
                 '{db_type}://{db_username}:{db_password}@{db_url}:{db_port}/{db_database}{db_socket}'
-                .format(**self.configs)
+                .format(**configs)
             ) # echo=True
         else:
-            raise Exception("Unsupported `db_type`: '{}'".format(self.configs['db_type']))
+            raise Exception("Unsupported `db_type`: '{}'".format(configs['db_type']))
         logger.info(info_message)
         return engine
     
@@ -143,11 +144,11 @@ class MyDatabase(object):
         `autocommit` and `autoflush` are enabled for the `sqlite` database in order to improve
         performance.
         """
-        if self.configs['db_type'] == 'sqlite':
+        if configs['db_type'] == 'sqlite':
             autocommit = False #True
             autoflush = False #True
             retry_on_failure = True
-        elif self.configs['db_type'] in ['postgresql', 'mysql']:
+        elif configs['db_type'] in ['postgresql', 'mysql']:
             autocommit = False
             autoflush = False
             retry_on_failure = True
@@ -174,10 +175,10 @@ class MyDatabase(object):
         session = self.Session()
         try:
             yield session
-            if not self.configs['db_is_immutable']:
+            if not configs['db_is_immutable']:
                 session.commit()
         except:
-            if not self.configs['db_is_immutable']:
+            if not configs['db_is_immutable']:
                 session.rollback()
             raise
         finally:
@@ -236,30 +237,30 @@ class MyDatabase(object):
         keep_uniprot_sequence : bool
             Wheter or not to keep the table (and schema) containing uniprot sequences.
         """       
-        if self.configs['db_type'] == 'sqlite':
-            os.remove(self.configs['sqlite_db_path'])
-            logger.info("Successfully removed the sqlite database file: {sqlite_db_path}".format(**self.configs))
+        if configs['db_type'] == 'sqlite':
+            os.remove(configs['sqlite_db_path'])
+            logger.info("Successfully removed the sqlite database file: {sqlite_db_path}".format(**configs))
             return
         
         # Remove tables one by one
         for table in reversed(Base.metadata.sorted_tables):
             if table.name != 'uniprot_sequence':
-                self.configs['table_name'] = table.name
-                self.engine.execute('drop table {db_schema}.{table_name};'.format(**self.configs))
+                configs['table_name'] = table.name
+                self.engine.execute('drop table {db_schema}.{table_name};'.format(**configs))
             elif not keep_uniprot_sequence:
-                self.configs['table_name'] = table.name
-                self.engine.execute('drop table {db_schema_uniprot}.{table_name};'.format(**self.configs))
+                configs['table_name'] = table.name
+                self.engine.execute('drop table {db_schema_uniprot}.{table_name};'.format(**configs))
                 
         # Remove the database schema
-        uniprot_on_diff_schema = self.configs['db_schema'] != self.configs['db_schema_uniprot']
+        uniprot_on_diff_schema = configs['db_schema'] != configs['db_schema_uniprot']
         if drop_schema and uniprot_on_diff_schema:
-            self.engine.execute('drop schema {db_schema};'.format(**self.configs))
+            self.engine.execute('drop schema {db_schema};'.format(**configs))
         if drop_schema and uniprot_on_diff_schema and not keep_uniprot_sequence:
-            self.engine.execute('drop schema {db_schema_uniprot};'.format(**self.configs))
+            self.engine.execute('drop schema {db_schema_uniprot};'.format(**configs))
         if drop_schema and not uniprot_on_diff_schema and not keep_uniprot_sequence:
-            self.engine.execute('drop schema {db_schema};'.format(**self.configs))
+            self.engine.execute('drop schema {db_schema};'.format(**configs))
         
-        logger.info("Successfully removed the {db_type} database schema: {db_schema}".format(**self.configs))    
+        logger.info("Successfully removed the {db_type} database schema: {db_schema}".format(**configs))    
 
 
 
@@ -300,7 +301,7 @@ class MyDatabase(object):
 
 
     def _run_create_table_system_command(self, system_command):
-        if self.configs['debug']:
+        if configs['debug']:
             logger.debug(system_command)
         result, error_message, return_code = helper.subprocess_check_output(system_command)
         if return_code != 0:
@@ -312,7 +313,7 @@ class MyDatabase(object):
         """
         Copy data from a ``.tsv`` file to a table in the database.
         """
-        configs = self.configs.copy()
+        configs = configs.copy()
         configs['table_name'] = table_name
         configs['table_folder'] = table_folder        
         
@@ -471,8 +472,8 @@ class MyDatabase(object):
                 .all()
             )
 
-        path_to_archive = self.configs['path_to_archive']
-        archive_type = self.configs['archive_type']
+        archive_dir = configs['archive_dir']
+        archive_type = configs['archive_type']
         d_idx = 0
         while d_idx < len(uniprot_domains):
             d = uniprot_domains[d_idx]
@@ -487,7 +488,7 @@ class MyDatabase(object):
             if copy_data:
                 try:
                     self._copy_provean(
-                        d, path_to_archive, archive_type)
+                        d, archive_dir, archive_type)
                 except subprocess.CalledProcessError as e:
                     logger.error(e)
                     logger.error('Failed to copy provean supporting set!')
@@ -496,7 +497,7 @@ class MyDatabase(object):
             if copy_data:
                 try:
                     self._copy_uniprot_domain_data(
-                        d, d.path_to_data, path_to_archive, archive_type)
+                        d, d.path_to_data, archive_dir, archive_type)
                 except subprocess.CalledProcessError as e:
                     logger.error(e)
                     logger.error('Failed to copy the domain alignment and / or homology model!')
@@ -529,8 +530,8 @@ class MyDatabase(object):
                 .all()
             )
 
-        path_to_archive = self.configs['path_to_archive']
-        archive_type = self.configs['archive_type']
+        archive_dir = configs['archive_dir']
+        archive_type = configs['archive_type']
         d_idx = 0
         while d_idx < len(uniprot_domain_pairs):
             d = uniprot_domain_pairs[d_idx]
@@ -549,7 +550,7 @@ class MyDatabase(object):
                     ud = d.uniprot_domain_2
                 try:
                     self._copy_provean(
-                        ud, path_to_archive, archive_type)
+                        ud, archive_dir, archive_type)
                 except subprocess.CalledProcessError as e:
                     logger.error(e)
                     logger.error('Failed to copy provean supporting set!')
@@ -558,7 +559,7 @@ class MyDatabase(object):
             if copy_data:
                 try:
                     self._copy_uniprot_domain_pair_data(
-                        d, d.path_to_data, path_to_archive, archive_type)
+                        d, d.path_to_data, archive_dir, archive_type)
                 except subprocess.CalledProcessError as e:
                     logger.error(e)
                     logger.error('Failed to copy domain pair alignments and / or homology model!')
@@ -570,7 +571,7 @@ class MyDatabase(object):
         return uniprot_domain_pairs
 
 
-    def _copy_uniprot_domain_data(self, d, path_to_data, path_to_archive, archive_type):
+    def _copy_uniprot_domain_data(self, d, path_to_data, archive_dir, archive_type):
         if path_to_data is None:
             logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
@@ -585,14 +586,14 @@ class MyDatabase(object):
                         path_to_data + d.template.model.model_filename,
                     ]
                     path_to_7z = os.path.join(
-                        path_to_archive, 
+                        archive_dir, 
                         'uniprot_domain', 
                         'uniprot_domain.7z'
                     )
                     self._extract_files_from_7zip(path_to_7z, filenames)
                 else:
-                    tmp_save_path = self.configs['temp_archive_path'] + path_to_data
-                    archive_save_path = path_to_archive + path_to_data
+                    tmp_save_path = configs['archive_temp_dir'] + path_to_data
+                    archive_save_path = archive_dir + path_to_data
                     path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
                     subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
                     subprocess.check_call("cp -f '{}' '{}'".format(
@@ -603,7 +604,7 @@ class MyDatabase(object):
                         tmp_save_path + d.template.model.model_filename), shell=True)
 
 
-    def _copy_uniprot_domain_pair_data(self, d, path_to_data, path_to_archive, archive_type):
+    def _copy_uniprot_domain_pair_data(self, d, path_to_data, archive_dir, archive_type):
         if path_to_data is None:
             logger.error('Cannot copy uniprot domain pair data because `path_to_data` is None')
             return
@@ -620,14 +621,14 @@ class MyDatabase(object):
                         path_to_data + d.template.model.model_filename,
                     ]
                     path_to_7zip = os.path.join(
-                        path_to_archive, 
+                        archive_dir, 
                         'uniprot_domain_pair', 
                         'uniprot_domain_pair.7z'
                     )
                     self._extract_files_from_7zip(path_to_7zip, filenames)
                 else:
-                    tmp_save_path = self.configs['temp_archive_path'] + path_to_data
-                    archive_save_path = path_to_archive + path_to_data
+                    tmp_save_path = configs['archive_temp_dir'] + path_to_data
+                    archive_save_path = archive_dir + path_to_data
                     path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
                     path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
                     subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
@@ -643,7 +644,7 @@ class MyDatabase(object):
                         tmp_save_path + d.template.model.model_filename), shell=True)
 
 
-    def _copy_provean(self, ud, path_to_archive, archive_type):
+    def _copy_provean(self, ud, archive_dir, archive_type):
         if not (ud.uniprot_sequence and
                 ud.uniprot_sequence.provean and
                 ud.uniprot_sequence.provean.provean_supset_filename):
@@ -663,7 +664,7 @@ class MyDatabase(object):
                 get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
             ]
             path_to_7zip = os.path.join(
-                path_to_archive, 
+                archive_dir, 
                 'provean', 
                 'provean.7z'
             )
@@ -674,18 +675,18 @@ class MyDatabase(object):
             subprocess.check_call(
                 "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
                     os.path.dirname(
-                        self.configs['temp_archive_path'] + get_uniprot_base_path(ud) +
+                        configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
                         ud.uniprot_sequence.provean.provean_supset_filename)),
                 shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
-                path_to_archive + get_uniprot_base_path(ud) +
+                archive_dir + get_uniprot_base_path(ud) +
                     ud.uniprot_sequence.provean.provean_supset_filename,
-                self.configs['temp_archive_path'] + get_uniprot_base_path(ud) +
+                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
                     ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
-                path_to_archive + get_uniprot_base_path(ud) +
+                archive_dir + get_uniprot_base_path(ud) +
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-                self.configs['temp_archive_path'] + get_uniprot_base_path(ud) +
+                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
 
 
@@ -693,7 +694,7 @@ class MyDatabase(object):
            wait_exponential_multiplier=1000, 
            wait_exponential_max=60000)
     def _extract_files_from_7zip(self, path_to_7zip, filenames):
-        """Extract files to `config['temp_archive_path']`
+        """Extract files to `config['archive_temp_dir']`
         """
         system_command = "7za x '{path_to_7zip}' '{files}' -y".format(
             path_to_7zip=path_to_7zip, 
@@ -703,7 +704,7 @@ class MyDatabase(object):
             'Extracting files from 7zip archive using the following system command:\n{}'
             .format(system_command))
         result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.configs['temp_archive_path'], system_command)
+            helper.subprocess_check_output_locally(configs['archive_temp_dir'], system_command)
         )
         
         def log_error():
@@ -747,7 +748,7 @@ class MyDatabase(object):
 
         if copy_data:
             try:
-                self._copy_mutation_data(uniprot_mutation, d.path_to_data, self.configs['path_to_archive'])
+                self._copy_mutation_data(uniprot_mutation, d.path_to_data, configs['archive_dir'])
             except (subprocess.CalledProcessError,
                     errors.Archive7zipError,
                     errors.Archive7zipFileNotFoundError) as e:
@@ -756,18 +757,18 @@ class MyDatabase(object):
         return uniprot_mutation
 
 
-    def _copy_mutation_data(self, mutation, path_to_data, path_to_archive):
+    def _copy_mutation_data(self, mutation, path_to_data, archive_dir):
         if mutation and mutation.model_filename_wt:
-            if path_to_archive.endswith('.7z'):
+            if archive_dir.endswith('.7z'):
                 # Extract files from a 7zip archive
                 filenames = [
                     path_to_data + mutation.model_filename_wt,
                     path_to_data + mutation.model_filename_mut,
                 ]
-                self._extract_files_from_7zip(path_to_archive, filenames)
+                self._extract_files_from_7zip(archive_dir, filenames)
             else:
-                tmp_save_path = self.configs['temp_archive_path'] + path_to_data
-                archive_save_path = path_to_archive + path_to_data
+                tmp_save_path = configs['archive_temp_dir'] + path_to_data
+                archive_save_path = archive_dir + path_to_data
                 path_to_mutation = os.path.dirname(tmp_save_path + mutation.model_filename_wt)
                 subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_mutation), shell=True)
                 subprocess.check_call("cp -f '{}' '{}'".format(
@@ -795,7 +796,7 @@ class MyDatabase(object):
                 "select count(*) from {0}.uniprot_domain_mutation "
                 "where uniprot_domain_id = {1} "
                 "and ddg is not null;"
-            ).format(self.configs['db_schema'], d.uniprot_domain_id)
+            ).format(configs['db_schema'], d.uniprot_domain_id)
             num_mutations = session.execute(validation_query).fetchone()[0]
             if num_mutations != 0:
                 raise errors.ModelHasMutationsError(
@@ -804,11 +805,11 @@ class MyDatabase(object):
             if isinstance(d, UniprotDomain):
                 session.execute(
                     'delete from {0}.uniprot_domain_model where uniprot_domain_id = {1}'
-                    .format(self.configs['db_schema'], d.uniprot_domain_id))
+                    .format(configs['db_schema'], d.uniprot_domain_id))
             elif isinstance(d, UniprotDomainPair):
                 session.execute(
                     'delete from {0}.uniprot_domain_pair_model where uniprot_domain_pair_id = {1}'
-                    .format(self.configs['db_schema'], d.uniprot_domain_pair_id))
+                    .format(configs['db_schema'], d.uniprot_domain_pair_id))
             else:
                 raise Exception("'d' is of incorrect type!")
 
@@ -817,7 +818,7 @@ class MyDatabase(object):
     def merge_row(self, row_instance):
         """Adds a list of rows (`row_instances`) to the database.
         """
-        if not self.configs['db_is_immutable']:
+        if not configs['db_is_immutable']:
             with self.session_scope() as session:
                 if not isinstance(row_instance, list):
                     session.merge(row_instance)
@@ -825,28 +826,25 @@ class MyDatabase(object):
                     deque( (session.merge(row) for row in row_instance), maxlen=0 )
 
 
-    def merge_provean(self, provean, uniprot_base_path=False):
+    def merge_provean(self, provean, provean_supset_file, uniprot_base_path):
         """Adds provean score to the database.
         """
-        if (uniprot_base_path and
-            provean.provean_supset_filename and
-            os.path.isfile(self.configs['temp_archive_path'] + uniprot_base_path +
-                provean.provean_supset_filename) and
-            os.path.isfile(self.configs['temp_archive_path'] + uniprot_base_path +
-                provean.provean_supset_filename + '.fasta')):
-            # ...
-            path_to_archive = self.configs['path_to_archive']
-            logger.debug(
-                'Moving provean supset to the output folder: {}'
-                .format(path_to_archive + uniprot_base_path))
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-                path_to_archive + uniprot_base_path), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                self.configs['temp_archive_path'] + uniprot_base_path + provean.provean_supset_filename,
-                path_to_archive + uniprot_base_path + provean.provean_supset_filename), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                self.configs['temp_archive_path'] + uniprot_base_path + provean.provean_supset_filename + '.fasta',
-                path_to_archive + uniprot_base_path + provean.provean_supset_filename + '.fasta'), shell=True)
+        assert op.isfile(provean_supset_file)
+        assert op.isfile(provean_supset_file + '.fasta')
+
+        archive_dir = configs['archive_dir']
+        logger.debug(
+            'Moving provean supset to the output folder: {}'
+            .format(archive_dir + uniprot_base_path))
+        subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
+            archive_dir + uniprot_base_path), shell=True)
+        subprocess.check_call("cp -f '{}' '{}'".format(
+            provean_supset_file,
+            archive_dir + uniprot_base_path + provean.provean_supset_filename), shell=True)
+        subprocess.check_call("cp -f '{}' '{}'".format(
+            provean_supset_file + '.fasta',
+            archive_dir + uniprot_base_path + provean.provean_supset_filename + '.fasta'), shell=True)
+
         self.merge_row(provean)
 
 
@@ -855,9 +853,9 @@ class MyDatabase(object):
         """
         # Save a copy of the alignment to the export folder
         if path_to_data:
-            path_to_archive = self.configs['path_to_archive']
-            archive_save_path = path_to_archive + path_to_data
-            tmp_save_path = self.configs['temp_archive_path'] + path_to_data
+            archive_dir = configs['archive_dir']
+            archive_save_path = archive_dir + path_to_data
+            tmp_save_path = configs['archive_temp_dir'] + path_to_data
             # Save the row corresponding to the model as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path), shell=True)
             # Don't need to dump template. Templates are precalculated
@@ -890,9 +888,9 @@ class MyDatabase(object):
         """
         mut.mut_date_modified = datetime.datetime.utcnow()
         if path_to_data and (mut.model_filename_wt is not None):
-            path_to_archive = self.configs['path_to_archive']
-            archive_save_path = path_to_archive + path_to_data
-            tmp_save_path = self.configs['temp_archive_path'] + path_to_data
+            archive_dir = configs['archive_dir']
+            archive_save_path = archive_dir + path_to_data
+            tmp_save_path = configs['archive_temp_dir'] + path_to_data
             archive_save_subpath = mut.model_filename_wt.split('/')[0] + '/'
             # Save the row corresponding to the mutation as a serialized sqlalchemy object
             subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
@@ -1100,8 +1098,8 @@ class MyDatabase(object):
         """
         """
 
-        tmp_save_path = self.configs['temp_archive_path'] + path_to_data
-        archive_save_path = self.configs['path_to_archive'] + path_to_data
+        tmp_save_path = configs['archive_temp_dir'] + path_to_data
+        archive_save_path = configs['archive_dir'] + path_to_data
 
         if isinstance(model, UniprotDomainModel):
 
@@ -1148,7 +1146,7 @@ class MyDatabase(object):
 
         for d in data:
             result, __, __ = (
-                helper.subprocess_check_output('ls ' + self.configs['path_to_archive'] + d[0])
+                helper.subprocess_check_output('ls ' + configs['archive_dir'] + d[0])
             )
             filenames = [fname for fname in result.split('\n') if fname != '']
             for filename in filenames:

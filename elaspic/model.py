@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 #%%
 class Model:
     
-    def __init__(self, sequence_file, structure_file):
+    def __init__(self, sequence_file, structure_file, model_results_file=None):
         logger.debug('Initialising a Model instance with parameters:')
         logger.debug('sequence_file: {}:'.format(sequence_file))
         logger.debug('structure_file: {}:'.format(structure_file))
@@ -42,7 +42,7 @@ class Model:
 
         ### Template structures
         self.structure_file = structure_file
-        self.structure = helper.get_pdb_structure(self.structure_file)
+        self.structure = structure_tools.get_pdb_structure(self.structure_file)
         self.structure_id = self.structure.id
         self.structure_seqrecords = [
             SeqRecord(
@@ -50,6 +50,7 @@ class Model:
                 seq=Seq(structure_tools.get_chain_sequence_and_numbering(chain, include_hetatms=True)[0])
             ) for chain in self.structure[0].child_list
         ]
+        self.chain_ids = [chain.id for chain in self.structure.child_list[0].child_list]
 
         ### Homology modelling
         if self.sequence_id == self.structure_id:
@@ -73,10 +74,12 @@ class Model:
                 json.dump(self.modeller_results, ofh)
         
         # Get interacting amino acids and interface area
+        self._analyse_core()
         if len(self.sequence_seqrecords) > 1:
             self._analyse_interface()
         
         self.mutations = {}
+        self.errors = []
         
     
     def _validate_sequence_seqrecords(self):
@@ -118,16 +121,49 @@ class Model:
     def _create_alignments_and_model(self):
         # Align sequence to structure.
         alignment_filenames = []
+        domain_def_offsets = []
+        alignment_stats = []
         self.sequence_seqrecords_aligned, self.structure_seqrecords_aligned = [], []
         for sequence_seqrec, structure_seqrec in zip(self.sequence_seqrecords, self.structure_seqrecords):
             if str(sequence_seqrec.seq) != str(structure_seqrec.seq):
+                # Sequence and structure are different, so perform alignment
                 alignment_output_file = self._align_with_tcoffee(sequence_seqrec, structure_seqrec)
-                alignment_filenames.append(alignment_output_file)
                 alignment = AlignIO.read(alignment_output_file, 'fasta')
                 assert len(alignment) == 2
-                sequence_seqrec, structure_seqrec = alignment[0], alignment[1]
-            self.sequence_seqrecords_aligned.append(sequence_seqrec)
-            self.structure_seqrecords_aligned.append(structure_seqrec)
+                # Check to make sure that the sequence does not have very large overhangs
+                # over the structure. 
+                # TODO: Do something similar for very large gaps (long region of sequence without structure)
+                # Right now Modeller will try to model those regions as loops (which end up looking
+                # very unnatural.
+                domain_def_offset = get_alignment_overhangs(alignment)
+                if any(domain_def_offset):
+                    logger.debug(
+                        'Shortening uniprot domain sequence because the alignment had large '
+                        'overhangs... (domain_def_offset: {})'.format(domain_def_offset)
+                    )
+                    cut_from_start = domain_def_offset[0] if domain_def_offset[0] else None
+                    cut_from_end = -domain_def_offset[1] if domain_def_offset[1] else None
+                    sequence_seqrec.seq = Seq(str(sequence_seqrec.seq)[cut_from_start:cut_from_end])
+                    alignment_output_file = self._align_with_tcoffee(sequence_seqrec, structure_seqrec)
+                    alignment = AlignIO.read(alignment_output_file, 'fasta')
+                    assert len(alignment) == 2
+                # Analyse the quality of the alignment
+                alignment_identity, alignment_coverage, __, __ = analyze_alignment(alignment)
+                alignment_score = score_alignment(alignment_identity, alignment_coverage)
+                # Save results
+                alignment_stats.append((alignment_identity, alignment_coverage, alignment_score))
+                alignment_filenames.append(alignment_output_file)
+                domain_def_offsets.append(domain_def_offset)
+                self.sequence_seqrecords_aligned.append(alignment[0])
+                self.structure_seqrecords_aligned.append(alignment[1])
+            else:
+                # Sequence and structure are the same; no need for alignment. Save dummy results.
+                alignment_stats.append((1.0, 1.0, 1.0,))
+                alignment_filenames.append(None)
+                domain_def_offsets.append((None, None,))
+                self.sequence_seqrecords_aligned.append(sequence_seqrec)
+                self.structure_seqrecords_aligned.append(structure_seqrec)
+
         # Add the HETATM chain if necesasry.
         assert len(self.sequence_seqrecords_aligned) == len(self.structure_seqrecords_aligned)
         if len(self.structure_seqrecords) == len(self.structure_seqrecords_aligned) + 1:
@@ -141,11 +177,51 @@ class Model:
         # Run modeller.
         self.modeller_results = run_modeller(
             self.pir_alignment_filename, self.sequence_id, self.structure_id,
-            new_chains=''.join(chain.id for chain in self.structure.child_list[0].child_list)
+            new_chains=''.join(self.chain_ids)
         )
-        self.modeller_results['alignment_filenames'] = alignment_filenames
         
+        # Save additional alignment info
+        self.modeller_results['alignment_filenames'] = alignment_filenames
+        self.modeller_results['domain_def_offsets'] = alignment_filenames
+        self.modeller_results['alignment_stats'] = alignment_stats
+        
+        
+    def _analyse_core(self):
+        # Run the homology model through msms and get dataframes with all the
+        # per atom and per residue SASA values
+        analyze_structure = structure_analysis.AnalyzeStructure(
+            self.modeller_results['model_file'], configs['modeller_dir']
+        )
+        __, seasa_by_chain_separately, __, seasa_by_residue_separately = (
+            analyze_structure.get_seasa()
+        )
+        
+        # Get SASA only for amino acids in the chain of interest
+        def _filter_df(df, chain_id, resname, resnum):
+            df = df[
+                    (df['pdb_chain'] == chain_id) & 
+                    (df['res_name'] == resname) & 
+                    (df['res_num'] == resnum)
+                ].iloc[0]['rel_sasa']
+            return df
             
+        self.relative_sasa_scores = {}
+        for chain_id in self.chian_ids:
+            self.relative_sasa_scores[chain_id] = []
+            chain = self.structure[0][chain_id]
+            for residue in chain:
+                if residue.resname in structure_tools.amino_acids:
+                    relative_sasa_score = _filter_df(
+                        seasa_by_residue_separately, 
+                        chain_id = chain_id, 
+                        resname = residue.resname, 
+                        resnum = (str(residue.id[1]) + residue.id[2].strip())
+                    )
+                    self.relative_sasa_scores[chain_id].append(relative_sasa_score)
+            if len(self.relative_sasa_scores[chain_id]) != len(chain):
+                raise errors.MSMSError()
+
+        
     def _analyse_interface(self):
         
         ### Get a dictionary of interacting residues
@@ -168,6 +244,9 @@ class Model:
                             a2b_contacts.add(tuple(value[2:]))
             return a2b_contacts
     
+        a2b_contacts = _get_a2b_contacts(0, 1)
+        b2a_contacts = _get_a2b_contacts(1, 0)
+
         def _validate_a2b_contacts(a2b_contacts, chain_idx):
             logger.debug('Validating chain {} interacting AA...'.format(chain_idx))
             interface_aa_a = ''.join(list(zip(*a2b_contacts))[2])
@@ -180,23 +259,18 @@ class Model:
                 logger.error('interface_aa_b: {}'.format(interface_aa_b))
                 raise errors.InterfaceMismatchError()
 
-        a2b_contacts = _get_a2b_contacts(0, 1)
-        b2a_contacts = _get_a2b_contacts(1, 0)
-        
         _validate_a2b_contacts(a2b_contacts, 0)
         _validate_a2b_contacts(b2a_contacts, 1)
         
+        # Using residue indexes
         self.interacting_residues_1 = sorted(list(zip(*a2b_contacts))[0])
         self.interacting_residues_2 = sorted(list(zip(*b2a_contacts))[0])
-                
-        self.chain_1_interactions = sorted(list(zip(*a2b_contacts))[1])
-        self.chain_2_interactions = sorted(list(zip(*b2a_contacts))[1])
-               
-        if not self.chain_1_interactions and not self.chain_2_interactions:
+        
+        if not self.interacting_residues_1 and not self.interacting_residues_2:
             message = (
                 'Chains {} and {} are not interacting!\n' +
-                'chain_1_interactions: {}\n'.format(self.chain_1_interactions) + 
-                'chain_2_interactions: {}\n'.format(self.chain_2_interactions)
+                'interacting_residues_1: {}\n'.format(self.interacting_residues_1) + 
+                'interacting_residues_2: {}\n'.format(self.interacting_residues_2)
             )
             logger.error(message)
             raise errors.ChainsNotInteractingError(message)
@@ -250,7 +324,6 @@ class Model:
         logger.debug('partner_chain_id: {}'.format(partner_chain_id))
         
         
-        
         #######################################################################
         # Create a folder for all mutation data.
         mutation_dir = op.join(configs['model_dir'], 'mutations',  mutation_id)
@@ -259,20 +332,17 @@ class Model:
         shutil.copy(op.join(configs['data_dir'], 'rotabase.txt'), mutation_dir)
 
 
-
         #######################################################################
         # Copy the homology model to the mutation folder
         model_file = op.join(mutation_dir, op.basename(self.modeller_results['model_file']))
         shutil.copy(self.modeller_results['model_file'], model_file)
 
 
-
         #######################################################################
         ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
         fX = call_foldx.FoldX(model_file, chain_id, mutation_dir)
         repairedPDB_wt = fX('RepairPDB')
-
-
+        
 
         #######################################################################
         ## 3rd: introduce the mutation using FoldX   
@@ -297,7 +367,6 @@ class Model:
         shutil.copy(repairedPDB_mut_list[0], model_filename_mut)
         
         
-        
         #######################################################################
         ## 4th: set up the classes for the wildtype and the mutant structures
         fX_wt_list = list()
@@ -307,7 +376,6 @@ class Model:
         fX_mut_list = list()
         for mPDB in repairedPDB_mut_list:
             fX_mut_list.append(call_foldx.FoldX(mPDB, chain_id, mutation_dir))
-
 
 
         #######################################################################
@@ -331,7 +399,6 @@ class Model:
             )
 
 
-
         #######################################################################
         ## 6: Calculate all other relevant properties
         # (This also verifies that mutations match mutated residues in pdb structures).
@@ -347,7 +414,6 @@ class Model:
             
         logger.debug('analyze_structure_results_wt: {}'.format(analyze_structure_results_wt))
         logger.debug('analyze_structure_results_mut: {}'.format(analyze_structure_results_mut))
-        
         
         
         #######################################################################
@@ -442,10 +508,10 @@ def analyze_alignment(alignment, pdb_contact_idxs=[]):
         if is_interface:
             interface_1_identity += 1 # Count as identity
 
-    identity = sequence_1_identity / float(sequence_1_length) * 100
-    coverage = sequence_1_coverage / float(sequence_1_length) * 100
-    if_identity = sequence_1_identity / float(len(pdb_contact_idxs)) * 100 if pdb_contact_idxs else None
-    if_coverage = interface_1_coverage / float(len(pdb_contact_idxs)) * 100 if pdb_contact_idxs else None
+    identity = sequence_1_identity / float(sequence_1_length)
+    coverage = sequence_1_coverage / float(sequence_1_length)
+    if_identity = sequence_1_identity / float(len(pdb_contact_idxs)) if pdb_contact_idxs else None
+    if_coverage = interface_1_coverage / float(len(pdb_contact_idxs)) if pdb_contact_idxs else None
 
     return identity, coverage, if_identity, if_coverage
 
@@ -454,6 +520,27 @@ def score_alignment(identity, coverage, alpha=0.95):
     """ T-score from the interactome3d paper
     """
     return alpha * (identity) * (coverage) + (1.0 - alpha) * (coverage)
+
+
+def get_alignment_overhangs(alignment):
+    """ Remove gap overhangs from the alignments.
+    There are cases where no template sequence is availible for a big chunk
+    of the protein. Return the number of amino acids that should be removed
+    from the start and end of the query sequence in order to match the template.
+    """
+    n_gaps_start = 0
+    n_gaps_end = 0
+    for aa_query, aa_template in zip(*alignment):
+        if aa_query != '-' and aa_template == '-':
+            n_gaps_start += 1
+        else:
+            break
+    for aa_query, aa_template in reversed(list(zip(*alignment))):
+        if aa_query != '-' and aa_template == '-':
+            n_gaps_end += 1
+        else:
+            break
+    return n_gaps_start, n_gaps_end
 
 
 def write_to_pir_alignment(pir_alignment_filehandle, seq_type, seq_name, seq):
@@ -493,7 +580,7 @@ def run_modeller(pir_alignment_filename, target_id, template_id, new_chains='ABC
     
     # If there is only one chain in the pdb, label that chain 'A'
     io = PDBIO()
-    structure = helper.get_pdb_structure(raw_model_file)
+    structure = structure_tools.get_pdb_structure(raw_model_file)
     chains = structure[0].child_list
     logger.debug('Modeller chain ids: ' + ', '.join(chain.id for chain in chains))
     for i in range(len(chains)):

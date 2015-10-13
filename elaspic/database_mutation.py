@@ -24,16 +24,20 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.PDB.PDBParser import PDBParser
 
-from . import conf, errors, sequence, structure, structure_analysis, call_foldx
+from . import (
+    conf, helper, errors, sequence, structure_tools, structure_analysis, call_foldx,
+    database_tables,
+)
 
 logger = logging.getLogger(__name__)
-
+configs = conf.Configs()
 
 
 #%%
 class GetMutation(object):
 
     def __init__(self, **kwargs):
+        """
         uniprot_id_1 = None
         mutation = None
         domain_sequences = None
@@ -47,9 +51,9 @@ class GetMutation(object):
         structure = None
         position_modeller = None # modeller_mutation_pos
         mutation_modeller = None # modeller_mutation
-
+        """
+        self.__dict__ = kwargs
         self.is_interface = len(self.domain_sequences) > 1
-        self.mutation_features = kwargs['mutation_features']
         self.validate()
 
 
@@ -113,7 +117,7 @@ class GetMutation(object):
         """
         """
 #        uniprot_sequence = self.db.get_uniprot_sequence(d.uniprot_id).seq.tostring()
-#        domain_def = database.decode_domain_def(t.domain_def)
+#        domain_def = database_tables.decode_domain_def(t.domain_def)
 #        uniprot_sequence_domain = uniprot_sequence[domain_def[0]-1:domain_def[1]]
         if isinstance(domain_sequence, six.string_types):
             pass
@@ -252,8 +256,8 @@ class GetMutation(object):
                       logger)
         repairedPDB_wt_list, repairedPDB_mut_list = fX_wt('BuildModel', mutCodes)
 
-        wt_chain_sequences = structure.get_structure_sequences(repairedPDB_wt_list[0])
-        mut_chain_sequences = structure.get_structure_sequences(repairedPDB_mut_list[0])
+        wt_chain_sequences = structure_tools.get_structure_sequences(repairedPDB_wt_list[0])
+        mut_chain_sequences = structure_tools.get_structure_sequences(repairedPDB_mut_list[0])
         logger.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
         logger.debug('wt_chain_sequences: %s' % str(wt_chain_sequences))
         logger.debug('repairedPDB_mut_list: %s' % str(repairedPDB_mut_list))
@@ -286,13 +290,13 @@ class GetMutation(object):
 
         #######################################################################
         ## 5th: calculate the energy for the wildtype
-        #if isinstance(d, database.UniprotDomain):
-        stability_values_wt = encode_list_as_text([foldx('Stability') for foldx in fX_wt_list])
-        stability_values_mut = encode_list_as_text([foldx('Stability') for foldx in fX_mut_list])
+        #if isinstance(d, database_tables.UniprotDomain):
+        stability_values_wt = helper.encode_list_as_text([foldx('Stability') for foldx in fX_wt_list])
+        stability_values_mut = helper.encode_list_as_text([foldx('Stability') for foldx in fX_mut_list])
 
-        if isinstance(d, database.UniprotDomainPair):
-            complex_stability_values_wt = encode_list_as_text([ foldx('AnalyseComplex') for foldx in fX_wt_list ])
-            complex_stability_values_mut = encode_list_as_text([ foldx('AnalyseComplex') for foldx in fX_mut_list ])
+        if isinstance(d, database_tables.UniprotDomainPair):
+            complex_stability_values_wt = helper.encode_list_as_text([ foldx('AnalyseComplex') for foldx in fX_wt_list ])
+            complex_stability_values_mut = helper.encode_list_as_text([ foldx('AnalyseComplex') for foldx in fX_mut_list ])
 
         #######################################################################
         ## 9th: calculate the pysico-chemical properties
@@ -304,8 +308,8 @@ class GetMutation(object):
                     pdb_filename, mutated_chain_id, mutation_domain)
                 opposite_chain_contact_vector_all.append(opposite_chain_contact_vector)
                 same_chain_contact_vector_all.append(same_chain_contact_vector)
-            return [encode_list_as_text(opposite_chain_contact_vector_all),
-                    encode_list_as_text(same_chain_contact_vector_all)]
+            return [helper.encode_list_as_text(opposite_chain_contact_vector_all),
+                    helper.encode_list_as_text(same_chain_contact_vector_all)]
 
         physi_chem = structure_analysis.PhysiChem(5.0, 4.0, conf.configs['unique_temp_folder'])
         opposite_chain_contact_vector_all_wt, same_chain_contact_vector_all_wt = get_contact_vectors(
@@ -328,10 +332,10 @@ class GetMutation(object):
             seasa_info = seasa_by_residue_separately[
                 (seasa_by_residue_separately['pdb_chain']==mut_data.chains_modeller[0]) &
                 (seasa_by_residue_separately['res_num']==mut_data.position_modeller[0])].iloc[0]
-            if (structure.convert_aa(seasa_info['res_name']) != mut_data.mutation_domain[0] and
-                structure.convert_aa(seasa_info['res_name']) != mut_data.mutation_domain[-1]):
+            if (structure_tools.convert_aa(seasa_info['res_name']) != mut_data.mutation_domain[0] and
+                structure_tools.convert_aa(seasa_info['res_name']) != mut_data.mutation_domain[-1]):
                     logger.error('Wrong amino acid for msms mutant!')
-                    logger.error(structure.convert_aa(seasa_info['res_name']))
+                    logger.error(structure_tools.convert_aa(seasa_info['res_name']))
                     logger.error(mut_data.mutation_domain)
                     logger.error(seasa_info)
                     logger.error(seasa_by_residue_separately)
@@ -371,22 +375,14 @@ class GetMutation(object):
             return solvent_accessibility, secondary_structure, contact_distance
 
         solvent_accessibility_wt, secondary_structure_wt, contact_distance_wt = \
-            obtain_additional_mutation_properties(repairedPDB_wt_list, isinstance(d, database.UniprotDomainPair))
+            obtain_additional_mutation_properties(repairedPDB_wt_list, isinstance(d, database_tables.UniprotDomainPair))
         solvent_accessibility_mut, secondary_structure_mut, contact_distance_mut = \
-            obtain_additional_mutation_properties(repairedPDB_mut_list, isinstance(d, database.UniprotDomainPair))
+            obtain_additional_mutation_properties(repairedPDB_mut_list, isinstance(d, database_tables.UniprotDomainPair))
 
         logger.debug('solvent_accessibility (wt/mut): ({}/{})'.format(solvent_accessibility_wt, solvent_accessibility_mut))
         logger.debug('secondary_structure (wt/mut): ({}/{})'.format(secondary_structure_wt, secondary_structure_mut))
         logger.debug('contact_distance (wt/mut): ({}/{})'.format(contact_distance_wt, contact_distance_mut))
 
-        #######################################################################
-        ## 11th: get the BLOSUM (or what ever matrix is given) score
-        # self.mutationss is a list containing the mutations of the form A_H56T
-        matrix_score = 0
-        for mut in [mut_data.mutation_domain]:
-            fromAA = mut[0]
-            toAA   = mut[-1]
-            matrix_score += score_pairwise(fromAA, toAA, conf.configs['matrix'], conf.configs['gap_start'], conf.configs['gap_extend'])
 
         #######################################################################
         ## 5th: calculate the energy for the wildtype
@@ -407,14 +403,12 @@ class GetMutation(object):
         uniprot_mutation.physchem_mut = opposite_chain_contact_vector_all_mut
         uniprot_mutation.physchem_mut_ownchain = same_chain_contact_vector_all_mut
 
-        uniprot_mutation.matrix_score = matrix_score
-
         uniprot_mutation.secondary_structure_wt = secondary_structure_wt
         uniprot_mutation.solvent_accessibility_wt = solvent_accessibility_wt
         uniprot_mutation.secondary_structure_mut = secondary_structure_mut
         uniprot_mutation.solvent_accessibility_mut = solvent_accessibility_mut
 
-        if isinstance(d, database.UniprotDomainPair):
+        if isinstance(d, database_tables.UniprotDomainPair):
             uniprot_mutation.analyse_complex_energy_wt = complex_stability_values_wt
             uniprot_mutation.analyse_complex_energy_mut = complex_stability_values_mut
             uniprot_mutation.contact_distance_wt = contact_distance_wt
@@ -443,7 +437,7 @@ class GetMutation(object):
             if (str(residue.id[1]) + residue.id[2].strip()) == mut_data.position_modeller[0]:
                 residue_found = True
                 break
-        if not residue_found or not (structure.convert_aa(residue.resname) == expecte_aa):
+        if not residue_found or not (structure_tools.convert_aa(residue.resname) == expecte_aa):
             logger.error('residue_found? %s' % residue_found)
             logger.error(residue.resname)
             logger.error(residue.id)
@@ -452,28 +446,5 @@ class GetMutation(object):
             raise errors.FoldXAAMismatchError('Expected and actual FoldX amino acids do not match!')
 
 
-    def predict_thermodynamic_effect(self, d, uniprot_mutation):
-        """
-        """
-        if isinstance(d, database.UniprotDomain):
-            clf = self.clf_domain
-            clf_features = self.clf_domain_features
-        elif isinstance(d, database.UniprotDomainPair):
-            clf = self.clf_interface
-            clf_features = self.clf_interface_features
 
-        feature_name_conversion = {
-            'normDOPE': 'norm_dope',
-            'seq_id_avg': 'alignment_identity'}
-        clf_features = [feature_name_conversion.get(x, x) for x in clf_features]
-
-        feature_df = get_mutation_features(d, uniprot_mutation)
-        feature_df = format_mutation_features(feature_df, isinstance(d, database.UniprotDomainPair))
-        feature_df = convert_features_to_differences(feature_df, True) # keep mut, remove it in next step
-        feature_df = feature_df[clf_features]
-
-        uniprot_mutation.ddg = clf.predict(feature_df)[0]
-        logger.debug('Predicted ddG: {}'.format(uniprot_mutation.ddg))
-
-        return uniprot_mutation
 

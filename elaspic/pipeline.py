@@ -50,7 +50,7 @@ class Pipeline(object):
     def __init__(self, configurations):
         """
         It should be possible to initialize one pipeline and call it in parallel using different
-        mutations as input
+        mutations as input.
         """       
         # Read the configuration file and set the variables
         if isinstance(configurations, six.string_types):
@@ -58,8 +58,7 @@ class Pipeline(object):
         elif isinstance(configurations, dict):
             configs.update(**configurations)
         
-        # TODO: remove so error message does not appear in a production release.  
-        self._validate_temp_path(conf.configs)
+        self._validate_temp_path()
 
         # Initialize a logger
         for line in ELASPIC_LOGO.split('\n'):
@@ -67,15 +66,18 @@ class Pipeline(object):
 
         self.PWD = os.getcwd()
         
+        # Each one leads to the next...
+        self.seqrecords = []
         self.sequences = {}
         self.models = {}
         self.predictions = {}
 
 
-
-    def _validate_temp_path(self, configs):
+    def _validate_temp_path(self):
         """
         Make sure that we are using a job specific temporary folder if we are on a cluster.
+        
+        TODO: Remove so error message does not appear in a production release.  
         """
         hostname = helper.get_hostname()
         no_job_specific_folder = configs['temp_dir'].startswith(configs['global_temp_dir'])
@@ -84,28 +86,167 @@ class Pipeline(object):
         )
         if no_job_specific_folder and on_node_with_manditory_job_specific_folder:
             raise Exception('You should be using a temp folder that it specific to the particular job!')
+          
+              
+                
+                .sequence = (
+                    sequence.Sequence(prep.sequence_file, prep.provean_supset_file)
+                )
+            
+        self.sequences[prep.key] = prep.sequence
+        return prep.sequence
     
+
+
+    def calculate_model(self, prep):
+        if prep.key in self.models:
+            return self.models[prep.key]
+        
+        with prep:
+            prep.model = (
+                sequence.Model(prep.sequence_file, prep.structure_file, prep.model_results_file)
+            )
+            
+        self.models[prep.key] = prep.model
+        return prep.model
+        
+   
+     
+    def calculate_score(self, prep):
+        if prep.key in self.mutations:
+            return self.mutations[prep.key]
+            
+        with prep:
+            prep.sequence.mutate(prep.mutation)
+            prep.model.mutate(prep.mutation_chan_idx, prep.mutation)
+            prep.predictor.score(prep.df, prep.core_or_interface)
+            
+            
+        self.sequences[prep.sequence_key].mutate()
+        self.models[prep.model_key].mutate()
+  
+
+
+#%%
+class Factory:
+    
+    _instances = {}
+    
+    @classmethod
+    def get(name, *args):
+        key = tuple([name] + args)
+        
+        if key in Factory._instances:
+            return Factory._instances[key]
+        elif name == 'sequence':
+            instance = PrepareSequence(*args)
+        elif name == 'model':
+            instance = PrepareModel(*args)
+        elif name == 'mutation':
+            instance = PrepareMutation(*args)
+        else:
+            raise Exception('Incorrect name: {}!'.format(name))
+            
+        if instance:
+            with instance:
+                instance.run()
+        Factory._instances[key] = instance.result
+        
+        return Factory._instances[key]
+
+
+
+#%%
+class Foo:
+    def __init__(self):
+        self.info = ["I as so great!"]
+        print(self.info)
+        
+    def __enter__(self):
+        self.info.append('I entered')
+        print(self.info)
 
     def run(self):
-        raise NotImplementedError()
+        self.info.append('And I ran')
+        print(self.info)
+        raise Exception('Oh oh,,,')
+
+    def __exit__(self, *exc):
+        self.info.append('And I exited')
+        print(self.info)
+        print(exc)
+        return True
+
+    def __bool__(self):
+        print(self.info)
+        return True
         
+
+foo = Foo()
+if foo:
+    with foo:
+        foo.run()
+
+
+
+#%%
+def lock(fn):
+    """
+    Allow only a single instance of function `fn`, 
+    and save results to a lock file.
+    """
+    @wraps(fn)
+    def locked_fn(self, *args, **kwargs):
+        """
         
-    def run_sequence(self):
-        raise NotImplementedError()
+        Returns
+        -------
+        lock_filename : str
+            Lock file that contains function output in json format.
+        
+        """
+        # Get the lock filename
+        if fn.__name__ == 'calculate_provean':
+            lock_filename = '{}{}_provean.json'.format(self.pdb_id, args[0])
+        elif fn.__name__ == 'calculate_model':
+            lock_filename = '{}_modeller.json'.format(self.pdb_id)
+        elif fn.__name__ == 'calculate_mutation':
+            lock_filename = '{}{}_mutation_{}.json'.format(self.pdb_id, args[0], args[1])
+        else:
+            raise Exception("Function {} is not supported!".format(fn))
+        
+        # Make sure that we can get exclusive rights on the lock
+        try:
+            lock = open(lock_filename, 'x')
+        except FileExistsError:
+            try:
+                results = json.load(open(lock_filename, 'r'))
+                info_message = (
+                    "Results have already been calculated and are in file: '{}'.\n"
+                    .format(lock_filename, results)
+                )
+                logger.info(info_message)
+                return lock_filename, results
+            except ValueError:
+                info_message = (
+                    "Another process is currently running this function.\n"
+                    "If you believe this is an error, delete lock file '{}' and try again."
+                    .format(lock_filename)
+                )
+                logger.info(info_message)
+                return lock_filename, None
+        
+        # Run the function and write results
+        try:
+            results = fn(self, *args, **kwargs)
+            json.dump(results, lock)
+            lock.close()
+            return lock_filename, results
+        except:
+            lock.close()
+            os.remove(lock.name)
+            raise
 
+    return locked_fn
 
-    def _get_model(self):
-        raise NotImplementedError()
-    
-    
-    def run_model(self):
-        raise NotImplementedError()
-
-
-    def _get_mutation(self):
-        raise NotImplementedError
-
-
-    def run_mutation(self):
-        raise NotImplementedError()
 
