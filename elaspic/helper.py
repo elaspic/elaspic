@@ -108,16 +108,6 @@ def make_tarfile(output_filename, source_dir):
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
 
-#%% Working with pdb structures
-def get_pdb_structure(path_to_pdb_file, pdb_id=None):
-    """Set QUIET to False to output warnings like incomplete chains etc.
-    """
-    if pdb_id is None:
-        pdb_id = op.splitext(op.basename(path_to_pdb_file))[0]
-    parser = PDBParser(get_header=True, QUIET=False)
-    structure = parser.get_structure(pdb_id, path_to_pdb_file)
-    return structure
-
 
 #%% Helper functions for sql objects
 def decode_domain_def(domains, merge=True, return_string=False):

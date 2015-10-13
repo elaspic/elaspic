@@ -9,6 +9,7 @@ import gzip
 import string
 import ftplib
 import logging
+import urllib.request
 
 from functools import wraps
 from tempfile import NamedTemporaryFile
@@ -65,14 +66,14 @@ LYSINE_ATOMS = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
 #%%################################################################################################
 ### Functions for downloading and parsing pdb files
 class MMCIFParserMod(MMCIFParser):
-    def __init__(self, tmp_path):
-        self.tmp_path = tmp_path
+    def __init__(self, temp_dir):
+        self.temp_dir = temp_dir
 
     def get_structure(self, structure_id, gzip_fh):
         """
         Altered ``get_structure`` method which accepts gzip file-handles as input.
         """
-        with NamedTemporaryFile(mode='w', dir=self.tmp_path) as temp_fh:
+        with NamedTemporaryFile(mode='w', dir=self.temp_dir) as temp_fh:
             temp_fh.writelines(gzip_fh.readlines())
             temp_fh.flush()
             temp_fh.seek(0)
@@ -80,45 +81,14 @@ class MMCIFParserMod(MMCIFParser):
 
 
 
-def download_pdb(pdb_id, pdb_path_suffix, tmp_path='/tmp/'):
+def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
+    """Get PDB file from a local mirror of the PDB database.
     """
-    Download the specified pdb file from the internet
-
-    Parameters
-    ----------
-    pdb_id : str
-        Structure ID of the pdb file
-    pdb_path_suffix : str
-        Path leading from the divided pdb dir to the pdb file
-    tmp_path : str, optional
-        Folder to store the downloaded file
-    """
-    ftp_hostname = 'ftp.wwpdb.org'
-    ftp_pdb_path = '/pub/pdb/data/structures/divided/pdb/'
-    temp_filename = tmp_path + pdb_path_suffix.split('/')[-1]
-
-    # Log into server
-    ftp = ftplib.FTP()
-    ftp.connect(ftp_hostname)
-    try:
-        ftp.login()
-        ftp.retrbinary("RETR {}".format(ftp_pdb_path + pdb_path_suffix), open(temp_filename, 'wb').write)
-    except:
-        raise
-    finally:
-        ftp.quit()
-
-    return temp_filename
-
-
-
-def _get_pdb_path_suffix(pdb_id, pdb_type='ent'):
-    
     if pdb_type == 'ent':
         # Original PDB structure.
         prefix = 'pdb'
         suffix = '.ent.gz'
-        return (
+        relative_pdb_file = (
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
         
@@ -126,7 +96,7 @@ def _get_pdb_path_suffix(pdb_id, pdb_type='ent'):
         # mmCIF pdb structure.
         prefix = ''
         suffix = '.cif.gz'
-        return (
+        relative_pdb_file = (
             '../mmCIF/' +
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
@@ -135,22 +105,60 @@ def _get_pdb_path_suffix(pdb_id, pdb_type='ent'):
         # The first biological unit.
         prefix = ''
         suffix = '.pdb1.gz'
-        return (
+        relative_pdb_file = (
             '../../../biounit/coordinates/divided/' + 
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
         
     elif pdb_type == 'raw':
         # Just a PDB file in some folder.
-        return ''
+        relative_pdb_file = ''
         
     else:
         raise Exception
+        
+    pdb_file = op.join(pdb_database_dir, relative_pdb_file)
+    return pdb_file
+
+
+
+def download_pdb_file(pdb_id, output_folder):
+    """Move PDB structure to the local working directory.
+    """
+    PDB_URL = 'http://www.rcsb.org/pdb/files/{}.pdb'
+
+    output_pdb_filename = op.join(output_folder, pdb_id + '.pdb')
+
+    # If the PDB already exists, do nothing...
+    if op.isfile(output_pdb_filename):
+        logger.debug('PDB file already exists in the folder: {}.'.format(output_folder))
+        return output_pdb_filename
+
+    # Download the PDB file from the internet...
+    logger.info('Downloading PDB {}...'.format(pdb_id + '.pdb'))
+    response = urllib.request.urlopen(PDB_URL.format(pdb_id))
+    with open(output_pdb_filename, 'wb') as ofh:
+        ofh.write(response.read())
+
+    return output_pdb_filename
+
+
+
+def get_pdb_parser(pdb_type, temp_dir='/tmp'):
+    """Get PDB parser that can work with structures of the specified type.
+    """
+    if pdb_type in {'ent', 'pdb', 'raw'}:
+        parser = PDBParser(QUIET=True)
+    elif pdb_type in {'cif'}:
+        parser = MMCIFParserMod(temp_dir=temp_dir)
+    else:
+        raise Exception('Unsupported ``pdb_type`` {}'.format(pdb_type))
+    return parser
 
 
 
 @clru_cache(maxsize=128, typed=False)
-def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=True):
+def get_pdb(pdb_id, pdb_path, temp_dir='/tmp', pdb_type='ent', use_external=True):
     """
     Parse a pdb file with biopythons PDBParser() and return the structure.
 
@@ -160,7 +168,7 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
         Four letter code of the PDB file
     pdb_path : str
         Biopython pdb structure
-    tmp_path : str, optional, default='/tmp/'
+    temp_dir : str, optional, default='/tmp/'
         Path to the folder for storing temporary files
     pdb_type : 'ent'/'pdb'/'cif', optional, default='ent'
         The extension of the pdb to use
@@ -170,17 +178,11 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
     PDBNotFoundError
         If the pdb file could not be retrieved from the local (and remote) databases
     """
-    pdb_path_suffix = _get_pdb_path_suffix(pdb_id, pdb_type)
-
-    if pdb_type in {'ent', 'pdb', 'raw'}:
-        parser = PDBParser(QUIET=True)
-    elif pdb_type in {'cif'}:
-        parser = MMCIFParserMod(tmp_path=tmp_path)
-    else:
-        raise Exception('Unsupported ``pdb_type`` {}'.format(pdb_type))
-
+    pdb_file = get_pdb_file(pdb_id, pdb_path, pdb_type)
+    pdb_parser = get_pdb_parser(pdb_type, temp_dir)
+                
     try:
-        structure = parser.get_structure(pdb_id, gzip.open(pdb_path + pdb_path_suffix, 'rt'))
+        structure = pdb_parser.get_structure(pdb_id, gzip.open(pdb_file, 'rt'))
     except IOError:
         error_message = (
             'PDB not found! (pdb_id: {}, pdb_path: {}, pdb_type: {})'
@@ -189,9 +191,21 @@ def get_pdb(pdb_id, pdb_path, tmp_path='/tmp/', pdb_type='ent', use_external=Tru
         if not use_external:
             raise errors.PDBNotFoundError(error_message)
         print('Retrieving pdb from the wwpdb ftp server...')
-        temp_filename = download_pdb(pdb_id, pdb_path_suffix, tmp_path)
-        structure = parser.get_structure(pdb_id, gzip.open(temp_filename, 'rt'))
+        temp_filename = download_pdb_file(pdb_id, temp_dir)
+        structure = pdb_parser.get_structure(pdb_id, gzip.open(temp_filename, 'rt'))
 
+    return structure
+
+
+
+def get_pdb_structure(pdb_file, pdb_id=None):
+    """Set QUIET to False to output warnings like incomplete chains etc.
+    """
+    pdb_basename, pdb_extension = op.splitext(op.basename(pdb_file))[0]
+    if pdb_id is None:
+        pdb_id = pdb_basename
+    parser = PDBParser(get_header=True, QUIET=False)
+    structure = parser.get_structure(pdb_id, pdb_file)
     return structure
 
 
@@ -642,7 +656,7 @@ class StructureParser:
         domain_boundaries [[[1,10],[20,45]]].
     
     """
-    def __init__(self, pdb_file, chain_ids=None):
+    def __init__(self, pdb_file, chain_ids=None, domain_defs=[]):
         """
         Parameters
         ----------
@@ -655,7 +669,7 @@ class StructureParser:
         """
         self.pdb_id = op.splitext(op.basename(pdb_file))[0]
         self.pdb_file = pdb_file
-        self.input_structure = helper.get_pdb_structure(self.pdb_file, self.pdb_id)
+        self.input_structure = get_pdb_structure(self.pdb_file, self.pdb_id)
         
         if chain_ids is None:
             self.chain_ids = [chain.id for chain in self.input_structure[0].child_list]
@@ -667,7 +681,13 @@ class StructureParser:
             raise Exception
                     
         self.r_cutoff = 6 # remove hetatms more than x A away from the main chain(s)
+
         self.domain_boundaries = []
+        for domain_def in domain_defs:
+            self.domain_boundaries.append(
+                helper.decode_domain_def(domain_def, merge=False, return_string=True)
+            )
+
         self.unique_id = ('pdb_id: {}, chain_ids: {}'.format(self.pdb_id, self.chain_ids))
 
 

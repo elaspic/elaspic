@@ -92,7 +92,7 @@ class GetModel(object):
                 [d.template.domain.pdb_domain_def], d.path_to_data)
         )
         logger.debug('Finished performing alignments!')
-        structure = helper.get_pdb_structure(op.join(self.unique_temp_folder, 'modeller', pdb_filename_wt))
+        structure = structure_tools.get_pdb_structure(op.join(self.unique_temp_folder, 'modeller', pdb_filename_wt))
         model = structure[0]
 
         ###
@@ -123,7 +123,8 @@ class GetModel(object):
                 if rel_sasa is None or rel_sasa is np.nan:
                     msms_length_mismatch = True
                 rel_sasa_for_each_residue.append(rel_sasa)
-        d.template.model.sasa_score = ','.join(['{:.2f}'.format(x) for x in rel_sasa_for_each_residue])
+        d.template.model.sasa_score = (
+            ','.join(['{:.2f}'.format(x) for x in model.relative_sasa_scores[model.chain_ids[]]])
 
         d.template.model.model_domain_def = self._truncate_domain_defs(
             d.template.domain_def,
@@ -134,11 +135,10 @@ class GetModel(object):
             model_errors.append('msms score length mismatch')
 
         # Values common for single domains and interactions
-        model_errors =', '.join(model_errors)
+        model_errors =', '.join('{}'.format(e) for e in model.errors)
         if model_errors != '':
             d.template.model.model_errors = model_errors
 
-#        return uniprot_model
 
 
     def get_domain_pair_model(self, d):
@@ -168,7 +168,7 @@ class GetModel(object):
                 [d.template.domain_1.pdb_domain_def, d.template.domain_2.pdb_domain_def],
                 d.path_to_data)
 
-        structure = helper.get_pdb_structure(self.unique_temp_folder + 'modeller/' + pdb_filename_wt)
+        structure = structure_tools.get_pdb_structure(self.unique_temp_folder + 'modeller/' + pdb_filename_wt)
         model = structure[0]
 
         model_domain_def_1 = self._truncate_domain_defs(
@@ -458,7 +458,7 @@ class GetModel(object):
         uniprot_domain_seqrecs = []
         for uniprot_id, uniprot_sequence, uniprot_domain_def in zip(
                 uniprot_ids, uniprot_sequences, uniprot_domain_defs):
-            uniprot_seqrec = SeqRecord(seq=Seq(uniprot_sequence), id=uniprot_id)
+            uniprot_seqrec = SeqRecord(id=uniprot_id, seq=Seq(uniprot_sequence))
             domain_def = helper.decode_domain_def(uniprot_domain_def, merge=True, return_string=False)
             uniprot_domain_seqrecs.append( uniprot_seqrec[domain_def[0]-1:domain_def[1]] )
         return uniprot_domain_seqrecs

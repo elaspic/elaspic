@@ -78,12 +78,14 @@ class Sequence:
         self.sequence = str(self.seqrecord.seq)
     
         # Provean supset
-        if provean_supset_file is not None:
-            self.provean_supset_file = provean_supset_file
-        else:
-            self.provean_supset_file = op.join(configs['sequence_dir'], self._provean_supset_filename)
+        if provean_supset_file is not None and provean_supset_file != self.provean_supset_file:
+            shutil.copy(provean_supset_file, self.provean_supset_file)
+            shutil.copy(provean_supset_file, self.provean_supset_file + '.fasta')
         if not self.provean_supset_exists:
+            logger.debug('Calculating provean supset...')
             self._build_provean_supset()
+        else:
+            logger.debug('Provean supset is already calculated!')
         self.provean_supset_length = self._get_provean_supset_length()
         
         # Mutations
@@ -107,8 +109,8 @@ class Sequence:
 
 
     @property
-    def _provean_supset_filename(self):
-        return self.protein_id + '_provean_supset'
+    def provean_supset_file(self):
+        return op.join(configs['sequence_dir'], self.protein_id + '_provean_supset')
 
 
     @property

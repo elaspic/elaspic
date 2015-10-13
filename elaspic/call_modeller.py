@@ -231,7 +231,7 @@ class Modeller(object):
 
         system_command = 'knot ' + pdbFile
         logger.debug('Knot system command: {}'.format(system_command))
-        result, error_message, return_code = helper.subprocess_check_output('./', system_command)
+        result, error_message, return_code = helper.subprocess_check_output_locally('./', system_command)
         if not return_code:
             logger.error('Knot result: {}'.format(result))
             logger.error('Knot error message: {}'.format(error_message))

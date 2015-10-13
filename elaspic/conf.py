@@ -131,6 +131,12 @@ class Configs:
     def clear(self):
         Configs._configs = Configs._Configs
 
+    def get(self, key, fallback=None):
+        try:
+            return getattr(Configs._configs, key)
+        except AttributeError:
+            return fallback
+            
 
 #%%
 configs = Configs()

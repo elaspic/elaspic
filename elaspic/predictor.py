@@ -160,7 +160,7 @@ class Predictor:
             self.clf_interface_features_p0 = _load_predictor('ml_features_interface_p1.pickle')
         
     
-    def __call__(self, df, core_or_interface):
+    def score(self, df, core_or_interface):
         """
         Parameters
         ----------
