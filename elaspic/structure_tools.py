@@ -1,13 +1,7 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import absolute_import
-from builtins import zip
-
 import os.path as op
 import gzip
 import string
-import ftplib
 import logging
 import urllib.request
 
@@ -79,6 +73,14 @@ class MMCIFParserMod(MMCIFParser):
             temp_fh.seek(0)
             return super(MMCIFParserMod, self).get_structure(structure_id, temp_fh.name)
 
+
+def get_pdb_id(pdb_file):
+    pdb_id = op.basename(pdb_file)
+    for ext in ['.gz', '.pdb', '.ent', '.cif']:
+        pdb_id = pdb_id.rstrip(ext)
+    for ext in ['pdb']:
+        pdb_id = pdb_id.lstrip(ext)
+    return pdb_id.upper()
 
 
 def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
@@ -201,11 +203,16 @@ def get_pdb(pdb_id, pdb_path, temp_dir='/tmp', pdb_type='ent', use_external=True
 def get_pdb_structure(pdb_file, pdb_id=None):
     """Set QUIET to False to output warnings like incomplete chains etc.
     """
-    pdb_basename, pdb_extension = op.splitext(op.basename(pdb_file))[0]
+    logger.debug('pdb_file: {}'.format(pdb_file))
+    logger.debug('pdb_id: {}'.format(pdb_id))
     if pdb_id is None:
-        pdb_id = pdb_basename
+        pdb_id = get_pdb_id(pdb_file)
     parser = PDBParser(get_header=True, QUIET=False)
-    structure = parser.get_structure(pdb_id, pdb_file)
+    if pdb_file.endswith('.gz'):
+        with gzip.open(pdb_file, 'rt') as ifh:
+            structure = parser.get_structure(pdb_id, ifh)
+    else:
+        structure = parser.get_structure(pdb_id, pdb_file)
     return structure
 
 
@@ -667,7 +674,7 @@ class StructureParser:
         chain_ids : list
             Chains of the structure that should be kept.
         """
-        self.pdb_id = op.splitext(op.basename(pdb_file))[0]
+        self.pdb_id = get_pdb_id(pdb_file)
         self.pdb_file = pdb_file
         self.input_structure = get_pdb_structure(self.pdb_file, self.pdb_id)
         

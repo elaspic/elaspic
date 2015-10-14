@@ -21,6 +21,7 @@ import pickle
 import six
 import logging
 import inspect
+import shutil
 
 from contextlib import contextmanager
 from collections import deque
@@ -549,8 +550,7 @@ class MyDatabase(object):
                 elif d.uniprot_domain_2.uniprot_id == uniprot_id:
                     ud = d.uniprot_domain_2
                 try:
-                    self._copy_provean(
-                        ud, archive_dir, archive_type)
+                    self._copy_provean(ud, archive_dir, archive_type)
                 except subprocess.CalledProcessError as e:
                     logger.error(e)
                     logger.error('Failed to copy provean supporting set!')
@@ -826,7 +826,7 @@ class MyDatabase(object):
                     deque( (session.merge(row) for row in row_instance), maxlen=0 )
 
 
-    def merge_provean(self, provean, provean_supset_file, uniprot_base_path):
+    def merge_provean(self, provean, provean_supset_file, path_to_data):
         """Adds provean score to the database.
         """
         assert op.isfile(provean_supset_file)
@@ -835,20 +835,20 @@ class MyDatabase(object):
         archive_dir = configs['archive_dir']
         logger.debug(
             'Moving provean supset to the output folder: {}'
-            .format(archive_dir + uniprot_base_path))
+            .format(archive_dir + path_to_data))
         subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-            archive_dir + uniprot_base_path), shell=True)
+            archive_dir + path_to_data), shell=True)
         subprocess.check_call("cp -f '{}' '{}'".format(
             provean_supset_file,
-            archive_dir + uniprot_base_path + provean.provean_supset_filename), shell=True)
+            archive_dir + path_to_data + provean.provean_supset_filename), shell=True)
         subprocess.check_call("cp -f '{}' '{}'".format(
             provean_supset_file + '.fasta',
-            archive_dir + uniprot_base_path + provean.provean_supset_filename + '.fasta'), shell=True)
+            archive_dir + path_to_data + provean.provean_supset_filename + '.fasta'), shell=True)
 
         self.merge_row(provean)
 
 
-    def merge_model(self, d, path_to_data=False):
+    def merge_model(self, d, files_dict, path_to_data=False):
         """Adds MODELLER models to the database.
         """
         # Save a copy of the alignment to the export folder
@@ -857,7 +857,9 @@ class MyDatabase(object):
             archive_save_path = archive_dir + path_to_data
             tmp_save_path = configs['archive_temp_dir'] + path_to_data
             # Save the row corresponding to the model as a serialized sqlalchemy object
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path), shell=True)
+            subprocess.check_call(
+                "umask ugo=rwx; mkdir -m 777 -p '{}'"
+                .format(archive_save_path), shell=True)
             # Don't need to dump template. Templates are precalculated
             # pickle_dump(sa_ext_serializer.dumps(d.template), archive_save_path + 'template.pickle')
             # pickle_dump(sa_ext_serializer.dumps(d.template.model), archive_save_path + 'model.pickle')
@@ -865,21 +867,27 @@ class MyDatabase(object):
             if d.template.model.model_filename is not None:
                 # Save alignments
                 if isinstance(d.template.model, UniprotDomainModel):
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        tmp_save_path + d.template.model.alignment_filename,
-                        archive_save_path + d.template.model.alignment_filename), shell=True)
+                    shutil.copy(
+                        files_dict['alignment_files'][0],
+                        op.join(archive_save_path, d.template.model.alignment_filename)
+                    )
                 elif isinstance(d.template.model, UniprotDomainPairModel):
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        tmp_save_path + d.template.model.alignment_filename_1,
-                        archive_save_path + d.template.model.alignment_filename_1), shell=True)
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        tmp_save_path + d.template.model.alignment_filename_2,
-                        archive_save_path + d.template.model.alignment_filename_2), shell=True)
+                    shutil.copy(
+                        files_dict['alignment_files'][0],
+                        op.join(archive_save_path, d.template.model.alignment_filename_1)
+                    )
+                    shutil.copy(
+                        files_dict['alignment_files'][1],
+                        op.join(archive_save_path, d.template.model.alignment_filename_2)
+                    )
                 # Save the model
-                subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    tmp_save_path + d.template.model.model_filename,
-                    archive_save_path + d.template.model.model_filename), shell=True)
+                subprocess.check_call(
+                    "umask ugo=rwx; mkdir -m 777 -p '{}'"
+                    .format(archive_save_path), shell=True)
+                shutil.copy(
+                    files_dict['model_file'],
+                    op.join(archive_save_path, d.template.model.model_filename)
+                )
         self.merge_row([d.template, d.template.model])
 
 

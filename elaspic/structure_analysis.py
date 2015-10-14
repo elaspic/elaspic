@@ -534,7 +534,7 @@ class AnalyzeStructure(object):
 
     def get_stride(self):
         structure_file = self.get_structure_file(''.join(self.chain_ids))
-        stride_results_file = op.splitext(structure_file)[0] + '_stride_results.txt'
+        stride_results_file = structure_tools.get_pdb_id(structure_file) + '_stride_results.txt'
         system_command = 'stride {} -f{}'.format(structure_file, stride_results_file)
         logger.debug('stride system command: %s' % system_command)
         result, error_message, return_code = (
