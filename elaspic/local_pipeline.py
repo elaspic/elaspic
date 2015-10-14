@@ -13,8 +13,8 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from . import conf, errors, helper, structure_tools, structure_analysis, sequence, model, predictor
-from .pipeline import Pipeline, Factory
+from . import conf, errors, structure_tools, structure_analysis, sequence, model, predictor
+from .pipeline import Pipeline, execute_and_remember
 
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
@@ -130,8 +130,8 @@ class LocalPipeline(Pipeline):
             
 
 
-
 #%%
+@execute_and_remember
 class PrepareSequence:
     """
     Raises
@@ -167,6 +167,7 @@ class PrepareSequence:
 
 
 #%%
+@execute_and_remember
 class PrepareModel:
     """
     Returns
@@ -222,6 +223,7 @@ class PrepareModel:
 
 
 #%%
+@execute_and_remember
 class PrepareMutation:
     """
     Raises

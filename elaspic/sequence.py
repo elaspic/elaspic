@@ -1,28 +1,15 @@
 # -*- coding: utf-8 -*-
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import absolute_import
-from builtins import zip
-from builtins import range
-from builtins import object
-from past.utils import old_div
-
 import re
 import os
 import os.path as op
 import psutil
 import time
-import subprocess
 import shutil
 import logging
-import json
 
 import six
-import numpy as np
 
 from Bio import SeqIO
-from Bio import AlignIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
@@ -64,13 +51,9 @@ class Sequence:
         provean_supset_file : str
             Full path and 
         """
-        message = (
-            'Initialising a Sequence instance with parameters:\n'
-            'sequence_file: {}\n'
-            'provean_supset_file: {}\n'
-            .format(sequence_file, provean_supset_file)
-        )
-        logger.debug(message)
+        logger.debug('Initialising a Sequence instance with parameters:')
+        logger.debug('sequence_file: {}'.format(sequence_file))
+        logger.debug('provean_supset_file: {}'.format(provean_supset_file))
 
         self.sequence_file = sequence_file
         self.seqrecord = SeqIO.read(self.sequence_file, 'fasta')

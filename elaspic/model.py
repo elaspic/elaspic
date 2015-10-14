@@ -1,17 +1,10 @@
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from builtins import zip
-from builtins import range
-from builtins import object
-
 import os
 import os.path as op
 import logging
 import shutil
 import json
 
-import numpy as np
 import subprocess
 
 from Bio import SeqIO, AlignIO
@@ -19,7 +12,10 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.PDB import PDBIO
 
-from . import conf, helper, errors, structure_tools, structure_analysis, call_modeller, call_tcoffee, call_foldx
+from . import (
+    conf, helper, errors, structure_tools, structure_analysis, 
+    call_modeller, call_tcoffee, call_foldx
+)
 configs = conf.Configs()
 
 logger = logging.getLogger(__name__)
@@ -29,7 +25,7 @@ logger = logging.getLogger(__name__)
 #%%
 class Model:
     
-    def __init__(self, sequence_file, structure_file, model_results_file=None):
+    def __init__(self, sequence_file, structure_file, modeller_results_file=None):
         logger.debug('Initialising a Model instance with parameters:')
         logger.debug('sequence_file: {}:'.format(sequence_file))
         logger.debug('structure_file: {}:'.format(structure_file))
@@ -58,22 +54,34 @@ class Model:
         self.model_id = '{}-{}'.format(self.sequence_id, self.structure_id)
 
         # Check for precalculated data
-        modeller_results_file = op.join(configs['model_dir'], self.model_id + '.json')
-        if op.isfile(modeller_results_file):
+        self.modeller_results_file = op.join(configs['model_dir'], self.model_id + '.json')
+        if modeller_results_file is not None and modeller_results_file != self.modeller_results_file:
+            logger.debug(
+                'Copying precalculated modeller results file from {} to {}...'
+                .format(modeller_results_file, self.modeller_results_file)
+            )
+            shutil.copy(modeller_results_file, self.modeller_results_file)
+        if op.isfile(self.modeller_results_file):
             logger.debug(
                 'Loading precalculated modeller results from file: {}'
-                .format(modeller_results_file)
+                .format(self.modeller_results_file)
             )
-            with open(modeller_results_file) as ifh:
+            with open(self.modeller_results_file) as ifh:
                 self.modeller_results = json.load(ifh)
         else:
             logger.debug('Creating sequence alignments and building a homology model')
             self._create_alignments_and_model()
             # Save model into a json file for faster future use
-            with open(modeller_results_file, 'w') as ofh:
+            with open(self.modeller_results_file, 'w') as ofh:
                 json.dump(self.modeller_results, ofh)
         
         # Get interacting amino acids and interface area
+        self.modeller_structure = (
+            structure_tools.get_pdb_structure(self.modeller_results['model_file'])
+        )
+        self.modeller_chain_ids = [
+            chain.id for chain in self.modeller_structure[0]
+        ]
         self._analyse_core()
         if len(self.sequence_seqrecords) > 1:
             self._analyse_interface()
@@ -105,8 +113,8 @@ class Model:
 
 
     def _create_pir_alignment(self):
-        pir_alignment_filename = op.join(configs['model_dir'], self.model_id + '.pir')
-        with open(pir_alignment_filename, 'w') as ofh:
+        pir_alignment_file = op.join(configs['model_dir'], self.model_id + '.pir')
+        with open(pir_alignment_file, 'w') as ofh:
             write_to_pir_alignment(
                 ofh, 'sequence', self.sequence_id, 
                 '/'.join(str(seqrec.seq) for seqrec in self.sequence_seqrecords_aligned)
@@ -115,12 +123,12 @@ class Model:
                 ofh, 'structure', self.structure_id, 
                 '/'.join(str(seqrec.seq) for seqrec in self.structure_seqrecords_aligned)
             )
-        return pir_alignment_filename
+        return pir_alignment_file
         
 
     def _create_alignments_and_model(self):
         # Align sequence to structure.
-        alignment_filenames = []
+        alignment_files = []
         domain_def_offsets = []
         alignment_stats = []
         self.sequence_seqrecords_aligned, self.structure_seqrecords_aligned = [], []
@@ -152,14 +160,14 @@ class Model:
                 alignment_score = score_alignment(alignment_identity, alignment_coverage)
                 # Save results
                 alignment_stats.append((alignment_identity, alignment_coverage, alignment_score))
-                alignment_filenames.append(alignment_output_file)
+                alignment_files.append(alignment_output_file)
                 domain_def_offsets.append(domain_def_offset)
                 self.sequence_seqrecords_aligned.append(alignment[0])
                 self.structure_seqrecords_aligned.append(alignment[1])
             else:
                 # Sequence and structure are the same; no need for alignment. Save dummy results.
                 alignment_stats.append((1.0, 1.0, 1.0,))
-                alignment_filenames.append(None)
+                alignment_files.append(None)
                 domain_def_offsets.append((None, None,))
                 self.sequence_seqrecords_aligned.append(sequence_seqrec)
                 self.structure_seqrecords_aligned.append(structure_seqrec)
@@ -171,18 +179,18 @@ class Model:
             self.structure_seqrecords_aligned.append(self.structure_seqrecords[-1])
             
         # Write *.pir alignment.
-        self.pir_alignment_filename = self._create_pir_alignment()
-        logger.debug('Created pir alignment: {}'.format(self.pir_alignment_filename))        
+        self.pir_alignment_file = self._create_pir_alignment()
+        logger.debug('Created pir alignment: {}'.format(self.pir_alignment_file))        
         
         # Run modeller.
         self.modeller_results = run_modeller(
-            self.pir_alignment_filename, self.sequence_id, self.structure_id,
+            self.pir_alignment_file, self.sequence_id, self.structure_id,
             new_chains=''.join(self.chain_ids)
         )
         
         # Save additional alignment info
-        self.modeller_results['alignment_filenames'] = alignment_filenames
-        self.modeller_results['domain_def_offsets'] = alignment_filenames
+        self.modeller_results['alignment_files'] = alignment_files
+        self.modeller_results['domain_def_offsets'] = domain_def_offsets
         self.modeller_results['alignment_stats'] = alignment_stats
         
         
@@ -198,34 +206,55 @@ class Model:
         
         # Get SASA only for amino acids in the chain of interest
         def _filter_df(df, chain_id, resname, resnum):
-            df = df[
+            df2 = df[
                     (df['pdb_chain'] == chain_id) & 
                     (df['res_name'] == resname) & 
                     (df['res_num'] == resnum)
-                ].iloc[0]['rel_sasa']
-            return df
+                ]
+            if not len(df2):
+                logger.error(
+                    'Error extracting relative sasa score from dataframe:\n{}'.format(df)
+                )
+                logger.error('Resulting dataframe is empty:\n{}'.format(df2))
+                logger.error(
+                    'chain_id: {}\tresname: {}\tresnum: {}'
+                    .format(chain_id, resname, resnum)
+                )
+                return None
+            else:
+                return df2.iloc[0]['rel_sasa']
             
         self.relative_sasa_scores = {}
-        for chain_id in self.chian_ids:
+        for chain_id in self.modeller_chain_ids:
+            logger.debug('chain_id: {}'.format(chain_id))
             self.relative_sasa_scores[chain_id] = []
-            chain = self.structure[0][chain_id]
+            chain = self.modeller_structure[0][chain_id]
             for residue in chain:
-                if residue.resname in structure_tools.amino_acids:
+                logger.debug('resudue.resname: {}'.format(residue.resname))
+                if residue.resname in structure_tools.AAA_DICT:
                     relative_sasa_score = _filter_df(
                         seasa_by_residue_separately, 
                         chain_id = chain_id, 
                         resname = residue.resname, 
                         resnum = (str(residue.id[1]) + residue.id[2].strip())
                     )
+                    logger.debug('relative_sasa_score: {}'.format(relative_sasa_score))
                     self.relative_sasa_scores[chain_id].append(relative_sasa_score)
-            if len(self.relative_sasa_scores[chain_id]) != len(chain):
+            number_of_aa = len(structure_tools.get_chain_sequence_and_numbering(chain)[0])
+            if (number_of_aa != len(self.relative_sasa_scores[chain_id])):
+                logger.error(
+                    'Chain has {} non-hetatm AA, but we have SASA score for only {} AA.'
+                    .format(number_of_aa, len(self.relative_sasa_scores[chain_id]))
+                )
                 raise errors.MSMSError()
 
         
     def _analyse_interface(self):
         
         ### Get a dictionary of interacting residues
-        interacting_residues = structure_tools.get_interacting_residues(self.structure[0])
+        interacting_residues = (
+            structure_tools.get_interacting_residues(self.self.modeller_structure[0])
+        )
         _interacting_residues_complement = dict()
         for key, values in interacting_residues.items():
             for value in values:
@@ -276,13 +305,11 @@ class Model:
             raise errors.ChainsNotInteractingError(message)
 
         ### Interface area
-        chain_ids = [self.structure[0].child_list[0].id, self.structure[0].child_list[1].id]
-
         analyze_structure = structure_analysis.AnalyzeStructure(
             self.modeller_results['model_file'], configs['modeller_dir']
         )
         self.interface_area_hydrophobic, self.interface_area_hydrophilic, self.interface_area_total = \
-            analyze_structure.get_interface_area(chain_ids)
+            analyze_structure.get_interface_area(self.modeller_chain_ids[:2])
 
 
 
@@ -486,7 +513,7 @@ def analyze_alignment(alignment, pdb_contact_idxs=[]):
     interface_1_identity = 0
     interface_1_coverage = 0
 
-    for aa_1, aa_2 in zip(alignment):
+    for aa_1, aa_2 in zip(*alignment):
         is_interface = False
         # Check if the amino acid falls in a gap
         if aa_1 == '-':
@@ -561,17 +588,17 @@ def write_to_pir_alignment(pir_alignment_filehandle, seq_type, seq_name, seq):
     pir_alignment_filehandle.write('\n\n')
 
 
-def run_modeller(pir_alignment_filename, target_id, template_id, new_chains='ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+def run_modeller(pir_alignment_file, target_id, template_id, new_chains='ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
     """
     """
     logger.debug(
         "Calling modeller with parameters:\n" +
-        'pir_alignment_filenames: {}\n'.format([pir_alignment_filename]) +
+        'pir_alignment_file: {}\n'.format([pir_alignment_file]) +
         'target_id: {}\n'.format(target_id) +
         'template_id: {}\n'.format(template_id)
     )
     modeller = call_modeller.Modeller(
-        [pir_alignment_filename], target_id, template_id, configs['unique_temp_dir'])
+        [pir_alignment_file], target_id, template_id, configs['unique_temp_dir'])
         
     with helper.switch_paths(configs['modeller_dir']):
         norm_dope, pdb_filename, knotted = modeller.run()
@@ -587,7 +614,7 @@ def run_modeller(pir_alignment_filename, target_id, template_id, new_chains='ABC
         chains[i].id = new_chains[i]
     logger.debug('Corrected chain ids: ' + ', '.join(chain.id for chain in chains))
     io.set_structure(structure)
-    model_file = op.splitext(pir_alignment_filename)[0] + '.pdb'
+    model_file = op.splitext(pir_alignment_file)[0] + '.pdb'
     io.save(model_file)
     
     results = {
@@ -595,7 +622,7 @@ def run_modeller(pir_alignment_filename, target_id, template_id, new_chains='ABC
         'raw_model_file': raw_model_file,
         'norm_dope': norm_dope,
         'knotted': knotted,
-        'pir_alignment_filename': pir_alignment_filename,
+        'pir_alignment_file': pir_alignment_file,
     }
     return results
 

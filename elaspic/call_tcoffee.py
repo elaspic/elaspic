@@ -11,7 +11,7 @@ import shutil
 
 from Bio import SeqIO
 
-from . import conf, errors, helper
+from . import conf, errors, helper, structure_tools
 configs = conf.Configs()
 
 logger = logging.getLogger(__name__)
@@ -25,10 +25,13 @@ class TCoffee(object):
         """
         """
         self.alignment_id = op.splitext(op.basename(alignment_fasta_file))[0]
-        self.alignment_fasta_file = op.join(configs.tcoffee_dir, self.alignment_id + '.fasta')
-        shutil.copy(alignment_fasta_file, self.alignment_fasta_file)
+        self.alignment_fasta_file = op.join(configs['tcoffee_dir'], self.alignment_id + '.fasta')
+        if alignment_fasta_file != self.alignment_fasta_file:
+            shutil.copy(alignment_fasta_file, self.alignment_fasta_file)
 
-        self.target_seqrecord, self.template_seqrecord = list(SeqIO.parse(self.alignment_fasta_file, 'fasta'))
+        self.target_seqrecord, self.template_seqrecord = (
+            list(SeqIO.parse(self.alignment_fasta_file, 'fasta'))
+        )
         self.mode = mode
 
         if pdb_file is not None:
@@ -53,7 +56,7 @@ class TCoffee(object):
         )
         logger.debug(message)
         
-        pdb_id = op.splitext(op.basename(pdb_file))[0]
+        pdb_id = structure_tools.get_pdb_id(pdb_file)
         pdb_file_new = op.join(configs['tcoffee_dir'], pdb_id + '.pdb')
         
         system_command = (

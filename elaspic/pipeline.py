@@ -1,24 +1,12 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_aliases()
-from builtins import object
-
 import os
 import os.path as op
 import json
-import signal
 import six
 import logging 
 from functools import wraps
 
-from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-
-from . import conf, errors, helper, structure_tools, structure_analysis, sequence, model, predictor
+from . import conf, helper, sequence
 
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
@@ -45,7 +33,7 @@ ELASPIC_LOGO = """
 
 
 #%% 
-class Pipeline(object):
+class Pipeline:
 
     def __init__(self, configurations):
         """
@@ -85,17 +73,7 @@ class Pipeline(object):
             any([(x.lower() in hostname) for x in ['node', 'behemoth', 'grendel', 'beagle']])
         )
         if no_job_specific_folder and on_node_with_manditory_job_specific_folder:
-            raise Exception('You should be using a temp folder that it specific to the particular job!')
-          
-              
-                
-                .sequence = (
-                    sequence.Sequence(prep.sequence_file, prep.provean_supset_file)
-                )
-            
-        self.sequences[prep.key] = prep.sequence
-        return prep.sequence
-    
+            raise Exception('You should be using a temp folder that it specific to the particular job!')    
 
 
     def calculate_model(self, prep):
@@ -110,7 +88,6 @@ class Pipeline(object):
         self.models[prep.key] = prep.model
         return prep.model
         
-   
      
     def calculate_score(self, prep):
         if prep.key in self.mutations:
@@ -128,31 +105,27 @@ class Pipeline(object):
 
 
 #%%
-class Factory:
-    
-    _instances = {}
-    
-    @classmethod
-    def get(name, *args):
-        key = tuple([name] + args)
+_instances = {}
+
+def execute_and_remember(f):
+    """ Some basic memoizer.
+    """
+    def f_new(*args):
+        key = tuple([f] + list(args))
         
-        if key in Factory._instances:
-            return Factory._instances[key]
-        elif name == 'sequence':
-            instance = PrepareSequence(*args)
-        elif name == 'model':
-            instance = PrepareModel(*args)
-        elif name == 'mutation':
-            instance = PrepareMutation(*args)
+        if key in _instances:
+            return _instances[key].result
+        
         else:
-            raise Exception('Incorrect name: {}!'.format(name))
+            instance = f(*args)
+            if instance:
+                with instance:
+                    instance.run()
+            _instances[key] = instance
+            return _instances[key].result
             
-        if instance:
-            with instance:
-                instance.run()
-        Factory._instances[key] = instance.result
-        
-        return Factory._instances[key]
+    return f_new
+
 
 
 
@@ -181,12 +154,6 @@ class Foo:
         print(self.info)
         return True
         
-
-foo = Foo()
-if foo:
-    with foo:
-        foo.run()
-
 
 
 #%%
