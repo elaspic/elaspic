@@ -498,10 +498,10 @@ class Model:
             structure_id = self.structure_id,
             sequence_file = self.sequence_file,
             sequence_id = self.sequence_id,
-            chain_ids = self.chain_ids,
+            chain_ids = tuple(self.chain_ids),
             mutations = self.mutations,
             modeller_results_file = self.modeller_results_file,
-            modeller_chain_ids = self.modeller_chain_ids,
+            modeller_chain_ids = tuple(self.modeller_chain_ids),
             modeller_results = self.modeller_results,
         )
         if len(self.sequence_seqrecords) > 1:        

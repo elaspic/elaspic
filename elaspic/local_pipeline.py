@@ -144,7 +144,8 @@ class LocalPipeline(Pipeline):
             model_results.append(model_result)
         for idxs in self.sp.interacting_chain_idxs:
             model = self.get_model(idxs)
-            model_result['idxs'] = idxs 
+            model_result = model.result
+            model_result['idxs'] = tuple(idxs)
             model_results.append(model_result)
         with open(model_results_file, 'w') as ofh:
             json.dump(model_results, ofh)
@@ -169,7 +170,7 @@ class LocalPipeline(Pipeline):
                 if mutation_idx in idxs:
                     mutation_result = self.get_mutation_score(idxs, mutation_idx, mutation)
                     mutation_result['idx'] = mutation_idx
-                    mutation_result['idxs'] = idxs
+                    mutation_result['idxs'] = tuple(idxs)
                     mutation_results.append(mutation_result)
             with open(mutation_results_file, 'w') as ofh:
                 json.dump(mutation_results, ofh)
