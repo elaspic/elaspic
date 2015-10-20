@@ -658,10 +658,13 @@ class MyDatabase(object):
             return
                 
         if archive_type == '7zip':
-            logger.info("Extract provean files from a 7zip archive...")
             filenames = [
-                get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename,
-                get_uniprot_base_path(ud) + ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+                op.join(
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename),
+                op.join(
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
             ]
             path_to_7zip = os.path.join(
                 archive_dir, 
@@ -671,7 +674,6 @@ class MyDatabase(object):
             logger.debug('path_to_7zip: {}'.format(path_to_7zip))
             self._extract_files_from_7zip(path_to_7zip, filenames)
         else:
-            logger.info("Copying files from the archive folders...")
             subprocess.check_call(
                 "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
                     os.path.dirname(
@@ -820,10 +822,11 @@ class MyDatabase(object):
         """
         if not configs['db_is_immutable']:
             with self.session_scope() as session:
-                if not isinstance(row_instance, list):
+                if not hasattr(row_instance, '__getitem__'):
                     session.merge(row_instance)
                 else:
-                    deque( (session.merge(row) for row in row_instance), maxlen=0 )
+                    for instance in row_instance:
+                        session.merge(instance)
 
 
     def merge_provean(self, provean, provean_supset_file, path_to_data):
@@ -896,22 +899,24 @@ class MyDatabase(object):
         """
         mut.mut_date_modified = datetime.datetime.utcnow()
         if path_to_data and (mut.model_filename_wt is not None):
-            archive_dir = configs['archive_dir']
-            archive_save_path = archive_dir + path_to_data
-            tmp_save_path = configs['archive_temp_dir'] + path_to_data
-            archive_save_subpath = mut.model_filename_wt.split('/')[0] + '/'
-            # Save the row corresponding to the mutation as a serialized sqlalchemy object
-            subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-                archive_save_path + archive_save_subpath), shell=True)
-            # pickle_dump(sa_ext_serializer.dumps(mut), archive_save_path + archive_save_subpath + 'mutation.pickle')
+            archive_temp_save_dir = op.join(configs['archive_temp_dir'], path_to_data)
+            archive_save_dir = op.join(configs['archive_dir'], path_to_data)
+            # Save Foldx structures
             if mut.model_filename_wt and mut.model_filename_mut:
-                # Save Foldx structures
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    tmp_save_path + mut.model_filename_wt,
-                    archive_save_path + mut.model_filename_wt), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    tmp_save_path + mut.model_filename_mut,
-                    archive_save_path + mut.model_filename_mut), shell=True)
+#                os.makedirs(op.dirname(op.join(archive_save_dir, mut.model_filename_wt)))
+                subprocess.check_call(
+                    "umask ugo=rwx; mkdir -m 777 -p '{}'"
+                    .format(op.dirname(op.join(archive_save_dir, mut.model_filename_wt))), 
+                    shell=True
+                )
+                shutil.copy(
+                    op.join(archive_temp_save_dir, mut.model_filename_wt),
+                    op.join(archive_save_dir, mut.model_filename_wt)
+                )
+                shutil.copy(
+                    op.join(archive_temp_save_dir, mut.model_filename_mut),
+                    op.join(archive_save_dir, mut.model_filename_mut)
+                )
         self.merge_row(mut)
 
 
@@ -1117,7 +1122,8 @@ class MyDatabase(object):
             elif os.path.isfile(archive_save_path + model.alignment_filename):
                 alignment = AlignIO.read(archive_save_path + model.alignment_filename, 'clustal')
             else:
-                raise errors.NoPrecalculatedAlignmentFound(archive_save_path, model.alignment_filename)
+                raise errors.NoPrecalculatedAlignmentFound(
+                    archive_save_path, model.alignment_filename)
 
             return [alignment, None]
 

@@ -190,6 +190,5 @@ class Predictor:
         df_features_asdifferences = df_features_asdifferences[clf_features]
         
         ddg = clf.predict(df_features_asdifferences)[0]
-        logger.debug('Predicted ddg: {}'.format(ddg))
 
         return ddg

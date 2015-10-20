@@ -25,45 +25,98 @@ equivalent to the ``$PYTHONPATH`` variable in bash):
 from __future__ import unicode_literals
 
 import os
+import os.path as op
 import argparse
 import subprocess
 from contextlib import contextmanager
+import logging
+import logging.config
 
 from elaspic import conf
 
+logger = logging.getLogger(__name__)
+configs = conf.Configs()
+
+#%%
+def configure_logger():
+    level = 'DEBUG' if configs['debug'] else 'INFO'
+    
+    LOGGING_CONFIGS = {
+        'version': 1,              
+        'disable_existing_loggers': False,  # this fixes the problem
+    
+        'formatters': {
+            'standard': {
+                'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            },
+            'clean': {
+                'format': '%(message)s',
+            },
+        },
+        'handlers': {
+            'default': {
+                'level':level,    
+                'class':'logging.StreamHandler',
+                'formatter':'standard',
+            },  
+        },
+        'loggers': {
+            '': {                  
+                'handlers': ['default'],        
+                'level': 'DEBUG',  
+                'propagate': True  
+            }
+        }
+    }
+    logging.config.dictConfig(LOGGING_CONFIGS)
+
 
 #%% Parse arguments
-
-def get_parser():
-
+def get_elaspic_parser():
     description = """
-    Run the ELASPIC pipeline
+    Run the ELASPIC pipeline.
     """
-    
     parser = argparse.ArgumentParser(
         description=description, 
         formatter_class=argparse.RawTextHelpFormatter)
         
     parser.add_argument(
         '-c', '--config_file', required=True, 
-        help='ELASPIC configuration file')
+        help='ELASPIC configuration file.')
     parser.add_argument(
         '-u', '--uniprot_id', 
-        help="The uniprot_id of the protein that you want to mutate (e.g. 'P28223')")
+        help="The Uniprot ID of the protein that you want to mutate (e.g. 'P28223')."
+             "This option relies on a local elaspic database, which has to be specified "
+             "in the configuration file.")
     parser.add_argument(
-        '-s', '--pdb_id',
-        help="The pdb_id of the structure that you want to mutate (e.g. '4dkl')")
+        '-p', '--pdb_file',
+        help="Full filename (including path) of the PDB file that you wish to mutate.")
+    parser.add_argument(
+        '-s', '--sequence_file',
+        help="Full filename (including path) of the FASTA file containing the sequence that you "
+             "wish to model. If you choose this option, you also have to specify "
+             "a template PDB file using the '--pdb-file' option.")
     parser.add_argument(
         '-m', '--mutations', nargs='?', default=['',], 
-        help="Mutation(s) that you wish to evaluate (e.g. 'D172E,R173H' or 'A_V10I')")
+        help="Mutation(s) that you wish to evaluate.\n"
+             "If you used '--uniprot_id', mutations must be provided using uniprot coordinates "
+             "(e.g. 'D172E,R173H' or 'A_V10I').\n"
+             "If you used '--pdb_file', mutations must be provided using the chain "
+             "and residue id (e.g. 'A_M1C,B_C20P' to mutate a residue with id '1' on chain A "
+             "to Cysteine, and residue with id '20' on chain B to Proline).\n"
+             "If you used '--sequence_file', mutations must be provided using the chain "
+             "and residue INDEX (e.g. '1_M1C,2_C20P' to mutate the first residue in sequence 1 "
+             "to Cysteine, and the 20th residue in sequence 2 to Proline).")       
     parser.add_argument(
-        '-p', '--uniprot_domain_pair_ids',  nargs='?', default='',
+        '-i', '--uniprot_domain_pair_ids',  nargs='?', default='',
         help="List of uniprot_domain_pair_ids to analyse "
-            "(useful if you want to restrict your analysis to only a handful of domains) ")
+            "(useful if you want to restrict your analysis to only a handful of domains).")
     parser.add_argument(
         '-f', '--input_file', 
-        help=("A tab separated file of uniprot_ids, mutations, and optionally, uniprot_domain_pair_ids \n"
-            "(optional; to be used instead of `--uniprot_id` and `--mutations`)"))
+        help="A tab separated file of uniprot_ids, mutations, "
+             "and uniprot_domain_pair_ids (optional).\n"
+             "This option can be used instead of `--uniprot_id` and `--mutations` "
+             "to input a list of proteins and mutations")
     parser.add_argument(
         '-t', '--run_type', nargs='?', type=int, default=5, choices=[1,2,3,4,5],
         help=('Type of analysis to perform: \n'
@@ -75,18 +128,26 @@ def get_parser():
     return parser
 
 
-
-#%%
 def validate_args(args):
     if not os.path.isfile(args.config_file):
         raise Exception('The configuration file {} does not exist!'.format(args.config_file))
         
     if args.input_file and not os.path.isfile(args.input_file):
         raise Exception('The input file {} does not exist!'.format(args.input_file))
+    
+    choose_one = [
+        args.uniprot_id is not None, args.input_file is not None, args.pdb_file is not None,
+    ]
+    if sum(choose_one) != 1:
+        raise Exception(
+            "One of '--uniprot_id', '--input_file', or '--pdb_file' must be specified!"
+        )
         
-    if ((args.uniprot_id is None and args.input_file is None) or 
-        (args.uniprot_id is not None and args.input_file is not None)):
-            raise Exception('One of `--uniprot_id` or `--input_file` must be specified!')
+    if args.sequence_file and not args.pdb_file:
+        raise Exception(
+            "A template PDB file must be specified using the '--pdb_file' option, "
+            "when you specify a target sequence using the '--sequence_file' option!"
+        )
 
 
 def parse_input_file(input_file):
@@ -117,44 +178,60 @@ def parse_input_file(input_file):
 
 
 def elaspic():
-    parser = get_parser()
+    parser = get_elaspic_parser()
     args = parser.parse_args()
     validate_args(args)
-    pipeline = Pipeline(args.config_file)
+    
     if args.input_file:
-        uniprot_ids, mutations, uniprot_domain_pair_ids = parse_input_file(args.input_file)
-    else:
-        uniprot_ids = [args.uniprot_id,]
-        mutations = args.mutations if args.mutations else ''
-        uniprot_domain_pair_ids = args.uniprot_domain_pair_ids
+        from elaspic import database_pipeline
+        conf.read_configuration_file(args.config_file)
+        configure_logger()
+        # Run database pipeline for each row in file
+        for uniprot_id, mutations, uniprot_domain_pair_id in \
+                zip(*parse_input_file(args.input_file)):
+            pipeline = database_pipeline.DatabasePipeline(
+                uniprot_id, mutations, 
+                run_type=args.run_type, 
+            )
+            pipeline.run()
+    elif args.uniprot_id:
+        from elaspic import database_pipeline
+        conf.read_configuration_file(args.config_file)
+        configure_logger()
+        # Run database pipeline
+        if args.uniprot_domain_pair_ids:
+            uniprot_domain_pair_ids_asint = (
+                [int(x) for x in args.uniprot_domain_pair_ids.split(',') if x]
+            )
+        else:
+            uniprot_domain_pair_ids_asint = []
+        pipeline = database_pipeline.DatabasePipeline(
+            args.uniprot_id, args.mutations, 
+            run_type=args.run_type,
+            uniprot_domain_pair_ids=uniprot_domain_pair_ids_asint
+        )
+        pipeline.run()
+    elif args.pdb_file:
+        from elaspic import local_pipeline
+        conf.read_configuration_file(args.config_file, unique_temp_dir=os.getcwd())
+        configure_logger()
+        # Run local pipeline
+        pipeline = local_pipeline(
+            args.pdb_file, args.sequence_file, args.mutations,
+        )
+        if args.run_type == 1:
+            pipeline.run_all_sequences()
+        elif args.run_type == 2:
+            pipeline.run_all_models()
+        elif args.run_type == 3:
+            pipeline.run_all_mutations()
+        elif args.run_type == 5:
+            pipeline.run()
         
-    uniprot_domain_pair_ids_asint = (
-        [int(x) for x in uniprot_domain_pair_ids.split(',') if x]
-        if uniprot_domain_pair_ids 
-        else []
-    )
-    pipeline(
-        uniprot_id=uniprot_ids[0],         
-        mutations=mutations, 
-        run_type=args.run_type, 
-        uniprot_domain_pair_ids=uniprot_domain_pair_ids_asint,
-    )
-
-    #~ # Run jobs
-    #~ for uniprot_id, mutation in zip(uniprot_ids, mutations):
-        #~ print uniprot_id
-        #~ print mutation
-        #~ print run_type
-        #~ uniprot_domains_and_domain_pairs = pipeline(uniprot_id, mutation, run_type, n_cores)
-
-
-
-
 
 
 
 #%%
-    
 def create_database(args):
     from elaspic import sql_db    
     db = sql_db.MyDatabase()
@@ -164,6 +241,10 @@ def create_database(args):
 
 @contextmanager
 def open_gzip(filename):
+    """
+    Temporarly unzip a file so that it can be processed with tools that do not work with 
+    compressed archives.
+    """
     try:
         print("Gunzipping file '{}'...".format(filename))
         subprocess.check_call("gunzip '{}'".format(filename), shell=True)
@@ -222,7 +303,7 @@ def delete_database(args):
     db.logger.info('Done!')
     
 
-def get_parser():
+def get_database_parser():
     parser = argparse.ArgumentParser(
         prog='ELASPIC database', 
         description="Perform maintenance tasks on the ELASPIC database.")
@@ -245,8 +326,8 @@ def get_parser():
             'in your configuration file!!!'))
     parser_create.add_argument(
         '--keep_uniprot_sequence', type=bool, default=True, 
-        help=('Whether or not to leave the `uniprot_sequence` table untouched when clearing the schema. \n'
-            'Only applicable if ``--clear_schema`` is set to ``True``.'))
+        help="Whether or not to leave the 'uniprot_sequence' table untouched when clearing "
+             "the schema. Only applicable if '--clear_schema' is set to 'True'.")
     parser_create.set_defaults(func=create_database)
     
     
@@ -270,10 +351,11 @@ def get_parser():
         description='Test the database by running some mutations. ')
     parser_test.add_argument(
         '--mutation_type', choices=['domain', 'interface', 'both'], default='both',
-        help=("The type of mutatation that you want to test. \n"
-            "``domain`` : Test the impact of a mutation on the folding of a domain. \n"
-            "``interface`` : Test the impact of a mutation on the interaction between two domains. \n"
-            "``both`` : Test both a domain mutation and an interface mutation (DEFAULT) "))
+        help="The type of mutatation that you want to test. \n"
+             "``domain`` : Test the impact of a mutation on the folding of a domain.\n"
+             "``interface`` : Test the impact of a mutation on the interaction "
+             "between two domains. \n"
+             "``both`` : Test both a domain mutation and an interface mutation (DEFAULT) ")
     parser_test.add_argument(
         '--do_provean', type=bool, default=True,
         help="Whether or not to run Provean when testing the database (DEFAULT True)")
@@ -293,19 +375,20 @@ def get_parser():
     parser_delete.add_argument(
         '--drop_schema', type=bool, default=False, 
         help=('Whether or not to drop the schema that contains the relevant tables. \n'
-            'WARNING: Choosing ``True`` will remove all existing data from the schema specified '
-            'in your configuration file!!!'))
+              'WARNING: Choosing ``True`` will remove all existing data from the schema specified '
+              'in your configuration file!!!'))
     parser_delete.add_argument(
         '--keep_uniprot_sequence', type=bool, default=True, 
-        help=('Whether or not to leave the ``uniprot_sequence`` table untouched when clearing the schema. \n'
-            'Only applicable if ``--drop_schema`` is set to ``True``.'))
+        help="Whether or not to leave the ``uniprot_sequence`` table untouched "
+             "when clearing the schema.\n"
+             "Only applicable if ``--drop_schema`` is set to ``True``.")
     parser_delete.set_defaults(func=delete_database)
     
     return parser
 
 
 def elaspic_database():
-    parser = get_parser()
+    parser = get_database_parser()
     args = parser.parse_args()
     if 'func' not in args.__dict__:
         args = parser.parse_args(['--help'])
@@ -317,6 +400,9 @@ def elaspic_database():
 
 #%%
 if __name__ == '__main__':
-    a
-    main()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] != 'database':
+        elaspic_database()
+    else:
+        elaspic()
 

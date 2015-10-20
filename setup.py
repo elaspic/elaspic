@@ -43,8 +43,8 @@ setup(
     ],
     entry_points={
           'console_scripts': [
-              'elaspic = elaspic.__main__:main',
-              'elaspic_database = elaspic.elaspic_database:main',
+              'elaspic = elaspic.__main__:elaspic',
+              'elaspic_database = elaspic.__main__:elaspic_database',
           ]
       },
     classifiers=[
