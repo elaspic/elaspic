@@ -33,7 +33,7 @@ class LocalPipeline(Pipeline):
         # Input parameters
         self.pdb_id = op.splitext(op.basename(structure_file))[0]
         self.pdb_file = structure_file
-        self.sequence_file = sequence_file
+        self.sequence_file = sequence_file if sequence_file else ''
 
         logger.info('pdb_file: {}'.format(self.pdb_file))
         logger.info('pwd: {}'.format(self.PWD))
@@ -45,7 +45,7 @@ class LocalPipeline(Pipeline):
         self.sp.save_structure(configs['unique_temp_dir'])
         self.sp.save_sequences(configs['unique_temp_dir'])
         
-        if mutations is None:
+        if not mutations:
             mutations = []
         elif isinstance(mutations, str):
             mutations = mutations.split(',')
