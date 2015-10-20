@@ -1,14 +1,9 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_aliases()
-
 import os.path as op
 import logging 
-from functools import wraps
+import json
 
+import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -29,7 +24,7 @@ domain_mutation = None
 #%%
 class LocalPipeline(Pipeline):
 
-    def __init__(self, structure_file, sequence_file=None, configurations=None):
+    def __init__(self, structure_file, sequence_file=None, mutations=None, configurations=None):
         """
         TODO: Add an option to store provean results based on sequence hash.
         """
@@ -49,61 +44,174 @@ class LocalPipeline(Pipeline):
         self.sp.extract()
         self.sp.save_structure(configs['unique_temp_dir'])
         self.sp.save_sequences(configs['unique_temp_dir'])
-            
-        if self.sequence_file is not None:
-            # Read template sequences from the sequence file
-            self.seqrecords = list(SeqIO.parse(self.sequence_file, 'fasta'))
-            for i, seqrec in enumerate(self.seqrecords):
-                seqrec.id = '{}_{}'.format(seqrec.id, str(i))
+        
+        if mutations is None:
+            mutations = []
+        elif isinstance(mutations, str):
+            mutations = mutations.split(',')
         else:
+            mutations = mutations
+
+        if self.sequence_file is None:
             # Read template sequences from the PDB
-            self.seqrecords = [
+            self.seqrecords = tuple([
                 SeqRecord(
                     id='{}{}_{}'.format(self.pdb_id, chain_id, i), 
                     seq=Seq(self.sp.chain_sequence_dict[chain_id]))
                 for (i, chain_id) in enumerate(self.sp.chain_ids)
-            ]
-            
+            ])
+            ### Parse mutations
+            self.mutations = dict()
+            for mutation_in in mutations:
+                mutation_chain, mutation_resnum = mutation_in.split('_')
+                # This is the index of the chain that is being mutated
+                mutation_idx = self.sp.chain_ids.index(mutation_chain)
+                # Converting mutation from PDB to index coordinates
+                mutation_id = (' ', int(mutation_resnum[1:-1]), ' ',)
+                chain_aa_residues = (
+                    structure_tools.get_aa_residues(self.sp.structure[0][mutation_chain])
+                )
+                mutation_pos = chain_aa_residues.index(mutation_id) + 1
+                mutation = mutation_resnum[0] + str(mutation_pos) + mutation_resnum[-1]
+                # Validating
+                mutation_expected_aa = (
+                    structure_tools.AAA_DICT
+                    [self.sp.structure[0][mutation_chain][mutation_id].resname]
+                )
+                if mutation_resnum[0] != mutation_expected_aa:
+                    raise errors.MutationMismatchError()
+                self.mutations[(mutation_idx, mutation,)] = mutation_in
+        else:
+            # Read template sequences from the sequence file
+            self.seqrecords = list(SeqIO.parse(self.sequence_file, 'fasta'))
+            for i, seqrec in enumerate(self.seqrecords):
+                seqrec.id = '{}_{}'.format(seqrec.id, str(i))
+            ### Parse mutations
+            self.mutations = []
+            for mutation_in in mutations:
+                mutation_idx, mutation = mutation_in.split('_')
+                mutation_idx = int(mutation_idx)
+                # Validation
+                mutation_expected_aa = (
+                    str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1])]
+                )
+                if mutation[0] != mutation_expected_aa:
+                    raise errors.MutationMismatchError()
+                self.mutations[(mutation_idx, mutation,)] = mutation_in
+
+
+    #==============================================================================
+    # Run methods
+    #==============================================================================
+
+    def run(self):
+        self.run_all_sequences()
+        self.run_all_models()
+        self.run_all_mutations()
     
-    def precalculate_all(self):
-        """
-        """
+    
+    def run_all_sequences(self):
+        sequence_results = []
+        sequence_results_file = op.join(configs['unique_temp_dir'], 'sequence.json')
+        if op.isfile(sequence_results_file):
+            logger.debug('Results file for model already exists: {}'.format(sequence_results_file))
+            return
         for chain_id in self.sp.chain_ids:
             if chain_id == self.sp.hetatm_chain_id:
                 continue
-            chain_pos = self._get_chain_pos(chain_id)
-            Factory.get('sequence', self.seqrecords, chain_pos, None)
-            Factory.get('sequence', self.seqrecords, self.sp, (chain_pos,))
-        for chain_idxs in self.sp.interacting_chain_idxs:
-            chain_idxs = self._get_position_tuple(chain_idxs)
-            Factory.get('sequence', self.seqrecords, self.sp, chain_idxs)
-
-
-    def mutate_all(self, mutation_idx, mutation):
-        """       
-        """
-        self.get_mutation_score(mutation_idx, mutation_idx, mutation)
+            idx = self._get_chain_idx(chain_id)
+            sequence = self.get_sequence(idx)
+            sequence_result = sequence.result
+            sequence_result['idx'] = idx
+            sequence_results.append(sequence_result)
+        with open(sequence_results_file, 'w') as ofh:
+            json.dump(sequence_results, ofh)
+    
+    
+    def run_all_models(self):
+        model_results = []
+        model_results_file = op.join(configs['unique_temp_dir'], 'model.json')
+        if op.isfile(model_results_file):
+            logger.debug('Results file for model already exists: {}'.format(model_results_file))
+            return
+        for chain_id in self.sp.chain_ids:
+            if chain_id == self.sp.hetatm_chain_id:
+                continue
+            idx = self._get_chain_idx(chain_id)
+            model = self.get_model(idx)
+            model_result = model.result
+            model_result['idx'] = self.sp.chain_ids.index(chain_id)
+            model_results.append(model_result)
         for idxs in self.sp.interacting_chain_idxs:
-            if mutation_idx in idxs:
-                self.get_mutation_score(idxs, mutation_idx, mutation)
-        
+            model = self.get_model(idxs)
+            model_result['idxs'] = idxs 
+            model_results.append(model_result)
+        with open(model_results_file, 'w') as ofh:
+            json.dump(model_results, ofh)
+    
+    
+    def run_all_mutations(self):
+        for (mutation_idx, mutation), mutation_in in self.mutations.items():
+            mutation_results = []            
+            mutation_results_file = op.join(
+                configs['unique_temp_dir'], 'mutation_{}.json'.format(mutation_in)
+            )
+            if op.isfile(mutation_results_file):
+                logger.debug(
+                    'Results file for mutation {} already exists: {}'
+                    .format(mutation_in, mutation_results_file)
+                )
+                continue
+            mutation_result = self.get_mutation_score(mutation_idx, mutation_idx, mutation)
+            mutation_result['idx'] = mutation_idx
+            mutation_results.append(mutation_result)
+            for idxs in self.sp.interacting_chain_idxs:
+                if mutation_idx in idxs:
+                    mutation_result = self.get_mutation_score(idxs, mutation_idx, mutation)
+                    mutation_result['idx'] = mutation_idx
+                    mutation_result['idxs'] = idxs
+                    mutation_results.append(mutation_result)
+            with open(mutation_results_file, 'w') as ofh:
+                json.dump(mutation_results, ofh)
+
+
+    #==============================================================================
+    # Get methods
+    #==============================================================================
 
     def get_sequence(self, idx):
-        return Factory.get('sequence', self.seqrecords, idx, None)
+        """
+        """
+        logger.debug('-' * 80)
+        logger.debug('get_sequence({})'.format(idx))
+        return PrepareSequence(self.seqrecords, idx, None)
 
 
     def get_model(self, idxs):
-        idxs = self._get_position_tuple(idxs)
-        return Factory.get('model', self.seqrecords, self.sp, idxs)
+        """
+        Use modeller to make a homology model for each uniprot domain that
+        has a template in pdbfam
+        """
+        logger.debug('-' * 80)
+        logger.debug('get_model({})'.format(idxs))
+        idxs = self._sort_chain_idxs(idxs)
+        return PrepareModel(self.seqrecords, self.sp, idxs)
 
 
     def get_mutation_score(self, idxs, mutation_idx, mutation):
+        logger.debug('-' * 80)
+        logger.debug('get_mutation_score({}, {}, {})'.format(idxs, mutation_idx, mutation))
+        idxs = self._sort_chain_idxs(idxs)
         sequence = self.get_sequence(mutation_idx)
         model = self.get_model(idxs)
-        return Factory.get('mutation', sequence, model, idxs.index(mutation_idx), mutation)
-
-
-    def _get_chain_pos(self, chain_id):
+        return PrepareMutation(sequence, model, idxs.index(mutation_idx), mutation)
+        
+        
+    #==============================================================================
+    # Helper functions
+    #==============================================================================
+    
+    def _get_chain_idx(self, chain_id):
         """chain_id -> chain_idx
         """
         chain_idx = [
@@ -120,13 +228,14 @@ class LocalPipeline(Pipeline):
         return chain_idx[0]
         
     
-    def _get_position_tuple(self, positions):
+    def _sort_chain_idxs(self, idxs):
         """Sort positions and return as as tuple.
         """
-        if not hasattr(positions, '__getitem__'):
-            positions = (positions,)
+        if not hasattr(idxs, '__getitem__'):
+            idxs = (idxs,)
         else:
-            positions = tuple(sorted(positions))
+            idxs = tuple(sorted(idxs))
+        return idxs
             
 
 
@@ -213,7 +322,7 @@ class PrepareModel:
     def run(self):
         self.model = model.Model(self.sequence_file, self.structure_file)
         
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_value, traceback):
         return False
         
     @property
@@ -238,30 +347,87 @@ class PrepareMutation:
     """
 
     def __init__(self, sequence, model, mutation_idx, mutation):
-        
-        ...
+        self.sequence = sequence
+        self.model = model
+        self.mutation_idx = mutation_idx
+        self.mutation = mutation
     
     def __bool__(self):
         return True
     
     def __enter__(self):
-        sequence.mutate(self.mutation)
-        model.mutate(self.mutation_idx, self.mutation)
-        self.feature_dict = dict(
-            
-        )        
+        pass
         
     def run(self):
-        self.sequences[sequence_to_mutate].mutate(mutation)
+        features = dict()
         
-        self.models[sequences_to_model].mutate(sequences_to_model.index(sequence_to_mutate), mutation)
+        ### Sequence features
+        results = self.sequence.mutate(self.mutation)
+        features['provean_score'] = results['provean_score']
+        features['matrix_score'] = results['matrix_score']        
+
+        ### Structure features
+        results = self.model.mutate(self.mutation_idx, self.mutation)
         
-    def __exit__(self):
-        ...
+        features['norm_dope'] = self.model.modeller_results['norm_dope']
+        (features['alignment_identity'], 
+         features['alignment_coverage'], 
+         features['alignment_score']) = (
+             self.model.modeller_results['alignment_stats'][self.mutation_idx]
+        )
+        
+        features['model_filename_wt'] = results['model_filename_wt']
+        features['model_filename_mut'] = results['model_filename_mut']
+
+        features['stability_energy_wt'] = results['stability_energy_wt']
+        features['stability_energy_mut'] = results['stability_energy_mut']
+
+        features['physchem_wt'] = (
+            '{},{},{},{}'.format(*results['physchem_wt'])
+        )
+        features['physchem_wt_ownchain'] = (
+            '{},{},{},{}'.format(*results['physchem_ownchain_wt'])
+        )
+        features['physchem_mut'] = (
+            '{},{},{},{}'.format(*results['physchem_mut'])
+        )
+        features['physchem_mut_ownchain'] = (
+            '{},{},{},{}'.format(*results['physchem_ownchain_mut'])
+        )
+        
+        features['secondary_structure_wt'] = results['secondary_structure_wt']
+        features['solvent_accessibility_wt'] = results['solvent_accessibility_wt']
+        features['secondary_structure_mut'] = results['secondary_structure_mut']
+        features['solvent_accessibility_mut'] = results['solvent_accessibility_mut']
+        
+        if len(self.model.sequence_seqrecords) > 1:
+            features['interface_area_hydrophobic'] = self.model.interface_area_hydrophobic
+            features['interface_area_hydrophilic'] = self.model.interface_area_hydrophilic
+            features['interface_area_total'] = self.model.interface_area_total
+
+            features['analyse_complex_energy_wt'] = results['analyse_complex_energy_wt']
+            features['analyse_complex_energy_mut'] = results['analyse_complex_energy_mut']
+            features['contact_distance_wt'] = results['contact_distance_wt']
+            features['contact_distance_mut'] = results['contact_distance_mut']
+
+                
+        logger.debug('feature_dict: {}'.format(features))
+        feature_df = pd.DataFrame(features, index=[0])
+    
+        pred = predictor.Predictor()
+        features['ddg'] = pred.score(feature_df, len(self.model.sequence_seqrecords) > 1)
+        logger.debug('Predicted ddG: {}'.format(features['ddg']))
+        
+        self.mutation_features = features
         
 
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
 
 
+    @property
+    def result(self):
+        return self.mutation_features
 
 
 
@@ -380,91 +546,3 @@ class Unused:
 
         return mutation_contacts
 
-
-     
-
-#%% PDB only
-#class UserStructureMutation(Base):
-#    __tablename__ = 'user_structure_mutation'
-#    _indexes = [
-#        ['pdb_id', 'pdb_chain', 'pdb_chain_2', 'pdb_mutation'],
-#    ]
-#    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
-#    
-#    id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
-#    
-#    ### Input
-#    unique = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
-#        primary_key=True)
-#    pdb_file = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-#    pdb_id = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-#    pdb_chains = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-#    
-#    
-#    ### Mutation    
-#    # Original PDB coordinates
-#    pdb_mutation = sa.Column(sa.String(SHORT), nullable=False)
-#    # Where 1 is the start of the domain (i.e. chain)
-#    domain_mutation = sa.Column(sa.String(SHORT), nullable=False)
-#    # Where 1 is the start of the protein (i.e. chain A residue 1)
-#    modeller_mutation = sa.Column(sa.String(SHORT), nullable=False)
-#    
-#    
-#    ### Homology Model
-#    # Core / Interface
-#    model_filename = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-#    norm_dope = sa.Column(sa.Float)
-#    sasa_score = sa.Column(sa.Text)
-#        
-#    # Interface
-#    pdb_chain = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-#    pdb_chain_2 = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')))
-#    interface_area_hydrophobic = sa.Column(sa.Float)
-#    interface_area_hydrophilic = sa.Column(sa.Float)
-#    interface_area_total = sa.Column(sa.Float)
-#    interacting_aa_1 = sa.Column(sa.Text)
-#    interacting_aa_2 = sa.Column(sa.Text)
-#    
-#    
-#    
-#    ### Mutation
-#    mutation = sa.Column(sa.String(SHORT), nullable=False)
-#    mutation_errors = sa.Column(sa.Text)
-#    model_filename_wt = sa.Column(sa.String(MEDIUM))
-#    model_filename_mut = sa.Column(sa.String(MEDIUM))
-#    chain_modeller = sa.Column(sa.String(SHORT))
-#    mutation_modeller = sa.Column(sa.String(SHORT))
-#    analyse_complex_energy_wt = sa.Column(sa.Text)
-#    stability_energy_wt = sa.Column(sa.Text)
-#    analyse_complex_energy_mut = sa.Column(sa.Text)
-#    stability_energy_mut = sa.Column(sa.Text)
-#    physchem_wt = sa.Column(sa.Text)
-#    physchem_wt_ownchain = sa.Column(sa.Text)
-#    physchem_mut = sa.Column(sa.Text)
-#    physchem_mut_ownchain = sa.Column(sa.Text)
-#    matrix_score = sa.Column(sa.Float)
-#    secondary_structure_wt = sa.Column(sa.Text)
-#    solvent_accessibility_wt = sa.Column(sa.Float)
-#    secondary_structure_mut = sa.Column(sa.Text)
-#    solvent_accessibility_mut = sa.Column(sa.Float)
-#    contact_distance_wt = sa.Column(sa.Float)
-#    contact_distance_mut = sa.Column(sa.Float)
-#    provean_score = sa.Column(sa.Float)
-#    ddg = sa.Column(sa.Float, index=False)
-#    mut_date_modified = sa.Column(
-#        sa.DateTime, default=datetime.datetime.utcnow,
-#        onupdate=datetime.datetime.utcnow, nullable=False)
-#        
-#    
-#    ### Relationships
-#    model = sa.orm.relationship(
-#        UniprotDomainPairModel, uselist=False, cascade='expunge', lazy='joined',
-#        backref=sa.orm.backref('mutations', cascade='expunge')) # many to one
-#

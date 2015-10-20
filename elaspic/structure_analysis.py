@@ -106,7 +106,7 @@ class AnalyzeStructure(object):
         secondary_structure_df = (
             secondary_structure_df[
                 (secondary_structure_df.chain == chain_id) &
-                (secondary_structure_df.idx == int(mutation[1:-1]))
+                (secondary_structure_df.resnum == mutation[1:-1])
             ]
         )
         assert len(secondary_structure_df) == 1
@@ -124,13 +124,15 @@ class AnalyzeStructure(object):
                     'The shortest interchain distance between chain {} and chain {} is {}'
                     .format(chain_id, chain_id_other, contact_distance))
                 if not contact_distance:
-                    raise ValueError
+                    raise ValueError()
             except (IndexError, KeyError, ValueError) as e:
-                logger.error('Could not calculate the shortest contact distance between two chains!')
+                logger.error(
+                    'Could not calculate the shortest contact distance between two chains!'
+                )
                 logger.error(e)
                 logger.error(contact_distance)
                 raise
-                
+        
         # PhysiChem
         physchem, physchem_ownchain = self.get_physi_chem(chain_id, mutation)
         
@@ -170,13 +172,22 @@ class AnalyzeStructure(object):
         opposite_chains = [ chain for chain in model.child_list if chain.id != chain_id ]
         main_chain_atoms = ['CA', 'C', 'N', 'O']
 
-        # Find the mutated residue
-        mutation_pos = int(mutation[1:-1])
-        residue_counter = 0
+        # Find the mutated residue (assuming mutation is in index coordinates)
+#        mutation_pos = int(mutation[1:-1])
+#        residue_counter = 0
+#        for residue in mutated_chain:
+#            if residue.resname in structure_tools.AMINO_ACIDS and not residue.id[0].strip():
+#                residue_counter += 1
+#                if residue_counter == mutation_pos:
+#                    self._validate_mutation(residue.resname, mutation)
+#                    mutated_residue = residue
+#                    break
+#        mutated_atoms = [atom for atom in mutated_residue if atom.name not in main_chain_atoms]
+
+        # Find the mutated residue (assuming mutation is in resnum)
         for residue in mutated_chain:
-            if residue.resname in structure_tools.AMINO_ACIDS and residue.id[0] == ' ':
-                residue_counter += 1
-                if residue_counter == mutation_pos:
+            if residue.resname in structure_tools.AMINO_ACIDS and not residue.id[0].strip():
+                if str(residue.id[1]) == mutation[1:-1]:
                     self._validate_mutation(residue.resname, mutation)
                     mutated_residue = residue
                     break
@@ -237,7 +248,8 @@ class AnalyzeStructure(object):
             mutated_atom_type = self._get_atom_type(mutated_residue.resname, mutated_atom)
             # And each partner residue and partner atom
             for partner_atom in partner_residue:
-                r = structure_tools.calculate_distance(mutated_atom, partner_atom, self.vdw_distance)
+                r = structure_tools.calculate_distance(
+                        mutated_atom, partner_atom, self.vdw_distance)
                 if r is not None:
                     partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
                     if partner_atom_type == 'ignore':
@@ -534,7 +546,10 @@ class AnalyzeStructure(object):
 
     def get_stride(self):
         structure_file = self.get_structure_file(''.join(self.chain_ids))
-        stride_results_file = structure_tools.get_pdb_id(structure_file) + '_stride_results.txt'
+        stride_results_file = op.join(
+            op.dirname(structure_file),
+            structure_tools.get_pdb_id(structure_file) + '_stride_results.txt'
+        )
         system_command = 'stride {} -f{}'.format(structure_file, stride_results_file)
         logger.debug('stride system command: %s' % system_command)
         result, error_message, return_code = (
@@ -651,7 +666,7 @@ class AnalyzeStructure(object):
                             residue_2.id[0] != ' '):
                                 continue
                         if pdb_mutation:
-                            if residue_2_idx != int(pdb_mutation[1:-1])-1:
+                            if str(residue_2.id[1]) != pdb_mutation[1:-1]:
                                 continue
                             if (structure_tools.convert_aa(residue_2.resname) != pdb_mutation[0] and
                                 structure_tools.convert_aa(residue_2.resname) != pdb_mutation[-1]):

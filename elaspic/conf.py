@@ -137,6 +137,9 @@ class Configs:
         except AttributeError:
             return fallback
             
+    def copy(self):
+        return Configs._configs.__dict__.copy()
+            
 
 #%%
 configs = Configs()

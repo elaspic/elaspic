@@ -112,7 +112,6 @@ def execute_and_remember(f):
     """
     def f_new(*args):
         key = tuple([f] + list(args))
-        
         if key in _instances:
             return _instances[key].result
         

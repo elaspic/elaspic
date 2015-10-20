@@ -80,7 +80,9 @@ class Sequence:
             return self.mutations[mutation]
         
         if mutation[0] != self.sequence[int(mutation[1:-1])-1]:
-            raise errors.MutationMismatchError
+            logger.error('sequence: {}'.format(self.sequence))
+            logger.error('mutation: {}'.format(mutation))
+            raise errors.MutationMismatchError()
             
         results = dict(
             protein_id = self.protein_id,
@@ -197,7 +199,7 @@ class Sequence:
             logger.debug('Disk space availible: {:.2f} GB'.format(disk_space_availible))
             if disk_space_availible < 5:
                 raise errors.ProveanError('Not enough disk space ({:.2f} GB) to run provean'.format(disk_space_availible))
-            memory_availible = old_div(psutil.virtual_memory().available, float(1024)**3)
+            memory_availible = psutil.virtual_memory().available / float(1024)**3
             logger.debug('Memory availible: {:.2f} GB'.format(memory_availible))
             if memory_availible < 0.5:
                 raise errors.ProveanError('Not enough memory ({:.2f} GB) to run provean'.format(memory_availible))
@@ -235,13 +237,17 @@ class Sequence:
     
         # Keep an eye on provean to make sure it doesn't do anything crazy
         while check_mem_usage and child_process.poll() is None:
-            disk_space_availible_now = old_div(psutil.disk_usage(configs['provean_temp_dir']).free, float(1024)**3)
+            disk_space_availible_now = (
+                psutil.disk_usage(configs['provean_temp_dir']).free / float(1024)**3
+            )
             if disk_space_availible_now < 5: # less than 5 GB of free disk space left
                 raise errors.ProveanResourceError(
                     'Ran out of disk space and provean had to be terminated ({} GB used)'
                     .format(disk_space_availible-disk_space_availible_now),
                     child_process_group_id)
-            memory_availible_now = old_div(psutil.virtual_memory().available, float(1024)**3)
+            memory_availible_now = (
+                psutil.virtual_memory().available / float(1024)**3
+            )
             if memory_availible_now < 0.5:
                 raise errors.ProveanResourceError(
                     'Ran out of RAM and provean had to be terminated ({} GB left)'
