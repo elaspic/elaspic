@@ -35,7 +35,8 @@ class Model:
         self.sequence_seqrecords = list(SeqIO.parse(self.sequence_file, 'fasta'))
         self.sequence_id = op.splitext(op.basename(self.sequence_file))[0]
         self._validate_sequence_seqrecords()
-
+        logger.debug('sequence_seqrecords: {}'.format(self.sequence_seqrecords))
+        
         ### Template structures
         self.structure_file = structure_file
         self.structure = structure_tools.get_pdb_structure(self.structure_file)
@@ -49,6 +50,7 @@ class Model:
             ) for chain in self.structure[0].child_list
         ]
         self.chain_ids = [chain.id for chain in self.structure.child_list[0].child_list]
+        logger.debug('structure_seqrecords: {}'.format(self.structure_seqrecords))
 
         ### Homology modelling
         if self.sequence_id == self.structure_id:
