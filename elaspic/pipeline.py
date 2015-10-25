@@ -76,33 +76,6 @@ class Pipeline:
             raise Exception('You should be using a temp folder that it specific to the particular job!')    
 
 
-    def calculate_model(self, prep):
-        if prep.key in self.models:
-            return self.models[prep.key]
-        
-        with prep:
-            prep.model = (
-                sequence.Model(prep.sequence_file, prep.structure_file, prep.model_results_file)
-            )
-            
-        self.models[prep.key] = prep.model
-        return prep.model
-        
-     
-    def calculate_score(self, prep):
-        if prep.key in self.mutations:
-            return self.mutations[prep.key]
-            
-        with prep:
-            prep.sequence.mutate(prep.mutation)
-            prep.model.mutate(prep.mutation_chan_idx, prep.mutation)
-            prep.predictor.score(prep.df, prep.core_or_interface)
-            
-            
-        self.sequences[prep.sequence_key].mutate()
-        self.models[prep.model_key].mutate()
-  
-
 
 #%%
 _instances = {}

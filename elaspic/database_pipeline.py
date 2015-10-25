@@ -52,7 +52,7 @@ class DatabasePipeline(Pipeline):
         else:
             self.mutations = mutations
         
-        logger.info(helper.color.UNDERLINE + 'Input parameters:' + helper.color.END)
+        logger.info('Input parameters:')
         logger.info('uniprot_id: {}'.format(uniprot_id))
         logger.info('mutations: {}'.format(mutations))
         logger.info('run_type: {}'.format(run_type))
@@ -984,6 +984,7 @@ class PrepareMutation:
               (errors.MutationOutsideDomainError, 
                errors.MutationOutsideInterfaceError)):
             logger.debug('{}: {}; OK'.format(exc_type, exc_value))
+            return True
         elif exc_type is not None and exc_type in self.handled_exceptions:
             uniprot_mutation.mutation_errors = '{}: {}'.format(exc_type, exc_value)
             logger.debug(uniprot_mutation.mutation_errors)
@@ -1012,7 +1013,6 @@ class PrepareMutation:
         logger.debug('Mergin mutation data with the database...')
         self.db.merge_mutation(uniprot_mutation, configs['copy_data'] and d.path_to_data)
         logger.debug('Done merging mutation data!')
-        return True
         
         
     @property

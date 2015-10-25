@@ -183,10 +183,10 @@ def elaspic():
     validate_args(args)
     
     if args.input_file:
-        from elaspic import database_pipeline
         conf.read_configuration_file(args.config_file)
         configure_logger()
         # Run database pipeline for each row in file
+        from elaspic import database_pipeline
         for uniprot_id, mutations, uniprot_domain_pair_id in \
                 zip(*parse_input_file(args.input_file)):
             pipeline = database_pipeline.DatabasePipeline(
@@ -195,16 +195,18 @@ def elaspic():
             )
             pipeline.run()
     elif args.uniprot_id:
-        from elaspic import database_pipeline
         conf.read_configuration_file(args.config_file)
         configure_logger()
         # Run database pipeline
         if args.uniprot_domain_pair_ids:
+            logger.debug('uniprot_domain_pair_ids: {}'.format(args.uniprot_domain_pair_ids))
             uniprot_domain_pair_ids_asint = (
                 [int(x) for x in args.uniprot_domain_pair_ids.split(',') if x]
             )
         else:
             uniprot_domain_pair_ids_asint = []
+        # Run database pipeline
+        from elaspic import database_pipeline
         pipeline = database_pipeline.DatabasePipeline(
             args.uniprot_id, args.mutations, 
             run_type=args.run_type,
@@ -212,11 +214,11 @@ def elaspic():
         )
         pipeline.run()
     elif args.pdb_file:
-        from elaspic import local_pipeline
         conf.read_configuration_file(args.config_file, unique_temp_dir=os.getcwd())
         configure_logger()
         # Run local pipeline
-        pipeline = local_pipeline(
+        from elaspic import local_pipeline
+        pipeline = local_pipeline.LocalPipeline(
             args.pdb_file, args.sequence_file, args.mutations,
         )
         if args.run_type == 1:

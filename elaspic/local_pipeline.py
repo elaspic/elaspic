@@ -8,7 +8,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from . import conf, errors, structure_tools, structure_analysis, sequence, model, predictor
+from . import conf, helper, errors, structure_tools, structure_analysis, sequence, model, predictor
 from .pipeline import Pipeline, execute_and_remember
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,6 @@ class LocalPipeline(Pipeline):
         # Input parameters
         self.pdb_id = op.splitext(op.basename(structure_file))[0]
         self.pdb_file = structure_file
-        self.sequence_file = sequence_file if sequence_file else ''
 
         logger.info('pdb_file: {}'.format(self.pdb_file))
         logger.info('pwd: {}'.format(self.PWD))
@@ -45,14 +44,21 @@ class LocalPipeline(Pipeline):
         self.sp.save_structure(configs['unique_temp_dir'])
         self.sp.save_sequences(configs['unique_temp_dir'])
         
+        if sequence_file in ['', 'None', None]:
+            self.sequence_file = ''
+        else:
+            self.sequence_file = sequence_file
+        logger.debug('self.sequence_file: {}'.format(self.sequence_file))
+        
         if not mutations:
             mutations = []
         elif isinstance(mutations, str):
             mutations = mutations.split(',')
         else:
             mutations = mutations
-
-        if self.sequence_file is None:
+        logger.debug('mutations: {}'.format(mutations))
+        
+        if not self.sequence_file:
             # Read template sequences from the PDB
             self.seqrecords = tuple([
                 SeqRecord(
@@ -83,11 +89,11 @@ class LocalPipeline(Pipeline):
                 self.mutations[(mutation_idx, mutation,)] = mutation_in
         else:
             # Read template sequences from the sequence file
-            self.seqrecords = list(SeqIO.parse(self.sequence_file, 'fasta'))
+            self.seqrecords = tuple(SeqIO.parse(self.sequence_file, 'fasta'))
             for i, seqrec in enumerate(self.seqrecords):
-                seqrec.id = '{}_{}'.format(seqrec.id, str(i))
+                seqrec.id = helper.slugify('{}_{}'.format(seqrec.id, str(i)))
             ### Parse mutations
-            self.mutations = []
+            self.mutations = dict()
             for mutation_in in mutations:
                 mutation_idx, mutation = mutation_in.split('_')
                 mutation_idx = int(mutation_idx)
@@ -259,7 +265,9 @@ class PrepareSequence:
         return True
         
     def __enter__(self):
-        sequence_file = op.join(configs['sequence_dir'], self.seqrecord.id + '.fasta')
+        sequence_file = op.join(
+            configs['sequence_dir'], 
+            helper.slugify(self.seqrecord.id + '.fasta'))
         with open(sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecord, ofh, 'fasta')
         self.sequence_file = sequence_file
@@ -307,7 +315,8 @@ class PrepareModel:
     def __enter__(self):
         # Target sequence file
         self.sequence_file = op.join(
-            configs['model_dir'], '_'.join(seqrec.id for seqrec in self.seqrecords) + '.fasta'
+            configs['model_dir'], 
+            helper.slugify('_'.join(seqrec.id for seqrec in self.seqrecords) + '.fasta')
         )
         with open(self.sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecords, ofh, 'fasta')
@@ -315,8 +324,9 @@ class PrepareModel:
 
         # Template structure file
         chain_string = ''.join(self.sp.structure[0].child_list[pos].id for pos in self.positions)
-        self.structure_file = (
-            op.join(configs['unique_temp_dir'], self.sp.pdb_id + chain_string + '.pdb')
+        self.structure_file = op.join(
+            configs['unique_temp_dir'], 
+            helper.slugify(self.sp.pdb_id + chain_string + '.pdb')
         )
         assert op.isfile(self.structure_file)
 
@@ -429,7 +439,6 @@ class PrepareMutation:
     @property
     def result(self):
         return self.mutation_features
-
 
 
 #%%

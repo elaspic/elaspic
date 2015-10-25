@@ -6,7 +6,7 @@ import psutil
 import time
 import shutil
 import logging
-
+import atexit
 import six
 
 from Bio import SeqIO
@@ -57,7 +57,7 @@ class Sequence:
 
         self.sequence_file = sequence_file
         self.seqrecord = SeqIO.read(self.sequence_file, 'fasta')
-        self.protein_id = self.seqrecord.id
+        self.protein_id = helper.slugify(self.seqrecord.id)
         self.sequence = str(self.seqrecord.seq)
     
         # Provean supset
@@ -95,12 +95,18 @@ class Sequence:
 
     @property
     def provean_supset_file(self):
-        return op.join(configs['sequence_dir'], self.protein_id + '_provean_supset')
+        return op.join(
+            configs['sequence_dir'], 
+            helper.slugify(self.protein_id + '_provean_supset')
+        )
 
 
     @property
     def provean_supset_exists(self):
-        return op.isfile(self.provean_supset_file) and op.isfile(self.provean_supset_file + '.fasta')
+        return (
+            op.isfile(self.provean_supset_file) and 
+            op.isfile(self.provean_supset_file + '.fasta')
+        )
 
 
     @property
@@ -121,6 +127,7 @@ class Sequence:
         """
         """
         logger.debug('Building Provean supporting set. This might take a while...')
+        atexit.register(_clear_provean_temp)
         
         # Get the required parameters
         any_position = 0
@@ -198,11 +205,15 @@ class Sequence:
             disk_space_availible = psutil.disk_usage(configs['provean_temp_dir']).free / (1024**3)
             logger.debug('Disk space availible: {:.2f} GB'.format(disk_space_availible))
             if disk_space_availible < 5:
-                raise errors.ProveanError('Not enough disk space ({:.2f} GB) to run provean'.format(disk_space_availible))
+                raise errors.ProveanError(
+                    'Not enough disk space ({:.2f} GB) to run provean'
+                    .format(disk_space_availible))
             memory_availible = psutil.virtual_memory().available / float(1024)**3
             logger.debug('Memory availible: {:.2f} GB'.format(memory_availible))
             if memory_availible < 0.5:
-                raise errors.ProveanError('Not enough memory ({:.2f} GB) to run provean'.format(memory_availible))
+                raise errors.ProveanError(
+                    'Not enough memory ({:.2f} GB) to run provean'
+                    .format(memory_availible))
     
         # Create a file with mutation
         mutation_file = op.join(configs['sequence_dir'], '{}.var'.format(mutation))
@@ -211,22 +222,22 @@ class Sequence:
         
         # Run provean
         system_command = (
-            'provean ' +
-            ' -q {} '.format(self.sequence_file) +
-            ' -v {} '.format(mutation_file) +
-            ' -d ' + op.join(configs['blast_db_dir'], 'nr') +
-            ' --tmp_dir {} '.format(configs['provean_temp_dir']) +
-            ' --num_threads {} '.format(configs['n_cores']) +
-            ' --psiblast {} '.format(helper.get_which('psiblast')) +
-            ' --blastdbcmd {} '.format(helper.get_which('blastdbcmd')) +
-            ' --cdhit {} '.format(helper.get_which('cd-hit'))
+            "provean " +
+            " -q '{}' ".format(self.sequence_file) +
+            " -v '{}' ".format(mutation_file) +
+            " -d " + op.join(configs['blast_db_dir'], 'nr') +
+            " --tmp_dir '{}' ".format(configs['provean_temp_dir']) +
+            " --num_threads {} ".format(configs['n_cores']) +
+            " --psiblast '{}' ".format(helper.get_which('psiblast')) +
+            " --blastdbcmd '{}' ".format(helper.get_which('blastdbcmd')) +
+            " --cdhit '{}' ".format(helper.get_which('cd-hit'))
         )
         
         if self.provean_supset_exists:
             # use supporting set
-            system_command += ' --supporting_set ' + self.provean_supset_file
+            system_command += " --supporting_set '{}' ".format(self.provean_supset_file)
         else:
-            system_command += ' --save_supporting_set ' + self.provean_supset_file           
+            system_command += " --save_supporting_set '{}' ".format(self.provean_supset_file)
     
         logger.debug(system_command)
         child_process = helper.run_subprocess_locally(configs['sequence_dir'], system_command)
@@ -311,4 +322,20 @@ class Sequence:
         else:
             return matrix_match[pair_match]
     
-    
+
+#%%
+def _clear_provean_temp():
+    provean_temp_dir =  configs['provean_temp_dir']
+    logger.info("Clearning provean temporary files from '{}'...".format(provean_temp_dir))
+    for filename in os.listdir(provean_temp_dir):
+        file_path = os.path.join(provean_temp_dir, filename)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path): 
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print(e)
+
+
+

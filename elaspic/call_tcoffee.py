@@ -108,7 +108,8 @@ class TCoffee(object):
         tcoffee_env['TMP_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 'tmp')
         tcoffee_env['CACHE_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 'cache')
         tcoffee_env['LOCKDIR_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 'lck')
-        tcoffee_env['ERRORFILE_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 't_coffee.ErrorReport')
+        tcoffee_env['ERRORFILE_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 
+                                        't_coffee.ErrorReport')
         tcoffee_env['BLASTDB'] = configs['blast_db_dir']
         tcoffee_env['PDB_DIR'] = configs['pdb_dir']
         tcoffee_env['NO_REMOTE_PDB_DIR'] = '1'
@@ -118,7 +119,8 @@ class TCoffee(object):
             'HOME_4_TCOFFEE', 'TMP_4_TCOFFEE', 'CACHE_4_TCOFFEE', 'LOCKDIR_4_TCOFFEE',
             'ERRORFILE_4_TCOFFEE', 'BLASTDB', 'PDB_DIR', 'NO_REMOTE_PDB_DIR']
         exports = [
-            'export {}={}'.format(x, tcoffee_env.get(x, '$'+x)) for x in t_coffee_environment_variables
+            'export {}={}'.format(x, tcoffee_env.get(x, '$'+x)) 
+            for x in t_coffee_environment_variables
         ]
         message = (
             "\nSystem command for setting environmental variables:\n" + ' && '.join(exports)
@@ -137,7 +139,8 @@ class TCoffee(object):
         # -pdb_min_sim=20 -template_file seqfiles.template '
 
         multi_core_option = (
-            '{}'.format(configs['n_cores']) if configs['n_cores'] and int(configs['n_cores']) > 1 else 'no'
+            '{}'.format(configs['n_cores']) 
+            if configs['n_cores'] and int(configs['n_cores']) > 1 else 'no'
         )
         n_core_option = '{}'.format(configs['n_cores']) if configs['n_cores'] else '1'
         protein_db = op.join(configs['blast_db_dir'], 'nr')
@@ -236,7 +239,8 @@ class TCoffee(object):
         # try the alignment in expresso mode (structure based with sap alignment)
         alignment_output_file = op.join(configs['tcoffee_dir'], self.alignment_id + '.aln')
         system_command, tcoffee_env = self._get_tcoffee_system_command(
-            self.alignment_fasta_file, self.alignment_template_file, alignment_output_file, self.mode)
+            self.alignment_fasta_file, self.alignment_template_file, alignment_output_file, 
+            self.mode)
 
         # Perform t_coffee alignment
         logger.debug("\nTCoffee system command:\n{}".format(system_command))
@@ -245,7 +249,8 @@ class TCoffee(object):
                 configs['tcoffee_dir'], system_command, env=tcoffee_env)     
         )
         logger.debug("t_coffee results:\n{}".format(result.strip()))
-        error_message_summary_idx = error_message.find('*                        MESSAGES RECAPITULATION')
+        error_message_summary_idx = error_message.find(
+            '*                        MESSAGES RECAPITULATION')
         if error_message_summary_idx == -1:
             error_message_summary = ''
         else:
@@ -258,10 +263,12 @@ class TCoffee(object):
             logger.info("Successfully made the alignment")
             return alignment_output_file
         else:
-            logger.error('Structural alignment failed with the following error: {}'.format(error_message))
+            logger.error('Structural alignment failed with the following error: {}'
+                .format(error_message))
             logger.error('Running quickalign alignment instead...')
             system_command, tcoffee_env = self._call_tcoffee_system_command(
-                self.alignment_fasta_file, self.alignment_template_file, alignment_output_file, 'quick')
+                self.alignment_fasta_file, self.alignment_template_file, alignment_output_file, 
+                'quick')
             result, error_message, return_code = (
                 helper.subprocess_check_output_locally(
                     configs['tcoffee_dir'], system_command, env=tcoffee_env)     
@@ -270,5 +277,6 @@ class TCoffee(object):
                 return alignment_output_file
             else:
                 logger.error('Even quickaln didn\'t work. Cannot create an alignment. Giving up.')
-                raise errors.TcoffeeError(result, error_message, self.alignment_fasta_file, system_command)
+                raise errors.TcoffeeError(result, error_message, self.alignment_fasta_file, 
+                                          system_command)
     

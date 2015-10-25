@@ -17,6 +17,7 @@ import logging
 import six
 import time
 import json
+import string
 
 from functools import wraps
 from contextlib import contextmanager
@@ -30,7 +31,14 @@ logger = logging.getLogger(__name__)
 #%%
 canonical_amino_acids = 'ARNDCEQGHILKMFPSTWYV'
 uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
- 
+
+
+
+#%%
+def slugify(filename_string):
+    valid_chars = "-_.()%s%s" % (string.ascii_letters, string.digits)
+    return ''.join(c if c in valid_chars else '_' for c in filename_string)
+    
 
 
 #%%

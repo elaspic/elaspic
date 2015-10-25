@@ -5,14 +5,12 @@ import os
 import os.path as op
 import subprocess
 import tempfile
-import shutil
 import logging
-import atexit
 
 from configparser import SafeConfigParser, NoOptionError
 from Bio.SubsMat import MatrixInfo
 
-from . import DATA_DIR, helper, errors
+from . import DATA_DIR, helper
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +175,7 @@ def read_configuration_file(config_file, unique_temp_dir=None):
     
     # Temporary directories
     configs['temp_dir'] = op.join(configs['global_temp_dir'], 'elaspic')
+    os.makedirs(configs['temp_dir'], exist_ok=True)
     if unique_temp_dir is not None:
         configs['unique_temp_dir'] = unique_temp_dir
     else:
@@ -233,7 +232,6 @@ def read_database_configs(configParser):
     configs['archive_temp_dir'] = op.join(configs['temp_dir'], 'archive')
         
 
-
 def read_sequence_configs(configParser):
     """[SEQUENCE]
     """
@@ -247,9 +245,6 @@ def read_sequence_configs(configParser):
     configs['blast_db_dir'] = configParser.get('SEQUENCE', 'blast_db_dir')
     configs['blast_db_dir_fallback'] = configParser.get('SEQUENCE', 'blast_db_dir_fallback', fallback='')
     _validate_blast_db_dir(configs)
-
-    atexit.register(_clear_provean_temp, configs['provean_temp_dir'])
-
     
     
 def read_model_configs(configParser):
@@ -295,27 +290,11 @@ def _validate_provean_temp_dir(configParser, configs):
             raise
 
 
-
 def _prepare_temp_folders(configs):
     for key, value in configs.items():
         if key.endswith('_dir'):
             logger.debug("Creating '{}' folder: {}...".format(key, value))
             os.makedirs(value, exist_ok=True)
-
-
-
-def _clear_provean_temp(provean_temp_dir):
-    logger.info("Clearning provean temporary files from '{}'...".format(provean_temp_dir))
-    for filename in os.listdir(provean_temp_dir):
-        file_path = os.path.join(provean_temp_dir, filename)
-        try:
-            if os.path.isfile(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path): 
-                shutil.rmtree(file_path)
-        except Exception as e:
-            print(e)
-
 
 
 def _validate_blast_db_dir(configs):
