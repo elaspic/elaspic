@@ -1,36 +1,26 @@
-# Source: http://conda.pydata.org/docs/travis.html#using-conda-with-travis-ci
 language: python
 python:
-  # We don't actually use the Travis Python, but this keeps it organized.
-  # - "2.6"
-  # - "2.7"
-  # - "3.3"
-  - "3.4"
+- '3.4'
 install:
-  - sudo apt-get update
-  # We do this conditionally because it saves us some downloading if the
-  # version is the same.
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh;
-    else
-      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-    fi
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
-  - hash -r
-  - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
-  # Useful for debugging any issues with conda
-  - conda info -a
-
-  # Replace dep1 dep2 ... with your dependencies
-  - conda config --add channels bioconda
-  - conda config --add channels ostrokach
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytest
-  - source activate test-environment
-  - conda build .
-  - conda install elaspic --use-local
-
+- sudo apt-get update
+- if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh
+  -O miniconda.sh; else wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+  -O miniconda.sh; fi
+- bash miniconda.sh -b -p $HOME/miniconda
+- export PATH="$HOME/miniconda/bin:$PATH"
+- hash -r
+- conda config --set always_yes yes --set changeps1 no
+- conda update -q conda
+- conda info -a
+- conda config --add channels bioconda
+- conda config --add channels ostrokach
+- conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytest
+- source activate test-environment
+- conda build .
+- conda install elaspic --use-local
 script:
-  # Your test script goes here
-  - elaspic --help
+- elaspic --help
+- py.test tests/test_local_pipeline.py --cov=elaspic
+env:
+  global:
+    secure: XZ83x+3DutthNju8wiZVVfmQb/CW1HX0Zrymm4T1vNPjgm+ce6QzwY9NJfE/Mywh0/4EnZrg+WxJmJWMjV/RdZgm8GA9DMDtfVja8UDCo2OFrEv2LUL5GBO1d/3DJUZJB0rpmlTDyKkg8OQCZ/dOAKcxTKrdUVx/NDL78Kr2zMHj8CHXRg9ljjFG7tcui9JKur+Uvx70o70PKxFFOGfGKrkfmxp+MclkBTKlPPzoi7N0UmptO+wFfKnAQubiD2l4KqwilUrdRS2qFKlnzbay8r9FRqUS65KsmwJTaMdta+TYcDmOPWql6R7EjwIOZkrSLousTtz2AroL1FL1D8YmSUSC7JqJQHF/tC5kFXCEk7zgwJUht2FMBWPdIiM9qKZHGw+tw8tC5FxUzGCJe888DlgRQgcSc5BXbJfREsue3m6+yMBFwaFk+1URPhRSGqrgIl5gy5gswQwvq9Nojrtvy1xxCxxA+GGVj3QieVnTnrJeF3wFdfb/0IjGBEC4FmWPCSwtZWr+YUbfVzfvHav5I+01FN/0ckMnErZlYM9nta/H6r07yfPOBe6OMm/Fq2OzUoDas2WwvWO6FeUUxZKiCXj9hOH1Ofyr/sijjYyyZHykj5rJnTOWK3HbrpYZiqZiLweNn7Smo5QepkhSH4LJqAPO99c7UrWaj8ADVP9fcwY=
