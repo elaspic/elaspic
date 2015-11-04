@@ -21,7 +21,7 @@ platform:
 #  - linux-32
 ## The engine are the inital conda packages you want to run with 
 engine:
-  - python=2.7
+  # - python=2.7
   - python=3.4
 ## The env param is an environment variable list 
 # env:
@@ -37,6 +37,7 @@ engine:
 ## Run before the script
 before_script:
   - conda config --add channels http://conda.anaconda.org/ostrokach
+  - conda config --add channels http://conda.anaconda.org/bioconda
 
 ## Put your main computations here!  
 script:
