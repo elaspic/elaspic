@@ -14,7 +14,7 @@ from Bio.SeqRecord import SeqRecord
 from Bio.PDB import PDBParser
 
 from . import (
-    conf, errors, helper, structure_tools, sequence, model, predictor, 
+    conf, errors, helper, structure_tools, sequence, model, predictor,
     database, database_tables
 )
 from .pipeline import Pipeline, execute_and_remember
@@ -24,34 +24,42 @@ configs = conf.Configs()
 
 
 
-#%%
+# %%
 class DatabasePipeline(Pipeline):
 
     def __init__(
-            self, uniprot_id, mutations, configurations=None, 
+            self, uniprot_id, mutations, configurations=None,
             run_type=5, number_of_tries=[], uniprot_domain_pair_ids=[]):
         """Run the main function of the program and parse errors.
-        
+
         Parameters
         ----------
         uniprot_domain_pair_ids : list of integers
             List of uniprot_domain_pair_ids specifying which uniprot domain pairs to analyse.
+        run_type : int
+            1 : Calculate provean supporting set.
+            2 : Calculate all homology models.
+            3 : Calculate mutations using precalculated provean and models
+                (not working)
+            4 : Calculate mutations using precalculated provean (calculating mutations on the fly)
+                (not working)
+            5 : Calculate mutations, calculating provean and homology models as required.
         """
         super().__init__(configurations)
-        
+
         self.uniprot_id = uniprot_id
         self.calculated_mutations = []
         self.run_type = run_type
         self.number_of_tries = number_of_tries
         self.uniprot_domain_pair_ids = uniprot_domain_pair_ids
-        
+
         if mutations is None:
             self.mutations = []
         elif isinstance(mutations, str):
             self.mutations = mutations.split(',')
         else:
             self.mutations = mutations
-        
+
         logger.info('Input parameters:')
         logger.info('uniprot_id: {}'.format(uniprot_id))
         logger.info('mutations: {}'.format(mutations))
@@ -61,18 +69,18 @@ class DatabasePipeline(Pipeline):
         logger.info('db_schema: {}'.format(conf.configs.get('db_schema')))
         logger.info('global_temp_dir: {global_temp_dir}'.format(**conf.configs))
         logger.info('temp_dir: {temp_dir}'.format(**conf.configs))
-        
+
         # Switch to the root of the unique tmp directory
         os.chdir(configs['unique_temp_dir'])
 
         # Initialise the sql database for accessing all information
         self.db = database.MyDatabase()
-        
+
         # Obtain all domains and interactions for a given uniprot
         logger.info('Obtaining protein domain information...')
         self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
         self._update_path_to_data(self.uniprot_domains)
-        
+
         # Mutations results
         self.uniprot_mutations = []
 
@@ -92,7 +100,7 @@ class DatabasePipeline(Pipeline):
     def run(self):
         if not self.uniprot_domains:
             logger.info('Warning! Uniprot {} has no pfam domains!'.format(self.uniprot_id))
-        
+
         # Find provean
         if self.run_type in [1, 5] and self.uniprot_domains and not self.sequences:
             logger.info('\n\n\n' + '*' * 110)
@@ -163,7 +171,7 @@ class DatabasePipeline(Pipeline):
 
 
 
-#%%
+# %%
 import random
 
 @execute_and_remember
@@ -171,7 +179,7 @@ class Foo:
     def __init__(self):
         self.info = ['init {}'.format(random.randint(0,1000))]
         print(self.info)
-        
+
     def __bool__(self):
         self.info.append('__bool__')
         print(self.info)
@@ -180,30 +188,30 @@ class Foo:
     def __enter__(self):
         self.info.append('__bool__')
         print(self.info)
-        
+
     def run(self):
         self.info.append('__bool__')
         print(self.info)
-        
+
     def __exit__(self, *exc):
         self.info.append('__bool__')
         print(self.info)
         print(exc)
         return False
-            
 
-#%%
+
+# %%
 @execute_and_remember
 class PrepareSequence:
-    
+
     def __init__(self, d, db):
         self.d = d
         self.db = db
-        
+
         self.sequence = None
         self.skip = False
 
-        if (d.uniprot_sequence and 
+        if (d.uniprot_sequence and
             d.uniprot_sequence.provean and
             d.uniprot_sequence.provean.provean_supset_filename):
             # Provean supset has already been calculated
@@ -218,8 +226,8 @@ class PrepareSequence:
 
     def __bool__(self):
         return not self.skip
-        
-        
+
+
     def __enter__(self):
         d = self.d
         self.sequence_file = op.join(configs['sequence_dir'], d.uniprot_id + '.fasta')
@@ -230,8 +238,8 @@ class PrepareSequence:
         with open(self.sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecord, ofh, 'fasta')
         assert op.isfile(self.sequence_file)
-    
-    
+
+
     def run(self):
         self.sequence = sequence.Sequence(self.sequence_file, self.provean_supset_file)
 #            if provean:
@@ -244,34 +252,34 @@ class PrepareSequence:
 #                logger.info('Obtaining protein domain information...')
 #                self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
 
-        
+
     def __exit__(self, exc_type, exc_value, traceback):
         d = self.d
 
         if exc_type is not None:
             return False
-        
+
         provean = database.Provean()
         provean.uniprot_id = d.uniprot_id
         provean.provean_supset_filename = op.basename(self.sequence.provean_supset_file)
         provean.provean_supset_length = self.sequence.provean_supset_length
         self.db.merge_provean(
-            provean, 
+            provean,
             self.sequence.provean_supset_file,
             configs['copy_data'] and database.get_uniprot_base_path(d)
         )
 
-    
+
     @property
     def result(self):
         return self.sequence
 
 
 
-#%%
+# %%
 @execute_and_remember
 class PrepareModel:
-    
+
     handled_errors = (
         errors.ModellerError,
         errors.PDBChainError,
@@ -284,7 +292,7 @@ class PrepareModel:
         errors.TcoffeeError,
     )
 
-    
+
     def __init__(self, d, db):
         """
         """
@@ -294,12 +302,12 @@ class PrepareModel:
         self.skip = False
         self.model = None
         self.modeller_results_file = None
-        
+
         # Check if we should skip the model
         if (isinstance(d, database.UniprotDomain) and not (d.template and d.template.cath_id)):
             logger.error('No structural template availible for this domain. Skipping...')
             self.skip = True
-        elif (isinstance(d, database.UniprotDomainPair) and not 
+        elif (isinstance(d, database.UniprotDomainPair) and not
                 (d.template and d.template.cath_id_1 and d.template.cath_id_2)):
             logger.error('No structural template availible for this domain pair. Skipping...')
             self.skip = True
@@ -308,12 +316,12 @@ class PrepareModel:
             self.modeller_results_file = self._get_modeller_results_file(d)
         elif (d.template.model and d.template.model.model_errors and
                 (('Giving up' in d.template.model.model_errors) or
-                (d.template.model.model_errors.count(';') > 10)) ):
+                (d.template.model.model_errors.count(';') >= 2)) ):
             logger.info(
                 'Previous model had unfixable errors: "{}". Skipping...'
                 .format(d.template.model.model_errors))
             self.skip = True
-            
+
 
     def _get_modeller_results_file(self, d):
         """Save relevant precalculated data to a json file.
@@ -362,12 +370,12 @@ class PrepareModel:
         with open(modeller_results_file, 'w') as ofh:
             json.dump(modeller_results, ofh)
         return modeller_results_file
-        
-        
+
+
     def __bool__(self):
         return not self.skip
-    
-    
+
+
     def __enter__(self):
         d = self.d
         ### Load data from database ORM to model input
@@ -387,8 +395,8 @@ class PrepareModel:
                 d.uniprot_domain_1.uniprot_id,
                 d.uniprot_domain_2.uniprot_id
             ]
-            if (d.template.model and 
-                d.template.model.model_domain_def_1 and 
+            if (d.template.model and
+                d.template.model.model_domain_def_1 and
                 d.template.model.model_domain_def_2):
                 protein_domain_defs = [
                     d.template.model.model_domain_def_1,
@@ -405,7 +413,7 @@ class PrepareModel:
             ]
             pdb_id = d.template.domain_1.pdb_id
             pdb_chains = [
-                d.template.domain_1.pdb_chain, 
+                d.template.domain_1.pdb_chain,
                 d.template.domain_2.pdb_chain
             ]
             pdb_domain_defs = [
@@ -416,18 +424,18 @@ class PrepareModel:
         self.sequence_file, self.sequence_seqrecords = (
             self._write_domain_sequence_file(protein_ids, protein_domain_defs, protein_sequences)
         )
-        
+
         self.structure_file, self.structure_seqrecords = (
             self._write_domain_structure_file(pdb_id, pdb_chains, pdb_domain_defs)
         )
-        
-    
+
+
     def run(self):
         self.model = model.Model(
             self.sequence_file, self.structure_file, self.modeller_results_file
         )
-        
-        
+
+
     def __exit__(self, exc_type, exc_value, traceback):
         d = self.d
         if exc_type is not None and exc_type in self.handled_errors:
@@ -454,13 +462,13 @@ class PrepareModel:
                     d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
                 bad_domains = self.db.get_rows_by_ids(
                     database_tables.DomainContact,
-                    [database_tables.DomainContact.cath_id_1, 
+                    [database_tables.DomainContact.cath_id_1,
                      database_tables.DomainContact.cath_id_2],
                     [d.template.cath_id_1, d.template.cath_id_2])
                 if len(bad_domains) == 0:
                     bad_domains = self.db.get_rows_by_ids(
                         database_tables.DomainContact,
-                        [database_tables.DomainContact.cath_id_1, 
+                        [database_tables.DomainContact.cath_id_1,
                          database_tables.DomainContact.cath_id_2],
                         [d.template.cath_id_2, d.template.cath_id_1])
                 assert len(bad_domains) == 1
@@ -472,53 +480,54 @@ class PrepareModel:
                     "Making a homology model failed!!!\n"
                     "Adding error '{0}' to the domain pair with cath_id_1 {1} "
                     "and cath_id_2 {2}..."
-                    .format(bad_domain.domain_contact_errors, d.template.cath_id_1, 
+                    .format(bad_domain.domain_contact_errors, d.template.cath_id_1,
                             d.template.cath_id_2))
-                    
+
             # Add the error type to the model_errors column
             d.template.model.model_errors = (
                 self.__add_new_error(d.template.model.model_errors, exc_value)
             )
             logger.error(d.template.model.model_errors)
+            logger.info('Adding bad domain and model...')
             self.db.merge_row(bad_domain)
+            self.db.merge_model(d)
             # d.template.model = empty_model
             return True
         elif exc_type is not None:
             # Raise any exceptions that were not handled above...
             return False
 
-
         ### Upload model data to the database
         if self.modeller_results_file:
             # Model has already been calculated
             # TODO: there must be a more elegant solution...
             return
-            
+
         d = self.d
         model = self.model
-        
+
         ### Domains
         if isinstance(d, database.UniprotDomain):
             if d.template.model == None:
                 d.template.model = database_tables.UniprotDomainModel()
                 d.template.model.uniprot_domain_id = d.uniprot_domain_id
-            
+
             d.template.model.model_filename = op.basename(model.modeller_results['model_file'])
             d.template.model.norm_dope = model.modeller_results['norm_dope']
             d.template.model.chain = model.chain_ids[0]
             d.template.model.alignment_filename = (
                 op.basename(self.model.modeller_results['alignment_files'][0])
             )
-            
+
             sasa_score = model.relative_sasa_scores[model.chain_ids[0]]
             d.template.model.sasa_score = ','.join('{:.2f}'.format(x) for x in sasa_score)
-        
+
             d.template.model.model_domain_def = (
                 self._truncate_domain_defs(
-                    d.template.domain_def, 
+                    d.template.domain_def,
                     model.modeller_results['domain_def_offsets'][0])
             )
-        
+
         ### Domain pairs
         elif isinstance(d, database.UniprotDomainPair):
             if d.template.model == None:
@@ -534,63 +543,60 @@ class PrepareModel:
             d.template.model.alignment_filename_2 = (
                 op.basename(self.model.modeller_results['alignment_files'][1])
             )
-    
+
             model_domain_def_1 = self._truncate_domain_defs(
                 d.uniprot_domain_1.template.domain_def,
                 model.modeller_results['domain_def_offsets'][0])
-    
+
             model_domain_def_2 = self._truncate_domain_defs(
                 d.uniprot_domain_2.template.domain_def,
                 model.modeller_results['domain_def_offsets'][1])
-    
+
             # Convert interacting AA from indexes to uniprot numbers
             domain_start_1 = int(model_domain_def_1.split(':')[0])
             domain_start_2 = int(model_domain_def_2.split(':')[0])
-            chain_1_interacting_uninum = [i + domain_start_1 for i in model.interacting_residues_1]
-            chain_2_interacting_uninum = [i + domain_start_2 for i in model.interacting_residues_2]
-    
+            chain_1_interacting_uninum = [
+                i + domain_start_1 - 1 for i in model.interacting_aa_1]
+            chain_2_interacting_uninum = [
+                i + domain_start_2 - 1 for i in model.interacting_aa_2]
+
             d.template.model.interacting_aa_1 = (
                 ','.join([str(uniprot_num) for uniprot_num in chain_1_interacting_uninum])
             )
             d.template.model.interacting_aa_2 = (
                 ','.join([str(uniprot_num) for uniprot_num in chain_2_interacting_uninum])
             )
-            
+
             # Get interacting amino acids and interface area
             d.template.model.interface_area_hydrophobic = model.interface_area_hydrophobic
             d.template.model.interface_area_hydrophilic = model.interface_area_hydrophilic
             d.template.model.interface_area_total = model.interface_area_total
-            
-            # Save model_domain_defs, which might be truncated compared to uniprot_domain_template 
+
+            # Save model_domain_defs, which might be truncated compared to uniprot_domain_template
             # domain defs
             d.template.model.model_domain_def_1 = model_domain_def_1
             d.template.model.model_domain_def_2 = model_domain_def_2
-    
-    
+
         ### Values common for single domains and interactions
         model_errors =', '.join('{}'.format(e) for e in model.errors)
         if model_errors != '':
             d.template.model.model_errors = model_errors
 
-
-        # TODO: Copy alignment and model file to the archive folder
-
-        # Add either the empty model or the calculated model to the database
         logger.info('Adding model...')
-        
-        self.db.merge_model(d, model.modeller_results, configs['copy_data'] and d.path_to_data)
-        
-        
+        self.db.merge_model(d, model.modeller_results)
+
+
     def _truncate_domain_defs(self, domain_def, domain_def_offset):
-        if (domain_def_offset is None or 
-            domain_def_offset[0] is None or 
+        if (domain_def_offset is None or
+            domain_def_offset[0] is None or
             domain_def_offset[1] is None):
             return domain_def
         n_gaps_start, n_gaps_end = domain_def_offset
         domain_def_new = (
             [str(int(domain_def.split(':')[0]) + n_gaps_start)] +
             domain_def.split(':')[1:-1] +
-            [str(int(domain_def.split(':')[-1]) - n_gaps_end)])
+            [str(int(domain_def.split(':')[-1]) - n_gaps_end)]
+        )
         domain_def_new = ':'.join(domain_def_new)
         return domain_def_new
 
@@ -606,20 +612,20 @@ class PrepareModel:
             domain_def = helper.decode_domain_def(
                 protein_domain_def, merge=True, return_string=False)
             seqrecord = SeqRecord(
-                id=protein_id, 
-                name=sequence_id,
+                id=sequence_id,
+                name=protein_id,
                 seq=Seq(protein_sequence[domain_def[0]-1:domain_def[1]])
             )
             sequence_seqrecords.append(seqrecord)
-        
+
         sequence_filename = '_'.join(seqrec.id for seqrec in sequence_seqrecords)
         sequence_file = op.join(configs['unique_temp_dir'], sequence_filename + '.fasta')
         with open(sequence_file, 'w') as ofh:
             SeqIO.write(sequence_seqrecords, ofh, 'fasta')
-        
+
         return sequence_file, sequence_seqrecords
-    
-    
+
+
     def _write_domain_structure_file(self, pdb_id, pdb_chains, pdb_domain_defs):
         """Write a pdb file containing template domain chains (cut to domain bounaries).
         """
@@ -628,17 +634,17 @@ class PrepareModel:
         sp.extract()
         sp.save_structure(configs['unique_temp_dir'])
         sp.save_sequences(configs['unique_temp_dir'])
-    
+
         structure_file = op.join(
             configs['unique_temp_dir'], sp.pdb_id + ''.join(sp.chain_ids) + '.pdb'
         )
-        
+
         structure_seqrecords = []
         for pdb_chain in pdb_chains:
             chain_sequence = sp.chain_sequence_dict[pdb_chain]
             seqrecord = SeqRecord(id=pdb_id+pdb_chain, seq=Seq(chain_sequence))
             structure_seqrecords.append(seqrecord)
-            
+
         return structure_file, structure_seqrecords
 
 
@@ -651,24 +657,24 @@ class PrepareModel:
     @property
     def result(self):
         return self.model
-        
 
 
-#%%
+
+# %%
 @execute_and_remember
 class PrepareMutation:
-    
+
     handled_exceptions = (
         errors.PDBError,
         errors.FoldxError,
         errors.ResourceError,
         errors.FoldXAAMismatchError,
     )
-    
-    
+
+
     def __init__(self, d, mutation, uniprot_id, sequence, model, db):
         print_header(d)
-        
+
         self.sequence = sequence
         self.model = model
         self.db = db
@@ -676,9 +682,9 @@ class PrepareMutation:
         self.d = d
         self.uniprot_id = uniprot_id
         self.mutation = mutation
-        
+
         self.skip = False
-        
+
         if not mutation:
             logger.debug('Not evaluating mutations because no mutations specified...')
             self.skip = True
@@ -749,8 +755,8 @@ class PrepareMutation:
         ### Sequence features
         results = self.sequence.mutate(self.mutation)
         uniprot_mutation.provean_score = results['provean_score']
-        uniprot_mutation.matrix_score = results['matrix_score']        
-        
+        uniprot_mutation.matrix_score = results['matrix_score']
+
         ### Structure features
         results = self.model.mutate(mut_data.mutation_idx, mut_data.mutation_domain)
         uniprot_mutation.uniprot_id = self.uniprot_id #mut_data.uniprot_id_1
@@ -759,32 +765,32 @@ class PrepareMutation:
         uniprot_mutation.mutation_modeller = results['mutation_modeller']
         uniprot_mutation.model_filename_wt = (
             '{}_{}/{}'.format(
-                self.uniprot_id, self.mutation, 
-                op.basename(results['model_filename_wt']))
+                self.uniprot_id, self.mutation,
+                op.basename(results['model_file_wt']))
         )
         uniprot_mutation.model_filename_mut = (
             '{}_{}/{}'.format(
-                self.uniprot_id, self.mutation, 
-                op.basename(results['model_filename_mut']))
+                self.uniprot_id, self.mutation,
+                op.basename(results['model_file_mut']))
         )
-        # Copy models to a 'archive_temp_dir`, so that `database.merge_mutation` knows where to 
+        # Copy models to a 'archive_temp_dir`, so that `database.merge_mutation` knows where to
         # find them.
         archive_model_file_wt = (
             op.join(
-                configs['archive_temp_dir'], 
-                d.path_to_data, 
+                configs['archive_temp_dir'],
+                d.path_to_data,
                 uniprot_mutation.model_filename_wt)
         )
         archive_model_file_mut = (
             op.join(
-                configs['archive_temp_dir'], 
-                d.path_to_data, 
+                configs['archive_temp_dir'],
+                d.path_to_data,
                 uniprot_mutation.model_filename_mut)
         )
         os.makedirs(op.dirname(archive_model_file_wt), exist_ok=True)
         os.makedirs(op.dirname(archive_model_file_mut), exist_ok=True)
-        shutil.copy(results['model_filename_wt'], archive_model_file_wt) 
-        shutil.copy(results['model_filename_mut'], archive_model_file_mut)
+        shutil.copy(results['model_file_wt'], archive_model_file_wt)
+        shutil.copy(results['model_file_mut'], archive_model_file_mut)
         #
         uniprot_mutation.stability_energy_wt = results['stability_energy_wt']
         uniprot_mutation.stability_energy_mut = results['stability_energy_mut']
@@ -821,7 +827,7 @@ class PrepareMutation:
         logger.debug('Predicted ddg: {}'.format(uniprot_mutation.ddg))
         df.loc[row_idx, 'ddg'] = uniprot_mutation.ddg
         df.to_json()
-      
+
 
     def get_mutation_data(self):
         """
@@ -829,7 +835,7 @@ class PrepareMutation:
         d = self.d
         uniprot_id_1 = self.uniprot_id
         mutation = self.mutation
-        
+
         if isinstance(d, database.UniprotDomain):
             logger.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
             logger.debug('model_domain_def: {}'.format(d.template.model.model_domain_def))
@@ -838,20 +844,20 @@ class PrepareMutation:
             )
             mutation_idx = 0
             core_or_interface = 'core'
-            
+
             if int(mutation[1:-1]) < domain_start or int(mutation[1:-1]) > domain_end:
                 raise errors.MutationOutsideDomainError(
                     'Mutation {} falls outside the domain with definitions {}.'
                     .format(mutation, d.template.model.model_domain_def)
                 )
-            
+
         elif isinstance(d, database.UniprotDomainPair):
             mutation_pos = int(mutation[1:-1])
             interacting_aa_1 = self._get_interacting_aa(d, 1)
             interacting_aa_2 = self._get_interacting_aa(d, 2)
             assert uniprot_id_1 in [d.uniprot_domain_1.uniprot_id, d.uniprot_domain_2.uniprot_id]
-            
-            if (uniprot_id_1 == d.uniprot_domain_1.uniprot_id and 
+
+            if (uniprot_id_1 == d.uniprot_domain_1.uniprot_id and
                 mutation_pos in interacting_aa_1):
                 logger.debug('Mutation is inside the first domain.')
                 logger.debug('model_domain_def: {}'.format(d.template.model.model_domain_def_1))
@@ -859,8 +865,8 @@ class PrepareMutation:
                     d.template.model.model_domain_def_1)
                 mutation_idx = 0
                 core_or_interface = 'interface'
-                
-                
+
+
             elif (uniprot_id_1 == d.uniprot_domain_2.uniprot_id and
                   mutation_pos in interacting_aa_2):
                 logger.debug('Mutation is inside the second domain.')
@@ -869,7 +875,7 @@ class PrepareMutation:
                     d.template.model.model_domain_def_2)
                 mutation_idx = 1
                 core_or_interface = 'interface'
-                
+
             else:
                 # Mutation is outside the interface
                 logger.error('Uniprot ID: {}\tMutation: {}'.format(
@@ -881,22 +887,22 @@ class PrepareMutation:
                 raise errors.MutationOutsideInterfaceError(
                     'Mutated residue {} not involved in the interaction!'
                     .format(mutation[:-1])
-                )    
-    
-        position_domain = int(mutation[1:-1]) - domain_start + 1 
+                )
+
+        position_domain = int(mutation[1:-1]) - domain_start + 1
         mutation_domain = mutation[0] + str(position_domain) + mutation[-1]
 
         class MutationData:
             def __init__(self, **kwargs):
                 self.__dict__ = kwargs
-        
+
         mut_data = MutationData(
             mutation_idx = mutation_idx,
             mutation_domain = mutation_domain,
             core_or_interface = core_or_interface,
         )
         return mut_data
-     
+
 
     def _get_interacting_aa(self, d, domain_1or2=1):
         if domain_1or2 == 1:
@@ -907,12 +913,12 @@ class PrepareMutation:
             raise Exception("`domain_1or2` should be either '1' or '2'!")
         return [int(uniprot_num) for uniprot_num in interacting_aa.split(',') if uniprot_num]
 
-        
+
     def get_mutation_features(self, d, mut, row_idx=0):
         """
-        Returns a dataframe that contains all features for the given mutation that are relevant 
+        Returns a dataframe that contains all features for the given mutation that are relevant
         for machine learning.
-    
+
         Parameters
         ----------
         d : sqlalchemy orm object
@@ -923,7 +929,7 @@ class PrepareMutation:
         feature_dict = {
             key: value for (key, value) in mut.__dict__.items() if not key.startswith('_')
         }
-    
+
         feature_dict.update({
             # Header columns
             # 'uniprot_id': mut.uniprot_id,
@@ -934,7 +940,7 @@ class PrepareMutation:
             #
             'norm_dope': d.template.model.norm_dope,
         })
-    
+
         if hasattr(d, 'uniprot_domain_id'):
             feature_dict.update({
                 # Header columns
@@ -947,7 +953,7 @@ class PrepareMutation:
                 'alignment_coverage': d.template.alignment_coverage,
                 'alignment_score': d.template.alignment_score,
             })
-    
+
         elif hasattr(d, 'uniprot_domain_pair_id'):
             feature_dict.update({
                 # Header columns
@@ -967,21 +973,21 @@ class PrepareMutation:
                 'interface_area_total': d.template.model.interface_area_total,
                 'score_total': d.template.score_total,
             })
-    
+
         logger.debug('feature_dict: {}'.format(feature_dict))
         logger.debug('index: {}'.format(row_idx))
         feature_df = pd.DataFrame(feature_dict, index=[row_idx])
-    
+
         return feature_df
-    
-    
+
+
     def __exit__(self, exc_type, exc_value, traceback):
         d = self.d
         mutation = self.mutation
         uniprot_mutation = self.mut
-        
-        if exc_type is not None and (exc_type in 
-              (errors.MutationOutsideDomainError, 
+
+        if exc_type is not None and (exc_type in
+              (errors.MutationOutsideDomainError,
                errors.MutationOutsideInterfaceError)):
             logger.debug('{}: {}; OK'.format(exc_type, exc_value))
             return True
@@ -990,7 +996,7 @@ class PrepareMutation:
             logger.debug(uniprot_mutation.mutation_errors)
         elif exc_type is not None:
             return False
-        
+
         logger.info('Adding mutation {}'.format(mutation))
         #logger.debug("Mutation attributes: {}".format(dir(uniprot_mutation)))
         for attr in dir(uniprot_mutation):
@@ -1013,14 +1019,14 @@ class PrepareMutation:
         logger.debug('Mergin mutation data with the database...')
         self.db.merge_mutation(uniprot_mutation, configs['copy_data'] and d.path_to_data)
         logger.debug('Done merging mutation data!')
-        
-        
+
+
     @property
     def result(self):
         return self
 
 
-#%%
+# %%
 def get_unique_id(d):
     if isinstance(d, database_tables.UniprotDomain):
         return ('uniprot_domain_id', d.uniprot_domain_id)

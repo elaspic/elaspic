@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import os.path as op
-import logging 
+import logging
 import json
 
 import pandas as pd
@@ -21,7 +21,7 @@ domain_mutation = None
 
 
 
-#%%
+# %%
 class LocalPipeline(Pipeline):
 
     def __init__(self, structure_file, sequence_file=None, mutations=None, configurations=None):
@@ -29,27 +29,27 @@ class LocalPipeline(Pipeline):
         TODO: Add an option to store provean results based on sequence hash.
         """
         super().__init__(configurations)
-        
+
         # Input parameters
         self.pdb_id = op.splitext(op.basename(structure_file))[0]
         self.pdb_file = structure_file
 
         logger.info('pdb_file: {}'.format(self.pdb_file))
         logger.info('pwd: {}'.format(self.PWD))
-        
+
         ### Load PDB structure and extract required sequences and chains.
         #fix_pdb(self.pdb_file, self.pdb_file)
         self.sp = structure_tools.StructureParser(self.pdb_file)
         self.sp.extract()
         self.sp.save_structure(configs['unique_temp_dir'])
         self.sp.save_sequences(configs['unique_temp_dir'])
-        
+
         if sequence_file in ['', 'None', None]:
             self.sequence_file = ''
         else:
             self.sequence_file = sequence_file
         logger.debug('self.sequence_file: {}'.format(self.sequence_file))
-        
+
         if not mutations:
             mutations = []
         elif isinstance(mutations, str):
@@ -57,12 +57,12 @@ class LocalPipeline(Pipeline):
         else:
             mutations = mutations
         logger.debug('mutations: {}'.format(mutations))
-        
+
         if not self.sequence_file:
             # Read template sequences from the PDB
             self.seqrecords = tuple([
                 SeqRecord(
-                    id='{}{}_{}'.format(self.pdb_id, chain_id, i), 
+                    id='{}{}_{}'.format(self.pdb_id, chain_id, i),
                     seq=Seq(self.sp.chain_sequence_dict[chain_id]))
                 for (i, chain_id) in enumerate(self.sp.chain_ids)
             ])
@@ -114,8 +114,8 @@ class LocalPipeline(Pipeline):
         self.run_all_sequences()
         self.run_all_models()
         self.run_all_mutations()
-    
-    
+
+
     def run_all_sequences(self):
         sequence_results = []
         sequence_results_file = op.join(configs['unique_temp_dir'], 'sequence.json')
@@ -132,8 +132,8 @@ class LocalPipeline(Pipeline):
             sequence_results.append(sequence_result)
         with open(sequence_results_file, 'w') as ofh:
             json.dump(sequence_results, ofh)
-    
-    
+
+
     def run_all_models(self):
         model_results = []
         model_results_file = op.join(configs['unique_temp_dir'], 'model.json')
@@ -155,11 +155,11 @@ class LocalPipeline(Pipeline):
             model_results.append(model_result)
         with open(model_results_file, 'w') as ofh:
             json.dump(model_results, ofh)
-    
-    
+
+
     def run_all_mutations(self):
         for (mutation_idx, mutation), mutation_in in self.mutations.items():
-            mutation_results = []            
+            mutation_results = []
             mutation_results_file = op.join(
                 configs['unique_temp_dir'], 'mutation_{}.json'.format(mutation_in)
             )
@@ -169,12 +169,20 @@ class LocalPipeline(Pipeline):
                     .format(mutation_in, mutation_results_file)
                 )
                 continue
-            mutation_result = self.get_mutation_score(mutation_idx, mutation_idx, mutation)
+            try:
+                mutation_result = self.get_mutation_score(mutation_idx, mutation_idx, mutation)
+            except errors.MutationOutsideDomainError as e:
+                logger.error(e)
+                continue
             mutation_result['idx'] = mutation_idx
             mutation_results.append(mutation_result)
             for idxs in self.sp.interacting_chain_idxs:
                 if mutation_idx in idxs:
-                    mutation_result = self.get_mutation_score(idxs, mutation_idx, mutation)
+                    try:
+                        mutation_result = self.get_mutation_score(idxs, mutation_idx, mutation)
+                    except errors.MutationOutsideInterfaceError as e:
+                        logger.error(e)
+                        continue
                     mutation_result['idx'] = mutation_idx
                     mutation_result['idxs'] = tuple(idxs)
                     mutation_results.append(mutation_result)
@@ -212,18 +220,17 @@ class LocalPipeline(Pipeline):
         sequence = self.get_sequence(mutation_idx)
         model = self.get_model(idxs)
         return PrepareMutation(sequence, model, idxs.index(mutation_idx), mutation)
-        
-        
+
     #==============================================================================
     # Helper functions
     #==============================================================================
-    
+
     def _get_chain_idx(self, chain_id):
         """chain_id -> chain_idx
         """
         chain_idx = [
-            i for (i, chain) 
-            in enumerate(self.sp.structure[0].child_list) 
+            i for (i, chain)
+            in enumerate(self.sp.structure[0].child_list)
             if chain.id == chain_id
         ]
         if len(chain_idx) == 0:
@@ -233,8 +240,8 @@ class LocalPipeline(Pipeline):
             raise errors.PDBChainError(
                 'Chain {} was found more than once in PDB {}!'.format(chain_id, self.sp.pdb_file))
         return chain_idx[0]
-        
-    
+
+
     def _sort_chain_idxs(self, idxs):
         """Sort positions and return as as tuple.
         """
@@ -243,10 +250,10 @@ class LocalPipeline(Pipeline):
         else:
             idxs = tuple(sorted(idxs))
         return idxs
-            
 
 
-#%%
+
+# %%
 @execute_and_remember
 class PrepareSequence:
     """
@@ -260,31 +267,31 @@ class PrepareSequence:
         self.provean_supset_file = provean_supset_file
         self.sequence_file = None
         self.sequence = None
-        
+
     def __bool__(self):
         return True
-        
+
     def __enter__(self):
         sequence_file = op.join(
-            configs['sequence_dir'], 
+            configs['sequence_dir'],
             helper.slugify(self.seqrecord.id + '.fasta'))
         with open(sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecord, ofh, 'fasta')
         self.sequence_file = sequence_file
-        
+
     def run(self):
         self.sequence = sequence.Sequence(self.sequence_file, self.provean_supset_file)
-        
+
     def __exit__(self, exc_type, exc_value, traceback):
         return False
-        
+
     @property
     def result(self):
         return self.sequence
 
 
 
-#%%
+# %%
 @execute_and_remember
 class PrepareModel:
     """
@@ -292,7 +299,7 @@ class PrepareModel:
     -------
     model_dict : dict
         Contains all important values calculated by modeller.
-        
+
     Raises
     -------
     errors.ModellerError
@@ -308,14 +315,14 @@ class PrepareModel:
         self.sequence_file = None
         self.structure_file = None
         self.model = None
-        
+
     def __bool__(self):
         return True
-        
+
     def __enter__(self):
         # Target sequence file
         self.sequence_file = op.join(
-            configs['model_dir'], 
+            configs['model_dir'],
             helper.slugify('_'.join(seqrec.id for seqrec in self.seqrecords) + '.fasta')
         )
         with open(self.sequence_file, 'w') as ofh:
@@ -325,24 +332,24 @@ class PrepareModel:
         # Template structure file
         chain_string = ''.join(self.sp.structure[0].child_list[pos].id for pos in self.positions)
         self.structure_file = op.join(
-            configs['unique_temp_dir'], 
+            configs['unique_temp_dir'],
             helper.slugify(self.sp.pdb_id + chain_string + '.pdb')
         )
         assert op.isfile(self.structure_file)
 
     def run(self):
         self.model = model.Model(self.sequence_file, self.structure_file)
-        
+
     def __exit__(self, exc_type, exc_value, traceback):
         return False
-        
+
     @property
     def result(self):
         return self.model
 
 
 
-#%%
+# %%
 @execute_and_remember
 class PrepareMutation:
     """
@@ -362,33 +369,36 @@ class PrepareMutation:
         self.model = model
         self.mutation_idx = mutation_idx
         self.mutation = mutation
-    
+
     def __bool__(self):
         return True
-    
+
     def __enter__(self):
         pass
-        
+
     def run(self):
         features = dict()
-        
+        features['mutation'] = self.mutation
+
         ### Sequence features
         results = self.sequence.mutate(self.mutation)
         features['provean_score'] = results['provean_score']
-        features['matrix_score'] = results['matrix_score']        
+        features['matrix_score'] = results['matrix_score']
 
         ### Structure features
         results = self.model.mutate(self.mutation_idx, self.mutation)
-        
+
         features['norm_dope'] = self.model.modeller_results['norm_dope']
-        (features['alignment_identity'], 
-         features['alignment_coverage'], 
+        (features['alignment_identity'],
+         features['alignment_coverage'],
          features['alignment_score']) = (
              self.model.modeller_results['alignment_stats'][self.mutation_idx]
         )
-        
-        features['model_filename_wt'] = results['model_filename_wt']
-        features['model_filename_mut'] = results['model_filename_mut']
+        features['alignment_identity'] = features['alignment_identity'] * 100
+        features['alignment_coverage'] = features['alignment_coverage'] * 100
+
+        features['model_file_wt'] = results['model_file_wt']
+        features['model_file_mut'] = results['model_file_mut']
 
         features['stability_energy_wt'] = results['stability_energy_wt']
         features['stability_energy_mut'] = results['stability_energy_mut']
@@ -405,12 +415,12 @@ class PrepareMutation:
         features['physchem_mut_ownchain'] = (
             '{},{},{},{}'.format(*results['physchem_ownchain_mut'])
         )
-        
+
         features['secondary_structure_wt'] = results['secondary_structure_wt']
         features['solvent_accessibility_wt'] = results['solvent_accessibility_wt']
         features['secondary_structure_mut'] = results['secondary_structure_mut']
         features['solvent_accessibility_mut'] = results['solvent_accessibility_mut']
-        
+
         if len(self.model.sequence_seqrecords) > 1:
             features['interface_area_hydrophobic'] = self.model.interface_area_hydrophobic
             features['interface_area_hydrophilic'] = self.model.interface_area_hydrophilic
@@ -421,16 +431,16 @@ class PrepareMutation:
             features['contact_distance_wt'] = results['contact_distance_wt']
             features['contact_distance_mut'] = results['contact_distance_mut']
 
-                
+
         logger.debug('feature_dict: {}'.format(features))
         feature_df = pd.DataFrame(features, index=[0])
-    
+
         pred = predictor.Predictor()
         features['ddg'] = pred.score(feature_df, len(self.model.sequence_seqrecords) > 1)
         logger.debug('Predicted ddG: {}'.format(features['ddg']))
-        
+
         self.mutation_features = features
-        
+
 
     def __exit__(self, exc_type, exc_value, traceback):
         return False
@@ -441,9 +451,9 @@ class PrepareMutation:
         return self.mutation_features
 
 
-#%%
+# %%
 class Unused:
-    
+
     def get_structure_sequence(self):
         """
         """
@@ -452,7 +462,7 @@ class Unused:
         for chain in self.sp.structure.child_list[0].child_list[:-1]:
             chain_sequence, chain_numbering_extended = self.sp.get_chain_sequence_and_numbering(chain.id)
             structure_sequence += [chain_sequence]
-        
+
         # If the last chain starts with a HETATM, it should be entirely HETATMs.
         last_chain = self.sp.structure.child_list[0].child_list[-1]
         if last_chain.child_list[0].resname in structure_tools.AAA_DICT:
@@ -460,17 +470,17 @@ class Unused:
             structure_sequence += [chain_sequence]
         else:
             structure_sequence += ['.' * len(last_chain.child_list)]
-            
+
         structure_sequence = '/'.join(structure_sequence)
         return structure_sequence
-    
-        
-    
+
+
+
     def get_mutation_data(self, pdb_chain, pdb_mutation, provean_results, modeller_results):
         """
         Create a MutData class that holds all the information we need
         about a given mutation.
-        """    
+        """
         protein_id = "{}{}".format(self.pdb_id, pdb_chain)
         logger.info(provean_results)
         provean_supset_filename = provean_results['provean_supset_filename']
@@ -484,15 +494,15 @@ class Unused:
             else:
                 break
         mutation_chain = pdb_mutation[0] + str(mutation_chain_pos) + pdb_mutation[-1]
-        
+
         mutation_modeller = self.mutation_to_modeller(pdb_chain, pdb_mutation)
         mutation_modeller_pos = mutation_modeller[1:-1]
 
         ### Assign values to appropriate variables
         mut_data = domain_mutation.MutationData()
-        
+
         # Mutation info
-        mut_data.uniprot_id_1 = protein_id 
+        mut_data.uniprot_id_1 = protein_id
         mut_data.mutation = mutation_modeller
         mut_data.chains_modeller = pdb_chains
         mut_data.domain_sequences = [
@@ -501,49 +511,49 @@ class Unused:
         ]
         mut_data.path_to_provean_supset = op.join(
             self.unique_temp_folder, 'sequence_conservation', provean_supset_filename
-        )    
+        )
         mut_data.save_path = self.unique_temp_folder
         mut_data.pdbFile_wt = op.join(self.unique_temp_folder, 'modeller', model_file)
         mut_data.position_domain = mutation_chain_pos
         mut_data.mutation_domain = mutation_chain
         mut_data.position_modeller = mutation_modeller_pos
         mut_data.mutation_modeller = mutation_modeller
-        
+
         # Provean results
         mut_data.provean_mutation = None
-        mut_data.provean    
-        
-        
-    
+        mut_data.provean
+
+
+
     def _mutation_to_modeller(self, pdb_chain, pdb_mutation):
         """
-        Modeller numbers all residues from 1 to n_residues, for all chains. 
+        Modeller numbers all residues from 1 to n_residues, for all chains.
         Use this function to convert mutations from PDB coordinates to Modeller coordinates.
         """
         mutation_id = pdb_mutation[:-1]
         mutation_idx = 1
-        
+
         for chain in self.sp.structure.child_list[0].child_list:
             if chain.id != pdb_chain:
                 mutation_idx += len(chain.child_list)
             else:
                 break
-            
+
         for residue in chain.child_list:
             residue_id = (structure_tools.AAA_DICT[residue.resname] + str(residue.id[1]))
             if residue_id != mutation_id:
                 mutation_idx += 1
             else:
                 break
-    
+
         if residue_id != mutation_id:
             return None
         else:
             mutation_modeller = "{}{}{}".format(pdb_mutation[0], mutation_idx, pdb_mutation[-1])
             return mutation_modeller
-    
-    
-    
+
+
+
     def _get_interactions(self, pdb_chain, pdb_mutation):
         interactions = structure_analysis.get_interactions(
             self.sp.structure.child_list[0], pdb_chain, self.R_CUTOFF)

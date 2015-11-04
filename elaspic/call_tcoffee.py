@@ -36,7 +36,7 @@ class TCoffee(object):
 
         if pdb_file is not None:
             self.pdb_id, self.pdb_file = self._clean_pdb(pdb_file)
-            
+
             # Write a template file for the sequences to be aligned
             self.alignment_template_file = (
                 op.join(configs['tcoffee_dir'], '{}.template_list'.format(self.alignment_id))
@@ -47,7 +47,6 @@ class TCoffee(object):
                     ">" + self.template_seqrecord.id + " _P_ " + self.pdb_id.upper() + "\n"
                 ])
 
-
     def _clean_pdb(self, pdb_file):
         """Write a template PDB file in a format that is compatible with t_coffee.
         """
@@ -55,10 +54,10 @@ class TCoffee(object):
             "Cleaning pdb {} to serve as a template for t_coffee...".format(pdb_file)
         )
         logger.debug(message)
-        
+
         pdb_id = structure_tools.get_pdb_id(pdb_file)
         pdb_file_new = op.join(configs['tcoffee_dir'], pdb_id + '.pdb')
-        
+
         system_command = (
             "t_coffee -other_pg extract_from_pdb {} > {}".format(pdb_file, pdb_file_new)
         )
@@ -73,24 +72,22 @@ class TCoffee(object):
         time.sleep(0.2)
         return pdb_id, pdb_file_new
 
-
-
     def _get_tcoffee_system_command(
             self, alignment_fasta_file, alignment_template_file, alignment_output_file, mode):
         """
-        
+
         Parameters
         ----------
         alignment_fasta_file : str
             Name of the file that contains the sequences to be aligned in fasta format.
         alignment_template_file : str
-            Name of the file that contains the structureal templates to be used for 
+            Name of the file that contains the structureal templates to be used for
             structure-assisted alignments.
         alignment_output_file : str
             Name of the file where the alignment should be saved.
         mode : str
             T-coffee mode the should be run.
-        
+
         Returns
         --------
         system_command : str
@@ -98,7 +95,7 @@ class TCoffee(object):
         tcoffee_env : str
             A dictionary of environment variables to run tcoffee in a thread-safe manner.
         """
-        ### Environment variables
+        # Environment variables
         # To be able to run parallel instances of t_coffee, the environment
         # variables have to be set to unique paths for each t_coffee call.
         # Also, make sure to change the directory to a unique one bevore
@@ -108,18 +105,19 @@ class TCoffee(object):
         tcoffee_env['TMP_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 'tmp')
         tcoffee_env['CACHE_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 'cache')
         tcoffee_env['LOCKDIR_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 'lck')
-        tcoffee_env['ERRORFILE_4_TCOFFEE'] = op.join(configs['tcoffee_dir'], 
-                                        't_coffee.ErrorReport')
+        tcoffee_env['ERRORFILE_4_TCOFFEE'] = (
+            op.join(configs['tcoffee_dir'], 't_coffee.ErrorReport')
+        )
         tcoffee_env['BLASTDB'] = configs['blast_db_dir']
         tcoffee_env['PDB_DIR'] = configs['pdb_dir']
         tcoffee_env['NO_REMOTE_PDB_DIR'] = '1'
-        
+
         # Print a command that can be used to set environmental variables
         t_coffee_environment_variables = [
             'HOME_4_TCOFFEE', 'TMP_4_TCOFFEE', 'CACHE_4_TCOFFEE', 'LOCKDIR_4_TCOFFEE',
             'ERRORFILE_4_TCOFFEE', 'BLASTDB', 'PDB_DIR', 'NO_REMOTE_PDB_DIR']
         exports = [
-            'export {}={}'.format(x, tcoffee_env.get(x, '$'+x)) 
+            'export {}={}'.format(x, tcoffee_env.get(x, '$'+x))
             for x in t_coffee_environment_variables
         ]
         message = (
@@ -127,8 +125,7 @@ class TCoffee(object):
         )
         logger.debug(message)
 
-
-        #### System command
+        # ### System command
         # Use the following command to clean the pdb file (add headers, etc.)
         # 't_coffee -other_pg extract_from_pdb 32c2A.pdb > template.pdb '
 
@@ -139,7 +136,7 @@ class TCoffee(object):
         # -pdb_min_sim=20 -template_file seqfiles.template '
 
         multi_core_option = (
-            '{}'.format(configs['n_cores']) 
+            '{}'.format(configs['n_cores'])
             if configs['n_cores'] and int(configs['n_cores']) > 1 else 'no'
         )
         n_core_option = '{}'.format(configs['n_cores']) if configs['n_cores'] else '1'
@@ -156,8 +153,8 @@ class TCoffee(object):
                 " -outorder=input" +
                 " -output=fasta_aln" +
                 " -pdb_min_sim=30" +
-                #" -quiet" +
-                #" -no_warning" +
+                # " -quiet" +
+                # " -no_warning" +
                 " -outfile=" + alignment_output_file +
                 " -multi_core=no" +
                 " -n_core=" + n_core_option +
@@ -177,8 +174,8 @@ class TCoffee(object):
                 ' -quiet -no_warning' +
                 ' -outfile=' + alignment_output_file +
                 ' -cache ignore ' +
-                ' -multi_core ' + multi_core_option + #AS changed !!!
-                ' -n_core ' + n_core_option #AS changed !!!
+                ' -multi_core ' + multi_core_option +  # AS changed !!!
+                ' -n_core ' + n_core_option  # AS changed !!!
             )
         if mode == 't_coffee':
             system_command = (
@@ -193,8 +190,8 @@ class TCoffee(object):
                 ' -output fasta_aln' +
                 ' -quiet -no_warning' +
                 ' -outfile=' + alignment_output_file +
-                ' -multi_core ' + multi_core_option + #AS changed !!!
-                ' -n_core ' + n_core_option #AS changed !!!
+                ' -multi_core ' + multi_core_option +  # AS changed !!!
+                ' -n_core ' + n_core_option  # AS changed !!!
             )
         if mode == 'quick':
             system_command = (
@@ -209,15 +206,14 @@ class TCoffee(object):
                 ' -output fasta_aln' +
                 ' -quiet -no_warning' +
                 ' -outfile=' + alignment_output_file +
-                ' -multi_core ' + multi_core_option + #AS changed !!!
-                ' -n_core ' + n_core_option #AS changed !!!
+                ' -multi_core ' + multi_core_option +  # AS changed !!!
+                ' -n_core ' + n_core_option  # AS changed !!!
             )
         return system_command, tcoffee_env
 
-
     def align(self, GAPOPEN=-0.0, GAPEXTEND=-0.0):
         """ Calls t_coffee (make sure BLAST is installed locally!).
-        
+
         Parameters
         ----------
         alignment_fasta_file : string
@@ -239,14 +235,14 @@ class TCoffee(object):
         # try the alignment in expresso mode (structure based with sap alignment)
         alignment_output_file = op.join(configs['tcoffee_dir'], self.alignment_id + '.aln')
         system_command, tcoffee_env = self._get_tcoffee_system_command(
-            self.alignment_fasta_file, self.alignment_template_file, alignment_output_file, 
+            self.alignment_fasta_file, self.alignment_template_file, alignment_output_file,
             self.mode)
 
         # Perform t_coffee alignment
         logger.debug("\nTCoffee system command:\n{}".format(system_command))
         result, error_message, return_code = (
             helper.subprocess_check_output_locally(
-                configs['tcoffee_dir'], system_command, env=tcoffee_env)     
+                configs['tcoffee_dir'], system_command, env=tcoffee_env)
         )
         logger.debug("t_coffee results:\n{}".format(result.strip()))
         error_message_summary_idx = error_message.find(
@@ -263,20 +259,20 @@ class TCoffee(object):
             logger.info("Successfully made the alignment")
             return alignment_output_file
         else:
-            logger.error('Structural alignment failed with the following error: {}'
+            logger.error(
+                'Structural alignment failed with the following error: {}'
                 .format(error_message))
             logger.error('Running quickalign alignment instead...')
             system_command, tcoffee_env = self._call_tcoffee_system_command(
-                self.alignment_fasta_file, self.alignment_template_file, alignment_output_file, 
+                self.alignment_fasta_file, self.alignment_template_file, alignment_output_file,
                 'quick')
             result, error_message, return_code = (
                 helper.subprocess_check_output_locally(
-                    configs['tcoffee_dir'], system_command, env=tcoffee_env)     
+                    configs['tcoffee_dir'], system_command, env=tcoffee_env)
             )
             if return_code == 0:
                 return alignment_output_file
             else:
                 logger.error('Even quickaln didn\'t work. Cannot create an alignment. Giving up.')
-                raise errors.TcoffeeError(result, error_message, self.alignment_fasta_file, 
+                raise errors.TcoffeeError(result, error_message, self.alignment_fasta_file,
                                           system_command)
-    

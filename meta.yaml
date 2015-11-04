@@ -72,14 +72,14 @@ requirements:
     - libfaketime
 
 # Can't get this to work without `elaspic` already being on anaconda.org.
-#~ test:
-  #~ requires:
-    #~ - elaspic
-  #~ imports:
-    #~ - elaspic
-  #~ commands:
-    #~ - elaspic --help
-    #~ - elaspic_database --help
+test:
+  requires:
+    - elaspic
+    - pytest
+  imports:
+    - elaspic
+  commands:
+    - elaspic --help
 
 about:
   home: elaspic.kimlab.org

@@ -12,7 +12,7 @@ from . import conf
 configs = conf.Configs()
 
 
-#%% Constants
+# %% Constants
 
 # Default sizes for creating varchar fields
 SHORT = 15
@@ -52,7 +52,7 @@ db_specific_properties = {
         'STRING_COLLATION': 'NOCASE',
         'schema_version_tuple': {'sqlite_autoincrement': True},
         'uniprot_kb_schema_tuple': {'sqlite_autoincrement': True},
-    }, 
+    },
 }
 
 if DB_TYPE is None:
@@ -60,12 +60,12 @@ if DB_TYPE is None:
 
 
 
-#%% Functions
+# %% Functions
 
 def get_db_specific_param(key):
     if DB_TYPE is None:
         return
-    if (DB_TYPE in ['mysql', 'postgresql'] and 
+    if (DB_TYPE in ['mysql', 'postgresql'] and
         (DB_DATABASE is None or DB_SCHEMA is None or DB_SCHEMA_UNIPROT is None)):
             error_message = (
                 'Both the `DB_SCHEMA` and `DB_SCHEMA_UNIPROT` have to be specified when using '
@@ -73,7 +73,7 @@ def get_db_specific_param(key):
             )
             raise Exception(error_message)
     return db_specific_properties[DB_TYPE][key]
-    
+
 
 def get_table_args(table_name, index_columns=[], db_specific_params=[]):
     """
@@ -100,19 +100,19 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
     for db_specific_param in db_specific_params:
         table_args.append(get_db_specific_param(db_specific_param))
     return tuple(table_args)
-   
-   
-   
-#%%
+
+
+
+# %%
 Base = sa_ext_declarative.declarative_base()
 Base.metadata.naming_conventions = naming_convention
 
 
 
-#%%
+# %%
 class Domain(Base):
     """
-    Profs domain definitions for all proteins in the PDB. 
+    Profs domain definitions for all proteins in the PDB.
 
     Columns:
       cath_id
@@ -132,10 +132,10 @@ class Domain(Base):
         The Profs name of the domain.
 
       pdb_pdbfam_idx
-        An integer specifying the number of times a domain with domain name ``pdb_pdbfam_name`` has 
-        occurred in this chain up to this point. It is used to make every 
+        An integer specifying the number of times a domain with domain name ``pdb_pdbfam_name`` has
+        occurred in this chain up to this point. It is used to make every
         ``(pdb_id, pdb_chain, pdb_pdbfam_name, pdb_pdbfam_idx)`` tuple unique.
-      
+
       domain_errors
         List of errors that occurred when annotating this domain, or when using this domain
         to make structural homology models.
@@ -154,14 +154,14 @@ class Domain(Base):
         ]
     __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
     cath_id = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
+        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')),
         primary_key=True)
     pdb_id = sa.Column(sa.String(SHORT), nullable=False)
     pdb_chain = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
+        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')),
         nullable=False)
     pdb_domain_def = sa.Column(sa.String(MEDIUM), nullable=False)
-    pdb_pdbfam_name = sa.Column(sa.String(LONG), nullable=False)   
+    pdb_pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
     pdb_pdbfam_idx = sa.Column(sa.Integer)
     domain_errors = sa.Column(sa.Text)
 
@@ -170,7 +170,7 @@ class DomainContact(Base):
     u"""
     Interactions between Profs domains in the PDB. Only interactions that were predicted to be
     biologically relevant by `NOXclass`_ are included in this table.
-    
+
     Columns:
       domain_contact_id
         A unique integer identifying each domain pair.
@@ -183,36 +183,36 @@ class DomainContact(Base):
 
       min_interchain_distance
         The closest that any residue in domain one comes to any residue in domain two.
-        
+
       contact_volume
         The volume covered by contacting residues.
-        
+
       contact_surface_area
         The surface area of the contacting regions of the first and second domains.
-        
+
       atom_count_1
         The number of atoms in the first domain.
-        
+
       atom_count_2
         The number of atoms in the second domain.
-        
+
       number_of_contact_residues_1
         The number of residues in the first domain that come within 5 \u212B of the second domain.
-        
+
       number_of_contact_residues_2
         The number of residues in the second domain that come withing 5 \u212B of the first domain.
-      
+
       contact_residues_1
         A list of all residues in the first domain that come within 5 \u212B of the second domain.
         The residue number corresponds to the position of the residue in the domain.
-      
+
       contact_residues_2
         A list of all residues in the second domain that come within 5 \u212B of the first domain.
         The residue number corresponds to the position of the residue in the domain.
 
       crystal_packing
         The probability that the interaction is a crystallization artifacts, as defined by `NOXclass`_.
-      
+
       domain_contact_errors
         List of errors that occurred when annotating this domain pair, or when using this domain
         as a template for making structural homology models.
@@ -225,14 +225,14 @@ class DomainContact(Base):
         (['cath_id_2', 'cath_id_1'], {'unique': True}),
     ]
     __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
-    
+
     domain_contact_id = sa.Column(sa.Integer, primary_key=True)
     cath_id_1 = sa.Column(
         None, sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'), nullable=False)
     cath_id_2 = sa.Column(
         None, sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'), nullable=False)
 #    cath_id_2 = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')), 
+#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')),
 #        nullable=False)
     min_interchain_distance = sa.Column(sa.Float)
     contact_volume = sa.Column(sa.Float)
@@ -256,9 +256,9 @@ class DomainContact(Base):
 
 class UniprotSequence(Base):
     """
-    Protein sequences from the Uniprot KB, obtained by parsing ``uniprot_sprot_fasta.gz``, 
+    Protein sequences from the Uniprot KB, obtained by parsing ``uniprot_sprot_fasta.gz``,
     ``uniprot_trembl_fasta.gz``, and ``homo_sapiens_variation.txt`` files from the `Uniprot ftp site`_.
-    
+
     Columns:
       db
         The database to which the protein sequence belongs. Possible values are ``sp`` for SwissProt
@@ -275,7 +275,7 @@ class UniprotSequence(Base):
 
       organism_name
         Name of the organism in which this protein is found.
-        
+
       gene_name
         Name of the gene that codes for this protein sequence.
 
@@ -342,14 +342,14 @@ class Provean(Base):
 
     uniprot_id = sa.Column(
         None, sa.ForeignKey(
-            UniprotSequence.uniprot_id, 
-            onupdate='cascade', ondelete='cascade'), 
+            UniprotSequence.uniprot_id,
+            onupdate='cascade', ondelete='cascade'),
         primary_key=True)
     provean_supset_filename = sa.Column(sa.String(MEDIUM))
     provean_supset_length = sa.Column(sa.Integer)
     provean_errors = sa.Column(sa.Text)
     provean_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, 
+        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
         nullable=False)
 
     # Relationships
@@ -360,7 +360,7 @@ class Provean(Base):
 
 class UniprotDomain(Base):
     """
-    Pfam domain definitions for proteins in the :ref:`uniprot_sequence` table. This table was 
+    Pfam domain definitions for proteins in the :ref:`uniprot_sequence` table. This table was
     obtained by downloading Pfam domain definitions for all known proteins from the `SIMAP`_ website,
     and mapping the protein sequence to uniprot using the MD5 hash of each sequence.
 
@@ -372,26 +372,26 @@ class UniprotDomain(Base):
         The uniprot id of the protein containing the domain.
 
       pdbfam_name
-        The Profs name of the domain. In most cases this will be equivalent to the Pfam name of the domain. 
+        The Profs name of the domain. In most cases this will be equivalent to the Pfam name of the domain.
 
       pdbfam_idx
-        The index of the Profs domain. ``pdbfam_idx`` ranges from 1 to the number of domains with 
-        the name ``pdbfam_name`` in the given protein. The ``(pdbfam_name, pdbfam_idx)`` tuple 
+        The index of the Profs domain. ``pdbfam_idx`` ranges from 1 to the number of domains with
+        the name ``pdbfam_name`` in the given protein. The ``(pdbfam_name, pdbfam_idx)`` tuple
         uniquely identifies each domain.
 
       pfam_clan
         The Pfam clan to which this Profs domain belongs.
 
       alignment_def
-        Alignment domain definitions of the Profs domain. This field is obtained by removing gaps 
+        Alignment domain definitions of the Profs domain. This field is obtained by removing gaps
         in the ``alignment_subdefs`` column.
 
       pfam_names
         Pfam names of all Pfam domains that were combined to create the given Profs domain.
 
       alignment_subdefs
-        Comma-separated list of domain definitions for all Pfam domains that were merged to create 
-        the given Profs domain. 
+        Comma-separated list of domain definitions for all Pfam domains that were merged to create
+        the given Profs domain.
 
       path_to_data
         Location for storing homology models, mutation results, and all other data that are relevant
@@ -400,13 +400,13 @@ class UniprotDomain(Base):
     .. _SIMAP: http://liferay.csb.univie.ac.at/portal/web/simap
     """
     __tablename__ = 'uniprot_domain'
-    
+
     IS_TRAINING_SCHEMA = 'training' in DB_SCHEMA
-    
+
     uniprot_domain_id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = sa.Column(
         None, sa.ForeignKey(
-            UniprotSequence.uniprot_id, 
+            UniprotSequence.uniprot_id,
             onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False)
     pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
@@ -422,16 +422,16 @@ class UniprotDomain(Base):
         # because we want to make homology models at different sequence identities.
         max_seq_identity = sa.Column(sa.Integer, index=True)
         _indexes = [
-            (['uniprot_id', 'alignment_def', 'max_seq_identity'], 
+            (['uniprot_id', 'alignment_def', 'max_seq_identity'],
              {'unique': True, 'index_name': 'ix_uniprot_id_unique'}),
-            (['pdbfam_name'], {'mysql_length': 255}), 
+            (['pdbfam_name'], {'mysql_length': 255}),
         ]
     else:
         _indexes = [
-            (['pdbfam_name'], {'mysql_length': 255}),   
+            (['pdbfam_name'], {'mysql_length': 255}),
         ]
     __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
-    
+
     # Relationships
     uniprot_sequence = sa.orm.relationship(
         UniprotSequence, uselist=False, cascade='expunge', lazy='joined',
@@ -441,32 +441,32 @@ class UniprotDomain(Base):
 
 class UniprotDomainPair(Base):
     """
-    Potentially-interacting pairs of domains for proteins that are known to interact, according to 
+    Potentially-interacting pairs of domains for proteins that are known to interact, according to
     `Hippie`_, `IRefIndex`_, and `Rolland et al. 2014`_.
 
     Columns:
       uniprot_domain_pair_id
         Unique id identifying each domain-domain interaction.
-      
+
       uniprot_domain_id_1
         Unique id of the first domain.
-      
+
       uniprot_domain_id_2
         Unique id of the second domain.
-      
+
       rigids
         Phased out.
-      
+
       domain_contact_ids
         List of unique ids identifying all domain-domain pairs in the PDB, where one domain
         belongs to the protein containing ``uniprot_domain_id_1`` and the other domain
-        belongs to the protein containing ``uniprot_domain_id_2``. This was used as crystallographic 
+        belongs to the protein containing ``uniprot_domain_id_2``. This was used as crystallographic
         evidence that the two proteins interact.
-      
+
       path_to_data
         Location for storing homology models, mutation results, and all other data that is relevant
         to this domain pair. This path is prefixed by :term:`path_to_archive`.
-        
+
     .. _Hippie: http://cbdm.mdc-berlin.de/tools/hippie/
     .. _IRefIndex: http://irefindex.org
     .. _Rolland et al. 2014: http://dx.doi.org/10.1016/j.cell.2014.10.050
@@ -481,12 +481,12 @@ class UniprotDomainPair(Base):
     uniprot_domain_pair_id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
     uniprot_domain_id_1 = sa.Column(
         None, sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id, 
+            UniprotDomain.uniprot_domain_id,
             onupdate='cascade', ondelete='cascade'),
         nullable=False)
     uniprot_domain_id_2 = sa.Column(
         None, sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id, 
+            UniprotDomain.uniprot_domain_id,
             onupdate='cascade', ondelete='cascade'),
         nullable=False)
     rigids = sa.Column(sa.Text) # Interaction references from iRefsa.Index
@@ -506,49 +506,49 @@ class UniprotDomainPair(Base):
 
 class UniprotDomainTemplate(Base):
     """
-    Structural templates for domains in the :ref:`uniprot_domain` table. Lists PDB crystal structures 
-    that will be used for making homology models. 
-    
+    Structural templates for domains in the :ref:`uniprot_domain` table. Lists PDB crystal structures
+    that will be used for making homology models.
+
     Columns:
       uniprot_domain_id
         An integer which uniquely identifies each uniprot domain in the :ref:`uniprot_domain` table.
-      
+
       template_errors
         List of errors that occurred during the process for finding the template.
-      
+
       cath_id
-        The unique id identifying the structural template of the domain. 
-      
+        The unique id identifying the structural template of the domain.
+
       domain_start
         The Uniprot position of the first amino acid of the Profs domain.
-      
+
       domain_end
         The Uniprot position of the last amino acid of the Profs domain.
-      
+
       domain_def
-        Profs domain definitions for domains with structural templates. Domain definitions in this 
-        column are different from domain definitions in the ``alignment_def`` column of the 
+        Profs domain definitions for domains with structural templates. Domain definitions in this
+        column are different from domain definitions in the ``alignment_def`` column of the
         :ref:`uniprot_domain` table in that they have been expanded to match domain boundaries of the
         Profs structural template, identified by the ``cath_id``.
-      
+
       alignment_identity
         Percent identity of the domain to its structural template.
-      
+
       alignment_coverage
         Percent coverage of the domain to its structural template.
 
       alignment_score
         A score obtained by combining ``alignment_identity`` (:math:`SeqId`) and ``alignment_coverage``
         (:math:`Cov`) using the following equation, as described by `Mosca et al.`_:
-      
-        .. math:: 
+
+        .. math::
            :label: score_function
 
            Score = 0.95 \\cdot \\frac{SeqId}{100} \\cdot \\frac{Cov}{100} + 0.05 \\cdot \\frac{Cov}{100}
 
       t_date_modified
         The date and time when this row was last modified.
-    
+
     .. _Mosca et al.: http://doi.org/10.1038/nmeth.2289
     """
     __tablename__ = 'uniprot_domain_template'
@@ -556,14 +556,14 @@ class UniprotDomainTemplate(Base):
 
     uniprot_domain_id = sa.Column(
         None, sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id, 
+            UniprotDomain.uniprot_domain_id,
             onupdate='cascade', ondelete='cascade'),
         nullable=False, primary_key=True)
     template_errors = sa.Column(sa.Text)
     cath_id = sa.Column(
         None, sa.ForeignKey(
-            Domain.cath_id, 
-            onupdate='cascade', ondelete='cascade'), 
+            Domain.cath_id,
+            onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False)
     domain_start = sa.Column(sa.Integer, index=True)
     domain_end = sa.Column(sa.Integer, index=True)
@@ -572,9 +572,9 @@ class UniprotDomainTemplate(Base):
     alignment_coverage = sa.Column(sa.Float)
     alignment_score = sa.Column(sa.Float)
     t_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, 
+        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
         nullable=False)
-        
+
     # Relationships
     uniprot_domain = sa.orm.relationship(
         UniprotDomain, uselist=False, cascade='expunge', lazy='joined',
@@ -601,9 +601,9 @@ class UniprotDomainModel(Base):
 
       model_filename
         The name of the homology model that was produced by Modeller.
-      
+
       chain
-        The chain that contains the domain in question in the homology (this is now set to 'A' 
+        The chain that contains the domain in question in the homology (this is now set to 'A'
         in all models).
 
       norm_dope
@@ -617,13 +617,13 @@ class UniprotDomainModel(Base):
 
       model_domain_def
         Domain definitions for the region of the domain that is covered by the structural template.
-        
+
         In most cases, this field is identical to the ``domain_def`` field in the
-        :ref:`uniprot_domain_template` table. However, it sometimes happens that the best 
+        :ref:`uniprot_domain_template` table. However, it sometimes happens that the best
         Profs structural template only covers a fraction of the Pfam domain. In that case, the
         ``alignment_def`` column in the :ref:`uniprot_domain` table, and the ``domain_def`` column
         in the :ref:`uniprot_domain_template` table, will contain the original Pfam domain definitions,
-        and the ``model_domain_def`` column will contain domain definitions for only the region that 
+        and the ``model_domain_def`` column will contain domain definitions for only the region that
         is covered by the structural template.
 
     """
@@ -632,7 +632,7 @@ class UniprotDomainModel(Base):
 
     uniprot_domain_id = sa.Column(
         None, sa.ForeignKey(
-            UniprotDomainTemplate.uniprot_domain_id, 
+            UniprotDomainTemplate.uniprot_domain_id,
             onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False, primary_key=True)
     model_errors = sa.Column(sa.Text)
@@ -644,7 +644,7 @@ class UniprotDomainModel(Base):
     m_date_modified = sa.Column(sa.DateTime, default=datetime.datetime.utcnow,
                              onupdate=datetime.datetime.utcnow, nullable=False)
     model_domain_def = sa.Column(sa.String(MEDIUM))
-                             
+
     # Relationships
     template = sa.orm.relationship(
         UniprotDomainTemplate, uselist=False, cascade='expunge', lazy='joined',
@@ -655,12 +655,12 @@ class UniprotDomainModel(Base):
 class UniprotDomainMutation(Base):
     """
     Characterization of mutations introduced into structures in the :ref:`uniprot_domain_model` table.
-    
+
     Columns:
       uniprot_id
-        Uniprot ID of the protein that was mutated. 
+        Uniprot ID of the protein that was mutated.
 
-      uniprot_domain_id 
+      uniprot_domain_id
         Unique id which identifies the Profs domain that was mutated in the :ref:`uniprot_domain` table.
 
       mutation
@@ -688,27 +688,60 @@ class UniprotDomainMutation(Base):
 
       stability_energy_wt
         Comma-separated list of scores returned by FoldX for the wildtype protein.
-        The comma-separated list can be converted into a DataFrame with each column clearly labelled 
-        using the :func:`elaspic.domain_mutation.format_mutation_features`.
+        The comma-separated list can be converted into a DataFrame with each column clearly
+        labelled using the :func:`elaspic.predictor.format_mutation_features`.
+        The FoldX energy terms are:
+
+            - dg
+            - backbone_hbond
+            - sidechain_hbond
+            - van_der_waals
+            - electrostatics
+            - solvation_polar
+            - solvation_hydrophobic
+            - van_der_waals_clashes
+            - entropy_sidechain
+            - entropy_mainchain
+            - sloop_entropy
+            - mloop_entropy
+            - cis_bond
+            - torsional_clash
+            - backbone_clash
+            - helix_dipole
+            - water_bridge
+            - disulfide
+            - electrostatic_kon
+            - partial_covalent_bonds
+            - energy_ionisation
+            - entropy_complex
+            - number_of_residues
 
       stability_energy_mut
         Comma-separated list of scores returned by FoldX for the mutant protein.
+        FoldX energy terms are the same as in `stability_energy_wt`, but for the mutated amino
+        acid rather than the wildtype.
 
       physchem_wt
         Physicochemical properties describing the interaction of the wildtype residue with residues
-        on the opposite chain.
+        on the opposite chain. The terms are:
+
+            - number of atoms in interacting residues that have the same charge.
+            - number of atoms in interacting residues that have an opposite charge.
+            - number of hydrogen bonds (very rough calculation).
+            - number of carbons in interacting residues within 4 A of the mutated residue
+              (rough measure of the van der Waals force).
 
       physchem_wt_ownchain
         Physicochemical properties describing the interaction of the wildtype residue with residues
-        on the same chain.
+        on the same chain. The terms are the same as in `physchem_wt`.
 
       physchem_mut
         Physicochemical properties describing the interaction of the mutant residue with residues
-        on the opposite chain.
+        on the opposite chain. The terms are the same as in `physchem_wt`.
 
       physchem_mut_ownchain
         Physicochemical properties describing the interaction of the mutant residue with residues
-        on the same chain.
+        on the same chain. The terms are the same as in `physchem_wt`.
 
       matrix_score
         Score assigned to the wt -> mut transition by the BLOSUM substitution matrix.
@@ -745,12 +778,12 @@ class UniprotDomainMutation(Base):
 
     uniprot_id = sa.Column(
         None, sa.ForeignKey(
-            UniprotSequence.uniprot_id, 
+            UniprotSequence.uniprot_id,
             onupdate='cascade', ondelete='cascade'),
         nullable=False, primary_key=True)
     uniprot_domain_id = sa.Column(
         None, sa.ForeignKey(
-            UniprotDomainModel.uniprot_domain_id, 
+            UniprotDomainModel.uniprot_domain_id,
             onupdate='cascade', ondelete='cascade'),
         nullable=False, primary_key=True, index=True)
     mutation = sa.Column(sa.String(SHORT), index=True, nullable=False, primary_key=True)
@@ -773,9 +806,9 @@ class UniprotDomainMutation(Base):
     provean_score = sa.Column(sa.Float)
     ddg = sa.Column(sa.Float, index=True)
     mut_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, 
+        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
         nullable=False)
-        
+
     # Relationships
     model = sa.orm.relationship(
         UniprotDomainModel, cascade='expunge', uselist=False, lazy='joined',
@@ -797,12 +830,12 @@ class UniprotDomainPairTemplate(Base):
 
       cath_id_1
         Unique id of the structural template for the first domain.
-      
+
       cath_id_2
         Unique id of the structural template for the second domain.
 
       identical_1
-        Fraction of residues in the Blast alignment of the first domain to its template that are 
+        Fraction of residues in the Blast alignment of the first domain to its template that are
         *identical*.
 
       conserved_1
@@ -825,46 +858,46 @@ class UniprotDomainPairTemplate(Base):
 
       score_if_1
         Score obtained by combining ``identical_if_1`` and ``coverage_if_1`` using :eq:`score_function`.
-    
+
       identical_2
-        Fraction of residues in the Blast alignment of the second domain to its template that are 
+        Fraction of residues in the Blast alignment of the second domain to its template that are
         *identical*.
-      
+
       conserved_2
         Fraction of residues in the Blast alignment of the second domain to its template that are *conserved*.
-      
+
       coverage_2
         Fraction of the second domain that is covered by the blast alignment.
-      
+
       score_2
         Score obtained by multiplying ``identical_2`` by ``coverage_2``.
-      
+
       identical_if_2
         Fraction of interface residues [#f1]_ that are *identical* in the Blast alignment of the second domain.
 
       conserved_if_2
         Fraction of interface residues [#f1]_ that are *conserved* in the Blast alignment of the second domain.
 
-      coverage_if_2 
+      coverage_if_2
         Fraction of interface residues [#f1]_ that are *covered* by the Blast alignment of the second domain.
 
-      score_if_2 
+      score_if_2
         Score obtained by combining ``identical_if_2`` and ``coverage_if_2`` using :eq:`score_function`.
 
       score_total
         The product of ``score_1`` and ``score_2``.
-      
-      score_if_total 
+
+      score_if_total
         The product of ``score_if_1`` and ``score_if_2``.
 
-      score_overall 
-        The product of ``score_total`` and ``score_if_total``. This is the score that was used to 
+      score_overall
+        The product of ``score_total`` and ``score_if_total``. This is the score that was used to
         select the best Profs domain pair to be used as a template.
-        
-      t_date_modified 
+
+      t_date_modified
         The date and time when this row was last updated.
 
-      template_errors 
+      template_errors
         List of errors that occured while looking for the structural template.
 
 
@@ -879,22 +912,22 @@ class UniprotDomainPairTemplate(Base):
 
     uniprot_domain_pair_id = sa.Column(
         None, sa.ForeignKey(
-            UniprotDomainPair.uniprot_domain_pair_id, 
+            UniprotDomainPair.uniprot_domain_pair_id,
             onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False, primary_key=True)
     domain_contact_id = sa.Column(
         None, sa.ForeignKey(
-            DomainContact.domain_contact_id, 
+            DomainContact.domain_contact_id,
             onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False)
     cath_id_1 = sa.Column(
         None, sa.ForeignKey(
-            Domain.cath_id, 
+            Domain.cath_id,
             onupdate='cascade', ondelete='cascade'),
         nullable=False)
     cath_id_2 = sa.Column(
         None, sa.ForeignKey(
-            Domain.cath_id, 
+            Domain.cath_id,
             onupdate='cascade', ondelete='cascade'),
         nullable=False)
 
@@ -947,12 +980,12 @@ class UniprotDomainPairModel(Base):
     """
     Structural models of interactions between pairs of domains in the :ref:`uniprot_domain_pair`
     table.
-    
+
     Columns:
       uniprot_domain_pair_id
         Unique id identifying each domain-domain interaction.
 
-      model_errors 
+      model_errors
         List of errors that occured while making the homology model.
 
       alignment_filename_1
@@ -962,10 +995,10 @@ class UniprotDomainPairModel(Base):
         Name of the file containing the alignment of the second domain with its structural template.
 
       model_filename
-        Name of the file containing the homology model of the domain-domain interaction 
+        Name of the file containing the homology model of the domain-domain interaction
         created by Modeller.
 
-      chain_1 
+      chain_1
         Chain containing the first domain in the model specified by ``model_filename``.
 
       chain_2
@@ -988,19 +1021,19 @@ class UniprotDomainPairModel(Base):
         Not implemented yet!
 
       interacting_aa_1
-        List of amino acid positions in the first domain that are within 5 \u212B of the second domain. 
+        List of amino acid positions in the first domain that are within 5 \u212B of the second domain.
         Positions are specified using uniprot coordinates.
 
       interacting_aa_2
         List of amino acids in the second domain that are within 5 \u212B of the first domain.
         Position are specified using uniprot coordinates.
 
-      m_date_modified 
+      m_date_modified
         Date and time that this row was last modified.
 
       model_domain_def_1
         Domain boundaries of the first domain that are covered by the Profs structural template.
-      
+
       model_domain_def_2
         Domain boundaries of the second domain that are covered by the Profs structural template.
 
@@ -1013,7 +1046,7 @@ class UniprotDomainPairModel(Base):
 
     uniprot_domain_pair_id = sa.Column(
         None, sa.ForeignKey(
-            UniprotDomainPairTemplate.uniprot_domain_pair_id, 
+            UniprotDomainPairTemplate.uniprot_domain_pair_id,
             onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False, primary_key=True)
     model_errors = sa.Column(sa.Text)
@@ -1030,32 +1063,32 @@ class UniprotDomainPairModel(Base):
     interacting_aa_1 = sa.Column(sa.Text)
     interacting_aa_2 = sa.Column(sa.Text)
     m_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, 
+        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
         nullable=False)
     model_domain_def_1 = sa.Column(sa.String(MEDIUM))
     model_domain_def_2 = sa.Column(sa.String(MEDIUM))
-        
+
     # Relationships
     template = sa.orm.relationship(
         UniprotDomainPairTemplate, uselist=False, cascade='expunge', lazy='joined',
         backref=sa.orm.backref('model', uselist=False, cascade='expunge', lazy='joined')) # one to one
-        
+
 
 
 class UniprotDomainPairMutation(Base):
     u"""
-    Characterization of interface mutations introduced into structures 
+    Characterization of interface mutations introduced into structures
     in the :ref:`uniprot_domain_pair_model` table.
 
     Columns:
-      uniprot_id 
+      uniprot_id
         Uniprot ID of the protein that is being mutated.
 
       uniprot_domain_pair_id
         Unique id identifying each domain-domain interaction.
 
       mutation
-        Mutation for which the :math:`\Delta \Delta G` score is being predicted, specified in 
+        Mutation for which the :math:`\Delta \Delta G` score is being predicted, specified in
         Uniprot coordinates.
 
       mutation_errors
@@ -1075,35 +1108,35 @@ class UniprotDomainPairMutation(Base):
         Mutation for which the :math:`\Delta \Delta G` score is being predicted, specified in PDB RESNUM coordinates.
 
       analyse_complex_energy_wt
-        Comma-separated list of FoldX scores describing the effect of the wildtype residue on 
+        Comma-separated list of FoldX scores describing the effect of the wildtype residue on
         the stability of the protein domain.
 
       stability_energy_wt
-        Comma-separated list of FoldX scores describing the effect of the wildtype residue on 
+        Comma-separated list of FoldX scores describing the effect of the wildtype residue on
         protein-protein interaction interface.
 
       analyse_complex_energy_mut
-        Comma-separated list of FoldX scores describing the effect of the mutated residue on 
+        Comma-separated list of FoldX scores describing the effect of the mutated residue on
         the stability of the protein domain.
 
       stability_energy_mut
-        Comma-separated list of FoldX scores describing the effect of the mutated residue on 
+        Comma-separated list of FoldX scores describing the effect of the mutated residue on
         protein-protein interaction interface.
 
       physchem_wt
-        Comma-separated list of physicochemical properties describing the interaction between 
+        Comma-separated list of physicochemical properties describing the interaction between
         the wildtype residue and other residues on the opposite chain.
 
       physchem_wt_ownchain
-        Comma-separated list of physicochemical properties describing the interaction between 
+        Comma-separated list of physicochemical properties describing the interaction between
         the wildtype residue and other residues on the same chain.
 
       physchem_mut
-        Comma-separated list of physicochemical properties describing the interaction between 
+        Comma-separated list of physicochemical properties describing the interaction between
         the mutated residue and other residues on the opposite chain.
 
       physchem_mut_ownchain
-        Comma-separated list of physicochemical properties describing the interaction between 
+        Comma-separated list of physicochemical properties describing the interaction between
         the mutated residue and other residues on the same chain.
 
       matrix_score
@@ -1111,7 +1144,7 @@ class UniprotDomainPairMutation(Base):
 
       secondary_structure_wt
         Secondary structure of the wildtype residue, predicted by `stride`_.
-      
+
       solvent_accessibility_wt
         Percent solvent accessible surface area of the wildtype residue, predicted by `msms`_.
 
@@ -1123,14 +1156,14 @@ class UniprotDomainPairMutation(Base):
 
       contact_distance_wt
         Shortest distance between the wildtype residue and a residue on the opposite chain.
-      
+
       contact_distance_mut
         Shortest distance between the mutated reside and a residue on the opposite chain.
 
       provean_score
         `Provean`_ score for this mutation.
 
-      ddg 
+      ddg
         Predicted change in Gibbs free energy of binding caused by this mutation.
 
       mut_date_modified

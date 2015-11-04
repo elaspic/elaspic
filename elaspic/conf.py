@@ -15,95 +15,43 @@ from . import DATA_DIR, helper
 logger = logging.getLogger(__name__)
 
 
-
-#%%
-#: Dictionary of configuration values used throughout the ELASPIC pipeline
+# %%
+# Dictionary of configuration values used throughout the ELASPIC pipeline
 
 class Singleton(type):
     instance = None
+
     def __call__(cls, *args, **kw):
         if not cls.instance:
-             cls.instance = super(Singleton, cls).__call__(*args, **kw)
+            cls.instance = super(Singleton, cls).__call__(*args, **kw)
         return cls.instance
 
-#
-#class Configs(dict, metaclass=Singleton):
-#    """Class that keeps ELASPIC configuations.
-#    
-#    Only one class is ever instantiated due to the use of the `Singleton` metaclass.
-#    """
-##    def __getitem__(self, key):
-##        try:
-##            return self.__dict__[key]
-##        except KeyError:
-##            message = (
-##                'dir(configs): {}\n'.format(dir(self)) +            
-##                'missing key: {}'.format(key)
-##            )
-##            logger.error(message)
-##            raise errors.WrongConfigKeyError(key)
-##            
-##    def __setitem__(self, key, value):
-##        self.__dict__[key] = value
-#
-#    def __getattr__(self, key):
-#        return self[key]
-#
-##    def __dir__(self):
-##        return sorted(set(self.__dict__.keys()))
-##
-##    def get(self, key, backup=None):
-##        try:
-##            return self.__dict__[key]
-##        except KeyError:
-##            return backup
-##
-##    def update(self, **kwargs):
-##        logger.debug(
-##            'The following configurations will be overwritten: {}'
-##            .format(set(Configs._configs.__dict__) & set(kwargs))
-##        )
-##        self.__dict__.update(kwargs)
-##        
-##    def keys(self):
-##        return self.__dict__.keys()
-##        
-##    def values(self):
-##        return self.__dict__.values()
-##        
-##    def items(self):
-##        return self.__dict__.items()
-##    
-##    def clear(self):
-##        self.__dict__ = {}
-##
-#
 
-#%%
+# %%
 class Configs:
     """
     A singleton class that keeps track of ELASPIC configuration settings.
-    
+
     Uses a `composition <>`_ design pattern.
     """
     class _Configs:
         pass
-    
+
     _configs = None
-    
+
     def __init__(self):
         if Configs._configs is None:
             Configs._configs = Configs._Configs()
-        
+
     def __getitem__(self, key):
         return getattr(Configs._configs, key)
-        
+
     def __getattr__(self, key):
         return getattr(Configs._configs, key)
-    
+
     def __setitem__(self, key, value):
         setattr(Configs._configs, key, value)
-    
+
     def __setattr__(self, key, value):
         setattr(Configs._configs, key, value)
 
@@ -116,16 +64,16 @@ class Configs:
             .format(set(Configs._configs.__dict__) & set(kwargs))
         )
         Configs._configs.__dict__.update(kwargs)
-        
+
     def keys(self):
         return Configs._configs.__dict__.keys()
-        
+
     def values(self):
         return Configs._configs.__dict__.values()
-        
+
     def items(self):
         return Configs._configs.__dict__.items()
-    
+
     def clear(self):
         Configs._configs = Configs._Configs
 
@@ -134,18 +82,19 @@ class Configs:
             return getattr(Configs._configs, key)
         except AttributeError:
             return fallback
-            
+
     def copy(self):
         return Configs._configs.__dict__.copy()
-            
 
-#%%
+
+# %%
 configs = Configs()
+
 
 def read_configuration_file(config_file, unique_temp_dir=None):
     if not os.path.isfile(config_file):
         raise Exception("The configuration file '{}' does not exist!".format(config_file))
-        
+
     configParser = SafeConfigParser(
         defaults={
             'global_temp_dir': '/tmp',
@@ -160,7 +109,7 @@ def read_configuration_file(config_file, unique_temp_dir=None):
         })
     configParser.read(config_file)
 
-    ### [DEFAULT] ###
+    # ### [DEFAULT] ###
 
     # These settings won't change most of the time.
     configs['global_temp_dir'] = configParser.get('DEFAULT', 'global_temp_dir')
@@ -172,7 +121,7 @@ def read_configuration_file(config_file, unique_temp_dir=None):
     configs['n_cores'] = configParser.getint('DEFAULT', 'n_cores')
     configs['web_server'] = configParser.get('DEFAULT', 'web_server')
     configs['copy_data'] = configParser.getboolean('DEFAULT', 'copy_data')
-    
+
     # Temporary directories
     configs['temp_dir'] = op.join(configs['global_temp_dir'], 'elaspic')
     os.makedirs(configs['temp_dir'], exist_ok=True)
@@ -180,27 +129,26 @@ def read_configuration_file(config_file, unique_temp_dir=None):
         configs['unique_temp_dir'] = unique_temp_dir
     else:
         configs['unique_temp_dir'] = configParser.get(
-            'SETTINGS', 'unique_temp_dir', 
+            'SETTINGS', 'unique_temp_dir',
             fallback=tempfile.mkdtemp(prefix='', dir=configs['temp_dir'])
         )
     configs['unique'] = op.basename(configs['unique_temp_dir'])
     configs['data_dir'] = configParser.get('SETTINGS', 'data_dir', fallback=DATA_DIR)
 
-    ### [DATABASE]
+    # ### [DATABASE]
     if configParser.has_section('DATABASE'):
         read_database_configs(configParser)
-    
-    ### [SEQUENCE]
+
+    # ### [SEQUENCE]
     if configParser.has_section('SEQUENCE'):
         read_sequence_configs(configParser)
-    
-    ### [MODEL]
+
+    # ### [MODEL]
     if configParser.has_section('MODEL'):
         read_model_configs(configParser)
 
-    #TODO: Update `unique_temp_dir` and dependencies.
+    # TODO: Update `unique_temp_dir` and dependencies.
     _prepare_temp_folders(configs)
-
 
 
 def read_database_configs(configParser):
@@ -212,9 +160,10 @@ def read_database_configs(configParser):
     if configs['db_type'] == 'sqlite':
         configs['sqlite_db_path'] = configParser.get('DATABASE', 'sqlite_db_path')
     elif configs['db_type'] in ['mysql', 'postgresql']:
-        configs['db_schema'] = configParser.get('DATABASE', 'db_schema')  
-        configs['db_schema_uniprot'] = configParser.get('DATABASE', 'db_schema_uniprot', fallback=configs['db_schema'])
-        configs['db_database'] = configParser.get('DATABASE', 'db_database', fallback='')   
+        configs['db_schema'] = configParser.get('DATABASE', 'db_schema')
+        configs['db_schema_uniprot'] = (
+            configParser.get('DATABASE', 'db_schema_uniprot', fallback=configs['db_schema']))
+        configs['db_database'] = configParser.get('DATABASE', 'db_database', fallback='')
         configs['db_username'] = configParser.get('DATABASE', 'db_username')
         configs['db_password'] = configParser.get('DATABASE', 'db_password')
         configs['db_url'] = configParser.get('DATABASE', 'db_url')
@@ -230,28 +179,29 @@ def read_database_configs(configParser):
     configs['pdb_dir'] = configParser.get('DATABASE', 'pdb_dir')
 
     configs['archive_temp_dir'] = op.join(configs['temp_dir'], 'archive')
-        
+
 
 def read_sequence_configs(configParser):
     """[SEQUENCE]
     """
     configs['sequence_dir'] = configParser.get(
-        'SEQUENCE', 'sequence_dir', 
+        'SEQUENCE', 'sequence_dir',
         fallback=op.join(configs['unique_temp_dir'], 'sequence')
     )
     configs['provean_temp_dir'] = op.join(configs['sequence_dir'], 'provean_temp')
     _validate_provean_temp_dir(configParser, configs)
-   
+
     configs['blast_db_dir'] = configParser.get('SEQUENCE', 'blast_db_dir')
-    configs['blast_db_dir_fallback'] = configParser.get('SEQUENCE', 'blast_db_dir_fallback', fallback='')
+    configs['blast_db_dir_fallback'] = (
+        configParser.get('SEQUENCE', 'blast_db_dir_fallback', fallback=''))
     _validate_blast_db_dir(configs)
-    
-    
+
+
 def read_model_configs(configParser):
     """[MODEL]
     """
     configs['model_dir'] = configParser.get(
-        'MODEL', 'model_dir', 
+        'MODEL', 'model_dir',
         fallback=op.join(configs['unique_temp_dir'], 'model')
     )
     configs['tcoffee_dir'] = op.join(configs['model_dir'], 'tcoffee')
@@ -259,7 +209,7 @@ def read_model_configs(configParser):
     # Modeller
     configs['modeller_dir'] = op.join(configs['model_dir'], 'modeller')
     configs['modeller_runs'] = configParser.getint('MODEL', 'modeller_runs')
-    
+
     # FoldX
     configs['foldx_water'] = configParser.get('MODEL', 'foldx_water')
     configs['foldx_num_of_runs'] = configParser.getint('MODEL', 'foldx_num_of_runs')
@@ -267,7 +217,6 @@ def read_model_configs(configParser):
     configs['gap_start'] = configParser.getint('MODEL', 'gap_start')
     configs['gap_extend'] = configParser.getint('MODEL', 'gap_extend')
     configs['matrix'] = getattr(MatrixInfo, configs['matrix_type'])
-
 
 
 def _validate_provean_temp_dir(configParser, configs):
@@ -284,7 +233,8 @@ def _validate_provean_temp_dir(configParser, configs):
             configs['provean_temp_dir'] = configParser.get('SETTINGS', 'provean_temp_dir')
         except configParser.NoOptionError:
             message = (
-                "The 'provean_temp_dir' option is required if you are running on one of hte bc nodes!"
+                "The 'provean_temp_dir' option is required "
+                "if you are running on one of hte bc nodes!"
             )
             logger.error(message)
             raise
@@ -301,12 +251,11 @@ def _validate_blast_db_dir(configs):
     """
     Make sure that configs['blast_db_path'] exists and contains a blast database.
     """
-    blast_db_dir_isvalid = lambda blast_db_dir: (
-        op.isdir(blast_db_dir) and op.isfile(op.join(blast_db_dir, 'nr.pal'))
-    )
-    
+    def blast_db_dir_isvalid(blast_db_dir):
+        return op.isdir(blast_db_dir) and op.isfile(op.join(blast_db_dir, 'nr.pal'))
+
     if blast_db_dir_isvalid(configs['blast_db_dir']):
-        pass        
+        pass
     elif blast_db_dir_isvalid(configs['blast_db_dir_2']):
         message = (
             "Using 'blast_db_dir_2' because 'blast_db_dir' is not valid!\n"
@@ -333,7 +282,7 @@ def _parse_look_for_interactions(look_for_interactions):
         return int(look_for_interactions)
     else:
         raise Exception()
-        
+
 
 def _get_db_socket(configParser, configs):
     """
@@ -366,5 +315,3 @@ def get_temp_dir(global_temp_dir='/tmp', elaspic_foldername=''):
     temp_dir = os.path.join(os.environ.get('TMPDIR', global_temp_dir), elaspic_foldername)
     subprocess.check_call("mkdir -p '{}'".format(temp_dir), shell=True)
     return temp_dir
-
-

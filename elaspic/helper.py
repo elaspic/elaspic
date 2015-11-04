@@ -28,20 +28,20 @@ logger = logging.getLogger(__name__)
 
 
 
-#%%
+# %%
 canonical_amino_acids = 'ARNDCEQGHILKMFPSTWYV'
 uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 
 
-#%%
+# %%
 def slugify(filename_string):
     valid_chars = "-_.()%s%s" % (string.ascii_letters, string.digits)
     return ''.join(c if c in valid_chars else '_' for c in filename_string)
-    
 
 
-#%%
+
+# %%
 class WritableObject(object):
     """ A class for collecting all the print statements from modeller in order
     to redirect them to the logger later on
@@ -73,7 +73,7 @@ def log_print_statements(logger):
             logger.handlers[i].formatter = original_formatters[i]
 
 
-#%%
+# %%
 def get_path_to_current_file():
     """ Find the location of the file that is being executed
     """
@@ -88,7 +88,7 @@ def get_path_to_current_file():
 def get_logger(do_debug=True, logger_filename=None):
     global logger
     if logger is not None:
-        return logger 
+        return logger
     import logging
     # Initialize logger
     logger = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ def make_tarfile(output_filename, source_dir):
 
 
 
-#%% Helper functions for sql objects
+# %% Helper functions for sql objects
 def decode_domain_def(domains, merge=True, return_string=False):
     """ Unlike split_domain(), this function returns a tuple of tuples of strings,
     preserving letter numbering (e.g. 10B)
@@ -169,7 +169,7 @@ def row2dict(row):
     return d
 
 
-#%% Helper functions for different subprocess commands
+# %% Helper functions for different subprocess commands
 def get_username():
     username, __, __ = subprocess_check_output('whoami')
     return username.strip()
@@ -191,7 +191,7 @@ def get_which(bin_name):
 
 
 
-#%%
+# %%
 @contextmanager
 def switch_paths(working_path):
     """
@@ -229,8 +229,8 @@ def kill_child_process(child_process):
 
 
 
-#%%
-###############################################################################
+# %%
+# ##############################################################################
 # The two functions below can be used to set the subproces group id to the same
 # value as the parent process group id. This is a simple way of ensuring that
 # all the child processes are terminated when the parent quits, but it makes
@@ -269,7 +269,7 @@ def run_subprocess_locally(working_path, system_command, **popen_argvars):
     with switch_paths(working_path):
         child_process = run_subprocess(system_command, **popen_argvars)
         return child_process
-        
+
 
 def subprocess_communicate(child_process):
     result, error_message = child_process.communicate()
@@ -277,22 +277,22 @@ def subprocess_communicate(child_process):
     error_message = _try_decoding_bytes_string(error_message)
     return_code = child_process.returncode
     return result, error_message, return_code
-    
+
 
 def subprocess_check_output(system_command, **popen_argvars):
     child_process = run_subprocess(system_command, **popen_argvars)
     return subprocess_communicate(child_process)
-    
+
 
 def subprocess_check_output_locally(working_path, system_command, **popen_argvars):
     child_process = run_subprocess_locally(working_path, system_command, **popen_argvars)
     return subprocess_communicate(child_process)
-    
-    
-    
 
 
-#%% Function-level locking
+
+
+
+# %% Function-level locking
 @contextmanager
 def get_lock(name):
     lock = None
@@ -316,18 +316,18 @@ def get_lock(name):
 
 def lock(fn):
     """
-    Allow only a single instance of function `fn`, 
+    Allow only a single instance of function `fn`,
     and save results to a lock file.
     """
     @wraps(fn)
     def locked_fn(self, *args, **kwargs):
         """
-        
+
         Returns
         -------
         lock_filename : str
             Lock file that contains function output in json format.
-        
+
         """
         # Get the lock filename
         if fn.__name__ == 'calculate_provean':
@@ -338,7 +338,7 @@ def lock(fn):
             lock_filename = '{}{}_mutation_{}.json'.format(self.pdb_id, args[0], args[1])
         else:
             raise Exception("Function {} is not supported!".format(fn))
-        
+
         # Make sure that we can get exclusive rights on the lock
         try:
             lock = open(lock_filename, 'x')
@@ -359,7 +359,7 @@ def lock(fn):
                 )
                 logger.info(info_message)
                 return lock_filename, None
-        
+
         # Run the function and write results
         try:
             results = fn(self, *args, **kwargs)
@@ -375,7 +375,7 @@ def lock(fn):
 
 
 
-#%% From Mutation
+# %% From Mutation
 def encode_list_as_text(list_of_lists):
     """
     Uses the database convention to encode a list of lists, describing domain boundaries of
@@ -390,11 +390,11 @@ def decode_text_as_list(list_string):
     multiple domains, as a list of lists.
     """
     str2num = lambda x: float(x) if '.' in x else int(x)
-    return list(zip(*[[str2num(x) for x in sublist.split(':')] 
+    return list(zip(*[[str2num(x) for x in sublist.split(':')]
         for sublist in list_string.split(',')]))
 
 
-#%% Text formatting
+# %% Text formatting
 class color:
     PURPLE = '\033[95m'
     CYAN = '\033[96m'

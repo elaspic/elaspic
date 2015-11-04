@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 configs = conf.Configs()
 
 
-#%%
-###############################################################################
+# %%
+# ##############################################################################
 # H     Alpha helix
 # G     3-10 helix
 # I     PI-helix
@@ -34,26 +34,26 @@ secondary_structure_to_int = {
 
 def format_mutation_features(feature_df, core_or_interface):
     """
-    Converts columns containing comma-separated lists of FoldX features and physicochemical features 
+    Converts columns containing comma-separated lists of FoldX features and physicochemical features
     into a DataFrame where each feature has its own column.
-    
+
     Parameters
     ----------
     feature_df : DataFrame
         A pandas DataFrame containing a subset of rows from the :ref:`uniprot_domain_mutation`
         or the :ref:`uniprot_domain_pair_mutation` tables.
     core_or_interface : int or str
-        If 0 or 'core', the `feature_df` DataFrame contains columns from the 
+        If 0 or 'core', the `feature_df` DataFrame contains columns from the
         :ref:`uniprot_domain_mutation` table.
-        If 1 or 'interface, the feature_df DataFrame contains columns from the 
+        If 1 or 'interface, the feature_df DataFrame contains columns from the
         :ref:`uniprot_domain_pair_mutation` table.
-        
+
     Returns
     -------
     DataFrame
-        Contains the same data as `feature_df`, but with columns containing comma-separated lists 
+        Contains the same data as `feature_df`, but with columns containing comma-separated lists
         of features converted to columns containing a single feature each.
-    
+
     """
     if core_or_interface == False or core_or_interface == 0 or core_or_interface == 'core':
         foldx_column_name = 'stability_energy'
@@ -123,7 +123,7 @@ def convert_features_to_differences(df, keep_mut=False):
 
 
 
-#%%
+# %%
 class Predictor:
 
     feature_name_conversion = {
@@ -132,34 +132,34 @@ class Predictor:
     }
 
     def __init__(self):
-        
+
         def _load_predictor(filename):
             with open(op.join(configs['data_dir'], filename), 'rb') as ifh:
                 return pickle.load(ifh)
-        
+
         if six.PY2:
             self.clf_domain = _load_predictor('ml_clf_core_p1.pickle.py27')
             self.clf_domain_features = _load_predictor('ml_features_core_p1.pickle.py27')
             self.clf_interface = _load_predictor('ml_clf_interface_p1.pickle.py27')
             self.clf_interface_features = _load_predictor('ml_features_interface_p1.pickle.py27')
-    
+
             self.clf_domain_p0 = _load_predictor('ml_clf_core_p1.pickle.py27')
             self.clf_domain_features_p0 = _load_predictor('ml_features_core_p1.pickle.py27')
             self.clf_interface_p0 = _load_predictor('ml_clf_interface_p1.pickle.py27')
             self.clf_interface_features_p0 = _load_predictor('ml_features_interface_p1.pickle.py27')
-    
+
         else:
             self.clf_domain = _load_predictor('ml_clf_core_p1.pickle')
             self.clf_domain_features = _load_predictor('ml_features_core_p1.pickle')
             self.clf_interface = _load_predictor('ml_clf_interface_p1.pickle')
             self.clf_interface_features = _load_predictor('ml_features_interface_p1.pickle')
-    
+
             self.clf_domain_p0 = _load_predictor('ml_clf_core_p1.pickle')
             self.clf_domain_features_p0 = _load_predictor('ml_features_core_p1.pickle')
             self.clf_interface_p0 = _load_predictor('ml_clf_interface_p1.pickle')
             self.clf_interface_features_p0 = _load_predictor('ml_features_interface_p1.pickle')
-        
-    
+
+
     def score(self, df, core_or_interface):
         """
         Parameters
@@ -167,7 +167,7 @@ class Predictor:
         df : DataFrame
             One or more rows with all data required to predict $\Delta \Delta G$ score.
             Like something that you would get when you join the appropriate rows in the database.
-            
+
         Returns
         -------
         df : Dataframe
@@ -188,7 +188,7 @@ class Predictor:
         df_features = format_mutation_features(df, core_or_interface)
         df_features_asdifferences = convert_features_to_differences(df_features, True) # keep mut, remove it in next step
         df_features_asdifferences = df_features_asdifferences[clf_features]
-        
+
         ddg = clf.predict(df_features_asdifferences)[0]
 
         return ddg

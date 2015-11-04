@@ -21,11 +21,10 @@ equivalent to the ``$PYTHONPATH`` variable in bash):
 
 
 """
-#%%
+# %%
 from __future__ import unicode_literals
 
 import os
-import os.path as op
 import argparse
 import subprocess
 from contextlib import contextmanager
@@ -37,14 +36,15 @@ from elaspic import conf
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
 
-#%%
+
+# %%
 def configure_logger():
     level = 'DEBUG' if configs['debug'] else 'INFO'
-    
+
     LOGGING_CONFIGS = {
-        'version': 1,              
+        'version': 1,
         'disable_existing_loggers': False,  # this fixes the problem
-    
+
         'formatters': {
             'standard': {
                 'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -55,36 +55,36 @@ def configure_logger():
         },
         'handlers': {
             'default': {
-                'level':level,    
-                'class':'logging.StreamHandler',
-                'formatter':'standard',
-            },  
+                'level': level,
+                'class': 'logging.StreamHandler',
+                'formatter': 'standard',
+            },
         },
         'loggers': {
-            '': {                  
-                'handlers': ['default'],        
-                'level': 'DEBUG',  
-                'propagate': True  
+            '': {
+                'handlers': ['default'],
+                'level': 'DEBUG',
+                'propagate': True
             }
         }
     }
     logging.config.dictConfig(LOGGING_CONFIGS)
 
 
-#%% Parse arguments
+# %% Parse arguments
 def get_elaspic_parser():
     description = """
     Run the ELASPIC pipeline.
     """
     parser = argparse.ArgumentParser(
-        description=description, 
+        description=description,
         formatter_class=argparse.RawTextHelpFormatter)
-        
+
     parser.add_argument(
-        '-c', '--config_file', required=True, 
+        '-c', '--config_file', required=True,
         help='ELASPIC configuration file.')
     parser.add_argument(
-        '-u', '--uniprot_id', 
+        '-u', '--uniprot_id',
         help="The Uniprot ID of the protein that you want to mutate (e.g. 'P28223')."
              "This option relies on a local elaspic database, which has to be specified "
              "in the configuration file.")
@@ -97,7 +97,7 @@ def get_elaspic_parser():
              "wish to model. If you choose this option, you also have to specify "
              "a template PDB file using the '--pdb-file' option.")
     parser.add_argument(
-        '-m', '--mutations', nargs='?', default=['',], 
+        '-m', '--mutations', nargs='?', default=[''],
         help="Mutation(s) that you wish to evaluate.\n"
              "If you used '--uniprot_id', mutations must be provided using uniprot coordinates "
              "(e.g. 'D172E,R173H' or 'A_V10I').\n"
@@ -106,35 +106,35 @@ def get_elaspic_parser():
              "to Cysteine, and residue with id '20' on chain B to Proline).\n"
              "If you used '--sequence_file', mutations must be provided using the chain "
              "and residue INDEX (e.g. '1_M1C,2_C20P' to mutate the first residue in sequence 1 "
-             "to Cysteine, and the 20th residue in sequence 2 to Proline).")       
+             "to Cysteine, and the 20th residue in sequence 2 to Proline).")
     parser.add_argument(
         '-i', '--uniprot_domain_pair_ids',  nargs='?', default='',
         help="List of uniprot_domain_pair_ids to analyse "
-            "(useful if you want to restrict your analysis to only a handful of domains).")
+             "(useful if you want to restrict your analysis to only a handful of domains).")
     parser.add_argument(
-        '-f', '--input_file', 
+        '-f', '--input_file',
         help="A tab separated file of uniprot_ids, mutations, "
              "and uniprot_domain_pair_ids (optional).\n"
              "This option can be used instead of `--uniprot_id` and `--mutations` "
              "to input a list of proteins and mutations")
     parser.add_argument(
-        '-t', '--run_type', nargs='?', type=int, default=5, choices=[1,2,3,4,5],
+        '-t', '--run_type', nargs='?', type=int, default=5, choices=[1, 2, 3, 4, 5],
         help=('Type of analysis to perform: \n'
-            '  1: Calculate Provean only \n'
-            '  2: Create homololgy models only \n'
-            '  3: Evaluate mutations only \n'
-            '  4: Create homology models and evaluate mutations \n'
-            '  5: Calculate Provean, create homology models, and evaluate mutations \n'))
+              '  1: Calculate Provean only \n'
+              '  2: Create homololgy models only \n'
+              '  3: Evaluate mutations only \n'
+              '  4: Create homology models and evaluate mutations \n'
+              '  5: Calculate Provean, create homology models, and evaluate mutations \n'))
     return parser
 
 
 def validate_args(args):
     if not os.path.isfile(args.config_file):
         raise Exception('The configuration file {} does not exist!'.format(args.config_file))
-        
+
     if args.input_file and not os.path.isfile(args.input_file):
         raise Exception('The input file {} does not exist!'.format(args.input_file))
-    
+
     choose_one = [
         args.uniprot_id is not None, args.input_file is not None, args.pdb_file is not None,
     ]
@@ -142,7 +142,7 @@ def validate_args(args):
         raise Exception(
             "One of '--uniprot_id', '--input_file', or '--pdb_file' must be specified!"
         )
-        
+
     if args.sequence_file and not args.pdb_file:
         raise Exception(
             "A template PDB file must be specified using the '--pdb_file' option, "
@@ -163,7 +163,7 @@ def parse_input_file(input_file):
             if line[0][0] == ' ' or line[0][0] == '\t':
                 print('Skipping line: {}'.format(line))
                 continue
-            row = [ l.strip() for l in line.split('\t') ]
+            row = [l.strip() for l in line.split('\t')]
             # Specifying the mutation is optional
             if len(row) == 2:
                 uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], row[2]
@@ -181,7 +181,7 @@ def elaspic():
     parser = get_elaspic_parser()
     args = parser.parse_args()
     validate_args(args)
-    
+
     if args.input_file:
         conf.read_configuration_file(args.config_file)
         configure_logger()
@@ -190,8 +190,8 @@ def elaspic():
         for uniprot_id, mutations, uniprot_domain_pair_id in \
                 zip(*parse_input_file(args.input_file)):
             pipeline = database_pipeline.DatabasePipeline(
-                uniprot_id, mutations, 
-                run_type=args.run_type, 
+                uniprot_id, mutations,
+                run_type=args.run_type,
             )
             pipeline.run()
     elif args.uniprot_id:
@@ -208,7 +208,7 @@ def elaspic():
         # Run database pipeline
         from elaspic import database_pipeline
         pipeline = database_pipeline.DatabasePipeline(
-            args.uniprot_id, args.mutations, 
+            args.uniprot_id, args.mutations,
             run_type=args.run_type,
             uniprot_domain_pair_ids=uniprot_domain_pair_ids_asint
         )
@@ -229,22 +229,20 @@ def elaspic():
             pipeline.run_all_mutations()
         elif args.run_type == 5:
             pipeline.run()
-        
 
 
-
-#%%
+# %%
 def create_database(args):
-    from elaspic import sql_db    
+    from elaspic import sql_db
     db = sql_db.MyDatabase()
     db.create_database_tables(args.clear_schema, args.keep_uniprot_sequence)
     db.logger.info('Done!')
-    
+
 
 @contextmanager
 def open_gzip(filename):
     """
-    Temporarly unzip a file so that it can be processed with tools that do not work with 
+    Temporarly unzip a file so that it can be processed with tools that do not work with
     compressed archives.
     """
     try:
@@ -258,8 +256,8 @@ def open_gzip(filename):
     finally:
         print("Gzipping the file back again...")
         subprocess.check_call("gzip '{}'".format(filename.rstrip('.gz')), shell=True)
-    
-    
+
+
 def load_data_to_database(args):
     from elaspic import sql_db
     db = sql_db.MyDatabase()
@@ -269,17 +267,17 @@ def load_data_to_database(args):
     for table in sql_db.Base.metadata.sorted_tables:
         if table_names is not None and table.name not in table_names:
             print("Skipping table '{}' because it was not included in the 'table_names' list..."
-                .format(table.name))
+                  .format(table.name))
             continue
         if '{}.tsv'.format(table.name) in filenames:
             db.copy_table_to_db(table.name, args.data_folder)
             print("Successfully loaded data from file '{}' to table '{}'"
-                .format('{}.tsv'.format(table.name), table.name))
+                  .format('{}.tsv'.format(table.name), table.name))
         elif '{}.tsv.gz'.format(table.name) in filenames:
             with open_gzip(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
                 db.copy_table_to_db(table.name, args.data_folder.rstrip('/'))
             print("Successfully loaded data from file '{}' to table '{}'"
-                .format('{}.tsv.gz'.format(table.name), table.name))   
+                  .format('{}.tsv.gz'.format(table.name), table.name))
 
 
 def test_database(args):
@@ -290,7 +288,7 @@ def test_database(args):
         test_uniprot_domain = elaspic_testing.TestUniprotDomain()
         test_uniprot_domain.setup_class(uniprot_domain_id=args.uniprot_domain_id)
         test_uniprot_domain.test()
-    if args.mutation_type in ['interface', 'both']:   
+    if args.mutation_type in ['interface', 'both']:
         print('*' * 80)
         print('Running a sample interface mutation...')
         test_uniprot_domain_pair = elaspic_testing.TestUniprotDomainPair()
@@ -299,55 +297,52 @@ def test_database(args):
 
 
 def delete_database(args):
-    from elaspic import sql_db    
+    from elaspic import sql_db
     db = sql_db.MyDatabase()
     db.delete_database_tables(args.drop_schema, args.keep_uniprot_sequence)
     db.logger.info('Done!')
-    
+
 
 def get_database_parser():
     parser = argparse.ArgumentParser(
-        prog='ELASPIC database', 
+        prog='ELASPIC database',
         description="Perform maintenance tasks on the ELASPIC database.")
     parser.add_argument(
-        '-c', '--config_file', required=True, 
+        '-c', '--config_file', required=True,
         help='ELASPIC configuration file')
     subparsers = parser.add_subparsers(
-        title='tasks', 
+        title='tasks',
         help='Maintenance tasks to perform')
-    
-    
-    ### Create an empty database schema
+
+    # Create an empty database schema
     parser_create = subparsers.add_parser(
         name='create',
         description='Create an empty database')
     parser_create.add_argument(
-        '--clear_schema', type=bool, default=False, 
+        '--clear_schema', type=bool, default=False,
         help=('Whether or not to first drop all existing tables from the database schema. \n'
-            'WARNING: Choosing `True` will remove all existing data from the schema specified '
-            'in your configuration file!!!'))
+              'WARNING: Choosing `True` will remove all existing data from the schema specified '
+              'in your configuration file!!!'))
     parser_create.add_argument(
-        '--keep_uniprot_sequence', type=bool, default=True, 
+        '--keep_uniprot_sequence', type=bool, default=True,
         help="Whether or not to leave the 'uniprot_sequence' table untouched when clearing "
              "the schema. Only applicable if '--clear_schema' is set to 'True'.")
     parser_create.set_defaults(func=create_database)
-    
-    
-    ### Load data to the database
+
+    # Load data to the database
     parser_load_data = subparsers.add_parser(
-        name='load_data', 
+        name='load_data',
         description='Load data from text files to the database.')
     parser_load_data.add_argument(
-        '--data_folder', default='.', 
+        '--data_folder', default='.',
         help='Location of text files to be loaded to the database.')
     parser_load_data.add_argument(
-        '--data_files', default=None, 
+        '--data_files', default=None,
         help=("Names of text files to be loaded to the database. \n"
-            "``all`` : load all tables found in the location specified by ``data_folder``."))
+              "``all`` : load all tables found in the location specified by ``data_folder``."))
     parser_load_data.set_defaults(func=load_data_to_database)
-    
-    
-    ### Test the created database by running several mutations
+
+    # Test the created database by running several mutations
     parser_test = subparsers.add_parser(
         name='test',
         description='Test the database by running some mutations. ')
@@ -368,24 +363,23 @@ def get_database_parser():
         '--uniprot_domain_pair_id', type=int, default=True,
         help="Unique ID identifying the domain pair that you want to mutate. ")
     parser_test.set_defaults(func=test_database)
-    
-    
-    ### Delete database
+
+    # Delete database
     parser_delete = subparsers.add_parser(
         name='delete',
         description='Delete the database specified in the configuration file.')
     parser_delete.add_argument(
-        '--drop_schema', type=bool, default=False, 
+        '--drop_schema', type=bool, default=False,
         help=('Whether or not to drop the schema that contains the relevant tables. \n'
               'WARNING: Choosing ``True`` will remove all existing data from the schema specified '
               'in your configuration file!!!'))
     parser_delete.add_argument(
-        '--keep_uniprot_sequence', type=bool, default=True, 
+        '--keep_uniprot_sequence', type=bool, default=True,
         help="Whether or not to leave the ``uniprot_sequence`` table untouched "
              "when clearing the schema.\n"
              "Only applicable if ``--drop_schema`` is set to ``True``.")
     parser_delete.set_defaults(func=delete_database)
-    
+
     return parser
 
 
@@ -399,12 +393,10 @@ def elaspic_database():
     args.func(args)
 
 
-
-#%%
+# %%
 if __name__ == '__main__':
     import sys
     if len(sys.argv) > 1 and sys.argv[1] != 'database':
         elaspic_database()
     else:
         elaspic()
-
