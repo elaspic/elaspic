@@ -24,12 +24,12 @@ from . import errors, helper, structure_tools
 logger = logging.getLogger(__name__)
 
 
-#%% CONSTANTS
+# %% CONSTANTS
 
 # Standard accessibilities for a ALA-X-ALA tripeptide
 # (obtained from NACCESS)
 STANDARD_DATA = """
-STANDARD ACCESSIBILITES FOR PROBE 1.40 AND RADII vdw.radii 
+STANDARD ACCESSIBILITES FOR PROBE 1.40 AND RADII vdw.radii
 ATOM S   2  ALA  107.95   0.0  69.41   0.0   0.00   0.0  69.41   0.0  38.54   0.0  71.38   0.0  36.58   0.0
 ATOM S   2  CYS  134.28   0.0  96.75   0.0   0.00   0.0  96.75   0.0  37.53   0.0  97.93   0.0  36.35   0.0
 ATOM S   2  ASP  140.39   0.0  48.00   0.0  54.69   0.0 102.69   0.0  37.70   0.0  49.24   0.0  91.15   0.0
@@ -55,7 +55,7 @@ STANDARD_SASA_ALL = [[l.strip() for l in line.split()] for line in STANDARD_DATA
 STANDARD_SASA = {x[3]: float(x[4]) for x in STANDARD_SASA_ALL}
 
 
-#%% Init
+# %% Init
 class AnalyzeStructure(object):
     """
     Runs the program pops to calculate the interface size of the complexes
@@ -66,16 +66,16 @@ class AnalyzeStructure(object):
     def __init__(self, pdb_file, working_dir, vdw_distance=5.0, min_contact_distance=4.0):
         self.pdb_file = pdb_file
         #: Folder with all the binaries (i.e. ./analyze_structure)
-        self.working_dir = working_dir 
+        self.working_dir = working_dir
         self.vdw_distance = vdw_distance
         self.min_contact_distance = min_contact_distance
-        
+
         self._prepare_temp_folder(self.working_dir)
-        
+
         self.sp = structure_tools.StructureParser(pdb_file)
         self.sp.extract()
         self.sp.save_structure(output_dir=self.working_dir)
-        
+
         self.chain_ids = self.sp.chain_ids
 
 
@@ -132,10 +132,10 @@ class AnalyzeStructure(object):
                 logger.error(e)
                 logger.error(contact_distance)
                 raise
-        
+
         # PhysiChem
         physchem, physchem_ownchain = self.get_physi_chem(chain_id, mutation)
-        
+
         # Compile results
         results = dict(
             solvent_accessibility = solvent_accessibility,
@@ -145,12 +145,12 @@ class AnalyzeStructure(object):
             physchem_ownchain = physchem_ownchain,
         )
         return results
-        
+
 
     def get_structure_file(self, chains, ext='.pdb'):
         return op.join(self.working_dir, self.sp.pdb_id + chains + ext)
-        
-        
+
+
 
     #%%
     def get_physi_chem(self, chain_id, mutation):
@@ -338,7 +338,7 @@ class AnalyzeStructure(object):
 
         # Convert pdb to xyz coordiates
         assert(os.path.isfile(op.join(self.working_dir, filename)))
-        
+
         system_command = 'pdb_to_xyzrn {0}.pdb'.format(op.join(self.working_dir, base_filename))
         logger.debug('msms system command 1: %s' % system_command)
         result, error_message, return_code = (
@@ -396,25 +396,25 @@ class AnalyzeStructure(object):
 
         msms_columns = [
             'atom_num', 'abs_sesa', 'abs_sasa', 'atom_id', 'res_name', 'res_num', 'pdb_chain'
-        ]        
+        ]
         def msms_parse_row(row):
             parsed_row = [
-                int(row[0]), float(row[1]), float(row[2]), 
-                row[3].split('_')[0].strip(), 
-                row[3].split('_')[1].strip(), 
-                row[3].split('_')[2], 
+                int(row[0]), float(row[1]), float(row[2]),
+                row[3].split('_')[0].strip(),
+                row[3].split('_')[1].strip(),
+                row[3].split('_')[2],
                 row[3].split('_')[3]
             ]
             return parsed_row
-            
+
         file_data = [msms_parse_row(row) for row in file_data if row]
         seasa_df = pd.DataFrame(data=file_data, columns=msms_columns)
         seasa_df['atom_num'] = seasa_df['atom_num'].apply(lambda x: x + 1)
         seasa_df['rel_sasa'] = [
-            x[0] / STANDARD_SASA.get(x[1], x[0]) * 100 
+            x[0] / STANDARD_SASA.get(x[1], x[0]) * 100
             for x in zip(seasa_df['abs_sasa'], seasa_df['res_name'])
         ]
-            
+
         seasa_gp_by_chain = seasa_df.groupby(['pdb_chain'])
         seasa_gp_by_residue = seasa_df.groupby(['pdb_chain', 'res_name', 'res_num'])
         seasa_by_chain = seasa_gp_by_chain.sum().reset_index()
@@ -426,11 +426,11 @@ class AnalyzeStructure(object):
     #%% SASA Old
     def get_sasa(self, program_to_use='pops'):
         """Get Solvent Accessible Surface Area scores.
-        
+
         .. note:: deprecated
-        
+
             Use :fn:`get_seasa` instead.
-            
+
         """
         if program_to_use == 'naccess':
             run_sasa_atom = self._run_naccess_atom
@@ -561,7 +561,7 @@ class AnalyzeStructure(object):
         # collect results
         with open(stride_results_file) as fh:
             file_data_df = pd.DataFrame(
-                [[structure_tools.AAA_DICT[row.split()[1]], row.split()[2], 
+                [[structure_tools.AAA_DICT[row.split()[1]], row.split()[2],
                   row.split()[3], int(row.split()[4]), row.split()[5]]
                 for row in fh.readlines() if row[:3] == 'ASG'],
                 columns=['amino_acid', 'chain', 'resnum', 'idx', 'ss_code'])
@@ -681,7 +681,7 @@ class AnalyzeStructure(object):
                                 r = structure_tools.calculate_distance(atom_1, atom_2, min_r)
                                 if min_r is None or (r is not None and r < min_r):
                                     min_r = r
-                                    
+
                 shortest_interchain_distances[chain_1_id][chain_2_id] = min_r
 
 
@@ -697,10 +697,10 @@ class AnalyzeStructure(object):
             for key_2, value in shortest_interchain_distances[key].items():
                 _shortest_interchain_distances_complement.setdefault(key_2, dict())[key] = value
         shortest_interchain_distances.update(_shortest_interchain_distances_complement)
-        
+
         all_chains = {key for key in shortest_interchain_distances}
         all_chains.update(
-            {key_2 for key in shortest_interchain_distances 
+            {key_2 for key in shortest_interchain_distances
              for key_2 in shortest_interchain_distances[key]}
         )
 
@@ -727,7 +727,7 @@ class AnalyzeStructure(object):
         """
         """
         assert len(chain_ids) == 2
-        
+
         termination, rc, e = self.__run_pops_area(self.get_structure_file(''.join(chain_ids)))
         if rc != 0:
             if termination != 'Clean termination':
@@ -764,7 +764,7 @@ class AnalyzeStructure(object):
             elif item[0] == 'total:':
                 total = float(item[1])
         sasa_chain = hydrophobic, hydrophilic, total
-        
+
         # calculate SASA for oppositeChain, i.e. the second part of the complex:
         termination, rc, e = self.__run_pops_area(self.get_structure_file(chain_ids[1]))
         if rc != 0:
@@ -819,9 +819,9 @@ class AnalyzeStructure(object):
     def __read_pops_area(self, filename):
         """
         This function parses POPS output that looks like this::
-        
+
             === MOLECULE SASAs ===
-            
+
             hydrophobic:    5267.01
             hydrophilic:    4313.68
             total:          9580.69
@@ -839,9 +839,9 @@ class AnalyzeStructure(object):
     def __read_pops_area_new(self, filename):
         """
         This function parses POPS output that looks like this::
-        
+
             === MOLECULE SASAs ===
-            
+
             Phob/A^2		Phil/A^2		Total/A^2
                5267.01	   4313.68	   9580.69
 

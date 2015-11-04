@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 configs = conf.Configs()
 
 
-#%%
+# %%
 class GetMutation(object):
 
     def __init__(self, **kwargs):
@@ -42,10 +42,10 @@ class GetMutation(object):
         mutation = None
         domain_sequences = None
         chains_modeller = None
-        uniprot_domain_id = None ## have to get rid of this 
+        uniprot_domain_id = None ## have to get rid of this
         path_to_provean_supset = None # provean_supset_file
-        save_path = None # archive_dir ? 
-        pdbFile_wt = None # pdb_file ? 
+        save_path = None # archive_dir ?
+        pdbFile_wt = None # pdb_file ?
         position_domain = None # mutation_domain_pos
         mutation_domain = None # mutation_domain
         structure = None
@@ -75,7 +75,7 @@ class GetMutation(object):
         """
         Parameters
         ----------
-        mutation_features : 
+        mutation_features :
             An object that can hold all mutation feautres for core or interface.
         """
         ...

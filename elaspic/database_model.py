@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 
-#%%
+# %%
 class GetModel(object):
     """
     Attributes
@@ -88,7 +88,7 @@ class GetModel(object):
         alignmnets, alignment_filenames, norm_dope_wt, pdb_filename_wt, knotted, model_errors, domain_def_offsets = (
             self.perform_alignments_and_modelling(
                 [d.uniprot_id], [d.uniprot_sequence.uniprot_sequence], [d.template.domain_def],
-                d.template.domain.pdb_id, [d.template.domain.pdb_chain], 
+                d.template.domain.pdb_id, [d.template.domain.pdb_chain],
                 [d.template.domain.pdb_domain_def], d.path_to_data)
         )
         logger.debug('Finished performing alignments!')
@@ -124,7 +124,8 @@ class GetModel(object):
                     msms_length_mismatch = True
                 rel_sasa_for_each_residue.append(rel_sasa)
         d.template.model.sasa_score = (
-            ','.join(['{:.2f}'.format(x) for x in model.relative_sasa_scores[model.chain_ids[]]])
+            ','.join(['{:.2f}'.format(x) for x in model.relative_sasa_scores[model.chain_ids]])
+        )
 
         d.template.model.model_domain_def = self._truncate_domain_defs(
             d.template.domain_def,
@@ -291,10 +292,10 @@ class GetModel(object):
             pdb_filename_wt, [d.template.model.chain_1, d.template.model.chain_2], None)
         interface_area = analyze_structure_object.get_interface_area()
         logger.debug('interface_area: {}'.format(interface_area))
-        d.template.model.interface_area_hydrophobic = interface_area[0] 
+        d.template.model.interface_area_hydrophobic = interface_area[0]
         d.template.model.interface_area_hydrophilic = interface_area[1]
         d.template.model.interface_area_total = interface_area[2]
-        
+
         # Save model_domain_defs, which might be truncated compared to uniprot_domain_template domain defs
         d.template.model.model_domain_def_1 = model_domain_def_1
         d.template.model.model_domain_def_2 = model_domain_def_2
@@ -397,7 +398,7 @@ class GetModel(object):
 
         # Make the homology model and check if it is knotted
         modeller_target_id = '_'.join(target_ids)
-    
+
         if len(template_ids) == 1:
             # If you're only modelling one domain
             modeller_template_id = template_ids[0]

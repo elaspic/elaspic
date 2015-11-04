@@ -9,8 +9,8 @@ from builtins import object
 
 import logging
 
-from modeller import * # Load standard Modeller classes
-from modeller.automodel import *	# Load the automodel class
+from modeller import *  # Load standard Modeller classes, analysis:ignore
+from modeller.automodel import *	# Load the automodel class, analysis:ignore
 
 from . import conf, errors, helper
 configs = conf.Configs()
@@ -54,18 +54,18 @@ class Modeller(object):
         # Some environment settings
         self.filePath = filePath
 
-
     def run(self):
         """
         """
-        ranking = dict() # key: assessment score
-                         # values: alignment, pdb filename, whether or not using loop refinement
+        # key: assessment score
+        # values: alignment, pdb filename, whether or not using loop refinement
+        ranking = dict()
         ranking_knotted = dict()
         knotted = True
         counter = 0
         while knotted and counter < 10:
             counter += 1
-            ## NB: You can actually supply many alignments and modeller will give
+            # NB: You can actually supply many alignments and modeller will give
             # you the alignment with the best model
             for aln in self.alignment:
                 # There is a chance that modeller fails to automatically select the
@@ -97,7 +97,6 @@ class Modeller(object):
         else:
             return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], knotted
 
-
     def __run_modeller(self, alignFile, loopRefinement):
         """
         Parameters
@@ -115,43 +114,53 @@ class Modeller(object):
             Successfully calculated models
         """
 
-        log.none() # instructs Modeller to display no log output.
-        env = environ() # create a new MODELLER environment to build this model in
+        log.none()  # instructs Modeller to display no log output.
+        env = environ()  # create a new MODELLER environment to build this model in
 
         # Directories for input atom files
-        env.io.atom_files_directory = [str(self.filePath.rstrip('/')),]
+        env.io.atom_files_directory = [str(self.filePath.rstrip('/')), ]
         env.schedule_scale = physical.values(default=1.0, soft_sphere=0.7)
 
         # Selected atoms do not feel the neighborhood
-        #env.edat.nonbonded_sel_atoms = 2
-        env.io.hetatm = True # read in HETATM records from template PDBs
-        env.io.water = True # read in WATER records (including waters marked as HETATMs)
+        # env.edat.nonbonded_sel_atoms = 2
+        env.io.hetatm = True  # read in HETATM records from template PDBs
+        env.io.water = True  # read in WATER records (including waters marked as HETATMs)
 
-        logger.debug('Performing loop refinement in addition to regular modelling: {}'.format(loopRefinement))
-        if loopRefinement == False:
+        logger.debug(
+            'Performing loop refinement in addition to regular modelling: {}'
+            .format(loopRefinement)
+        )
+        if not loopRefinement:
             a = automodel(
                 env,
-                alnfile=str(alignFile), # alignment filename
-                knowns=(str(self.templateID)), # codes of the templates
-                sequence=str(self.seqID), # code of the target
-                assess_methods=(assess.DOPE, assess.normalized_dope) # wich method for validation should be calculated
+                # alignment filename
+                alnfile=str(alignFile),
+                # codes of the templates
+                knowns=(str(self.templateID)),
+                # code of the target
+                sequence=str(self.seqID),
+                # wich method for validation should be calculated
+                assess_methods=(assess.DOPE, assess.normalized_dope)
             )
         else:
             a = dope_loopmodel(
                 env,
-                alnfile=str(alignFile), # alignment filename
-                knowns=(str(self.templateID)), # codes of the templates
-                sequence=str(self.seqID), # code of the target
-                assess_methods=(assess.DOPE, assess.normalized_dope), # wich method for validation should be calculated
+                # alignment filename
+                alnfile=str(alignFile),
+                # codes of the templates
+                knowns=(str(self.templateID)),
+                # code of the target
+                sequence=str(self.seqID),
+                # wich method for validation should be calculated
+                assess_methods=(assess.DOPE, assess.normalized_dope),
                 loop_assess_methods=(assess.DOPE, assess.normalized_dope)
             )
-            a.loop.starting_model = self.loopStart # index of the first loop model
-            a.loop.ending_model = self.loopEnd # index of the last loop model
-            a.loop.md_level = refine.slow # loop refinement method; this yields
+            a.loop.starting_model = self.loopStart  # index of the first loop model
+            a.loop.ending_model = self.loopEnd  # index of the last loop model
+            a.loop.md_level = refine.slow  # loop refinement method; this yields
 
-
-        a.starting_model = self.start # index of the first model
-        a.ending_model = self.end # index of the last model
+        a.starting_model = self.start  # index of the first model
+        a.ending_model = self.end  # index of the last model
 
         # Very thorough VTFM optimization:
         a.library_schedule = autosched.slow
@@ -167,7 +176,7 @@ class Modeller(object):
         a.max_molpdf = 2e5
 
         with helper.log_print_statements(logger):
-            a.make() # do the actual homology modeling
+            a.make()  # do the actual homology modeling
 
         # The output produced by modeller is stored in a.loop.outputs or a.outputs
         # it is a dictionary
@@ -182,7 +191,9 @@ class Modeller(object):
             if not a.outputs[i]['failure']:
                 model_filename = a.outputs[i]['name']
                 model_dope_score = a.outputs[i]['Normalized DOPE score']
-                logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
+                logger.debug(
+                    'Success! model_filename: {}, model_dope_score: {}'
+                    .format(model_filename, model_dope_score))
                 result.append((model_filename, model_dope_score))
             else:
                 failure = a.outputs[i]['failure']
@@ -196,7 +207,9 @@ class Modeller(object):
                 if not a.loop.outputs[i]['failure']:
                     model_filename = a.loop.outputs[i]['name']
                     model_dope_score = a.loop.outputs[i]['Normalized DOPE score']
-                    logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
+                    logger.debug(
+                        'Success! model_filename: {}, model_dope_score: {}'
+                        .format(model_filename, model_dope_score))
                     result.append((model_filename, model_dope_score))
                     loop = True
                 else:
@@ -207,7 +220,6 @@ class Modeller(object):
         # Return the successfully calculated models and a loop flag indicating
         # whether the returned models are loop refined or not
         return result, loop, failures
-
 
     def __call_knot(self, pdbFile):
         """
@@ -227,31 +239,30 @@ class Modeller(object):
         int
             0: no knot; 1: knot
         """
-
-
         system_command = 'knot ' + pdbFile
         logger.debug('Knot system command: {}'.format(system_command))
-        result, error_message, return_code = helper.subprocess_check_output_locally('./', system_command)
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally('./', system_command)
+        )
         if not return_code:
             logger.error('Knot result: {}'.format(result))
             logger.error('Knot error message: {}'.format(error_message))
 
-        line = [ x for x in result.split('\n') ]
+        line = [x for x in result.split('\n')]
 
         # I found two different forms in which the output appears,
         # hence two if statements to catch them
         if line[-4].strip().split(' ')[0] == 'len':
             if int(line[-4].strip().split(' ')[2]) == 2:
-                return False # i.e. no knot
+                return False  # i.e. no knot
             if int(line[-4].strip().split(' ')[2]) > 2:
-                return True # i.e. knotted
+                return True  # i.e. knotted
         elif line[-2].strip().split(' ')[0] == 'len':
             if int(line[-2].strip().split(' ')[2]) == 2:
-                return False # i.e. no knot
+                return False  # i.e. no knot
             if int(line[-2].strip().split(' ')[2]) > 2:
-                return True # i.e. knotted
+                return True  # i.e. knotted
         else:
             # in case the output can't be read, the model is classified as
             # knotted and thus disregarded. This could be improved.
             return True
-

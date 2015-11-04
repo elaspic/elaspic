@@ -7,7 +7,6 @@ from builtins import object
 
 import os.path as op
 import shutil
-import six
 import logging
 
 from . import conf, errors, helper
@@ -15,7 +14,7 @@ from . import conf, errors, helper
 logger = logging.getLogger(__name__)
 
 names_rows_stability = [
-    ['dg', 1], # totalEnergy
+    ['dg', 1],  # totalEnergy
     ['backbone_hbond', 2],
     ['sidechain_hbond', 3],
     ['van_der_waals', 4],
@@ -37,7 +36,8 @@ names_rows_stability = [
     ['partial_covalent_bonds', 20],
     ['energy_ionisation', 21],
     ['entropy_complex', 22],
-    ['number_of_residues', 23],]
+    ['number_of_residues', 23]
+]
 names_stability_wt = (
     [name + '_wt' for name in list(zip(*names_rows_stability))[0][:-1]] +
     ['number_of_residues'])
@@ -46,8 +46,9 @@ names_stability_mut = (
     ['number_of_residues'])
 
 names_rows_stability_complex = (
-    [ ['intraclashes_energy_1', 3], ['intraclashes_energy_2', 4], ] +
-    [ [x[0], x[1] + 4] for x in names_rows_stability ])
+    [['intraclashes_energy_1', 3], ['intraclashes_energy_2', 4], ] +
+    [[x[0], x[1] + 4] for x in names_rows_stability]
+)
 names_stability_complex_wt = (
     [name + '_wt' for name in list(zip(*names_rows_stability_complex))[0][:-1]] +
     ['number_of_residues'])
@@ -69,20 +70,19 @@ class FoldX(object):
             self.foldx_dir = foldx_dir
         self.foldx_runfile = op.join(self.foldx_dir, 'runfile_FoldX.txt')
 
-
     def __call__(self, whatToRun, mutCodes=[]):
         """
         Select which action should be performed by FoldX by setting `whatToRun`.
-        
-        Possible values are: 
-        
+
+        Possible values are:
+
             - AnalyseComplex
             - Stability
             - RepairPDB
             - BuildModel
-            
+
         See the `FoldX manual`_ for an explanation on what they do.
-        
+
         .. _FoldX manual: http://foldx.crg.es/manual3.jsp
         """
         logger.debug('Running FoldX {}'.format(whatToRun))
@@ -90,11 +90,11 @@ class FoldX(object):
         self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
             return self.__read_result(
-                op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'), 
+                op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'),
                 self.pdb_filename, whatToRun)
         elif whatToRun == 'Stability':
             return self.__read_result(
-                op.join(self.foldx_dir, 'Stability.txt'), 
+                op.join(self.foldx_dir, 'Stability.txt'),
                 self.pdb_filename, whatToRun)
         elif whatToRun == 'RepairPDB':
             return op.join(self.foldx_dir, 'RepairPDB_' + self.pdb_filename)
@@ -107,13 +107,16 @@ class FoldX(object):
             else:
                 mutants = [
                     op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
-                    for x in range(0,conf.configs['foldx_num_of_runs']) ]
+                    for x in range(0, conf.configs['foldx_num_of_runs'])
+                ]
                 wiltype = [
-                    op.join(self.foldx_dir, 'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
-                    for x in range(0,conf.configs['foldx_num_of_runs']) ]
+                    op.join(
+                        self.foldx_dir,
+                        'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
+                    for x in range(0, conf.configs['foldx_num_of_runs'])
+                ]
                 results = [wiltype, mutants]
             return results
-
 
     def __write_runfile(self, pdbFile, chainID, whatToRun, mutCodes):
         if whatToRun == 'AnalyseComplex':
@@ -173,7 +176,6 @@ class FoldX(object):
             f.write(foldX_runfile)
         shutil.copy(self.foldx_runfile, op.join(self.foldx_dir, copy_filename))
 
-
     def __run_runfile(self):
         """
         TODO: Add a fallback plan using libfaketime.
@@ -190,7 +192,6 @@ class FoldX(object):
             if 'Cannot allocate memory' in error_message:
                 raise errors.ResourceError(error_message)
 
-
     def __read_result(self, outFile, pdb, whatToRead):
         with open(outFile, 'r') as f:
             lines = f.readlines()
@@ -199,10 +200,12 @@ class FoldX(object):
                 total_energy_difference = line[1]
                 return total_energy_difference
             if whatToRead == 'Stability':
-                stability_values = [ line[x[1]].strip() for x in names_rows_stability ]
+                stability_values = [
+                    line[x[1]].strip() for x in names_rows_stability
+                ]
                 return stability_values
             if whatToRead == 'AnalyseComplex':
-                complex_stability_values = [ line[x[1]].strip() for x in names_rows_stability_complex ]
+                complex_stability_values = [
+                    line[x[1]].strip() for x in names_rows_stability_complex
+                ]
                 return complex_stability_values
-
-

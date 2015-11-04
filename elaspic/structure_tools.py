@@ -39,9 +39,9 @@ AAA_DICT['UNK'] = 'X'
 AAA_DICT['MSE'] = 'M'
 AAA_DICT['CSD'] = 'C'
 # Phosphorylated residues
-#AAA_DICT['SEP'] = 'S' # PHOSPHOSERINE
-#AAA_DICT['TPO'] = 'T' # PHOSPHOTHREONINE
-#AAA_DICT['SEP'] = 'Y' # O-PHOSPHOTYROSINE
+# AAA_DICT['SEP'] = 'S' # PHOSPHOSERINE
+# AAA_DICT['TPO'] = 'T' # PHOSPHOTHREONINE
+# AAA_DICT['SEP'] = 'Y' # O-PHOSPHOTYROSINE
 
 # Methylated lysines
 AAA_DICT['MLZ'] = 'K'
@@ -52,11 +52,11 @@ AMINO_ACIDS = list(AAA_DICT.keys())
 
 METHYLATED_LYSINES = ['MLZ', 'MLY', 'M3L']
 LYSINE_ATOMS = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
-        
 
 
-#%%################################################################################################
-### Functions for downloading and parsing pdb files
+
+# %%###############################################################################################
+# ## Functions for downloading and parsing pdb files
 class MMCIFParserMod(MMCIFParser):
     def __init__(self, temp_dir):
         self.temp_dir = temp_dir
@@ -90,7 +90,7 @@ def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
         relative_pdb_file = (
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
-        
+
     elif pdb_type == 'cif':
         # mmCIF pdb structure.
         prefix = ''
@@ -99,23 +99,23 @@ def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
             '../mmCIF/' +
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
-        
+
     elif pdb_type == 'pdb':
         # The first biological unit.
         prefix = ''
         suffix = '.pdb1.gz'
         relative_pdb_file = (
-            '../../../biounit/coordinates/divided/' + 
+            '../../../biounit/coordinates/divided/' +
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
-        
+
     elif pdb_type == 'raw':
         # Just a PDB file in some folder.
         relative_pdb_file = ''
-        
+
     else:
         raise Exception
-        
+
     pdb_file = op.join(pdb_database_dir, relative_pdb_file)
     return pdb_file
 
@@ -179,7 +179,7 @@ def get_pdb(pdb_id, pdb_path, temp_dir='/tmp', pdb_type='ent', use_external=True
     """
     pdb_file = get_pdb_file(pdb_id, pdb_path, pdb_type)
     pdb_parser = get_pdb_parser(pdb_type, temp_dir)
-                
+
     try:
         structure = pdb_parser.get_structure(pdb_id, gzip.open(pdb_file, 'rt'))
     except IOError:
@@ -214,7 +214,7 @@ def get_pdb_structure(pdb_file, pdb_id=None):
 
 
 
-#%%
+# %%
 def euclidean_distance(a, b):
     """Calculate the Euclidean distance between two lists or tuples of arbitrary length.
     """
@@ -246,7 +246,7 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
 
 
 
-#%%
+# %%
 def get_chain_seqres_sequence(chain, aa_only=False):
     """Get the amino acid sequence for the construct coding for the given chain.
 
@@ -302,7 +302,7 @@ def get_chain_sequence_and_numbering(chain, domain_def_tuple=None, include_hetat
 
 def convert_position_to_resid(chain, positions, domain_def_tuple=None):
     """Convert mutation_domain to mutation_modeller.
-    In mutation_modeller, the first amino acid in a chain may start 
+    In mutation_modeller, the first amino acid in a chain may start
     with something other than 1.
     """
     __, chain_numbering = get_chain_sequence_and_numbering(
@@ -342,7 +342,7 @@ def get_structure_sequences(file_or_structure, seqres_sequence=False):
 
 
 
-#%%
+# %%
 def suppress_logger(fn):
     @wraps(fn)
     def fn_quiet(*args, **kwargs):
@@ -359,12 +359,12 @@ def convert_aa(aa, quiet=False):
     """Convert amino acids from three letter code to one letter code or vice versa
 
     .. note:: Deprecated!
-    
+
        Use ``''.join(AAA_DICT[aaa] for aaa in aa)`` and ``''.join(A_DICT[a] for a in aa)``.
     """
     if quiet:
         return suppress_logger(convert_aa)(aa)
-    
+
     if len(aa) == 3:
         try:
             return AAA_DICT[aa.upper()]
@@ -389,7 +389,7 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
     residue numbering without letters (i.e. 1, 2, 3...).
 
     .. note:: Deprecated!
-    
+
         Use ``get_chain_sequence_and_numbering()``.
     """
     idx_increment = 0
@@ -401,7 +401,7 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
 
 
 
-#%% STANDALONE FUNCTIONS
+# %% STANDALONE FUNCTIONS
 def get_interactions(model, chain_id, r_cutoff=6):
     """
     """
@@ -420,11 +420,11 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
     Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
     interaction is defines as a pair of residues where at least one pair of atom
     is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
-    
+
     .. deprecated:: 1.0
         Use :func:`get_interacting_residues` instead.
         It gives you both the residue index and the resnum.
-        
+
     Returns
     --------
     OrderedDict
@@ -439,7 +439,7 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
         print('Importing Biopython NeighborSearch returned an error: {}'.format(e))
         print('Using the the slow version of the neighbour-finding algorithm...')
         return get_interactions_between_chains_slow(model, chain_id_1, chain_id_2, r_cutoff)
-        
+
     # Extract the chains of interest from the model
     chain_1 = None
     chain_2 = None
@@ -479,10 +479,10 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
     Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
     interaction is defines as a pair of residues where at least one pair of atom
     is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
-    
+
     .. deprecated:: 1.0
         Use :func:`get_interacting_residues` instead.
-        It gives you both the residue index and the resnum.        
+        It gives you both the residue index and the resnum.
 
     """
     # Extract the chains of interest from the model
@@ -523,7 +523,7 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
 
 
 
-#%%
+# %%
 def chain_is_hetatm(chain):
     """Return True if the chain is made up entirely of HETATMs.
     """
@@ -535,11 +535,11 @@ def chain_is_hetatm(chain):
         return True
     elif not any(hetatms):
         return False
-    else:  
+    else:
         # Something went wrong.
         sequence, numbering = get_chain_sequence_and_numbering(chain)
         message = (
-            'Some but not all residues in chain {} are hetatms!\n'.format(chain.id) + 
+            'Some but not all residues in chain {} are hetatms!\n'.format(chain.id) +
             'sequence: {}\n'.format(sequence) +
             'numbering: {}\n'.format(numbering)
         )
@@ -549,14 +549,14 @@ def chain_is_hetatm(chain):
 
 def get_aa_residues(chain):
     aa_residues = [
-        residue.id for residue in chain 
+        residue.id for residue in chain
         if residue.resname in AAA_DICT and not residue.id[0].split()
     ]
     return aa_residues
 
 
 def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
-    """Returns all interactions between residues on different chains in `model`.   
+    """Returns all interactions between residues on different chains in `model`.
 
 
     Returns
@@ -569,25 +569,25 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
 
 
     You can reverse the order of keys and values like this::
-    
+
         complement = dict()
         for key, values in get_interacting_chains(model):
             for value in values:
                 complement.setdefault(value, set()).add(key)
-    
-    
+
+
     You can get a list of all interacting chains using this command::
-    
-        {(key[0], value[0]) 
-         for (key, values) in get_interacting_chains(model).items() 
+
+        {(key[0], value[0])
+         for (key, values) in get_interacting_chains(model).items()
          for value in values}
-    
-    
+
+
     """
     from Bio.PDB import NeighborSearch
 
     interactions_between_chains = dict()
-    
+
     # Chain 1
     for chain_1_idx, chain_1 in enumerate(model):
         if skip_hetatm_chains and chain_is_hetatm(chain_1):
@@ -598,7 +598,7 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
             logger.debug(message)
             continue
         chain_1_residue_ids = get_aa_residues(chain_1)
-        
+
         # Chain 2
         for j, chain_2 in enumerate(model.child_list[chain_1_idx + 1:]):
             chain_2_idx = chain_1_idx + 1 + j
@@ -611,7 +611,7 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
                 continue
             chain_2_residue_ids = get_aa_residues(chain_2)
             ns = NeighborSearch(list(chain_2.get_atoms()))
-            
+
             # Residue 1
             for residue_1 in chain_1:
                 try:
@@ -626,7 +626,7 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
                 interacting_residues = set()
                 for atom_1 in residue_1:
                     interacting_residues.update(ns.search(atom_1.get_coord(), r_cutoff, 'R'))
-                
+
                 # Residue 2
                 interacting_residue_ids = []
                 for residue_2 in interacting_residues:
@@ -644,12 +644,12 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
                     interactions_between_chains\
                         .setdefault(residue_1_key, set())\
                         .update(interacting_residue_ids)
-    
+
     return interactions_between_chains
 
 
 
-#%% Additions for `pipeline_structure`
+# %% Additions for `pipeline_structure`
 class SelectChains(Select):
     """Only accept the specified chains when saving.
     """
@@ -668,7 +668,7 @@ class SelectChains(Select):
                 if self.ns.search(atom.get_coord(), self.r_cutoff, 'C'):
                     return True
         return False
-        
+
 
 class StructureParser:
     """
@@ -682,7 +682,7 @@ class StructureParser:
         fragment of each domain. For example, if there is only one chain
         with pdb domain boundaries 1-10:20-45, this would correspond to
         domain_boundaries [[[1,10],[20,45]]].
-    
+
     """
     def __init__(self, pdb_file, chain_ids=None, domain_defs=[]):
         """
@@ -698,7 +698,7 @@ class StructureParser:
         self.pdb_id = get_pdb_id(pdb_file)
         self.pdb_file = pdb_file
         self.input_structure = get_pdb_structure(self.pdb_file, self.pdb_id)
-        
+
         if chain_ids is None:
             self.chain_ids = [chain.id for chain in self.input_structure[0].child_list]
         elif isinstance(chain_ids, str):
@@ -707,7 +707,7 @@ class StructureParser:
             self.chain_ids = list(chain_ids)
         else:
             raise Exception
-                    
+
         self.r_cutoff = 6 # remove hetatms more than x A away from the main chain(s)
 
         self.domain_boundaries = []
@@ -730,9 +730,9 @@ class StructureParser:
         model = self.input_structure[0] # assuming that model 0 is always the desired one
         new_structure = Bio.PDB.Structure.Structure(self.pdb_id)
         new_model = Bio.PDB.Model.Model(0)
-        
+
         # Always assigning hetatms to chain 'Z' may lead to undesirable performance
-        # when the PDB stucture actually has a chain 'Z'. 
+        # when the PDB stucture actually has a chain 'Z'.
         # As of 2015, there are ~1300 structures with chain 'Z' in the elaspic.domain table.
         # TODO: Convert `pdb_chain` tables in the database to use binary collation.
         # I think the Bio.PDB module may have to be upgraded too as it currently does not support
@@ -767,7 +767,7 @@ class StructureParser:
 #                if res.id[0] != ' ':
 #                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=True)
 #                    continue
-                
+
                 # Now treating all unusual amino acids as hetatms
                 # Convert methylated lysines to regular lysines
                 if res.resname in METHYLATED_LYSINES:
@@ -788,7 +788,7 @@ class StructureParser:
                     continue
 
                 res_idx += 1
-            
+
             if len(chain):
                 new_model.add(chain)
                 chain_idx += 1
@@ -818,15 +818,15 @@ class StructureParser:
         self.interactions_between_chains = (
             get_interacting_residues(self.structure[0], self.r_cutoff, True)
         )
-        
+
         self.interacting_chain_ids = {
-            (key[1], value[1]) 
-            for (key, values) in self.interactions_between_chains.items() 
+            (key[1], value[1])
+            for (key, values) in self.interactions_between_chains.items()
             for value in values
         }
         self.interacting_chain_idxs = {
-            (key[0], value[0]) 
-            for (key, values) in self.interactions_between_chains.items() 
+            (key[0], value[0])
+            for (key, values) in self.interactions_between_chains.items()
             for value in values
         }
 
@@ -851,7 +851,7 @@ class StructureParser:
 
         io = PDBIO()
         io.set_structure(self.structure)
-        
+
         try:
             # Save all chains together
             outFile = op.join(output_dir, self.pdb_id + ''.join(self.chain_ids) + '.pdb')
@@ -873,7 +873,7 @@ class StructureParser:
                 for chain_ids in self.interacting_chain_ids:
                     outFile = op.join(output_dir, self.pdb_id + ''.join(chain_ids) + '.pdb')
                     atom_list = [
-                        atom for atom 
+                        atom for atom
                         in self.structure[0][chain_id].get_atoms()
                         for chain_id in chain_ids
                     ]
@@ -905,7 +905,7 @@ class StructureParser:
 
     def _get_domain_def_idxs_for_chain(self, chain, chain_idx):
         if not self.domain_boundaries or not self.domain_boundaries[chain_idx]:
-            return None, None, None 
+            return None, None, None
 
         __, chain_numbering = get_chain_sequence_and_numbering(chain)
         try:

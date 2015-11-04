@@ -34,22 +34,22 @@ def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
 
 
 
-#%%
+# %%
 class Sequence:
     """
     Class for calculating sequence level features.
     """
-    
+
     def __init__(self, sequence_file, provean_supset_file=None):
         """
-        
+
         Parameters
         ----------
         sequence_file : str
             Full filename of the file containing the protein sequence.
             Only fasta format is supported.
         provean_supset_file : str
-            Full path and 
+            Full path and
         """
         logger.debug('Initialising a Sequence instance with parameters:')
         logger.debug('sequence_file: {}'.format(sequence_file))
@@ -59,7 +59,7 @@ class Sequence:
         self.seqrecord = SeqIO.read(self.sequence_file, 'fasta')
         self.protein_id = helper.slugify(self.seqrecord.id)
         self.sequence = str(self.seqrecord.seq)
-    
+
         # Provean supset
         if provean_supset_file is not None and provean_supset_file != self.provean_supset_file:
             shutil.copy(provean_supset_file, self.provean_supset_file)
@@ -70,20 +70,20 @@ class Sequence:
         else:
             logger.debug('Provean supset is already calculated!')
         self.provean_supset_length = self._get_provean_supset_length()
-        
+
         # Mutations
         self.mutations = {}
 
-     
+
     def mutate(self, mutation):
         if mutation in self.mutations:
             return self.mutations[mutation]
-        
+
         if mutation[0] != self.sequence[int(mutation[1:-1])-1]:
             logger.error('sequence: {}'.format(self.sequence))
             logger.error('mutation: {}'.format(mutation))
             raise errors.MutationMismatchError()
-            
+
         results = dict(
             protein_id = self.protein_id,
             mutation = mutation,
@@ -96,7 +96,7 @@ class Sequence:
     @property
     def provean_supset_file(self):
         return op.join(
-            configs['sequence_dir'], 
+            configs['sequence_dir'],
             helper.slugify(self.protein_id + '_provean_supset')
         )
 
@@ -104,7 +104,7 @@ class Sequence:
     @property
     def provean_supset_exists(self):
         return (
-            op.isfile(self.provean_supset_file) and 
+            op.isfile(self.provean_supset_file) and
             op.isfile(self.provean_supset_file + '.fasta')
         )
 
@@ -121,21 +121,21 @@ class Sequence:
             mutations = self.mutations,
         )
         return result
-        
-    
+
+
     def _build_provean_supset(self):
         """
         """
         logger.debug('Building Provean supporting set. This might take a while...')
         atexit.register(_clear_provean_temp)
-        
+
         # Get the required parameters
         any_position = 0
         while self.sequence[any_position] not in helper.canonical_amino_acids:
             any_position += 1
         first_aa = self.sequence[any_position]
         mutation = '{0}{1}{0}'.format(first_aa, any_position+1)
-        
+
         # Run provean
         provean_score = self._run_provean(
             mutation, save_supporting_set=True, check_mem_usage=True
@@ -152,11 +152,11 @@ class Sequence:
 #            logger.error('Provean return_code: {}'.format(return_code))
 #            logger.error('Protein sequence: {}'.format(self.sequence))
 #            logger.error('Protein mutation: {}'.format(mutation))
-#            
+#
 #        logger.info('Provean supset length: {}'.format(provean_supset_length))
 #        return provean_supset_length
-        
-    
+
+
     def _get_provean_supset_length(self):
         provean_supset_length = 0
         with open(self.provean_supset_file) as fh:
@@ -164,12 +164,12 @@ class Sequence:
                 if line and not line.startswith('#'):
                     provean_supset_length += 1
         return provean_supset_length
-    
+
 
     def _run_provean(self, mutation, save_supporting_set=False, check_mem_usage=False):
         """
         Provean results look something like this::
-    
+
             #[23:28:34] clustering subject sequences...
             #[23:28:34] selecting clusters...
             #[23:28:34] 0 subject sequences in 0 clusters were selected for supporting sequences.
@@ -183,23 +183,23 @@ class Sequence:
             ### PROVEAN scores ##
             ## VARIATION	SCORE
             #M1A	-6.000
-    
+
         Parameters
         ----------
         domain_mutation : string
             Mutation in domain coordinates (i.e. relative to the start of the domain)
-    
+
         Returns
         -------
         list
             [result, error_message, return_code] -- The output from running a provean system command.
-    
+
         Raises
         ------
         errors.ProveanError
             Can raise this exception only if ``check_mem_usage`` is set to ``True``.
         """
-    
+
         if check_mem_usage:
             # Get initial measurements of how much virtual memory and disk space is availible
             disk_space_availible = psutil.disk_usage(configs['provean_temp_dir']).free / (1024**3)
@@ -214,12 +214,12 @@ class Sequence:
                 raise errors.ProveanError(
                     'Not enough memory ({:.2f} GB) to run provean'
                     .format(memory_availible))
-    
+
         # Create a file with mutation
         mutation_file = op.join(configs['sequence_dir'], '{}.var'.format(mutation))
         with open(mutation_file, 'w') as ofh:
             ofh.write(mutation)
-        
+
         # Run provean
         system_command = (
             "provean " +
@@ -232,20 +232,20 @@ class Sequence:
             " --blastdbcmd '{}' ".format(helper.get_which('blastdbcmd')) +
             " --cdhit '{}' ".format(helper.get_which('cd-hit'))
         )
-        
+
         if self.provean_supset_exists:
             # use supporting set
             system_command += " --supporting_set '{}' ".format(self.provean_supset_file)
         else:
             system_command += " --save_supporting_set '{}' ".format(self.provean_supset_file)
-    
+
         logger.debug(system_command)
         child_process = helper.run_subprocess_locally(configs['sequence_dir'], system_command)
-    
+
         logger.debug('Parent group id: {}'.format(os.getpgrp()))
         child_process_group_id = os.getpgid(child_process.pid)
         logger.debug('Child group id: {}'.format(child_process_group_id))
-    
+
         # Keep an eye on provean to make sure it doesn't do anything crazy
         while check_mem_usage and child_process.poll() is None:
             disk_space_availible_now = (
@@ -265,11 +265,11 @@ class Sequence:
                     .format(memory_availible - memory_availible_now),
                     child_process_group_id)
             time.sleep(60) # Wait for 1 minute before checking again
-    
+
         # Collect the results and check for errors
         result, error_message, return_code = helper.subprocess_communicate(child_process)
         logger.debug(result)
-        
+
         # Extract provean score from the results message
         provean_score = None
         result_list = result.split('\n')
@@ -277,7 +277,7 @@ class Sequence:
             if re.findall('# VARIATION\s*SCORE', result_list[i]):
                 provean_score = float(result_list[i+1].split()[-1])
                 break
-        
+
         if return_code != 0 or provean_score is None:
             logger.error('return_code: {}'.format(return_code))
             logger.error('provean_score: {}'.format(provean_score))
@@ -285,7 +285,7 @@ class Sequence:
             raise errors.ProveanError(error_message)
 
         return provean_score
-    
+
 
 
     def score_pairwise(self, seq1, seq2, matrix=None, gap_s=None, gap_e=None):
@@ -294,7 +294,7 @@ class Sequence:
         matrix = matrix or configs['matrix']
         gap_s = gap_s or configs['gap_start']
         gap_e = gap_e or configs['gap_extend']
-        
+
         score = 0
         gap = False
         for i in range(len(seq1)):
@@ -321,9 +321,9 @@ class Sequence:
             return matrix_match[(tuple(reversed(pair_match)))]
         else:
             return matrix_match[pair_match]
-    
 
-#%%
+
+# %%
 def _clear_provean_temp():
     provean_temp_dir =  configs['provean_temp_dir']
     logger.info("Clearning provean temporary files from '{}'...".format(provean_temp_dir))
@@ -332,7 +332,7 @@ def _clear_provean_temp():
         try:
             if os.path.isfile(file_path):
                 os.unlink(file_path)
-            elif os.path.isdir(file_path): 
+            elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
         except Exception as e:
             print(e)
