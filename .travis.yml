@@ -4,24 +4,26 @@ python:
   - '3.4'
 install:
   - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then 
-      wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh; 
+      wget https://repo.continuum.io/archive/Anaconda-2.3.0-Linux-x86_64.sh -O anaconda.sh; 
     else 
-      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+      wget https://repo.continuum.io/archive/Anaconda3-2.3.0-Linux-x86_64.sh -O anaconda.sh;
     fi
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
+  - bash anaconda.sh -b -p $HOME/anaconda
+  - export PATH="$HOME/anaconda/bin:$PATH"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
+  - conda update -q --all
   - conda info -a
   - conda install -q conda-build
-  # - conda config --add channels bioconda
-  # - conda config --add channels ostrokach
+  - conda config --add channels bioconda
+  - conda config --add channels ostrokach
   # - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytest
   # - source activate test-environment
   - cat ~/.condarc
-  - conda build . -c ostrokach -c bioconda -c salilab
-  - conda install elaspic --use-local -c ostrokach -c bioconda -c salilab
+  - cat .travis.yml
+  - conda build . 
+  - conda install elaspic --use-local 
 script:
   - elaspic --help
   - py.test tests/test_local_pipeline.py --cov=elaspic
