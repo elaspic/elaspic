@@ -4,7 +4,6 @@ build
 dist
 
 # Hidden files and folders
-.*
 _*
 
 # Compiled source code
