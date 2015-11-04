@@ -19,7 +19,7 @@ install:
   # - conda config --add channels ostrokach
   # - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytest
   # - source activate test-environment
-  - conda info elaspic
+  - cat ~/.condarc
   - conda build . -c ostrokach -c bioconda -c salilab
   - conda install elaspic --use-local -c ostrokach -c bioconda -c salilab
 script:
