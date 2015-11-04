@@ -15,13 +15,13 @@ install:
   - conda update -q conda
   - conda info -a
   - conda install -q conda-build
-  - conda config --add channels bioconda
-  - conda config --add channels ostrokach
+  # - conda config --add channels bioconda
+  # - conda config --add channels ostrokach
   # - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytest
   # - source activate test-environment
   - conda info elaspic
-  - conda build .
-  - conda install elaspic --use-local
+  - conda build . -c ostrokach -c bioconda -c salilab
+  - conda install elaspic --use-local -c ostrokach -c bioconda -c salilab
 script:
   - elaspic --help
   - py.test tests/test_local_pipeline.py --cov=elaspic
