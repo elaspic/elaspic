@@ -7,13 +7,16 @@ from __future__ import unicode_literals
 from builtins import range
 from builtins import object
 
-import six
+import logging
 
-from modeller import * # Load standard Modeller classes
-from modeller.automodel import *	# Load the automodel class
+from modeller import *  # Load standard Modeller classes, analysis:ignore
+from modeller.automodel import *	# Load the automodel class, analysis:ignore
 
-from . import helper_functions as hf
-from . import errors
+from . import conf, errors, helper
+configs = conf.Configs()
+
+logger = logging.getLogger(__name__)
+
 
 class Modeller(object):
     """
@@ -27,49 +30,42 @@ class Modeller(object):
         Name of the sequence (target)
     templateID : string
         Name of the template (structure)
-    path_to_pdb_for_modeller : string
+    filePath : string
         Path to PDB files
-    tmpPath : string
-        Path for storing tmp files
     modeller_runs : int
        How many rounds of modelling should be done
     loopRefinement : boolean
         If True, calculate loop refinemnts
     """
-    def __init__(
-            self, alignment, seqID, templateID, path_to_pdb_for_modeller,
-            tmpPath, logger, modeller_runs, loopRefinement=True,):
+    def __init__(self, alignment, seqID, templateID, filePath, loopRefinement=True):
 
         if not isinstance(alignment, list):
-            self.alignment = list()
-            self.alignment.append(alignment)
+            self.alignment = [alignment]
         else:
             self.alignment = alignment
         self.seqID = seqID
         self.templateID = templateID
         self.loopRefinement = loopRefinement
         self.start = 1                # start model
-        self.end = modeller_runs      # end model
+        self.end = configs['modeller_runs']      # end model
         self.loopStart = 1            # start loop refinement model
         self.loopEnd = 4              # end loop refinement model
 
-        # some environment settings
-        self.filePath = path_to_pdb_for_modeller
-        self.tmpPath = tmpPath
-        self.logger = logger
-
+        # Some environment settings
+        self.filePath = filePath
 
     def run(self):
         """
         """
-        ranking = dict() # key: assessment score
-                         # values: alignment, pdb filename, whether or not using loop refinement
+        # key: assessment score
+        # values: alignment, pdb filename, whether or not using loop refinement
+        ranking = dict()
         ranking_knotted = dict()
         knotted = True
         counter = 0
         while knotted and counter < 10:
             counter += 1
-            ## NB: You can actually supply many alignments and modeller will give
+            # NB: You can actually supply many alignments and modeller will give
             # you the alignment with the best model
             for aln in self.alignment:
                 # There is a chance that modeller fails to automatically select the
@@ -79,7 +75,7 @@ class Modeller(object):
                 try:
                     result, loop, failures = self.__run_modeller(aln, self.loopRefinement)
                 except Exception as e:
-                    self.logger.error('Loop refinement failed with an error: {}'.format(e))
+                    logger.error('Loop refinement failed with an error: {}'.format(e))
                     try:
                         result, loop, failures = self.__run_modeller(aln, False)
                     except ModellerError as e:
@@ -101,7 +97,6 @@ class Modeller(object):
         else:
             return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], knotted
 
-
     def __run_modeller(self, alignFile, loopRefinement):
         """
         Parameters
@@ -119,43 +114,53 @@ class Modeller(object):
             Successfully calculated models
         """
 
-        log.none() # instructs Modeller to display no log output.
-        env = environ() # create a new MODELLER environment to build this model in
+        log.none()  # instructs Modeller to display no log output.
+        env = environ()  # create a new MODELLER environment to build this model in
 
         # Directories for input atom files
-        env.io.atom_files_directory = [str(self.filePath.rstrip('/')),]
+        env.io.atom_files_directory = [str(self.filePath.rstrip('/')), ]
         env.schedule_scale = physical.values(default=1.0, soft_sphere=0.7)
 
         # Selected atoms do not feel the neighborhood
-        #env.edat.nonbonded_sel_atoms = 2
-        env.io.hetatm = True # read in HETATM records from template PDBs
-        env.io.water = True # read in WATER records (including waters marked as HETATMs)
+        # env.edat.nonbonded_sel_atoms = 2
+        env.io.hetatm = True  # read in HETATM records from template PDBs
+        env.io.water = True  # read in WATER records (including waters marked as HETATMs)
 
-        self.logger.debug('Performing loop refinement in addition to regular modelling: {}'.format(loopRefinement))
-        if loopRefinement == False:
+        logger.debug(
+            'Performing loop refinement in addition to regular modelling: {}'
+            .format(loopRefinement)
+        )
+        if not loopRefinement:
             a = automodel(
                 env,
-                alnfile=str(alignFile), # alignment filename
-                knowns=(str(self.templateID)), # codes of the templates
-                sequence=str(self.seqID), # code of the target
-                assess_methods=(assess.DOPE, assess.normalized_dope) # wich method for validation should be calculated
+                # alignment filename
+                alnfile=str(alignFile),
+                # codes of the templates
+                knowns=(str(self.templateID)),
+                # code of the target
+                sequence=str(self.seqID),
+                # wich method for validation should be calculated
+                assess_methods=(assess.DOPE, assess.normalized_dope)
             )
         else:
             a = dope_loopmodel(
                 env,
-                alnfile=str(alignFile), # alignment filename
-                knowns=(str(self.templateID)), # codes of the templates
-                sequence=str(self.seqID), # code of the target
-                assess_methods=(assess.DOPE, assess.normalized_dope), # wich method for validation should be calculated
+                # alignment filename
+                alnfile=str(alignFile),
+                # codes of the templates
+                knowns=(str(self.templateID)),
+                # code of the target
+                sequence=str(self.seqID),
+                # wich method for validation should be calculated
+                assess_methods=(assess.DOPE, assess.normalized_dope),
                 loop_assess_methods=(assess.DOPE, assess.normalized_dope)
             )
-            a.loop.starting_model = self.loopStart # index of the first loop model
-            a.loop.ending_model = self.loopEnd # index of the last loop model
-            a.loop.md_level = refine.slow # loop refinement method; this yields
+            a.loop.starting_model = self.loopStart  # index of the first loop model
+            a.loop.ending_model = self.loopEnd  # index of the last loop model
+            a.loop.md_level = refine.slow  # loop refinement method; this yields
 
-
-        a.starting_model = self.start # index of the first model
-        a.ending_model = self.end # index of the last model
+        a.starting_model = self.start  # index of the first model
+        a.ending_model = self.end  # index of the last model
 
         # Very thorough VTFM optimization:
         a.library_schedule = autosched.slow
@@ -170,8 +175,8 @@ class Modeller(object):
 
         a.max_molpdf = 2e5
 
-        with hf.log_print_statements(self.logger):
-            a.make() # do the actual homology modeling
+        with helper.log_print_statements(logger):
+            a.make()  # do the actual homology modeling
 
         # The output produced by modeller is stored in a.loop.outputs or a.outputs
         # it is a dictionary
@@ -186,32 +191,35 @@ class Modeller(object):
             if not a.outputs[i]['failure']:
                 model_filename = a.outputs[i]['name']
                 model_dope_score = a.outputs[i]['Normalized DOPE score']
-                self.logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
+                logger.debug(
+                    'Success! model_filename: {}, model_dope_score: {}'
+                    .format(model_filename, model_dope_score))
                 result.append((model_filename, model_dope_score))
             else:
                 failure = a.outputs[i]['failure']
-                self.logger.debug('Failure! {}'.format(failure))
+                logger.debug('Failure! {}'.format(failure))
                 failures.append(a.outputs[i]['failure'])
 
         # Add the loop refinement output
         if loopRefinement:
-            self.logger.debug('Modeller loop outputs:')
+            logger.debug('Modeller loop outputs:')
             for i in range(len(a.loop.outputs)):
                 if not a.loop.outputs[i]['failure']:
                     model_filename = a.loop.outputs[i]['name']
                     model_dope_score = a.loop.outputs[i]['Normalized DOPE score']
-                    self.logger.debug('Success! model_filename: {}, model_dope_score: {}'.format(model_filename, model_dope_score))
+                    logger.debug(
+                        'Success! model_filename: {}, model_dope_score: {}'
+                        .format(model_filename, model_dope_score))
                     result.append((model_filename, model_dope_score))
                     loop = True
                 else:
                     failure = a.loop.outputs[i]['failure']
-                    self.logger.debug('Failure! {}'.format(failure))
+                    logger.debug('Failure! {}'.format(failure))
                     failures.append(failure)
 
         # Return the successfully calculated models and a loop flag indicating
         # whether the returned models are loop refined or not
         return result, loop, failures
-
 
     def __call_knot(self, pdbFile):
         """
@@ -231,36 +239,30 @@ class Modeller(object):
         int
             0: no knot; 1: knot
         """
-
-
         system_command = 'knot ' + pdbFile
-        self.logger.debug('Knot system command: {}'.format(system_command))
-        child_process = hf.run_subprocess_locally('./', system_command)
-        result, error_message = child_process.communicate()
-        if six.PY3:
-            result = str(result, encoding='utf-8')
-            error_message = str(error_message, encoding='utf-8')
-        return_code = child_process.returncode
+        logger.debug('Knot system command: {}'.format(system_command))
+        result, error_message, return_code = (
+            helper.subprocess_check_output_locally('./', system_command)
+        )
         if not return_code:
-            self.logger.error('Knot result: {}'.format(result))
-            self.logger.error('Knot error message: {}'.format(error_message))
+            logger.error('Knot result: {}'.format(result))
+            logger.error('Knot error message: {}'.format(error_message))
 
-        line = [ x for x in result.split('\n') ]
+        line = [x for x in result.split('\n')]
 
         # I found two different forms in which the output appears,
         # hence two if statements to catch them
         if line[-4].strip().split(' ')[0] == 'len':
             if int(line[-4].strip().split(' ')[2]) == 2:
-                return False # i.e. no knot
+                return False  # i.e. no knot
             if int(line[-4].strip().split(' ')[2]) > 2:
-                return True # i.e. knotted
+                return True  # i.e. knotted
         elif line[-2].strip().split(' ')[0] == 'len':
             if int(line[-2].strip().split(' ')[2]) == 2:
-                return False # i.e. no knot
+                return False  # i.e. no knot
             if int(line[-2].strip().split(' ')[2]) > 2:
-                return True # i.e. knotted
+                return True  # i.e. knotted
         else:
             # in case the output can't be read, the model is classified as
             # knotted and thus disregarded. This could be improved.
             return True
-

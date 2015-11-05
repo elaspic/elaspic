@@ -38,5 +38,7 @@ blast=2.2.30=1
 cd-hit=4.6.1=1
 p7zip=9.38.1=0
 provean=1.1.5=1
-msms=2.6.1=2
+msms=2.6.1=3
 stride=1.6.4=1
+t_coffee=11.0.8=py34_1
+knot=1.0.0=2

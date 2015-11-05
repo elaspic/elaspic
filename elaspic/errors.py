@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
-#%% Tcoffee
+# %% Configurations
+class WrongConfigKeyError(Exception):
+    pass
+
+
+# %% Tcoffee
 
 class TcoffeeError(Exception):
     def __init__(self, result, error, alignInFile, system_command):
@@ -31,7 +36,7 @@ class TcoffeePDBidError(Exception):
 
 
 
-#%% Provean
+# %% Provean
 
 class ProveanError(Exception):
     pass
@@ -41,9 +46,11 @@ class ProveanResourceError(Exception):
         Exception.__init__(self, message)
         self.child_process_group_id = child_process_group_id
 
+class MutationMismatchError(Exception):
+    pass
 
 
-#%% Finding templates (PDB in uppercase to be consistent with Biopython)
+# %% Finding templates (PDB in uppercase to be consistent with Biopython)
 
 class LowIdentity(Exception):
     pass
@@ -69,7 +76,7 @@ class PDBChainError(Exception):
     pass
 
 
-#%% Making models
+# %% Making models
 
 class MSMSError(Exception):
     pass
@@ -95,8 +102,10 @@ class TemplateInterfaceError(Exception):
 class ResourceError(Exception):
     pass
 
+class InterfaceMismatchError(Exception):
+    pass
 
-#%% Computing mutations
+# %% Computing mutations
 
 class Archive7zipError(Exception):
     def __init__(self, result, error_message, return_code):
@@ -129,7 +138,7 @@ class PopsError(Exception):
         self.chains = chains
 
 
-#%%
+# %%
 
 class ChainsNotInteractingError(Exception):
     pass
@@ -145,7 +154,7 @@ class NoModelFoundError(Exception):
 
 
 
-#%% Database
+# %% Database
 
 class ModelHasMutationsError(Exception):
     """Don't delete a model that has precalculated mutations!

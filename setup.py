@@ -1,8 +1,7 @@
+# -*- coding: utf-8 -*-
 import os
-from setuptools import setup, Extension
-#~ import distutils.command.bdist_conda
-
 from setuptools import setup
+#~ import distutils.command.bdist_conda
 
 
 def read(fname):
@@ -19,7 +18,7 @@ def read(fname):
 
 setup(
     name='elaspic',
-    version='0.2.0', # now in meta.yaml
+    version='1.0.0', # now in meta.yaml
     
     description=(
 		'Ensemble Learning Approach for Stability Prediction of Interface '
@@ -44,8 +43,8 @@ setup(
     ],
     entry_points={
           'console_scripts': [
-              'elaspic = elaspic.__main__:main',
-              'elaspic_database = elaspic.elaspic_database:main',
+              'elaspic = elaspic.__main__:elaspic',
+              'elaspic_database = elaspic.__main__:elaspic_database',
           ]
       },
     classifiers=[

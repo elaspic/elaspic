@@ -1,0 +1,31 @@
+language: python
+sudo: false
+python:
+  - '3.4'
+install:
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then 
+      wget https://repo.continuum.io/archive/Anaconda-2.3.0-Linux-x86_64.sh -O anaconda.sh; 
+    else 
+      wget https://repo.continuum.io/archive/Anaconda3-2.3.0-Linux-x86_64.sh -O anaconda.sh;
+    fi
+  - bash anaconda.sh -b -p $HOME/anaconda
+  - export PATH="$HOME/anaconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  - conda info -a
+  - conda config --add channels bioconda
+  - conda config --add channels ostrokach
+  - conda install -q conda-build pytest
+  - pip install pytest-cov
+  # - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytest
+  # - source activate test-environment
+  - conda build . 
+  - conda install elaspic --use-local 
+script:
+  - py.test tests/test_local_pipeline.py
+after_success:
+  - coveralls
+env:
+  global:
+    secure: XZ83x+3DutthNju8wiZVVfmQb/CW1HX0Zrymm4T1vNPjgm+ce6QzwY9NJfE/Mywh0/4EnZrg+WxJmJWMjV/RdZgm8GA9DMDtfVja8UDCo2OFrEv2LUL5GBO1d/3DJUZJB0rpmlTDyKkg8OQCZ/dOAKcxTKrdUVx/NDL78Kr2zMHj8CHXRg9ljjFG7tcui9JKur+Uvx70o70PKxFFOGfGKrkfmxp+MclkBTKlPPzoi7N0UmptO+wFfKnAQubiD2l4KqwilUrdRS2qFKlnzbay8r9FRqUS65KsmwJTaMdta+TYcDmOPWql6R7EjwIOZkrSLousTtz2AroL1FL1D8YmSUSC7JqJQHF/tC5kFXCEk7zgwJUht2FMBWPdIiM9qKZHGw+tw8tC5FxUzGCJe888DlgRQgcSc5BXbJfREsue3m6+yMBFwaFk+1URPhRSGqrgIl5gy5gswQwvq9Nojrtvy1xxCxxA+GGVj3QieVnTnrJeF3wFdfb/0IjGBEC4FmWPCSwtZWr+YUbfVzfvHav5I+01FN/0ckMnErZlYM9nta/H6r07yfPOBe6OMm/Fq2OzUoDas2WwvWO6FeUUxZKiCXj9hOH1Ofyr/sijjYyyZHykj5rJnTOWK3HbrpYZiqZiLweNn7Smo5QepkhSH4LJqAPO99c7UrWaj8ADVP9fcwY=
