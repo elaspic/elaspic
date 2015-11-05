@@ -133,7 +133,6 @@ class LocalPipeline(Pipeline):
         with open(sequence_results_file, 'w') as ofh:
             json.dump(sequence_results, ofh)
 
-
     def run_all_models(self):
         model_results = []
         model_results_file = op.join(configs['unique_temp_dir'], 'model.json')
@@ -155,7 +154,6 @@ class LocalPipeline(Pipeline):
             model_results.append(model_result)
         with open(model_results_file, 'w') as ofh:
             json.dump(model_results, ofh)
-
 
     def run_all_mutations(self):
         for (mutation_idx, mutation), mutation_in in self.mutations.items():

@@ -79,7 +79,7 @@ def pdb_id(request):
 # %%
 def test_local_pipeline(pdb_id):
     working_dir = working_dirs.get(pdb_id, None)
-    config_file = op.join(basedir, 'test_config_file.ini')
+    config_file = op.join(basedir, 'test_local_pipeline.ini')
     conf.read_configuration_file(config_file, unique_temp_dir=working_dir)
     configs = conf.Configs()
     pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
@@ -87,7 +87,8 @@ def test_local_pipeline(pdb_id):
         for mutation in pdb_mutatations[pdb_id][chain_id]:
             mutation_pdb = '{}_{}'.format(chain_id, mutation)
             lp = local_pipeline.LocalPipeline(pdb_file, mutations=mutation_pdb)
-            lp.run()
+            lp.run_all_models()
+            lp.run_all_mutations()
 
 
 # %%
