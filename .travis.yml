@@ -23,6 +23,7 @@ install:
   - conda build . 
   - conda install elaspic --use-local 
 script:
+  - py.test tests/test_pep8.py
   - py.test tests/test_local_pipeline.py
 after_success:
   - coveralls
