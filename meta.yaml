@@ -7,7 +7,7 @@ package:
   #~ git_tag: develop
 
 build:
-  number: 1
+  number: 3
   entry_points: 
     - elaspic = elaspic.__main__:elaspic
     - elaspic_database = elaspic.__main__:elaspic_database
