@@ -329,15 +329,6 @@ class Model:
         """
         Parameters
         ----------
-        chain : int
-            Number of the chain that is being mutated, starting from 1.
-        mutation : str
-            Mutation to introduce, in A1B format.
-            Here 'A' is the starting amino acid, 'B' is the mutant amino acid,
-            and '1' is the position of the mutation in the model, starting from 1.
-            This is `mutation_domain` from the original elaspic pipeline.
-        partner_chain_pos_id : int
-            Number of the chain that the mutation is interacting with.
 
         Raises
         ------
@@ -371,7 +362,7 @@ class Model:
             )
             if partner_chain_idx == 0:
                 if int(mutation[1:-1]) not in self.interacting_aa_1:
-                     raise errors.MutationOutsideInterfaceError()
+                    raise errors.MutationOutsideInterfaceError()
             elif partner_chain_idx == 1:
                 if int(mutation[1:-1]) not in self.interacting_aa_2:
                     raise errors.MutationOutsideInterfaceError()
@@ -385,13 +376,13 @@ class Model:
 
         if mutation_errors:
             results = dict(
-                protein_id = protein_id,
-                sequence_idx = sequence_idx,
-                chain_modeller = chain_id,
-                partner_chain_id = partner_chain_id,
-                mutation_id = mutation_id,
-                mutation_domain = mutation,
-                mutation_errors = mutation_errors,
+                protein_id=protein_id,
+                sequence_idx=sequence_idx,
+                chain_modeller=chain_id,
+                partner_chain_id=partner_chain_id,
+                mutation_id=mutation_id,
+                mutation_domain=mutation,
+                mutation_errors=mutation_errors,
             )
             self.mutations[(sequence_idx, mutation)] = results
             return results

@@ -20,7 +20,6 @@ domain_model = None
 domain_mutation = None
 
 
-
 # %%
 class LocalPipeline(Pipeline):
 
@@ -37,8 +36,8 @@ class LocalPipeline(Pipeline):
         logger.info('pdb_file: {}'.format(self.pdb_file))
         logger.info('pwd: {}'.format(self.PWD))
 
-        ### Load PDB structure and extract required sequences and chains.
-        #fix_pdb(self.pdb_file, self.pdb_file)
+        # Load PDB structure and extract required sequences and chains.
+        # fix_pdb(self.pdb_file, self.pdb_file)
         self.sp = structure_tools.StructureParser(self.pdb_file)
         self.sp.extract()
         self.sp.save_structure(configs['unique_temp_dir'])
@@ -66,7 +65,7 @@ class LocalPipeline(Pipeline):
                     seq=Seq(self.sp.chain_sequence_dict[chain_id]))
                 for (i, chain_id) in enumerate(self.sp.chain_ids)
             ])
-            ### Parse mutations
+            # Parse mutations
             self.mutations = dict()
             for mutation_in in mutations:
                 mutation_chain, mutation_resnum = mutation_in.split('_')
@@ -92,11 +91,11 @@ class LocalPipeline(Pipeline):
             self.seqrecords = tuple(SeqIO.parse(self.sequence_file, 'fasta'))
             for i, seqrec in enumerate(self.seqrecords):
                 seqrec.id = helper.slugify('{}_{}'.format(seqrec.id, str(i)))
-            ### Parse mutations
+            # Parse mutations
             self.mutations = dict()
             for mutation_in in mutations:
-                mutation_idx, mutation = mutation_in.split('_')
-                mutation_idx = int(mutation_idx)
+                mutation_pos, mutation = mutation_in.split('_')
+                mutation_idx = int(mutation_pos) - 1
                 # Validation
                 mutation_expected_aa = (
                     str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1])]
@@ -105,16 +104,12 @@ class LocalPipeline(Pipeline):
                     raise errors.MutationMismatchError()
                 self.mutations[(mutation_idx, mutation,)] = mutation_in
 
-
-    #==============================================================================
-    # Run methods
-    #==============================================================================
+    # === Run methods ===
 
     def run(self):
         self.run_all_sequences()
         self.run_all_models()
         self.run_all_mutations()
-
 
     def run_all_sequences(self):
         sequence_results = []
@@ -187,10 +182,7 @@ class LocalPipeline(Pipeline):
             with open(mutation_results_file, 'w') as ofh:
                 json.dump(mutation_results, ofh)
 
-
-    #==============================================================================
-    # Get methods
-    #==============================================================================
+    # === Get methods ===
 
     def get_sequence(self, idx):
         """
@@ -198,7 +190,6 @@ class LocalPipeline(Pipeline):
         logger.debug('-' * 80)
         logger.debug('get_sequence({})'.format(idx))
         return PrepareSequence(self.seqrecords, idx, None)
-
 
     def get_model(self, idxs):
         """
@@ -210,7 +201,6 @@ class LocalPipeline(Pipeline):
         idxs = self._sort_chain_idxs(idxs)
         return PrepareModel(self.seqrecords, self.sp, idxs)
 
-
     def get_mutation_score(self, idxs, mutation_idx, mutation):
         logger.debug('-' * 80)
         logger.debug('get_mutation_score({}, {}, {})'.format(idxs, mutation_idx, mutation))
@@ -219,9 +209,7 @@ class LocalPipeline(Pipeline):
         model = self.get_model(idxs)
         return PrepareMutation(sequence, model, idxs.index(mutation_idx), mutation)
 
-    #==============================================================================
-    # Helper functions
-    #==============================================================================
+    # === Helper functions ===
 
     def _get_chain_idx(self, chain_id):
         """chain_id -> chain_idx
@@ -239,7 +227,6 @@ class LocalPipeline(Pipeline):
                 'Chain {} was found more than once in PDB {}!'.format(chain_id, self.sp.pdb_file))
         return chain_idx[0]
 
-
     def _sort_chain_idxs(self, idxs):
         """Sort positions and return as as tuple.
         """
@@ -248,7 +235,6 @@ class LocalPipeline(Pipeline):
         else:
             idxs = tuple(sorted(idxs))
         return idxs
-
 
 
 # %%
@@ -286,7 +272,6 @@ class PrepareSequence:
     @property
     def result(self):
         return self.sequence
-
 
 
 # %%
@@ -346,7 +331,6 @@ class PrepareModel:
         return self.model
 
 
-
 # %%
 @execute_and_remember
 class PrepareMutation:
@@ -378,12 +362,12 @@ class PrepareMutation:
         features = dict()
         features['mutation'] = self.mutation
 
-        ### Sequence features
+        # Sequence features
         results = self.sequence.mutate(self.mutation)
         features['provean_score'] = results['provean_score']
         features['matrix_score'] = results['matrix_score']
 
-        ### Structure features
+        # Structure features
         results = self.model.mutate(self.mutation_idx, self.mutation)
 
         features['norm_dope'] = self.model.modeller_results['norm_dope']
@@ -429,7 +413,6 @@ class PrepareMutation:
             features['contact_distance_wt'] = results['contact_distance_wt']
             features['contact_distance_mut'] = results['contact_distance_mut']
 
-
         logger.debug('feature_dict: {}'.format(features))
         feature_df = pd.DataFrame(features, index=[0])
 
@@ -439,10 +422,8 @@ class PrepareMutation:
 
         self.mutation_features = features
 
-
     def __exit__(self, exc_type, exc_value, traceback):
         return False
-
 
     @property
     def result(self):
