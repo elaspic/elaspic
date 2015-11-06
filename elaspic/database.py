@@ -953,8 +953,8 @@ class MyDatabase(object):
                 address = 'http://www.uniprot.org/uniprot/{}.fasta'.format(uniprot_id)
                 try:
                     handle = urllib.request.urlopen(address)
-                    sequence = next(SeqIO.parse(handle, "fasta"))
-                except (StopIteration, urllib.errors.HTTPError) as e:
+                    sequence = SeqIO.read(handle, "fasta")
+                except (IndexError, StopIteration, urllib.error.HTTPError) as e:
                     logger.debug('{}: {}'.format(type(e), str(e)))
                     print('{}: {}'.format(type(e), str(e)))
                     return None

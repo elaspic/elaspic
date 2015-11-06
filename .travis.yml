@@ -20,7 +20,7 @@ install:
   - pip install pytest-cov
   # - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytest
   # - source activate test-environment
-  - conda build . 
+  - conda build conda/elaspic 
   - conda install elaspic --use-local 
 script:
   - py.test tests/test_pep8.py

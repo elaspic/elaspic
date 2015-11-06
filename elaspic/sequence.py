@@ -32,8 +32,6 @@ def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
     return seqrec
 
 
-
-
 # %%
 class Sequence:
     """
@@ -74,7 +72,6 @@ class Sequence:
         # Mutations
         self.mutations = {}
 
-
     def mutate(self, mutation):
         if mutation in self.mutations:
             return self.mutations[mutation]
@@ -85,13 +82,12 @@ class Sequence:
             raise errors.MutationMismatchError()
 
         results = dict(
-            protein_id = self.protein_id,
-            mutation = mutation,
-            provean_score = self._run_provean(mutation),
-            matrix_score = self.score_pairwise(mutation[0], mutation[-1])
+            protein_id=self.protein_id,
+            mutation=mutation,
+            provean_score=self._run_provean(mutation),
+            matrix_score=self.score_pairwise(mutation[0], mutation[-1])
         )
         return results
-
 
     @property
     def provean_supset_file(self):
@@ -100,7 +96,6 @@ class Sequence:
             helper.slugify(self.protein_id + '_provean_supset')
         )
 
-
     @property
     def provean_supset_exists(self):
         return (
@@ -108,20 +103,18 @@ class Sequence:
             op.isfile(self.provean_supset_file + '.fasta')
         )
 
-
     @property
     def result(self):
         result = dict(
-            protein_id = self.protein_id,
-            sequence = self.sequence,
-            sequence_file = self.sequence_file,
-            provean_supset_exists = self.provean_supset_exists,
-            provean_supset_file = self.provean_supset_file,
-            provean_supset_length = self.provean_supset_length,
-            mutations = self.mutations,
+            protein_id=self.protein_id,
+            sequence=self.sequence,
+            sequence_file=self.sequence_file,
+            provean_supset_exists=self.provean_supset_exists,
+            provean_supset_file=self.provean_supset_file,
+            provean_supset_length=self.provean_supset_length,
+            mutations=self.mutations,
         )
         return result
-
 
     def _build_provean_supset(self):
         """
@@ -146,7 +139,8 @@ class Sequence:
 #            if 'Number of supporting sequences used:' in line:
 #                provean_supset_length = int(line.split()[-1])
 #        if provean_supset_length is None:
-#            logger.error('Provean supporting set length could not be estimated. This is an error!')
+#            logger.error('Provean supporting set length could not be estimated.
+#            This is an error!')
 #            logger.error('Provean result: {}'.format(result))
 #            logger.error('Provean error_message: {}'.format(error_message))
 #            logger.error('Provean return_code: {}'.format(return_code))
@@ -156,7 +150,6 @@ class Sequence:
 #        logger.info('Provean supset length: {}'.format(provean_supset_length))
 #        return provean_supset_length
 
-
     def _get_provean_supset_length(self):
         provean_supset_length = 0
         with open(self.provean_supset_file) as fh:
@@ -164,7 +157,6 @@ class Sequence:
                 if line and not line.startswith('#'):
                     provean_supset_length += 1
         return provean_supset_length
-
 
     def _run_provean(self, mutation, save_supporting_set=False, check_mem_usage=False):
         """
@@ -192,7 +184,8 @@ class Sequence:
         Returns
         -------
         list
-            [result, error_message, return_code] -- The output from running a provean system command.
+            [result, error_message, return_code] --
+            The output from running a provean system command.
 
         Raises
         ------
@@ -251,7 +244,7 @@ class Sequence:
             disk_space_availible_now = (
                 psutil.disk_usage(configs['provean_temp_dir']).free / float(1024)**3
             )
-            if disk_space_availible_now < 5: # less than 5 GB of free disk space left
+            if disk_space_availible_now < 5:  # less than 5 GB of free disk space left
                 raise errors.ProveanResourceError(
                     'Ran out of disk space and provean had to be terminated ({} GB used)'
                     .format(disk_space_availible-disk_space_availible_now),
@@ -264,7 +257,7 @@ class Sequence:
                     'Ran out of RAM and provean had to be terminated ({} GB left)'
                     .format(memory_availible - memory_availible_now),
                     child_process_group_id)
-            time.sleep(60) # Wait for 1 minute before checking again
+            time.sleep(60)  # Wait for 1 minute before checking again
 
         # Collect the results and check for errors
         result, error_message, return_code = helper.subprocess_communicate(child_process)
@@ -286,7 +279,7 @@ class Sequence:
 
         return provean_score
 
-
+    # === Other sequence scores ===
 
     def score_pairwise(self, seq1, seq2, matrix=None, gap_s=None, gap_e=None):
         """Get the BLOSUM (or what ever matrix is given) score.
@@ -313,7 +306,6 @@ class Sequence:
                     score += gap_e
         return score
 
-
     def _score_match(self, pair_match, matrix_match):
         """
         """
@@ -325,7 +317,7 @@ class Sequence:
 
 # %%
 def _clear_provean_temp():
-    provean_temp_dir =  configs['provean_temp_dir']
+    provean_temp_dir = configs['provean_temp_dir']
     logger.info("Clearning provean temporary files from '{}'...".format(provean_temp_dir))
     for filename in os.listdir(provean_temp_dir):
         file_path = os.path.join(provean_temp_dir, filename)
@@ -336,6 +328,3 @@ def _clear_provean_temp():
                 shutil.rmtree(file_path)
         except Exception as e:
             print(e)
-
-
-
