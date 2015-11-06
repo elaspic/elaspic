@@ -16,8 +16,10 @@ install:
   - conda info -a
   - conda config --add channels bioconda
   - conda config --add channels ostrokach
-  - conda install -q conda-build pytest
+  # Install required packages
+  - conda install -q conda-build pytest fake_provean
   - pip install pytest-cov
+  # Activate a new environment
   # - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pytest
   # - source activate test-environment
   - conda build conda/elaspic 
