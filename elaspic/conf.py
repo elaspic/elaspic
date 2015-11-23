@@ -123,7 +123,7 @@ def read_configuration_file(config_file, unique_temp_dir=None):
     configs['copy_data'] = configParser.getboolean('DEFAULT', 'copy_data')
 
     # Temporary directories
-    configs['temp_dir'] = op.join(configs['global_temp_dir'], 'elaspic')
+    configs['temp_dir'] = get_temp_dir(configs['global_temp_dir'], 'elaspic')
     os.makedirs(configs['temp_dir'], exist_ok=True)
     if unique_temp_dir is not None:
         configs['unique_temp_dir'] = unique_temp_dir
@@ -258,19 +258,19 @@ def _validate_blast_db_dir(configs):
         pass
     elif blast_db_dir_isvalid(configs['blast_db_dir_2']):
         message = (
-            "Using 'blast_db_dir_2' because 'blast_db_dir' is not valid!\n"
+            "Using 'blast_db_dir_fallback' because 'blast_db_dir' is not valid!\n"
             "blast_db_dir: {}\n"
-            "blast_db_dir_2: {}"
-            .format(configs['blast_db_dir'], configs['blast_db_dir_2'])
+            "blast_db_dir_fallback: {}"
+            .format(configs['blast_db_dir'], configs['blast_db_dir_fallback'])
         )
         logger.info(message)
-        configs['blast_db_dir'] = configs['blast_db_dir_2']
+        configs['blast_db_dir'] = configs['blast_db_dir_fallback']
     else:
         message = (
-            "Both 'blast_db_dir' and 'blast_db_dir_2' are not valid!"
+            "Both 'blast_db_dir' and 'blast_db_dir_fallback' are not valid!"
             "blast_db_dir: {}\n"
-            "blast_db_dir_2: {}"
-            .format(configs['blast_db_dir'], configs['blast_db_dir_2'])
+            "blast_db_dir_fallback: {}"
+            .format(configs['blast_db_dir'], configs['blast_db_dir_fallback'])
         )
         logger.error(message)
 

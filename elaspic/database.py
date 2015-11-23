@@ -4,15 +4,10 @@ from __future__ import unicode_literals
 from __future__ import absolute_import
 from future import standard_library
 
-from builtins import next
-from builtins import object
-
 import os
 import os.path as op
 import re
 import stat
-import urllib.request
-import urllib.error
 import subprocess
 import json
 import datetime
@@ -36,7 +31,7 @@ from Bio.SeqRecord import SeqRecord
 
 # import parse_pfamscan
 
-from . import helper, errors, conf
+from . import helper, errors, conf, sequence
 from .database_tables import (
     Base,
     Domain, DomainContact, UniprotSequence, Provean,
@@ -83,8 +78,8 @@ def enable_sqlite_foreign_key_checks(engine):
 
 
 # %%
-# : Get the session that will be used for all future queries.
-# : `expire_on_commit` so that you keep all the table objects even after the session closes.
+# Get the session that will be used for all future queries.
+# `expire_on_commit` so that you keep all the table objects even after the session closes.
 Session = sa.orm.sessionmaker(expire_on_commit=False)
 # Session = scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
 
@@ -209,7 +204,8 @@ class MyDatabase(object):
         """
         #
         if clear_schema:
-            self.delete_database_tables(drop_schema=False, keep_uniprot_sequence=keep_uniprot_sequence)
+            self.delete_database_tables(
+                drop_schema=False, keep_uniprot_sequence=keep_uniprot_sequence)
             logger.debug('Database schema was cleared successfully.')
 
         # Create all tables, creating schema as neccessary
@@ -219,13 +215,16 @@ class MyDatabase(object):
             except (sa.exc.OperationalError, sa.exc.ProgrammingError) as e:
                 logger.error(str(e))
                 if re.search('schema .* does not exist', str(e)):
-                    missing_schema = str(e)[str(e).find('schema "')+8:str(e).find('" does not exist')]
+                    missing_schema = str(e)[
+                        str(e).find('schema "')+8:str(e).find('" does not exist')]
                 elif 'Unknown database ' in str(e):
-                    missing_schema = str(e)[str(e).find("Unknown database '")+18:str(e).find("'\")")]
+                    missing_schema = str(e)[
+                        str(e).find("Unknown database '")+18:str(e).find("'\")")]
                 else:
                     raise e
                 sql_command = 'create schema {};'.format(missing_schema)
-                logger.warning("Creating missing schema with system command: '{}'".format(sql_command))
+                logger.warning(
+                    "Creating missing schema with system command: '{}'".format(sql_command))
                 self.engine.execute(sql_command)
                 table.create(self.engine, checkfirst=True)
         logger.debug('Database tables were created successfully.')
@@ -241,7 +240,9 @@ class MyDatabase(object):
         """
         if configs['db_type'] == 'sqlite':
             os.remove(configs['sqlite_db_path'])
-            logger.info("Successfully removed the sqlite database file: {sqlite_db_path}".format(**configs))
+            logger.info(
+                "Successfully removed the sqlite database file: {sqlite_db_path}"
+                .format(**configs))
             return
 
         # Remove tables one by one
@@ -251,7 +252,8 @@ class MyDatabase(object):
                 self.engine.execute('drop table {db_schema}.{table_name};'.format(**configs))
             elif not keep_uniprot_sequence:
                 configs['table_name'] = table.name
-                self.engine.execute('drop table {db_schema_uniprot}.{table_name};'.format(**configs))
+                self.engine.execute(
+                    'drop table {db_schema_uniprot}.{table_name};'.format(**configs))
 
         # Remove the database schema
         uniprot_on_diff_schema = configs['db_schema'] != configs['db_schema_uniprot']
@@ -262,8 +264,9 @@ class MyDatabase(object):
         if drop_schema and not uniprot_on_diff_schema and not keep_uniprot_sequence:
             self.engine.execute('drop schema {db_schema};'.format(**configs))
 
-        logger.info("Successfully removed the {db_type} database schema: {db_schema}".format(**configs))
-
+        logger.info(
+            "Successfully removed the {db_type} database schema: {db_schema}"
+            .format(**configs))
 
     # %%
     mysql_load_table_template = (
@@ -311,32 +314,31 @@ class MyDatabase(object):
         """
         Copy data from a ``.tsv`` file to a table in the database.
         """
-        configs = configs.copy()
-        configs['table_name'] = table_name
-        configs['table_folder'] = table_folder
+        cmd_options = configs.copy()
+        cmd_options['table_name'] = table_name
+        cmd_options['table_folder'] = table_folder
 
         def _format_configs():
             if table_name == 'uniprot_sequence':
-                configs['table_db_schema'] = configs['db_schema_uniprot']
+                cmd_options['table_db_schema'] = cmd_options['db_schema_uniprot']
             else:
-                configs['table_db_schema'] = configs['db_schema']
+                cmd_options['table_db_schema'] = cmd_options['db_schema']
 
-        logger.info("Copying '{table_name}' to '{db_type}' database...".format(**configs))
-        if configs['db_type'] == 'sqlite':
-            self._load_data_into_sqlite(configs)
-        elif configs['db_type'] == 'mysql':
+        logger.info("Copying '{table_name}' to '{db_type}' database...".format(**cmd_options))
+        if cmd_options['db_type'] == 'sqlite':
+            self._load_data_into_sqlite(cmd_options)
+        elif cmd_options['db_type'] == 'mysql':
             _format_configs()
-            configs['sql_command'] = self.mysql_command_template.format(**configs)
-            system_command = self.mysql_load_table_template.format(**configs)
+            cmd_options['sql_command'] = self.mysql_command_template.format(**cmd_options)
+            system_command = self.mysql_load_table_template.format(**cmd_options)
             self._run_create_table_system_command(system_command)
-        elif configs['db_type'] == 'postgresql':
+        elif cmd_options['db_type'] == 'postgresql':
             _format_configs()
-            configs['sql_command'] = self.psql_command_template.format(**configs)
-            system_command = self.psql_load_table_template.format(**configs)
+            cmd_options['sql_command'] = self.psql_command_template.format(**cmd_options)
+            system_command = self.psql_load_table_template.format(**cmd_options)
             self._run_create_table_system_command(system_command)
         else:
-            raise Exception("Unsupported database type: '{}'".format(configs['db_type']))
-
+            raise Exception("Unsupported database type: '{}'".format(cmd_options['db_type']))
 
     # %% Get objects from the database
     def get_rows_by_ids(self, row_object, row_object_identifiers, row_object_identifier_values):
@@ -382,18 +384,23 @@ class MyDatabase(object):
                 if not subdomains:
                     domain = (
                         session.query(Domain)
-                        .filter(Domain.pfam_name==pfam_name)
-                        .distinct().all() )
+                        .filter(Domain.pfam_name == pfam_name)
+                        .distinct().all()
+                    )
                 else:
                     domain = (
                         session.query(Domain).filter(
                             (Domain.pfam_name.like(pfam_name)) |
                             (Domain.pfam_name.like(pfam_name+'+%')) |
-                            (Domain.pfam_name.like(pfam_name+'\_%')) |  # need an escape character because _ matches any single character
+                            # need an escape character because _ matches any single character
+                            (Domain.pfam_name.like(pfam_name+'\_%')) |
                             (Domain.pfam_name.like('%+'+pfam_name)) |
                             (Domain.pfam_name.like('%+'+pfam_name+'+%')) |
-                            (Domain.pfam_name.like('%+'+pfam_name+'\_%')) )  # need an escape character because _ matches any single character
-                        .distinct().all() )
+                            # need an escape character because _ matches any single character
+                            (Domain.pfam_name.like('%+'+pfam_name+'\_%'))
+                        )
+                        .distinct().all()
+                    )
                 domain_set.update(domain)
         if not domain_set:
             logger.debug('No domain definitions found for pfam: %s' % str(pfam_names))
@@ -405,14 +412,17 @@ class MyDatabase(object):
         Note that the produced dataframe may not have the same order as the keys.
         """
         with self.session_scope() as session:
-            domain_contact_1 = self._get_domain_contact(pfam_names_1, pfam_names_2, session, subdomains)
-            domain_contact_2 = self._get_domain_contact(pfam_names_2, pfam_names_1, session, subdomains)
+            domain_contact_1 = self._get_domain_contact(
+                pfam_names_1, pfam_names_2, session, subdomains)
+            domain_contact_2 = self._get_domain_contact(
+                pfam_names_2, pfam_names_1, session, subdomains)
 
         if not len(domain_contact_1) and not len(domain_contact_2):
-            logger.debug('No domain contact template found for domains %s, %s' % (str(pfam_names_1), str(pfam_names_2),))
+            logger.debug(
+                'No domain contact template found for domains %s, %s' %
+                (str(pfam_names_1), str(pfam_names_2),))
 
         return [domain_contact_1, domain_contact_2]
-
 
     def _get_domain_contact(self, pfam_names_1, pfam_names_2, session, subdomains):
         """
@@ -426,10 +436,11 @@ class MyDatabase(object):
                     domain_contact = (
                         session.query(DomainContact)
                         # .join(domain_1, DomainContact.cath_id_1==domain_1.cath_id)
-                        .filter(domain_1.pfam_name==pfam_name_1)
+                        .filter(domain_1.pfam_name == pfam_name_1)
                         # .join(domain_2, DomainContact.cath_id_2==domain_2.cath_id)
-                        .filter(domain_2.pfam_name==pfam_name_2)
-                        .distinct().all() )
+                        .filter(domain_2.pfam_name == pfam_name_2)
+                        .distinct().all()
+                    )
                 else:
                     domain_contact = (
                         session.query(DomainContact)
@@ -437,19 +448,26 @@ class MyDatabase(object):
                         .filter(
                             (domain_1.pfam_name.like(pfam_name_1)) |
                             (domain_1.pfam_name.like(pfam_name_1+'+%')) |
-                            (domain_1.pfam_name.like(pfam_name_1+'\_%')) | # need an escape character because _ matches any single character
+                            # need an escape character because _ matches any single character
+                            (domain_1.pfam_name.like(pfam_name_1+'\_%')) |
                             (domain_1.pfam_name.like('%+'+pfam_name_1)) |
                             (domain_1.pfam_name.like('%+'+pfam_name_1+'+%')) |
-                            (domain_1.pfam_name.like('%+'+pfam_name_1+'\_%')) ) # need an escape character because _ matches any single character
+                            # need an escape character because _ matches any single character
+                            (domain_1.pfam_name.like('%+'+pfam_name_1+'\_%'))
+                        )
                         # .join(domain_2, DomainContact.cath_id_2==domain_2.cath_id)
                         .filter(
                             (domain_2.pfam_name.like(pfam_name_2)) |
                             (domain_2.pfam_name.like(pfam_name_2+'+%')) |
-                            (domain_2.pfam_name.like(pfam_name_2+'\_%')) | # need an escape character because _ matches any single character
+                            # need an escape character because _ matches any single character
+                            (domain_2.pfam_name.like(pfam_name_2+'\_%')) |
                             (domain_2.pfam_name.like('%+'+pfam_name_2)) |
                             (domain_2.pfam_name.like('%+'+pfam_name_2+'+%')) |
-                            (domain_2.pfam_name.like('%+'+pfam_name_2+'\_%')) ) # need an escape character because _ matches any single character
-                        .distinct().all() )
+                            # need an escape character because _ matches any single character
+                            (domain_2.pfam_name.like('%+'+pfam_name_2+'\_%'))
+                        )
+                        .distinct().all()
+                    )
                 domain_contact_set.update(domain_contact)
         return list(domain_contact_set)
 
@@ -566,72 +584,81 @@ class MyDatabase(object):
         if path_to_data is None:
             logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
-        if (d.template != None and
-            d.template.model != None and
-            d.template.model.alignment_filename != None and
-            d.template.model.model_filename != None):
-                if archive_type == '7zip':
-                    # Extract files from a 7zip archive
-                    filenames = [
-                        path_to_data + d.template.model.alignment_filename,
-                        path_to_data + d.template.model.model_filename,
-                    ]
-                    path_to_7z = os.path.join(
-                        archive_dir,
-                        'uniprot_domain',
-                        'uniprot_domain.7z'
-                    )
-                    self._extract_files_from_7zip(path_to_7z, filenames)
-                else:
-                    tmp_save_path = configs['archive_temp_dir'] + path_to_data
-                    archive_save_path = archive_dir + path_to_data
-                    path_to_alignment = tmp_save_path + '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
-                    subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        archive_save_path + d.template.model.alignment_filename,
-                        tmp_save_path + d.template.model.alignment_filename), shell=True)
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        archive_save_path + d.template.model.model_filename,
-                        tmp_save_path + d.template.model.model_filename), shell=True)
+        if (d.templat and
+                d.template.model and
+                d.template.model.alignment_filename and
+                d.template.model.model_filename):
+            if archive_type == '7zip':
+                # Extract files from a 7zip archive
+                filenames = [
+                    path_to_data + d.template.model.alignment_filename,
+                    path_to_data + d.template.model.model_filename,
+                ]
+                path_to_7z = os.path.join(
+                    archive_dir,
+                    'uniprot_domain',
+                    'uniprot_domain.7z'
+                )
+                self._extract_files_from_7zip(path_to_7z, filenames)
+            else:
+                tmp_save_path = configs['archive_temp_dir'] + path_to_data
+                archive_save_path = archive_dir + path_to_data
+                path_to_alignment = (
+                    tmp_save_path +
+                    '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
+                )
+                subprocess.check_call(
+                    "umask ugo=rwx; mkdir -m 777 -p '{}'"
+                    .format(path_to_alignment), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.alignment_filename,
+                    tmp_save_path + d.template.model.alignment_filename), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.model_filename,
+                    tmp_save_path + d.template.model.model_filename), shell=True)
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, archive_dir, archive_type):
         if path_to_data is None:
             logger.error('Cannot copy uniprot domain pair data because `path_to_data` is None')
             return
-        if (d.template != None and
-            d.template.model != None and
-            d.template.model.alignment_filename_1 != None and
-            d.template.model.alignment_filename_2 != None and
-            d.template.model.model_filename != None):
-                if archive_type == '7zip':
-                    # Extract files from a 7zip archive
-                    filenames = [
-                        path_to_data + d.template.model.alignment_filename_1,
-                        path_to_data + d.template.model.alignment_filename_2,
-                        path_to_data + d.template.model.model_filename,
-                    ]
-                    path_to_7zip = os.path.join(
-                        archive_dir,
-                        'uniprot_domain_pair',
-                        'uniprot_domain_pair.7z'
-                    )
-                    self._extract_files_from_7zip(path_to_7zip, filenames)
-                else:
-                    tmp_save_path = configs['archive_temp_dir'] + path_to_data
-                    archive_save_path = archive_dir + path_to_data
-                    path_to_alignment_1 = tmp_save_path + '/'.join(d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
-                    path_to_alignment_2 = tmp_save_path + '/'.join(d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
-                    subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
-                    subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        archive_save_path + d.template.model.alignment_filename_1,
-                        tmp_save_path + d.template.model.alignment_filename_1), shell=True)
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        archive_save_path + d.template.model.alignment_filename_2,
-                        tmp_save_path + d.template.model.alignment_filename_2), shell=True)
-                    subprocess.check_call("cp -f '{}' '{}'".format(
-                        archive_save_path + d.template.model.model_filename,
-                        tmp_save_path + d.template.model.model_filename), shell=True)
+        if (d.template and
+                d.template.model and
+                d.template.model.alignment_filename_1 and
+                d.template.model.alignment_filename_2 and
+                d.template.model.model_filename):
+            if archive_type == '7zip':
+                # Extract files from a 7zip archive
+                filenames = [
+                    path_to_data + d.template.model.alignment_filename_1,
+                    path_to_data + d.template.model.alignment_filename_2,
+                    path_to_data + d.template.model.model_filename,
+                ]
+                path_to_7zip = os.path.join(
+                    archive_dir,
+                    'uniprot_domain_pair',
+                    'uniprot_domain_pair.7z'
+                )
+                self._extract_files_from_7zip(path_to_7zip, filenames)
+            else:
+                tmp_save_path = configs['archive_temp_dir'] + path_to_data
+                archive_save_path = archive_dir + path_to_data
+                path_to_alignment_1 = tmp_save_path + '/'.join(
+                    d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
+                path_to_alignment_2 = tmp_save_path + '/'.join(
+                    d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
+                subprocess.check_call(
+                    "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
+                subprocess.check_call(
+                    "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.alignment_filename_1,
+                    tmp_save_path + d.template.model.alignment_filename_1), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.alignment_filename_2,
+                    tmp_save_path + d.template.model.alignment_filename_2), shell=True)
+                subprocess.check_call("cp -f '{}' '{}'".format(
+                    archive_save_path + d.template.model.model_filename,
+                    tmp_save_path + d.template.model.model_filename), shell=True)
 
     def _copy_provean(self, ud, archive_dir, archive_type):
         if not (ud.uniprot_sequence and
@@ -641,9 +668,11 @@ class MyDatabase(object):
             if ud.uniprot_sequence:
                 logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence))
                 if ud.uniprot_sequence.provean:
-                    logger.warning('ud.uniprot_sequence.provean: {}'.format(ud.uniprot_sequence.provean))
+                    logger.warning('ud.uniprot_sequence.provean: {}'.format(
+                        ud.uniprot_sequence.provean))
                     if ud.uniprot_sequence.provean.provean_supset_filename:
-                        logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence.provean.provean_supset_filename))
+                        logger.warning('uniprot_sequence: {}'.format(
+                            ud.uniprot_sequence.provean.provean_supset_filename))
             return
 
         if archive_type == '7zip':
@@ -671,15 +700,14 @@ class MyDatabase(object):
                 shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_dir + get_uniprot_base_path(ud) +
-                    ud.uniprot_sequence.provean.provean_supset_filename,
+                ud.uniprot_sequence.provean.provean_supset_filename,
                 configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-                    ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
+                ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
             subprocess.check_call("cp -f '{}' '{}'".format(
                 archive_dir + get_uniprot_base_path(ud) +
-                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
                 configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
-
+                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
 
     @retry(retry_on_exception=lambda exc: type(exc) == errors.Archive7zipError,
            wait_exponential_multiplier=1000,
@@ -937,30 +965,20 @@ class MyDatabase(object):
             raise Exception('Several uniprot sequences returned!? This should never happen!')
 
         elif len(uniprot_sequence) == 0:
-            username = helper.get_username()
-            if (username.strip() == 'joan' or  # on Scinet
-                    not check_external):  # don't bother with external sequences
+            if not check_external:
                 print(
                     "Couldn't find a sequence for uniprot {}, "
                     "and not bothering to look for it online"
                     .format(uniprot_id))
                 return None
             else:
-                logger.debug(
-                    'Fetching sequence for uniprot {} from an online server'.format(uniprot_id))
-                print(
-                    'Fetching sequence for uniprot {} from an online server'.format(uniprot_id))
-                address = 'http://www.uniprot.org/uniprot/{}.fasta'.format(uniprot_id)
-                try:
-                    handle = urllib.request.urlopen(address)
-                    sequence = SeqIO.read(handle, "fasta")
-                except (IndexError, StopIteration, urllib.error.HTTPError) as e:
-                    logger.debug('{}: {}'.format(type(e), str(e)))
-                    print('{}: {}'.format(type(e), str(e)))
-                    return None
+                sequence_file = sequence.download_uniport_sequence(
+                    uniprot_id, configs['unique_temp_dir'])
+                with open(sequence_file) as ifh:
+                    seqrecord = SeqIO.read(ifh, 'fasta')
                 uniprot_sequence = UniprotSequence()
                 uniprot_sequence.uniprot_id = uniprot_id
-                sp_or_trembl, uniprot_id_2, uniprot_name = sequence.name.split('|')
+                sp_or_trembl, uniprot_id_2, uniprot_name = seqrecord.name.split('|')
                 if uniprot_id != uniprot_id_2:
                     print(
                         'Uniprot id of the fasta file ({}) does not match the '
@@ -969,8 +987,8 @@ class MyDatabase(object):
                     return None
                 uniprot_sequence.db = sp_or_trembl
                 uniprot_sequence.uniprot_name = uniprot_name
-                uniprot_sequence.uniprot_description = sequence.description
-                uniprot_sequence.uniprot_sequence = str(sequence.seq)
+                uniprot_sequence.uniprot_description = seqrecord.description
+                uniprot_sequence.uniprot_sequence = str(seqrecord.seq)
                 self.add_uniprot_sequence(uniprot_sequence)
 
         uniprot_seqrecord = SeqRecord(

@@ -2,6 +2,7 @@
 import re
 import os
 import os.path as op
+import requests
 import psutil
 import time
 import shutil
@@ -19,6 +20,26 @@ logger = logging.getLogger(__name__)
 configs = conf.Configs()
 
 
+# %% Sequence tools
+def download_uniport_sequence(uniprot_id, output_dir):
+    """
+    """
+    output_file = op.join(output_dir, uniprot_id + '.fasta')
+
+    # If the file already exists, do nothing...
+    if op.isfile(output_file):
+        logger.debug('Sequence file {} already exists...'.format(output_file))
+        return output_file
+
+    logger.debug('Downloading sequence {}...'.format(uniprot_id + '.fasta'))
+    address = 'http://www.uniprot.org/uniprot/{}.fasta'.format(uniprot_id)
+    r = requests.get(address)
+    if r.status_code == 200:
+        with open(output_file, 'w') as ofh:
+            ofh.write(r.text)
+        return output_file
+
+
 def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
     if any([isinstance(sequence, string_type) for string_type in six.string_types]):
         seqrec = SeqRecord(Seq(sequence), id=str(sequence_id))
@@ -28,7 +49,6 @@ def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
         seqrec = sequence
     else:
         raise Exception("Wrong class type %s for ``sequence``" % str(type(sequence)))
-
     return seqrec
 
 
@@ -315,7 +335,6 @@ class Sequence:
             return matrix_match[pair_match]
 
 
-# %%
 def _clear_provean_temp():
     provean_temp_dir = configs['provean_temp_dir']
     logger.info("Clearning provean temporary files from '{}'...".format(provean_temp_dir))

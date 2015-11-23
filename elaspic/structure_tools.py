@@ -28,13 +28,13 @@ from . import errors, helper
 logger = logging.getLogger(__name__)
 
 A_DICT = {
-    'A':'ALA', 'R':'ARG', 'N':'ASN', 'D':'ASP', 'C':'CYS', 'E':'GLU',
-    'Q':'GLN', 'G':'GLY', 'H':'HIS', 'I':'ILE', 'L':'LEU', 'K':'LYS',
-    'M':'MET', 'F':'PHE', 'P':'PRO', 'S':'SER', 'T':'THR', 'W':'TRP',
-    'Y':'TYR', 'V':'VAL', 'U':'SEC', 'O':'PYL',
-    'B':'ASX', 'Z':'GLX', 'J':'XLE', 'X':'XAA', '*':'TER'
+    'A': 'ALA', 'R': 'ARG', 'N': 'ASN', 'D': 'ASP', 'C': 'CYS', 'E': 'GLU',
+    'Q': 'GLN', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE', 'L': 'LEU', 'K': 'LYS',
+    'M': 'MET', 'F': 'PHE', 'P': 'PRO', 'S': 'SER', 'T': 'THR', 'W': 'TRP',
+    'Y': 'TYR', 'V': 'VAL', 'U': 'SEC', 'O': 'PYL',
+    'B': 'ASX', 'Z': 'GLX', 'J': 'XLE', 'X': 'XAA', '*': 'TER'
 }
-AAA_DICT = dict([(value,key) for key,value in list(A_DICT.items())])
+AAA_DICT = dict([(value, key) for key, value in list(A_DICT.items())])
 AAA_DICT['UNK'] = 'X'
 AAA_DICT['MSE'] = 'M'
 AAA_DICT['CSD'] = 'C'
@@ -54,9 +54,7 @@ METHYLATED_LYSINES = ['MLZ', 'MLY', 'M3L']
 LYSINE_ATOMS = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
 
 
-
-# %%###############################################################################################
-# ## Functions for downloading and parsing pdb files
+# %% Functions for downloading and parsing pdb files
 class MMCIFParserMod(MMCIFParser):
     def __init__(self, temp_dir):
         self.temp_dir = temp_dir
@@ -90,7 +88,6 @@ def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
         relative_pdb_file = (
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
-
     elif pdb_type == 'cif':
         # mmCIF pdb structure.
         prefix = ''
@@ -99,7 +96,6 @@ def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
             '../mmCIF/' +
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
-
     elif pdb_type == 'pdb':
         # The first biological unit.
         prefix = ''
@@ -108,11 +104,9 @@ def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
             '../../../biounit/coordinates/divided/' +
             pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
         )
-
     elif pdb_type == 'raw':
         # Just a PDB file in some folder.
         relative_pdb_file = ''
-
     else:
         raise Exception
 
@@ -120,17 +114,16 @@ def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
     return pdb_file
 
 
-
-def download_pdb_file(pdb_id, output_folder):
+def download_pdb_file(pdb_id, output_dir):
     """Move PDB structure to the local working directory.
     """
     PDB_URL = 'http://www.rcsb.org/pdb/files/{}.pdb'
 
-    output_pdb_filename = op.join(output_folder, pdb_id + '.pdb')
+    output_pdb_filename = op.join(output_dir, pdb_id + '.pdb')
 
     # If the PDB already exists, do nothing...
     if op.isfile(output_pdb_filename):
-        logger.debug('PDB file already exists in the folder: {}.'.format(output_folder))
+        logger.debug('PDB file {} already exists...'.format(output_pdb_filename))
         return output_pdb_filename
 
     # Download the PDB file from the internet...
@@ -140,7 +133,6 @@ def download_pdb_file(pdb_id, output_folder):
         ofh.write(response.read())
 
     return output_pdb_filename
-
 
 
 def get_pdb_parser(pdb_type, temp_dir='/tmp'):
@@ -153,7 +145,6 @@ def get_pdb_parser(pdb_type, temp_dir='/tmp'):
     else:
         raise Exception('Unsupported ``pdb_type`` {}'.format(pdb_type))
     return parser
-
 
 
 @clru_cache(maxsize=128, typed=False)
@@ -196,7 +187,6 @@ def get_pdb(pdb_id, pdb_path, temp_dir='/tmp', pdb_type='ent', use_external=True
     return structure
 
 
-
 def get_pdb_structure(pdb_file, pdb_id=None):
     """Set QUIET to False to output warnings like incomplete chains etc.
     """
@@ -211,7 +201,6 @@ def get_pdb_structure(pdb_file, pdb_id=None):
     else:
         structure = parser.get_structure(pdb_id, pdb_file)
     return structure
-
 
 
 # %%
@@ -231,19 +220,18 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
     """
 
     if ((type(atom_1) == type(atom_2) == list) or
-        (type(atom_1) == type(atom_2) == tuple)):
-            a = atom_1
-            b = atom_2
+            (type(atom_1) == type(atom_2) == tuple)):
+        a = atom_1
+        b = atom_2
     elif hasattr(atom_1, 'coord') and hasattr(atom_2, 'coord'):
-            a = atom_1.coord
-            b = atom_2.coord
+        a = atom_1.coord
+        b = atom_2.coord
     else:
         raise Exception('Unsupported format {} {}'.format(type(atom_1), type(atom_2)))
 
     assert(len(a) == 3 and len(b) == 3)
     if cutoff is None or all(abs(p - q) <= cutoff for p, q in zip(a, b)):
         return euclidean_distance(a, b)
-
 
 
 # %%
@@ -263,7 +251,6 @@ def get_chain_seqres_sequence(chain, aa_only=False):
     for pb in PPBuilder().build_peptides(chain, aa_only=aa_only):
         sequence += sequence + pb.get_sequence()
     return sequence
-
 
 
 def get_chain_sequence_and_numbering(chain, domain_def_tuple=None, include_hetatms=False):
@@ -341,7 +328,6 @@ def get_structure_sequences(file_or_structure, seqres_sequence=False):
     return chain_sequences
 
 
-
 # %%
 def suppress_logger(fn):
     @wraps(fn)
@@ -400,7 +386,6 @@ def convert_resnum_alphanumeric_to_numeric(resnum):
     return resnum
 
 
-
 # %% STANDALONE FUNCTIONS
 def get_interactions(model, chain_id, r_cutoff=6):
     """
@@ -412,7 +397,7 @@ def get_interactions(model, chain_id, r_cutoff=6):
         interactions[chain_id_2] = (
             get_interactions_between_chains(model, chain_id, chain_id_2, r_cutoff)
         )
-    return {k:v for (k,v) in interactions.items() if v}
+    return {k: v for (k, v) in interactions.items() if v}
 
 
 def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
@@ -467,11 +452,10 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
                 if residue_2.resname in AMINO_ACIDS and residue_2.id[0] == ' ':
                     interacting_resids.append((resnum_2, resaa_2,))
             if interacting_resids:
-                interacting_resids.sort(key=lambda x: int(''.join([c for c in x[0] if c.isdigit()])))
+                interacting_resids.sort(
+                    key=lambda x: int(''.join([c for c in x[0] if c.isdigit()])))
                 interactions_between_chains[(resnum_1, resaa_1)] = interacting_resids
     return interactions_between_chains
-
-
 
 
 def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
@@ -494,7 +478,8 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
         if child.id == pdb_chain_2:
             chain_2 = child
     if chain_1 is None or chain_2 is None:
-        raise Exception('Chains %s and %s were not found in the model' % (pdb_chain_1, pdb_chain_2))
+        raise Exception(
+            'Chains %s and %s were not found in the model' % (pdb_chain_1, pdb_chain_2))
 
     interactions_between_chains = OrderedDict()
     for idx, residue_1 in enumerate(chain_1):
@@ -520,7 +505,6 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
             if interacting_resids:
                 interactions_between_chains[(resnum_1, resaa_1)] = interacting_resids
     return interactions_between_chains
-
 
 
 # %%
@@ -648,7 +632,6 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
     return interactions_between_chains
 
 
-
 # %% Additions for `pipeline_structure`
 class SelectChains(Select):
     """Only accept the specified chains when saving.
@@ -708,7 +691,7 @@ class StructureParser:
         else:
             raise Exception
 
-        self.r_cutoff = 6 # remove hetatms more than x A away from the main chain(s)
+        self.r_cutoff = 6  # remove hetatms more than x A away from the main chain(s)
 
         self.domain_boundaries = []
         for domain_def in domain_defs:
@@ -718,8 +701,6 @@ class StructureParser:
 
         self.unique_id = ('pdb_id: {}, chain_ids: {}'.format(self.pdb_id, self.chain_ids))
 
-
-
     def extract(self):
         """Extract the wanted chains out of the PDB file. Removes water atoms
         and selects the domain regions (i.e. selects only those parts of the
@@ -727,7 +708,7 @@ class StructureParser:
         """
         logger.debug('Extracting {}...'.format(self.unique_id))
 
-        model = self.input_structure[0] # assuming that model 0 is always the desired one
+        model = self.input_structure[0]  # assuming that model 0 is always the desired one
         new_structure = Bio.PDB.Structure.Structure(self.pdb_id)
         new_model = Bio.PDB.Model.Model(0)
 
@@ -751,7 +732,8 @@ class StructureParser:
             )
             logger.debug(
                 'domain_def: {}, domain_start_idxs: {}, domain_end_idxs: {}'.format(
-                self.domain_boundaries, domain_start_idxs, domain_end_idxs))
+                    self.domain_boundaries, domain_start_idxs, domain_end_idxs)
+            )
 
             res_idx = 0
             while res_idx < len(chain):
@@ -830,20 +812,17 @@ class StructureParser:
             for value in values
         }
 
-
     def get_chain_sequence_and_numbering(self, chain_id, *args, **varargs):
         """Call ``get_chain_sequence_and_numbering`` using chain with id ``chain_id``
         """
         chain = self.structure[0][chain_id]
         return get_chain_sequence_and_numbering(chain, *args, **varargs)
 
-
     def get_chain_seqres_sequence(self, chain_id, *args, **varargs):
         """Call ``get_chain_seqres_sequence`` using chain with id ``chain_id``
         """
         chain = self.structure[0][chain_id]
         return get_chain_seqres_sequence(chain, *args, **varargs)
-
 
     def save_structure(self, output_dir='', remove_disordered=False):
         if remove_disordered:
@@ -887,7 +866,6 @@ class StructureParser:
                 raise(e)
             self.save_structure(output_dir=output_dir, remove_disordered=True)
 
-
     def save_sequences(self, output_dir=''):
         self.chain_numbering_extended_dict = {}
         self.chain_sequence_dict = {}
@@ -901,7 +879,6 @@ class StructureParser:
                 f.write('>' + self.pdb_id + chain_id + '\n')
                 f.write(chain_sequence + '\n')
                 f.write('\n')
-
 
     def _get_domain_def_idxs_for_chain(self, chain, chain_idx):
         if not self.domain_boundaries or not self.domain_boundaries[chain_idx]:
@@ -917,7 +894,6 @@ class StructureParser:
             raise errors.PDBDomainDefsError(self.unique_id)
 
         return chain_numbering, domain_start_idxs, domain_end_idxs
-
 
     def _correct_methylated_lysines(self, res):
         new_resname = 'LYS'
@@ -938,17 +914,18 @@ class StructureParser:
             else:
                 atom_idx += 1
 
-
     def _move_hetatm_to_hetatm_chain(self, chain, hetatm_chain, res, echo=False):
-        #logger.debug('Moving hetatm residue {} {} to the hetatm chain'.format(res.resname, res.id))
+        # logger.debug(
+        #     'Moving hetatm residue {} {} to the hetatm chain'
+        #     .format(res.resname, res.id))
         chain.detach_child(res.id)
         hetatm_res = res
         hetatm_res.id = (hetatm_res.id[0], len(hetatm_chain)+1, hetatm_res.id[2],)
         hetatm_chain.add(hetatm_res)
 
-
-    def _residue_outside_domain(self, chain, chain_numbering, domain_start_idxs, domain_end_idxs, res):
-        """Returns `True` if residue ``res`` is outside the domain
+    def _residue_outside_domain(
+            self, chain, chain_numbering, domain_start_idxs, domain_end_idxs, res):
+        """Returns `True` if residue ``res`` is outside the domain.
         """
         if domain_start_idxs is None or domain_end_idxs is None:
             return False
@@ -962,7 +939,6 @@ class StructureParser:
 
         # Residue is outside the domain
         return True
-
 
     def _remove_distant_hatatms(self, new_model, hetatm_chain):
         """Detach hetatms that are more than ``self.r_cutoff`` away from the main chain(s)
@@ -985,7 +961,6 @@ class StructureParser:
             # logger.debug('Detaching child: {}'.format(res_1.id))
             hetatm_chain.detach_child(res_1.id)
 
-
     def _unset_disordered_flags(self):
         """Change atom and residue ``disordered`` flag to `False`.
         Otherwise, Biopython may crash when saving the PDB structure.
@@ -1005,4 +980,3 @@ class StructureParser:
                                 'Changing disordered_flag on atom {} from {} to 0'
                                 .format(a, a.disordered_flag))
                             a.disordered_flag = 0
-

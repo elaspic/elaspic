@@ -2,9 +2,8 @@ package:
   name: elaspic
   version: "1.0.0"
 
-#~ source:
-  #~ git_url: https://ostrokach@bitbucket.org/ostrokach/elaspic.git
-  #~ git_tag: develop
+source:
+  path: ../..
 
 build:
   number: 1
