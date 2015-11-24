@@ -14,50 +14,36 @@ build:
 requirements:
   build:
     - python
-    - setuptools
-    #~ - binstar-build
+    - numpy
+    - pandas
+    - scikit-learn
   run:
-    # System
-    - ncurses
-
     # Basic python
     - python
-    - dateutil
-    - python-dateutil
-    - pytz
     - retrying
-    
     # Scientific python
     - fastcache
     - numpy
     - scipy
-    - pandas ==0.15.2
+    - pandas
     - psutil
-    - scikit-learn ==0.15.2
-    - cython
+    - scikit-learn
     - biopython
-
     # Testing
     - pytest
-    - nose
-
     # Documentation
-    - docutils
     - sphinx >=1.3
     - sphinxcontrib-programoutput
     - jinja2
     - markupsafe
-
     # Python 2 / 3 compatibility
     - future
     - six
-
     # Database access
     - sqlalchemy
     - sqlite
     - mysqlclient
     - psycopg2
-
     # Binary files
     - stride
     - knot
@@ -70,7 +56,6 @@ requirements:
     - foldx
     - libfaketime
 
-# Can't get this to work without `elaspic` already being on anaconda.org.
 test:
   requires:
     - pytest
