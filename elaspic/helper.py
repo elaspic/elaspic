@@ -14,18 +14,15 @@ import signal
 import tarfile
 import datetime
 import logging
-import six
 import time
 import json
 import string
+import fcntl
 
 from functools import wraps
 from contextlib import contextmanager
 
-from Bio.PDB.PDBParser import PDBParser
-
 logger = logging.getLogger(__name__)
-
 
 
 # %%
@@ -33,12 +30,10 @@ canonical_amino_acids = 'ARNDCEQGHILKMFPSTWYV'
 uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 
-
 # %%
 def slugify(filename_string):
     valid_chars = "-_.()%s%s" % (string.ascii_letters, string.digits)
     return ''.join(c if c in valid_chars else '_' for c in filename_string)
-
 
 
 # %%
@@ -48,6 +43,7 @@ class WritableObject(object):
     """
     def __init__(self, logger):
         self.logger = logger
+
     def write(self, string):
         self.logger.debug(string.strip())
 
@@ -80,9 +76,9 @@ def get_path_to_current_file():
     encoding = sys.getfilesystemencoding()
     if hasattr(sys, "frozen"):
         # All of the modules are built-in to the interpreter, e.g., by py2exe
-        return os.path.dirname(str(sys.executable, encoding))
+        return op.dirname(str(sys.executable, encoding))
     else:
-        return os.path.dirname(str(__file__, encoding))
+        return op.dirname(str(__file__, encoding))
 
 
 def get_logger(do_debug=True, logger_filename=None):
@@ -113,8 +109,7 @@ def get_logger(do_debug=True, logger_filename=None):
 
 def make_tarfile(output_filename, source_dir):
     with tarfile.open(output_filename, "w:bz2") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
-
+        tar.add(source_dir, arcname=op.basename(source_dir))
 
 
 # %% Helper functions for sql objects
@@ -129,10 +124,10 @@ def decode_domain_def(domains, merge=True, return_string=False):
         domains = domains[:-1]
     x = domains
     if return_string:
-        domain_fragments = [ [r.strip() for r in ro.split(':')] for ro in x.split(',') ]
+        domain_fragments = [[r.strip() for r in ro.split(':')] for ro in x.split(',')]
     else:
-        domain_fragments = [ [int(r.strip()) for r in ro.split(':')] for ro in x.split(',') ]
-    domain_merged = [ domain_fragments[0][0], domain_fragments[-1][-1] ]
+        domain_fragments = [[int(r.strip()) for r in ro.split(':')] for ro in x.split(',')]
+    domain_merged = [domain_fragments[0][0], domain_fragments[-1][-1]]
     if merge:
         return domain_merged
     else:
@@ -153,7 +148,7 @@ def decode_aa_list(interface_aa):
     if interface_aa and (interface_aa != '') and (interface_aa != 'NULL'):
         if interface_aa[-1] == ',':
             interface_aa = interface_aa[:-1]
-        x  = interface_aa
+        x = interface_aa
         return_tuple = tuple([int(r.strip()) for r in x.split(',')])
     else:
         return_tuple = []
@@ -190,7 +185,6 @@ def get_which(bin_name):
     return bin_filename.strip()
 
 
-
 # %%
 @contextmanager
 def switch_paths(working_path):
@@ -208,8 +202,8 @@ def switch_paths(working_path):
 
 def kill_child_process(child_process):
     if child_process.poll() is not None:
-        print ('Child process with pid {} already terminated with return code {}'
-                .format(child_process.pid, child_process.returncode))
+        print('Child process with pid {} already terminated with return code {}'
+              .format(child_process.pid, child_process.returncode))
         return
     try:
         print('Trying to terminate gracefully child process with pid: {}'.child_process.pid)
@@ -228,7 +222,6 @@ def kill_child_process(child_process):
     print('OK')
 
 
-
 # %%
 # ##############################################################################
 # The two functions below can be used to set the subproces group id to the same
@@ -237,11 +230,11 @@ def kill_child_process(child_process):
 # it impossible to terminate the child process group while keeping the parent
 # running....
 def _set_process_group(parent_process_group_id):
-    """ This function is used to set the group id of the child process to be
+    """This function is used to set the group id of the child process to be
     the same as the group id of the parent process. This way when you delete the
     parent process you also delete all the children.
     """
-    child_process_id = os.getpid() #
+    child_process_id = os.getpid()
     os.setpgid(child_process_id, parent_process_group_id)
 
 
@@ -289,13 +282,11 @@ def subprocess_check_output_locally(working_path, system_command, **popen_argvar
     return subprocess_communicate(child_process)
 
 
-
-
-
 # %% Function-level locking
 @contextmanager
 def get_lock(name):
     lock = None
+
     def close_lock(lock):
         if lock is not None:
             lock.close()
@@ -374,6 +365,18 @@ def lock(fn):
     return locked_fn
 
 
+@contextmanager
+def open_exclusively(filename, mode='a'):
+    fd = os.open(filename, os.O_CREAT | os.O_RDWR)
+    fcntl.lockf(fd, fcntl.LOCK_EX)
+    try:
+        f = os.fdopen(fd, mode)
+        yield f
+    except:
+        raise
+    finally:
+        f.close()
+
 
 # %% From Mutation
 def encode_list_as_text(list_of_lists):
@@ -389,9 +392,13 @@ def decode_text_as_list(list_string):
     Uses the database convention to decode a string, describing domain boundaries of
     multiple domains, as a list of lists.
     """
-    str2num = lambda x: float(x) if '.' in x else int(x)
-    return list(zip(*[[str2num(x) for x in sublist.split(':')]
-        for sublist in list_string.split(',')]))
+    def str2num(x):
+        return float(x) if '.' in x else int(x)
+
+    decoded = list(
+        zip(*[[str2num(x) for x in sublist.split(':')] for sublist in list_string.split(',')])
+    )
+    return decoded
 
 
 # %% Text formatting
@@ -411,6 +418,7 @@ class color:
     OKGREEN = '\033[92m'
     WARNING = '\033[93m'
     FAIL = '\033[91m'
+
 
 def underline(print_string):
     return color.UNDERLINE + print_string + color.END

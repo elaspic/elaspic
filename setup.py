@@ -1,9 +1,14 @@
-# -*- coding: utf-8 -*-
-import os
-from setuptools import setup
+import os.path as op
+import json
+import pickle
+from setuptools import setup, Command
+
+import yaml
+import pandas as pd
 # import distutils.command.bdist_conda
 
 
+# %%
 def read(fname):
     """Utility function to read the README file.
 
@@ -13,44 +18,104 @@ def read(fname):
 
     Source: https://pythonhosted.org/an_example_pypi_project/setuptools.html
     """
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+    return open(op.join(op.dirname(__file__), fname)).read()
+
+
+class TrainPredictors(Command):
+    user_options = []
+
+    def initialize_options(self):
+        """Abstract method that is required to be overwritten"""
+        pass
+
+    def run(self):
+        from elaspic import DATA_DIR, machine_learning
+        SETUP_DIR = op.abspath(op.dirname(__file__))
+
+        # Load data
+        with open(op.join(SETUP_DIR, 'training_data', 'core_options_p0.json')) as ifh:
+            core_options_p0 = json.load(ifh)
+        with open(op.join(SETUP_DIR, 'training_data', 'core_options_p1.json')) as ifh:
+            core_options_p1 = json.load(ifh)
+        with open(op.join(SETUP_DIR, 'training_data', 'interface_options_p0.json')) as ifh:
+            interface_options_p0 = json.load(ifh)
+        with open(op.join(SETUP_DIR, 'training_data', 'interface_options_p1.json')) as ifh:
+            interface_options_p1 = json.load(ifh)
+
+        core_training_set = (
+            pd.read_csv(
+                op.join(SETUP_DIR, 'training_data', 'core_training_set.tsv.gz'), sep='\t')
+        )
+        interface_training_set = (
+            pd.read_csv(
+                op.join(SETUP_DIR, 'training_data', 'interface_training_set.tsv.gz'), sep='\t')
+        )
+
+        # Train predictors
+        core_clf_p0 = (
+            machine_learning.get_final_predictor(
+                core_training_set, core_options_p0['features'], core_options_p0)
+        )
+        core_clf_p1 = (
+            machine_learning.get_final_predictor(
+                core_training_set, core_options_p1['features'], core_options_p1)
+        )
+        interface_clf_p0 = (
+            machine_learning.get_final_predictor(
+                interface_training_set, interface_options_p0['features'], interface_options_p0)
+        )
+        interface_clf_p1 = (
+            machine_learning.get_final_predictor(
+                interface_training_set, interface_options_p1['features'], interface_options_p1)
+        )
+
+        # Save predictors and features
+        with open(op.join(DATA_DIR, 'ml_features_core_p0.json'), 'w') as ofh:
+            json.dump(core_options_p0['features'], ofh)
+        with open(op.join(DATA_DIR, 'ml_features_core_p1.json'), 'w') as ofh:
+            json.dump(core_options_p1['features'], ofh)
+        with open(op.join(DATA_DIR, 'ml_features_interface_p0.json'), 'w') as ofh:
+            json.dump(interface_options_p0['features'], ofh)
+        with open(op.join(DATA_DIR, 'ml_features_interface_p1.json'), 'w') as ofh:
+            json.dump(interface_options_p1['features'], ofh)
+
+        with open(op.join(DATA_DIR, 'ml_clf_core_p0.pickle'), 'wb') as ofh:
+            pickle.dump(core_clf_p0, ofh)
+        with open(op.join(DATA_DIR, 'ml_clf_core_p1.pickle'), 'wb') as ofh:
+            pickle.dump(core_clf_p1, ofh)
+        with open(op.join(DATA_DIR, 'ml_clf_interface_p0.pickle'), 'wb') as ofh:
+            pickle.dump(interface_clf_p0, ofh)
+        with open(op.join(DATA_DIR, 'ml_clf_interface_p1.pickle'), 'wb') as ofh:
+            pickle.dump(interface_clf_p1, ofh)
+
+    def finalize_options(self):
+        """Abstract method that is required to be overwritten"""
+        pass
+
+
+# %% Load conda configuration file
+with open('conda/elaspic/meta.yaml') as ifh:
+    meta = yaml.load(ifh)
 
 
 setup(
-    name='elaspic',
-    version='1.0.0',  # now in meta.yaml
-    description=(
-        'Ensemble Learning Approach for Stability Prediction of Interface '
-        'and Core mutations (ELASPIC).'
-    ),
+    name=meta['package']['name'],
+    version=meta['package']['version'],  # now in meta.yaml
+    description=meta['about']['summary'],
     author='kimlab',
     author_email='alex.strokach@utoronto.ca',
-    url='http://elaspic.kimlab.org',
+    url=meta['about']['home'],
     packages=['elaspic'],
     package_data={'elaspic': ['data/*']},
     long_description=read("README.rst"),
-
-    # Conda specific features
-    # distclass=distutils.command.bdist_conda.CondaDistribution,
-    # conda_buildnum=1,
-    # conda_features=['mkl'],
-    # conda_import_tests=False,
-
-    # Specify install requirements in the conda `meta.yaml` file
-    # install_requires=[],
-    tests_require=[
-        'pytest',
-    ],
-    entry_points={
-          'console_scripts': [
-              'elaspic = elaspic.__main__:elaspic',
-              'elaspic_database = elaspic.__main__:elaspic_database',
-          ]
-      },
+    install_requires=meta['requirements']['run'],
+    tests_require=meta['test']['requires'],
+    entry_points={'console_scripts': meta['build']['entry_points']},
     classifiers=[
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3",
         "Topic :: Structural Biology",
         "Topic :: Bioinformatics",
     ],
+    cmdclass={'train': TrainPredictors},
 )

@@ -1,0 +1,1 @@
+["alignment_coverage", "alignment_score", "backbone_clash_change", "cis_bond_wt", "dg_change", "dg_wt", "entropy_mainchain_change", "matrix_score", "norm_dope", "pcv_salt_equal_self_wt", "pcv_salt_opposite_self_wt", "pcv_vdw_self_wt", "secondary_structure_change", "secondary_structure_wt", "solvation_hydrophobic_change", "torsional_clash_wt", "van_der_waals_change"]
