@@ -407,11 +407,11 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
     is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
 
     .. deprecated:: 1.0
-        Use :func:`get_interacting_residues` instead.
+        Use python:fn:`get_interacting_residues` instead.
         It gives you both the residue index and the resnum.
 
     Returns
-    --------
+    -------
     OrderedDict
         Keys are (residue_number, residue_amino_acid) tuples
         (e.g. ('0', 'M'), ('1', 'Q'), ...).
@@ -542,9 +542,8 @@ def get_aa_residues(chain):
 def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
     """Returns all interactions between residues on different chains in `model`.
 
-
     Returns
-    --------
+    -------
     dict
         A dictionary of interactions between chains i (0..n-1) and j (i+1..n).
         Keys are (chain_idx, chain_id, residue_idx, residue_resnum, residue_amino_acid) tuples.

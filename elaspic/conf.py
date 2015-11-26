@@ -29,10 +29,7 @@ class Singleton(type):
 
 # %%
 class Configs:
-    """
-    A singleton class that keeps track of ELASPIC configuration settings.
-
-    Uses a `composition <>`_ design pattern.
+    """A singleton class that keeps track of ELASPIC configuration settings.
     """
     class _Configs:
         pass

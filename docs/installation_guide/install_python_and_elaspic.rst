@@ -3,39 +3,43 @@
 Installing Python and ELASPIC
 ==============================
 
-Using Anaconda (recommended)
-----------------------------
+.. _install_using_conda:
 
-#. Downlaod and install the `Anaconda`_ Python distribution for Linux.
+Using Conda (recommended)
+-------------------------
+
+#. Downlaod and install the `Anaconda Python Distribution`_ for Linux.
    
-#. Clone the ELASPIC git repository::
+#. Add ``bioconda``, ``salilab``, and ``ostrokach`` channels to your ~/.condarc file::
 
-    git clone git@bitbucket.org:ostrokach/elaspic.git
+    conda config --add channels bioconda
+    conda config --add channels salilab
+    conda config --add channels ostrokach
 
-#. Create a separate conda environment for ELASPIC, containing all required Python packages::
+#. Obtain a `Modeller license`_, and export the license as ``KEY_MODELLER`` in your ~/.bashrc file::
 
-    # Enter the ELASPIC repository folder
-    cd elaspic
+    # ~/.bashrc
+    export KEY_MODELLER=XXXXXXX
 
-    # Create a conda environment `elaspic` (use 'py2' for Python2, and 'py3' for Python3)
-    conda env create -f environment_{py2/py3}.yml 
 
-    # Activate the conda environment `elaspic`
-    source activate elaspic
+#. Install ELASPC, including all dependencies::
 
-#. Install the ELASPC package::
-
-    # Install in development mode so that local changes are reflected
-    python setup.py develop 
+    conda install elaspic
 
 
 .. _Conda: http://conda.pydata.org/
-.. _Anaconda: https://store.continuum.io/cshop/anaconda/
+.. _Anaconda Python Distribution: https://store.continuum.io/cshop/anaconda/
 .. _Miniconda: http://conda.pydata.org/miniconda.html
+.. _Modeller license: https://salilab.org/modeller/registration.html
 
 
 Using Virtualenv
 -----------------
+
+.. note:: 
+
+    This method is deprecated. Please use conda instead.
+    
 
 #. Make sure that you have Python 2.7+ or Python 3.4+ installed on your system. If your system comes with an older version of Python, download a `recent version of Python`_ and compile it from source. Use ``make altinstall`` instead of ``make install`` to prevent system Python binaries from being overwritten. 
 

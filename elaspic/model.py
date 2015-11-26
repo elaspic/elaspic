@@ -664,10 +664,10 @@ def get_alignment_overhangs(alignment):
 
 
 def write_to_pir_alignment(pir_alignment_filehandle, seq_type, seq_name, seq):
-    """ Write the *.pir alignment compatible with modeller.
+    """Write the `*.pir` alignment compatible with modeller.
 
     Parameters
-    -----------
+    ----------
     seq_type : str
         One of: ['sequence', 'structure'], in that order.
     seq_name : str

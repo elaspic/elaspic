@@ -429,7 +429,7 @@ class AnalyzeStructure(object):
 
         .. note:: deprecated
 
-            Use :fn:`get_seasa` instead.
+            Use python:fn:`get_seasa` instead.
 
         """
         if program_to_use == 'naccess':
