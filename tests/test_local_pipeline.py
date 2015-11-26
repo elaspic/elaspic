@@ -15,6 +15,11 @@ from conftest import TESTS_BASE_DIR
 logger = logging.getLogger(__name__)
 
 
+# %% Constants
+QUICK = (hasattr(pytest, "config") and pytest.config.getoption('--quick'))
+logger.debug("\nRunning quickly: {}".format(QUICK))
+
+
 # %%
 # Source of good PDB stuctures: http://www.rcsb.org/pdb/101/motm_archive.do
 pdb_mutatations = {
@@ -64,39 +69,47 @@ pdb_mutatations = {
 sequence_mutations = {
     ('2Z5Y', 'Q5NU32'): {
         '1': [
-            'H1A',
-            'M2A',
-            'F3A',
-            'D4A',
-            'V5A',
-            'V6A',
-            'V7A',
-            'I8A',
-            'G9A',
-            'G10A',
-            'G11A',
-            'I12A',
-            'S13A',
-            'G14A',
-            'L15A',
-            'S16A',
-            'A17G',
-            'A18G',
-            'K19A',
-            'L20A',
+            'H12A',
+            'M13A',
+            'F14A',
+            'D15A',
+            'V16A',
+            'V17A',
+            'V18A',
+            'I19A',
+            'G20A',
+            'G21A',
+            'G22A',
+            'I23A',
+            'S24A',
+            'G25A',
+            'L26A',
+            'S27A',
+            'A28G',
+            'A29G',
+            'K30A',
+            'L31A',
         ]
     },
 }
 
 
 # %%
-# In case you want to rerun things in the same directory
-# (don't want to run provean again, for example)
-working_dirs = {
-    '3M7R': '/tmp/elaspic/x5szda5d',
-    '1THJ': '/tmp/elaspic/7siaev7u',
-    '3OS0': '/tmp/elaspic/sz9wlfc2',
-}
+if QUICK:
+    # pdb_mutatations
+    for pdb_id in pdb_mutatations:
+        for chain_id in pdb_mutatations[pdb_id]:
+            mutations = pdb_mutatations[pdb_id][chain_id]
+            break
+        break
+    pdb_mutatations = {pdb_id: {chain_id: [mutations[0]]}}
+    # sequence_mutations
+    for key in sequence_mutations:
+        for chain_id in sequence_mutations[key]:
+            mutations = sequence_mutations[key][chain_id]
+            break
+        break
+    sequence_mutations = {key: {chain_id: [mutations[0]]}}
 
 
 # %% Fixtures
@@ -111,25 +124,25 @@ def pdb_id_sequence(request):
 
 
 # %%
-def test_pdb_mutation_pipeline(pdb_id):
-    working_dir = working_dirs.get(pdb_id, None)
-    config_file = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
-    conf.read_configuration_file(config_file, unique_temp_dir=working_dir)
-    configs = conf.Configs()
-    pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
-    for chain_id in pdb_mutatations[pdb_id]:
-        for mutation in pdb_mutatations[pdb_id][chain_id]:
-            mutation_pdb = '{}_{}'.format(chain_id, mutation)
-            lp = local_pipeline.LocalPipeline(
-                pdb_file, mutations=mutation_pdb)
-            lp.run_all_sequences()
-            lp.run_all_models()
-            lp.run_all_mutations()
+#def test_pdb_mutation_pipeline(pdb_id):
+#    working_dir = None  # can set to something if don't want to rerun entire pipeline
+#    config_file = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
+#    conf.read_configuration_file(config_file, unique_temp_dir=working_dir)
+#    configs = conf.Configs()
+#    pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
+#    for chain_id in pdb_mutatations[pdb_id]:
+#        for mutation in pdb_mutatations[pdb_id][chain_id]:
+#            mutation_pdb = '{}_{}'.format(chain_id, mutation)
+#            lp = local_pipeline.LocalPipeline(
+#                pdb_file, mutations=mutation_pdb)
+#            lp.run_all_sequences()
+#            lp.run_all_models()
+#            lp.run_all_mutations()
 
 
 def test_sequence_mutation_pipeline(pdb_id_sequence):
     pdb_id, sequence_id = pdb_id_sequence
-    working_dir = working_dirs.get(pdb_id, None)
+    working_dir = None  # can set to something if don't want to rerun entire pipeline
     config_file = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
     conf.read_configuration_file(config_file, unique_temp_dir=working_dir)
     configs = conf.Configs()
@@ -145,9 +158,6 @@ def test_sequence_mutation_pipeline(pdb_id_sequence):
             lp.run_all_mutations()
 
 
-
-
 # %%
 if __name__ == '__main__':
-    import pytest
-    pytest.main(['test_local_pipeline.py', '-svx'])
+    pytest.main([__file__, '-vsx', '--quick'])

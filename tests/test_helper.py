@@ -38,11 +38,10 @@ def test_open_exclusively(cleanup):
 
     with open('deleteme.txt', 'r') as ofh:
         data = ofh.readlines()
-    print(''.join(data))
     assert len(data) == NUMBER_OF_WRITES
 
 
 # %%
 if __name__ == '__main__':
     import pytest
-    pytest.main(['test_helper.py', '-vsx'])
+    pytest.cmdlined.main(['test_helper.py', '-vsx', '--quick'])

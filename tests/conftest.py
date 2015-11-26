@@ -123,5 +123,16 @@ def pytest_runtest_setup(item):
             pytest.xfail("previous test failed (%s)" % previousfailed.name)
 
 
+# %% Command line options
+def pytest_addoption(parser):
+    parser.addoption("--quick", action="store_true", default=False,
+                     help="Run quick tests.")
+
+
+@pytest.fixture
+def quick(request):
+    return request.config.getoption("--quick")
+
+
 # %%
 print('Conftest loaded!')
