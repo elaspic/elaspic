@@ -173,8 +173,6 @@ def read_database_configs(configParser):
     configs['archive_type'] = configParser.get('DATABASE', 'archive_type', fallback='directory')
     configs['archive_dir'] = configParser.get('DATABASE', 'archive_dir')
     # supported archive types are 'directory' and 'archive'
-    configs['pdb_dir'] = configParser.get('DATABASE', 'pdb_dir')
-
     configs['archive_temp_dir'] = op.join(configs['temp_dir'], 'archive')
 
 
@@ -188,6 +186,7 @@ def read_sequence_configs(configParser):
     configs['provean_temp_dir'] = op.join(configs['sequence_dir'], 'provean_temp')
     _validate_provean_temp_dir(configParser, configs)
 
+    configs['pdb_dir'] = configParser.get('SEQUENCE', 'pdb_dir')
     configs['blast_db_dir'] = configParser.get('SEQUENCE', 'blast_db_dir')
     configs['blast_db_dir_fallback'] = (
         configParser.get('SEQUENCE', 'blast_db_dir_fallback', fallback=''))
