@@ -124,20 +124,20 @@ def pdb_id_sequence(request):
 
 
 # %%
-#def test_pdb_mutation_pipeline(pdb_id):
-#    working_dir = None  # can set to something if don't want to rerun entire pipeline
-#    config_file = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
-#    conf.read_configuration_file(config_file, unique_temp_dir=working_dir)
-#    configs = conf.Configs()
-#    pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
-#    for chain_id in pdb_mutatations[pdb_id]:
-#        for mutation in pdb_mutatations[pdb_id][chain_id]:
-#            mutation_pdb = '{}_{}'.format(chain_id, mutation)
-#            lp = local_pipeline.LocalPipeline(
-#                pdb_file, mutations=mutation_pdb)
-#            lp.run_all_sequences()
-#            lp.run_all_models()
-#            lp.run_all_mutations()
+def test_pdb_mutation_pipeline(pdb_id):
+    working_dir = None  # can set to something if don't want to rerun entire pipeline
+    config_file = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
+    conf.read_configuration_file(config_file, unique_temp_dir=working_dir)
+    configs = conf.Configs()
+    pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
+    for chain_id in pdb_mutatations[pdb_id]:
+        for mutation in pdb_mutatations[pdb_id][chain_id]:
+            mutation_pdb = '{}_{}'.format(chain_id, mutation)
+            lp = local_pipeline.LocalPipeline(
+                pdb_file, mutations=mutation_pdb)
+            lp.run_all_sequences()
+            lp.run_all_models()
+            lp.run_all_mutations()
 
 
 def test_sequence_mutation_pipeline(pdb_id_sequence):
