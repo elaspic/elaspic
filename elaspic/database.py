@@ -584,7 +584,7 @@ class MyDatabase(object):
         if path_to_data is None:
             logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
-        if (d.templat and
+        if (d.template and
                 d.template.model and
                 d.template.model.alignment_filename and
                 d.template.model.model_filename):

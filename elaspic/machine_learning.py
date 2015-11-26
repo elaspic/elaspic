@@ -7,7 +7,7 @@ from sklearn import ensemble
 from sklearn import cross_validation
 from sklearn import metrics
 
-from common import dat
+from . import helper
 
 
 # %%
@@ -20,7 +20,7 @@ def write_row_to_file(results, output_filename):
     results_df = results_df.reindex_axis(sorted(results_df.columns), axis=1)
     print('Results:\n{}'.format(results_df))
     try:
-        with dat.open_exclusively(output_filename) as ofh:
+        with helper.open_exclusively(output_filename) as ofh:
             results_df.to_csv(ofh, sep='\t', mode='a', index=False, header=False)
     except Exception as e:
         print('Counld not append result to file: {}'.format(output_filename))

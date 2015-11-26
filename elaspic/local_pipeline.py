@@ -98,7 +98,7 @@ class LocalPipeline(Pipeline):
                 mutation_idx = int(mutation_pos) - 1
                 # Validation
                 mutation_expected_aa = (
-                    str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1])]
+                    str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1]) - 1]
                 )
                 if mutation[0] != mutation_expected_aa:
                     raise errors.MutationMismatchError()
