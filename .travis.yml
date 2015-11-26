@@ -15,6 +15,7 @@ install:
   - conda update -q conda
   - conda info -a
   - conda config --add channels bioconda
+  - conda config --add channels salilab
   - conda config --add channels ostrokach
   # Install required packages
   - conda install -q conda-build pytest fake_provean
@@ -25,8 +26,7 @@ install:
   - conda build conda/elaspic 
   - conda install elaspic --use-local 
 script:
-  - py.test tests/test_pep8.py
-  - py.test tests/test_local_pipeline.py
+  - py.test
 after_success:
   - coveralls
 env:

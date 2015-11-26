@@ -25,7 +25,7 @@ def parse_args():
     args = parser.parse_args()
     assert op.isfile(args.sequence_file)
     assert op.isfile(args.mutation_file)
-    assert op.isdir(args.blast_db_dir)
+    assert op.isfile(args.blast_db_dir + '.pal')
     assert op.isdir(args.tmp_dir)
     assert op.isfile(args.psiblast)
     assert op.isfile(args.blastdbcmd)
@@ -38,13 +38,13 @@ def parse_args():
 def main():
     args = parse_args()
     with open(args.mutation_file) as ifh:
-        mutation = ifh.read.strip()
+        mutation = ifh.read().strip()
     print('# VARIATION            SCORE')
     print('{} {}'.format(mutation, 0))
     if args.save_supporting_set:
-        with open(args.save_supporting_set) as ofh:
+        with open(args.save_supporting_set, 'w') as ofh:
             ofh.write('fake_provean supporting set')
-        with open(args.save_supporting_set + '.fasta') as ofh:
+        with open(args.save_supporting_set + '.fasta', 'w') as ofh:
             ofh.write('fake_provean supporting set fasta file')
 
 if __name__ == '__main__':

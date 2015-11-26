@@ -108,8 +108,8 @@ setup(
     packages=['elaspic'],
     package_data={'elaspic': ['data/*']},
     long_description=read("README.rst"),
-    install_requires=meta['requirements']['run'],
-    tests_require=meta['test']['requires'],
+    # install_requires=meta['requirements']['run'],
+    # tests_require=meta['test']['requires'],
     entry_points={'console_scripts': meta['build']['entry_points']},
     classifiers=[
         "Programming Language :: Python :: 2",

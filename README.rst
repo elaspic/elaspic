@@ -4,9 +4,8 @@ Introduction
 .. image:: https://travis-ci.org/ostrokach/elaspic.svg
    :align: right
 
-.. image:: https://coveralls.io/repos/ostrokach/elaspic/badge.svg?branch=master&service=github 
+.. image:: https://coveralls.io/repos/ostrokach/elaspic/badge.svg?branch=master&service=github
    :target: https://coveralls.io/github/ostrokach/elaspic?branch=master
-   :align: right
 
 Welcome to the ELASPIC code repository! 
 

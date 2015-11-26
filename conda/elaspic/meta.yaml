@@ -13,14 +13,10 @@ build:
 
 requirements:
   build:
-    - python
-    - numpy
-    - pandas
-    - scikit-learn
-  run:
     # Basic python
     - python
     - retrying
+    - pyyaml
     # Scientific python
     - fastcache
     - numpy
@@ -29,13 +25,6 @@ requirements:
     - psutil
     - scikit-learn
     - biopython
-    # Testing
-    - pytest
-    # Documentation
-    - sphinx >=1.3
-    - sphinxcontrib-programoutput
-    - jinja2
-    - markupsafe
     # Python 2 / 3 compatibility
     - future
     - six
@@ -50,21 +39,51 @@ requirements:
     - pops
     - msms
     - t_coffee
-    - modeller
+    - modeller ==9.15
     - cd-hit
-    - provean
+    - fake_provean  # in order to speed up tests
+    - foldx
+    - libfaketime
+  run:
+    # Basic python
+    - python
+    - pyyaml
+    - psutil
+    - retrying
+    - fastcache
+    # Scientific python
+    - numpy
+    - scipy
+    - pandas
+    - scikit-learn
+    - biopython
+    # Python 2 / 3 compatibility
+    - future
+    - six
+    # Database access
+    - sqlalchemy
+    - sqlite
+    - mysqlclient
+    - psycopg2
+    # Binary files
+    - stride
+    - knot
+    - pops
+    - msms
+    - t_coffee
+    - modeller ==9.15
+    - cd-hit
+    - fake_provean  # in order to speed up tests
     - foldx
     - libfaketime
 
 test:
-  requires:
-    - pytest
   imports:
     - elaspic
   commands:
     - elaspic --help
     - elaspic_database --help
-
+      
 about:
   home: elaspic.kimlab.org
   license: MIT
