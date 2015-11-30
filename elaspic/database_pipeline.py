@@ -207,7 +207,7 @@ class PrepareSequence:
                 d.uniprot_sequence.provean.provean_supset_filename):
             # Provean supset has already been calculated
             self.provean_supset_file = op.join(
-                configs['archive_dir'],
+                configs['archive_temp_dir'],
                 database.get_uniprot_base_path(d),
                 d.uniprot_sequence.provean.provean_supset_filename
             )
@@ -313,13 +313,13 @@ class PrepareModel:
         if isinstance(d, database.UniprotDomain):
             unique_id = d.uniprot_domain_id
             modeller_results['model_file'] = op.join(
-                configs['archive_dir'],
+                configs['archive_temp_dir'],
                 d.path_to_data,
                 d.template.model.model_filename
             )
             modeller_results['alignment_files'] = [
                 op.join(
-                    configs['archive_dir'],
+                    configs['archive_temp_dir'],
                     d.path_to_data,
                     d.template.model.alignment_filename,
                 )
@@ -329,18 +329,18 @@ class PrepareModel:
         elif isinstance(d, database.UniprotDomainPair):
             unique_id = d.uniprot_domain_pair_id
             modeller_results['model_file'] = op.join(
-                configs['archive_dir'],
+                configs['archive_temp_dir'],
                 d.path_to_data,
                 d.template.model.model_filename
             )
             modeller_results['alignment_files'] = [
                 op.join(
-                    configs['archive_dir'],
+                    configs['archive_temp_dir'],
                     d.path_to_data,
                     d.template.model.alignment_filename_1,
                 ),
                 op.join(
-                    configs['archive_dir'],
+                    configs['archive_temp_dir'],
                     d.path_to_data,
                     d.template.model.alignment_filename_2,
                 ),
