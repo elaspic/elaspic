@@ -15,35 +15,17 @@ requirements:
   build:
     # Basic python
     - python
-    - retrying
     - pyyaml
+    - requests
     # Scientific python
-    - fastcache
     - numpy
     - scipy
     - pandas
-    - psutil
     - scikit-learn
     - biopython
     # Python 2 / 3 compatibility
     - future
     - six
-    # Database access
-    - sqlalchemy
-    - sqlite
-    - mysqlclient
-    - psycopg2
-    # Binary files
-    - stride
-    - knot
-    - pops
-    - msms
-    - t_coffee
-    - modeller ==9.15
-    - cd-hit
-    - fake_provean  # in order to speed up tests
-    - foldx
-    - libfaketime
   run:
     # Basic python
     - python
@@ -51,6 +33,7 @@ requirements:
     - psutil
     - retrying
     - fastcache
+    - requests
     # Scientific python
     - numpy
     - scipy
@@ -66,6 +49,8 @@ requirements:
     - mysqlclient
     - psycopg2
     # Binary files
+    - p7zip
+    - blast
     - stride
     - knot
     - pops
@@ -73,11 +58,14 @@ requirements:
     - t_coffee
     - modeller ==9.15
     - cd-hit
-    - fake_provean  # in order to speed up tests
+    - provean 
     - foldx
     - libfaketime
 
 test:
+  requires:
+    - pytest
+    - fake_provean
   imports:
     - elaspic
   commands:
