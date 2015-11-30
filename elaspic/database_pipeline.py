@@ -325,6 +325,7 @@ class PrepareModel:
                 )
             ]
             modeller_results['norm_dope'] = d.template.model.norm_dope
+            modeller_results['domain_def_offsets'] = [(0, 0)]
         elif isinstance(d, database.UniprotDomainPair):
             unique_id = d.uniprot_domain_pair_id
             modeller_results['model_file'] = op.join(
@@ -345,6 +346,7 @@ class PrepareModel:
                 ),
             ]
             modeller_results['norm_dope'] = d.template.model.norm_dope
+            modeller_results['domain_def_offsets'] = [(0, 0), (0, 0)]
 
         modeller_results_file = op.join(
             configs['model_dir'],
@@ -606,6 +608,8 @@ class PrepareModel:
         """Write a pdb file containing template domain chains (cut to domain bounaries).
         """
         pdb_file = structure_tools.get_pdb_file(pdb_id, configs['pdb_dir'], 'ent')
+        if not op.isfile(pdb_file) and configs['allow_internet']:
+            pdb_file = structure_tools.download_pdb_file(pdb_id, configs['pdb_dir'])
         sp = structure_tools.StructureParser(pdb_file, pdb_chains, pdb_domain_defs)
         sp.extract()
         sp.save_structure(configs['unique_temp_dir'])
