@@ -32,14 +32,14 @@ class Model:
         # Target sequences
         self.sequence_file = sequence_file
         self.sequence_seqrecords = list(SeqIO.parse(self.sequence_file, 'fasta'))
-        self.sequence_id = op.splitext(op.basename(self.sequence_file))[0]
+        self.sequence_id = op.splitext(op.basename(self.sequence_file))[0].replace(':', '.')
         self._validate_sequence_seqrecords()
         logger.debug('sequence_seqrecords: {}'.format(self.sequence_seqrecords))
 
         # Template structures
         self.structure_file = structure_file
         self.structure = structure_tools.get_pdb_structure(self.structure_file)
-        self.structure_id = self.structure.id
+        self.structure_id = self.structure.id.replace(':', '.')
         self.structure_seqrecords = [
             SeqRecord(
                 id='{}{}'.format(self.structure_id, chain.id),
