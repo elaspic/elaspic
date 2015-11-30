@@ -61,7 +61,7 @@ class MMCIFParserMod(MMCIFParser):
 
     def get_structure(self, structure_id, gzip_fh):
         """
-        Altered ``get_structure`` method which accepts gzip file-handles as input.
+        Altered `get_structure` method which accepts gzip file handles as input.
         """
         with NamedTemporaryFile(mode='w', dir=self.temp_dir) as temp_fh:
             temp_fh.writelines(gzip_fh.readlines())
