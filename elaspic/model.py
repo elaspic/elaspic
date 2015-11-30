@@ -191,7 +191,7 @@ class Model:
                 with open(alignment_output_file, 'w') as ofh:
                     SeqIO.write([sequence_seqrec, structure_seqrec], ofh, 'clustal')
                 alignment_files.append(alignment_output_file)
-                domain_def_offsets.append((None, None,))
+                domain_def_offsets.append((0, 0,))
                 self.sequence_seqrecords_aligned.append(sequence_seqrec)
                 self.structure_seqrecords_aligned.append(structure_seqrec)
 
@@ -343,8 +343,14 @@ class Model:
 
         mutation_errors = ''
 
+        # Domain definitions, in case not the entire sequence was modelled
+        domain_def_offset = self.modeller_results['domain_def_offsets'][sequence_idx]
+        domain_def = (
+            domain_def_offset[0],
+            len(self.sequence_seqrecords[sequence_idx].seq) - domain_def_offset[1]
+        )
         mutation_pos = int(mutation[1:-1])
-        if mutation_pos < 1 or mutation_pos > len(self.sequence_seqrecords[sequence_idx].seq):
+        if mutation_pos < domain_def[0] or mutation_pos > domain_def[1]:
             raise errors.MutationOutsideDomainError()
 
         if len(self.sequence_seqrecords) == 1:
@@ -394,7 +400,6 @@ class Model:
         logger.debug('chain_id: {}'.format(chain_id))
         logger.debug('partner_chain_id: {}'.format(partner_chain_id))
 
-
         #######################################################################
         # Create a folder for all mutation data.
         mutation_dir = op.join(configs['model_dir'], 'mutations',  mutation_id)
@@ -402,28 +407,25 @@ class Model:
         os.makedirs(mutation_dir, exist_ok=True)
         shutil.copy(op.join(configs['data_dir'], 'rotabase.txt'), mutation_dir)
 
-
         #######################################################################
         # Copy the homology model to the mutation folder
         model_file = op.join(mutation_dir, op.basename(self.modeller_results['model_file']))
         shutil.copy(self.modeller_results['model_file'], model_file)
 
-
         #######################################################################
-        ## 2nd: use the 'Repair' feature of FoldX to optimise the structure
+        # 2nd: use the 'Repair' feature of FoldX to optimise the structure
         fX = call_foldx.FoldX(model_file, chain_id, mutation_dir)
         repairedPDB_wt = fX('RepairPDB')
 
-
         #######################################################################
-        ## 3rd: introduce the mutation using FoldX
+        # 3rd: introduce the mutation using FoldX
         position_modeller = (
             structure_tools.convert_position_to_resid(
                 self.modeller_structure[0][chain_id],
-                [int(mutation[1:-1])])[0]
+                [int(mutation[1:-1]) - domain_def[0]])[0]
         )
         mutation_modeller = (mutation[0] + str(position_modeller) + mutation[-1])
-        mutCodes = [mutation_modeller[0] + chain_id + mutation_modeller[1:],]
+        mutCodes = [mutation_modeller[0] + chain_id + mutation_modeller[1:], ]
         logger.debug('Mutcodes for foldx: {}'.format(mutCodes))
 
         # Introduce the mutation using foldX
@@ -445,9 +447,8 @@ class Model:
         shutil.copy(repairedPDB_wt_list[0], model_file_wt)
         shutil.copy(repairedPDB_mut_list[0], model_file_mut)
 
-
         #######################################################################
-        ## 4th: set up the classes for the wildtype and the mutant structures
+        # 4th: set up the classes for the wildtype and the mutant structures
         fX_wt_list = list()
         for wPDB in repairedPDB_wt_list:
             fX_wt_list.append(call_foldx.FoldX(wPDB, chain_id, mutation_dir))
@@ -456,9 +457,8 @@ class Model:
         for mPDB in repairedPDB_mut_list:
             fX_mut_list.append(call_foldx.FoldX(mPDB, chain_id, mutation_dir))
 
-
         #######################################################################
-        ## 5th: Calculate energies
+        # 5th: Calculate energies
         stability_values_wt = helper.encode_list_as_text(
             [foldx('Stability') for foldx in fX_wt_list]
         )
@@ -477,9 +477,8 @@ class Model:
                 [foldx('AnalyseComplex') for foldx in fX_mut_list]
             )
 
-
         #######################################################################
-        ## 6: Calculate all other relevant properties
+        # 6: Calculate all other relevant properties
         # (This also verifies that mutations match mutated residues in pdb structures).
         analyze_structure_wt = structure_analysis.AnalyzeStructure(
             repairedPDB_wt_list[0], mutation_dir,
@@ -496,64 +495,62 @@ class Model:
         logger.debug('analyze_structure_results_wt: {}'.format(analyze_structure_results_wt))
         logger.debug('analyze_structure_results_mut: {}'.format(analyze_structure_results_mut))
 
-
         #######################################################################
-        ## 5th: calculate the energy for the wildtype
+        # 5th: calculate the energy for the wildtype
         results = dict(
-            protein_id = protein_id,
-            sequence_idx = sequence_idx,
-            chain_modeller = chain_id,
-            partner_chain_id = partner_chain_id,
-            mutation_id = mutation_id,
-            mutation_domain = mutation,
-            mutation_errors = mutation_errors,
+            protein_id=protein_id,
+            sequence_idx=sequence_idx,
+            chain_modeller=chain_id,
+            partner_chain_id=partner_chain_id,
+            mutation_id=mutation_id,
+            mutation_domain=mutation,
+            mutation_errors=mutation_errors,
             #
-            mutation_dir = mutation_dir,
-            mutation_modeller = mutation_modeller,
-            mutation_foldx = ','.join(mutCodes),
-            model_file_wt = model_file_wt,
-            model_file_mut = model_file_mut,
-            stability_energy_wt = stability_values_wt,
-            stability_energy_mut = stability_values_mut,
-            analyse_complex_energy_wt = complex_stability_values_wt,
-            analyse_complex_energy_mut = complex_stability_values_mut,
+            mutation_dir=mutation_dir,
+            mutation_modeller=mutation_modeller,
+            mutation_foldx=','.join(mutCodes),
+            model_file_wt=model_file_wt,
+            model_file_mut=model_file_mut,
+            stability_energy_wt=stability_values_wt,
+            stability_energy_mut=stability_values_mut,
+            analyse_complex_energy_wt=complex_stability_values_wt,
+            analyse_complex_energy_mut=complex_stability_values_mut,
         )
         for key, value in analyze_structure_results_wt.items():
             results[key + '_wt'] = value
         for key, value in analyze_structure_results_mut.items():
             results[key + '_mut'] = value
 
-        ## Another exit point
+        # Another exit point
         self.mutations[(sequence_idx, mutation)] = results
         return results
 
     @property
     def result(self):
         result = dict(
-            model_id = self.model_id,
-            structure_file = self.structure_file,
-            structure_id = self.structure_id,
-            sequence_file = self.sequence_file,
-            sequence_id = self.sequence_id,
-            chain_ids = tuple(self.chain_ids),
-            mutations = self.mutations,
-            modeller_results_file = self.modeller_results_file,
-            modeller_chain_ids = tuple(self.modeller_chain_ids),
-            modeller_results = self.modeller_results,
-            relative_sasa_scores = self.relative_sasa_scores,
-            core_or_interface = self.core_or_interface,
+            model_id=self.model_id,
+            structure_file=self.structure_file,
+            structure_id=self.structure_id,
+            sequence_file=self.sequence_file,
+            sequence_id=self.sequence_id,
+            chain_ids=tuple(self.chain_ids),
+            mutations=self.mutations,
+            modeller_results_file=self.modeller_results_file,
+            modeller_chain_ids=tuple(self.modeller_chain_ids),
+            modeller_results=self.modeller_results,
+            relative_sasa_scores=self.relative_sasa_scores,
+            core_or_interface=self.core_or_interface,
         )
         if len(self.sequence_seqrecords) > 1:
             result_interface = dict(
-                interacting_aa_1 = self.interacting_aa_1,
-                interacting_aa_2 = self.interacting_aa_2,
-                interface_area_hydrophobic = self.interface_area_hydrophobic,
-                interface_area_hydrophilic = self.interface_area_hydrophilic,
-                interface_area_total = self.interface_area_total,
+                interacting_aa_1=self.interacting_aa_1,
+                interacting_aa_2=self.interacting_aa_2,
+                interface_area_hydrophobic=self.interface_area_hydrophobic,
+                interface_area_hydrophilic=self.interface_area_hydrophilic,
+                interface_area_total=self.interface_area_total,
             )
             result.update(result_interface)
         return result
-
 
 
 # %%
@@ -719,5 +716,3 @@ def run_modeller(
         'pir_alignment_file': pir_alignment_file,
     }
     return results
-
-
