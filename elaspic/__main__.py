@@ -233,10 +233,10 @@ def elaspic():
 
 # %%
 def create_database(args):
-    from elaspic import sql_db
-    db = sql_db.MyDatabase()
+    from elaspic import database
+    db = database.MyDatabase()
     db.create_database_tables(args.clear_schema, args.keep_uniprot_sequence)
-    db.logger.info('Done!')
+    logger.info('Done!')
 
 
 @contextmanager
@@ -259,12 +259,12 @@ def open_gzip(filename):
 
 
 def load_data_to_database(args):
-    from elaspic import sql_db
-    db = sql_db.MyDatabase()
+    from elaspic import database
+    db = database.MyDatabase()
     args.data_folder = args.data_folder.rstrip('/')
     table_names = args.data_files.split(',') if args.data_files else None
     dirpath, dirnames, filenames = next(os.walk(args.data_folder))
-    for table in sql_db.Base.metadata.sorted_tables:
+    for table in database.Base.metadata.sorted_tables:
         if table_names is not None and table.name not in table_names:
             print("Skipping table '{}' because it was not included in the 'table_names' list..."
                   .format(table.name))
@@ -281,26 +281,14 @@ def load_data_to_database(args):
 
 
 def test_database(args):
-    from elaspic import elaspic_testing
-    if args.mutation_type in ['domain', 'both']:
-        print('*' * 80)
-        print('Running a sample domain mutation...')
-        test_uniprot_domain = elaspic_testing.TestUniprotDomain()
-        test_uniprot_domain.setup_class(uniprot_domain_id=args.uniprot_domain_id)
-        test_uniprot_domain.test()
-    if args.mutation_type in ['interface', 'both']:
-        print('*' * 80)
-        print('Running a sample interface mutation...')
-        test_uniprot_domain_pair = elaspic_testing.TestUniprotDomainPair()
-        test_uniprot_domain_pair.setup_class(uniprot_domain_pair_id=args.uniprot_domain_pair_id)
-        test_uniprot_domain_pair.test()
+    raise NotImplementedError
 
 
 def delete_database(args):
-    from elaspic import sql_db
-    db = sql_db.MyDatabase()
+    from elaspic import database
+    db = database.MyDatabase()
     db.delete_database_tables(args.drop_schema, args.keep_uniprot_sequence)
-    db.logger.info('Done!')
+    logger.info('Done!')
 
 
 def get_database_parser():
