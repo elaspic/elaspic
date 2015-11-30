@@ -261,16 +261,19 @@ def run_subprocess(system_command, **popen_argvars):
 def run_subprocess_locally(working_path, system_command, **popen_argvars):
     with switch_paths(working_path):
         child_process = run_subprocess(system_command, **popen_argvars)
+    return child_process
+
+
+def subprocess_communicate(child_process):
+    # Print a message every 5 minutes for long-running subprocesses
+    # (This is required for travis-ci)
     time_counter = 0
     while child_process.poll() == None:
         time.sleep(1)
         time_counter += 1
         if (time_counter % 5) == 0:
-            logger.debug("Still running: '{}'".format(system_command))
-    return child_process
-
-
-def subprocess_communicate(child_process):
+            logger.debug("Subprocess is still running...")
+    # Collect output
     result, error_message = child_process.communicate()
     result = _try_decoding_bytes_string(result)
     error_message = _try_decoding_bytes_string(error_message)
