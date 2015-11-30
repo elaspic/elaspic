@@ -6,23 +6,46 @@ set -e
 rsync -av $SRC_DIR/tests ./ --exclude='[._]*'
 rsync -av $SRC_DIR/setup.cfg ./
 
-# Directories
+# Common directories
 PWD=`pwd`
 PDB_DIR="$PWD/pdb"
 BLAST_DB_DIR="$PWD/blast/db"
-ARCHIVE_DIR="$PWD/elaspic.kimlab.org"
 
 mkdir -p "$PDB_DIR"
 mkdir -p "$BLAST_DB_DIR"
-mkdir -p "$ARCHIVE_DIR"
 
 touch "$BLAST_DB_DIR/nr.pal"
 touch "$BLAST_DB_DIR/pdbaa.pal"
 
-# Update the configuration file
 sed -i "s|^pdb_dir = .*|pdb_dir = $PDB_DIR|" ./tests/travis_config_file.ini
 sed -i "s|^blast_db_dir = .*|blast_db_dir = $BLAST_DB_DIR|" ./tests/travis_config_file.ini
-sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" ./tests/travis_config_file.ini
+
+
+
+# ====== Local Test 1 ======
+
+ARCHIVE_DIR="$PWD/archive"
+mkdir -p "$ARCHIVE_DIR"
+
+# Update the configuration file
+cp -f ./tests/travis_config_file.ini ./config_file.ini
+sed -i "s|^archive_type = .*|archive_type = directory|" ./config_file.ini
+sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" ./config_file.ini
+
+# Run tests
+py.test -vsx --cache-clear --quick
+
+
+
+# ===== Configure database =====
+
+# Download external files
+wget -r --no-parent --reject "index.html*" --cut-dirs=4 \
+    http://elaspic.kimlab.org/static/download/current_release/Homo_sapiens_test/
+wget -P elaspic.kimlab.org \
+    http://elaspic.kimlab.org/static/download/current_release/domain.tsv.gz
+wget -P elaspic.kimlab.org \
+    http://elaspic.kimlab.org/static/download/current_release/domain_contact.tsv.gz
 
 # Configure the database
 mysql -u root -e 'drop database if exists travis_test';
@@ -75,32 +98,54 @@ END$$
 DELIMITER ;
 EOF
 
-# Download external files
-wget -r --no-parent --reject "index.html*" --cut-dirs=4 \
-    http://elaspic.kimlab.org/static/download/current_release/Homo_sapiens_test/
-wget -P elaspic.kimlab.org \
-    http://elaspic.kimlab.org/static/download/current_release/domain.tsv.gz
-wget -P elaspic.kimlab.org \
-    http://elaspic.kimlab.org/static/download/current_release/domain_contact.tsv.gz
-
-# Extract precalculated data into archive folder
-#tar -xzvf elaspic.kimlab.org/provean/provean.tar.gz -C archive/
-#tar -xzvf elaspic.kimlab.org/uniprot_domain/uniprot_domain.tar.gz -C archive/
-#tar -xzvf elaspic.kimlab.org/uniprot_domain_pair/uniprot_domain_pair.tar.gz -C archive/
-
 # Load precalculated data to the database
 elaspic_database -c tests/travis_config_file.ini create
 elaspic_database -c tests/travis_config_file.ini load_data --data_folder elaspic.kimlab.org
 
-# Remove some rows from the database
+# Remove some rows from the database, so that we have something to calculate
 mysql -u root travis_test -e "DELETE FROM provean LIMIT 100";
 mysql -u root travis_test -e "DELETE FROM uniprot_domain_model LIMIT 100";
 mysql -u root travis_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 100";
 
+
+
+# ===== Database Test 1 =====
+
+ARCHIVE_DIR="$PWD/elaspic.kimlab.org"
+
+# Update the configuration file
+cp -f ./tests/travis_config_file.ini ./config_file.ini
+sed -i "s|^archive_type = .*|archive_type = 7zip|" ./config_file.ini
+sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" ./config_file.ini
+
 # Run tests
-py.test -vsx --cache-clear --quick
 py.test tests/test_database_pipeline.py -vsx --cache-clear --quick \
     --config-file="./tests/travis_config_file.ini"
+
+
+
+# ===== Database Test 2 =====
+
+ARCHIVE_DIR="$PWD/archive"
+rm -rf $ARCHIVE_DIR
+mkdir -p $ARCHIVE_DIR
+
+7z x "$PWD/elaspic.kimlab.org/provean/provean.7z -o $ARCHIVE_DIR"
+7z x "$PWD/elaspic.kimlab.org/uniprot_domain/uniprot_domain.7z -o $ARCHIVE_DIR"
+7z x "$PWD/elaspic.kimlab.org/uniprot_domain_pair/uniprot_domain_pair.7z -o $ARCHIVE_DIR"
+
+# Update the configuration file
+cp -f ./tests/travis_config_file.ini ./config_file.ini
+sed -i "s|^archive_type = .*|archive_type = directory|" ./config_file.ini
+sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" ./config_file.ini
+
+# Run tests
+py.test tests/test_database_pipeline.py -vsx --cache-clear --quick \
+        --config-file="./tests/travis_config_file.ini"
+
+
+
+# ===== Cleanup =====
 
 # Clear the database
 elaspic_database -c tests/travis_config_file.ini delete
