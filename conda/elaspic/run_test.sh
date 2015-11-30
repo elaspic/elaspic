@@ -33,11 +33,12 @@ sed -i "s|^archive_type = .*|archive_type = directory|" ./config_file.ini
 sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" ./config_file.ini
 
 # Run tests
-py.test -vsx --cache-clear --quick
+py.test -vsx --cache-clear --quick \
+    --config-file="./config_file.ini"
 
 
 
-# ===== Configure database =====
+# ====== Configure Database ======
 
 # Download external files
 wget -r --no-parent --reject "index.html*" --cut-dirs=4 \
@@ -109,7 +110,7 @@ mysql -u root travis_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 100";
 
 
 
-# ===== Database Test 1 =====
+# ====== Database Test 1 ======
 
 ARCHIVE_DIR="$PWD/elaspic.kimlab.org"
 
@@ -120,11 +121,11 @@ sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" ./config_file.ini
 
 # Run tests
 py.test tests/test_database_pipeline.py -vsx --cache-clear --quick \
-    --config-file="./tests/travis_config_file.ini"
+    --config-file="./config_file.ini"
 
 
 
-# ===== Database Test 2 =====
+# ====== Database Test 2 ======
 
 ARCHIVE_DIR="$PWD/archive"
 rm -rf $ARCHIVE_DIR
@@ -141,11 +142,11 @@ sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" ./config_file.ini
 
 # Run tests
 py.test tests/test_database_pipeline.py -vsx --cache-clear --quick \
-        --config-file="./tests/travis_config_file.ini"
+    --config-file="./config_file.ini"
 
 
 
-# ===== Cleanup =====
+# ====== Cleanup ======
 
 # Clear the database
 elaspic_database -c tests/travis_config_file.ini delete
