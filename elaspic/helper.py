@@ -261,7 +261,13 @@ def run_subprocess(system_command, **popen_argvars):
 def run_subprocess_locally(working_path, system_command, **popen_argvars):
     with switch_paths(working_path):
         child_process = run_subprocess(system_command, **popen_argvars)
-        return child_process
+    time_counter = 0
+    while child_process.poll() == None:
+        time.sleep(1)
+        time_counter += 1
+        if (time_counter % 5) == 0:
+            logger.debug("Still running: '{}'".format(system_command))
+    return child_process
 
 
 def subprocess_communicate(child_process):
