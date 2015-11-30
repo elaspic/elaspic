@@ -186,11 +186,14 @@ class FoldX(object):
         result, error_message, return_code = (
             helper.subprocess_check_output_locally(self.foldx_dir, system_command)
         )
-        if return_code != 0:
-            logger.debug('FoldX result: %s' % result)
-            logger.debug('FoldX error: %s' % error_message)
+        if error_message:
+            logger.error('foldx error message: {}'.format(error_message))
             if 'Cannot allocate memory' in error_message:
                 raise errors.ResourceError(error_message)
+        if 'There was a problem' in result:
+            logger.error('foldx result: {}'.format(result))
+            if 'Specified residue not found.' in result:
+                raise errors.MutationMismatchError()
 
     def __read_result(self, outFile, pdb, whatToRead):
         with open(outFile, 'r') as f:
