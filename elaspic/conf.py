@@ -103,6 +103,7 @@ def read_configuration_file(config_file, unique_temp_dir=None):
             'n_cores': '1',
             'web_server': 'False',
             'copy_data': 'True',
+            'allow_internet': 'False',
         })
     configParser.read(config_file)
 
@@ -118,6 +119,8 @@ def read_configuration_file(config_file, unique_temp_dir=None):
     configs['n_cores'] = configParser.getint('DEFAULT', 'n_cores')
     configs['web_server'] = configParser.get('DEFAULT', 'web_server')
     configs['copy_data'] = configParser.getboolean('DEFAULT', 'copy_data')
+    configs['allow_internet'] = configParser.getboolean(
+        'DEFAULT', 'allow_internet')
 
     # Temporary directories
     configs['temp_dir'] = get_temp_dir(configs['global_temp_dir'], 'elaspic')
@@ -252,7 +255,7 @@ def _validate_blast_db_dir(configs):
 
     if blast_db_dir_isvalid(configs['blast_db_dir']):
         pass
-    elif blast_db_dir_isvalid(configs['blast_db_dir_2']):
+    elif blast_db_dir_isvalid(configs['blast_db_dir_fallback']):
         message = (
             "Using 'blast_db_dir_fallback' because 'blast_db_dir' is not valid!\n"
             "blast_db_dir: {}\n"
