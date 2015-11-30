@@ -126,7 +126,9 @@ def pytest_runtest_setup(item):
 # %% Command line options
 def pytest_addoption(parser):
     parser.addoption("--quick", action="store_true", default=False,
-                     help="Run quick tests.")
+                     help="Run only quick tests.")
+    parser.addoption("--config-file", default=None,
+                     help="Name of the configuration file.")
 
 
 @pytest.fixture

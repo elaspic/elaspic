@@ -16,8 +16,19 @@ logger = logging.getLogger(__name__)
 
 
 # %% Constants
-QUICK = (hasattr(pytest, "config") and pytest.config.getoption('--quick'))
-logger.debug("\nRunning quickly: {}".format(QUICK))
+if hasattr(pytest, "config"):
+    QUICK = pytest.config.getoption('--quick')
+    CONFIG_FILE = (
+        pytest.config.getoption('--config-file') or
+        op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
+    )
+else:
+    QUICK = False
+    CONFIG_FILE = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
+
+
+logger.debug('Running quick: {}'.format(QUICK))
+logger.debug('Config file: {}'.format(CONFIG_FILE))
 
 
 # %%
@@ -126,8 +137,7 @@ def pdb_id_sequence(request):
 # %%
 def test_pdb_mutation_pipeline(pdb_id):
     working_dir = None  # can set to something if don't want to rerun entire pipeline
-    config_file = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
-    conf.read_configuration_file(config_file, unique_temp_dir=working_dir)
+    conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=working_dir)
     configs = conf.Configs()
     pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
     for chain_id in pdb_mutatations[pdb_id]:
@@ -140,11 +150,18 @@ def test_pdb_mutation_pipeline(pdb_id):
             lp.run_all_mutations()
 
 
-def test_sequence_mutation_pipeline(pdb_id_sequence):
+def test_sequence_mutation_pipeline(pdb_id_sequence, working_dir=None):
+    """
+    Parameters
+    ----------
+    pdb_id_sequence : tuple
+        (pdb_id, uniprot_id)
+    working_dir : str, optional
+        `unique_temp_dir` to use for this run.
+        (Useful if you want to resume a previous job).
+    """
     pdb_id, sequence_id = pdb_id_sequence
-    working_dir = None  # can set to something if don't want to rerun entire pipeline
-    config_file = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
-    conf.read_configuration_file(config_file, unique_temp_dir=working_dir)
+    conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=working_dir)
     configs = conf.Configs()
     pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
     sequence_file = sequence.download_uniport_sequence(sequence_id, configs['unique_temp_dir'])
@@ -160,4 +177,4 @@ def test_sequence_mutation_pipeline(pdb_id_sequence):
 
 # %%
 if __name__ == '__main__':
-    pytest.main([__file__, '-vsx', '--quick'])
+    test_sequence_mutation_pipeline(('2Z5Y', 'Q5NU32'), working_dir='/tmp/elaspic/nm9omiv6')
