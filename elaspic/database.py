@@ -105,7 +105,7 @@ class MyDatabase(object):
         )
 
     # %%
-    def get_engine(self):
+    def get_engine(self, echo=False):
         """
         Get an SQLAlchemy engine that can be used to connect to the database.
         """
@@ -118,7 +118,8 @@ class MyDatabase(object):
             # (required for SCINET)
             engine = sa.create_engine(
                 '{db_type}:///{sqlite_db_path}'.format(**configs),
-                isolation_level='READ UNCOMMITTED'
+                isolation_level='READ UNCOMMITTED',
+                echo=echo,
             )
             enable_sqlite_foreign_key_checks(engine)
         elif configs['db_type'] in ['postgresql', 'mysql']:
@@ -130,8 +131,9 @@ class MyDatabase(object):
             engine = sa.create_engine(
                 "{db_type}://{db_username}:{db_password}@"
                 "{db_url}:{db_port}/{db_database}{db_socket}"
-                .format(**configs)
-            )  # echo=True
+                .format(**configs),
+                echo=echo,
+            )
         else:
             raise Exception("Unsupported `db_type`: '{}'".format(configs['db_type']))
         logger.info(info_message)
@@ -591,8 +593,8 @@ class MyDatabase(object):
             if archive_type == '7zip':
                 # Extract files from a 7zip archive
                 filenames = [
-                    path_to_data + d.template.model.alignment_filename,
-                    path_to_data + d.template.model.model_filename,
+                    op.join(path_to_data, d.template.model.alignment_filename),
+                    op.join(path_to_data, d.template.model.model_filename),
                 ]
                 path_to_7z = os.path.join(
                     archive_dir,
@@ -601,21 +603,29 @@ class MyDatabase(object):
                 )
                 self._extract_files_from_7zip(path_to_7z, filenames)
             else:
-                tmp_save_path = configs['archive_temp_dir'] + path_to_data
-                archive_save_path = archive_dir + path_to_data
-                path_to_alignment = (
-                    tmp_save_path +
-                    '/'.join(d.template.model.alignment_filename.split('/')[:-1]) + '/'
+                tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
+                archive_save_path = op.join(archive_dir, path_to_data)
+                path_to_alignment = op.join(
+                    tmp_save_path,
+                    *d.template.model.alignment_filename.split('/')[:-1],
                 )
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'"
                     .format(path_to_alignment), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.alignment_filename,
-                    tmp_save_path + d.template.model.alignment_filename), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.model_filename,
-                    tmp_save_path + d.template.model.model_filename), shell=True)
+#                subprocess.check_call("cp -f '{}' '{}'".format(
+#                    archive_save_path + d.template.model.alignment_filename,
+#                    tmp_save_path + d.template.model.alignment_filename), shell=True)
+#                subprocess.check_call("cp -f '{}' '{}'".format(
+#                    archive_save_path + d.template.model.model_filename,
+#                    tmp_save_path + d.template.model.model_filename), shell=True)
+                shutil.copy(
+                    op.join(archive_save_path, d.template.model.alignment_filename),
+                    op.join(tmp_save_path, d.template.model.alignment_filename),
+                )
+                shutil.copy(
+                    op.join(archive_save_path, d.template.model.model_filename),
+                    op.join(tmp_save_path, d.template.model.model_filename),
+                )
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, archive_dir, archive_type):
         if path_to_data is None:
@@ -629,9 +639,9 @@ class MyDatabase(object):
             if archive_type == '7zip':
                 # Extract files from a 7zip archive
                 filenames = [
-                    path_to_data + d.template.model.alignment_filename_1,
-                    path_to_data + d.template.model.alignment_filename_2,
-                    path_to_data + d.template.model.model_filename,
+                    op.join(path_to_data, d.template.model.alignment_filename_1),
+                    op.join(path_to_data, d.template.model.alignment_filename_2),
+                    op.join(path_to_data, d.template.model.model_filename),
                 ]
                 path_to_7zip = os.path.join(
                     archive_dir,
@@ -640,25 +650,36 @@ class MyDatabase(object):
                 )
                 self._extract_files_from_7zip(path_to_7zip, filenames)
             else:
-                tmp_save_path = configs['archive_temp_dir'] + path_to_data
-                archive_save_path = archive_dir + path_to_data
-                path_to_alignment_1 = tmp_save_path + '/'.join(
-                    d.template.model.alignment_filename_1.split('/')[:-1]) + '/'
-                path_to_alignment_2 = tmp_save_path + '/'.join(
-                    d.template.model.alignment_filename_2.split('/')[:-1]) + '/'
+                tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
+                archive_save_path = op.join(archive_dir, path_to_data)
+                path_to_alignment_1 = op.join(
+                    tmp_save_path,
+                    *d.template.model.alignment_filename_1.split('/')[:-1])
+                path_to_alignment_2 = op.join(
+                    tmp_save_path,
+                    *d.template.model.alignment_filename_2.split('/')[:-1])
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.alignment_filename_1,
-                    tmp_save_path + d.template.model.alignment_filename_1), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.alignment_filename_2,
-                    tmp_save_path + d.template.model.alignment_filename_2), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + d.template.model.model_filename,
-                    tmp_save_path + d.template.model.model_filename), shell=True)
+#                subprocess.check_call("cp -f '{}' '{}'".format(
+#                    archive_save_path + d.template.model.alignment_filename_1,
+#                    tmp_save_path + d.template.model.alignment_filename_1), shell=True)
+#                subprocess.check_call("cp -f '{}' '{}'".format(
+#                    archive_save_path + d.template.model.alignment_filename_2,
+#                    tmp_save_path + d.template.model.alignment_filename_2), shell=True)
+#                subprocess.check_call("cp -f '{}' '{}'".format(
+#                    archive_save_path + d.template.model.model_filename,
+#                    tmp_save_path + d.template.model.model_filename), shell=True)
+                shutil.copy(
+                    op.join(archive_save_path, d.template.model.alignment_filename_1),
+                    op.join(tmp_save_path, d.template.model.alignment_filename_1))
+                shutil.copy(
+                    op.join(archive_save_path, d.template.model.alignment_filename_2),
+                    op.join(tmp_save_path, d.template.model.alignment_filename_2))
+                shutil.copy(
+                    op.join(archive_save_path, d.template.model.model_filename),
+                    op.join(tmp_save_path, d.template.model.model_filename))
 
     def _copy_provean(self, ud, archive_dir, archive_type):
         if not (ud.uniprot_sequence and
@@ -694,20 +715,39 @@ class MyDatabase(object):
         else:
             subprocess.check_call(
                 "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-                    os.path.dirname(
-                        configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-                        ud.uniprot_sequence.provean.provean_supset_filename)),
+                    op.dirname(op.join(
+                        configs['archive_temp_dir'],
+                        get_uniprot_base_path(ud),
+                        ud.uniprot_sequence.provean.provean_supset_filename))),
                 shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_dir + get_uniprot_base_path(ud) +
-                ud.uniprot_sequence.provean.provean_supset_filename,
-                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-                ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
-            subprocess.check_call("cp -f '{}' '{}'".format(
-                archive_dir + get_uniprot_base_path(ud) +
-                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
+#            subprocess.check_call("cp -f '{}' '{}'".format(
+#                archive_dir + get_uniprot_base_path(ud) +
+#                ud.uniprot_sequence.provean.provean_supset_filename,
+#                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
+#                ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
+#            subprocess.check_call("cp -f '{}' '{}'".format(
+#                archive_dir + get_uniprot_base_path(ud) +
+#                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+#                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
+#                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
+            shutil.copy(
+                op.join(
+                    archive_dir,
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename),
+                op.join(
+                    configs['archive_temp_dir'],
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename))
+            shutil.copy(
+                op.join(
+                    archive_dir,
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
+                op.join(
+                    configs['archive_temp_dir'],
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'))
 
     @retry(retry_on_exception=lambda exc: type(exc) == errors.Archive7zipError,
            wait_exponential_multiplier=1000,
@@ -780,22 +820,28 @@ class MyDatabase(object):
             if archive_dir.endswith('.7z'):
                 # Extract files from a 7zip archive
                 filenames = [
-                    path_to_data + mutation.model_filename_wt,
-                    path_to_data + mutation.model_filename_mut,
+                    op.join(path_to_data, mutation.model_filename_wt),
+                    op.join(path_to_data, mutation.model_filename_mut),
                 ]
                 self._extract_files_from_7zip(archive_dir, filenames)
             else:
-                tmp_save_path = configs['archive_temp_dir'] + path_to_data
-                archive_save_path = archive_dir + path_to_data
-                path_to_mutation = os.path.dirname(tmp_save_path + mutation.model_filename_wt)
+                tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
+                archive_save_path = op.join(archive_dir, path_to_data)
+                path_to_mutation = op.dirname(op.join(tmp_save_path, mutation.model_filename_wt))
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_mutation), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + mutation.model_filename_wt,
-                    tmp_save_path + mutation.model_filename_wt), shell=True)
-                subprocess.check_call("cp -f '{}' '{}'".format(
-                    archive_save_path + mutation.model_filename_mut,
-                    tmp_save_path + mutation.model_filename_mut), shell=True)
+#                subprocess.check_call("cp -f '{}' '{}'".format(
+#                    archive_save_path + mutation.model_filename_wt,
+#                    tmp_save_path + mutation.model_filename_wt), shell=True)
+#                subprocess.check_call("cp -f '{}' '{}'".format(
+#                    archive_save_path + mutation.model_filename_mut,
+#                    tmp_save_path + mutation.model_filename_mut), shell=True)
+                shutil.copy(
+                    op.join(archive_save_path, mutation.model_filename_wt),
+                    op.join(tmp_save_path, mutation.model_filename_wt))
+                shutil.copy(
+                    op.join(archive_save_path, mutation.model_filename_mut),
+                    op.join(tmp_save_path, mutation.model_filename_mut))
 
     def remove_model(self, d):
         """Remove a model from the database.
@@ -852,16 +898,15 @@ class MyDatabase(object):
         archive_dir = configs['archive_dir']
         logger.debug(
             'Moving provean supset to the output folder: {}'
-            .format(archive_dir + path_to_data))
+            .format(op.join(archive_dir, path_to_data)))
         subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-            archive_dir + path_to_data), shell=True)
-        subprocess.check_call("cp -f '{}' '{}'".format(
+            op.join(archive_dir, path_to_data)), shell=True)
+        shutil.copy(
             provean_supset_file,
-            archive_dir + path_to_data + provean.provean_supset_filename), shell=True)
-        subprocess.check_call("cp -f '{}' '{}'".format(
+            op.join(archive_dir, path_to_data, provean.provean_supset_filename))
+        shutil.copy(
             provean_supset_file + '.fasta',
-            archive_dir + path_to_data + provean.provean_supset_filename + '.fasta'), shell=True)
-
+            op.join(archive_dir, path_to_data, provean.provean_supset_filename + '.fasta'))
         self.merge_row(provean)
 
     def merge_model(self, d, files_dict={}):
@@ -870,7 +915,7 @@ class MyDatabase(object):
         # Save a copy of the alignment to the export folder
         if files_dict:
             archive_dir = configs['archive_dir']
-            archive_save_path = archive_dir + d.path_to_data
+            archive_save_path = op.join(archive_dir, d.path_to_data)
             # tmp_save_path = configs['archive_temp_dir'] + d.path_to_data
             subprocess.check_call(
                 "umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path),
@@ -1117,10 +1162,14 @@ class MyDatabase(object):
         if isinstance(model, UniprotDomainModel):
 
             # Load previously-calculated alignments
-            if os.path.isfile(tmp_save_path + model.alignment_filename):
-                alignment = AlignIO.read(tmp_save_path + model.alignment_filename, 'clustal')
-            elif os.path.isfile(archive_save_path + model.alignment_filename):
-                alignment = AlignIO.read(archive_save_path + model.alignment_filename, 'clustal')
+            if os.path.isfile(op.join(tmp_save_path, model.alignment_filename)):
+                alignment = AlignIO.read(
+                    op.join(tmp_save_path, model.alignment_filename),
+                    'clustal')
+            elif os.path.isfile(op.join(archive_save_path, model.alignment_filename)):
+                alignment = AlignIO.read(
+                    op.join(archive_save_path, model.alignment_filename),
+                    'clustal')
             else:
                 raise errors.NoPrecalculatedAlignmentFound(
                     archive_save_path, model.alignment_filename)
@@ -1164,7 +1213,7 @@ class MyDatabase(object):
 
         for d in data:
             result, __, __ = (
-                helper.subprocess_check_output('ls ' + configs['archive_dir'] + d[0])
+                helper.subprocess_check_output('ls ' + op.join(configs['archive_dir'], d[0]))
             )
             filenames = [fname for fname in result.split('\n') if fname != '']
             for filename in filenames:
@@ -1243,7 +1292,7 @@ def scinet_cleanup(folder, destination, name=None):
         output_name = 'result_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
     else:
         output_name = name + '_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
-    copy = 'cp ' + output_name + ' ' + destination + output_name
+    copy = 'cp ' + output_name + ' ' + op.join(destination, output_name)
 #    copy = 'cp ' + output_name + ' $SCRATCH/niklas-pipeline/' + output_name
 #    copy = 'cp ' + output_name + ' /home/niklas/tmp/' + output_name
     system_command = 'tar -acf ' + output_name + ' * && ' + copy
