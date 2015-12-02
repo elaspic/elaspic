@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -ev
 
 
 # Sanity checks
@@ -9,8 +9,6 @@ if [[ -z ${TEST_DIR} ]] ; then
     exit 1
 fi
 
-
-cd "${TEST_DIR}"
 
 # ====== Local Test 1 ======
 if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == 'local_1' ]] ; then
@@ -38,9 +36,9 @@ CONFIG_FILE="$TEST_DIR/database_1.ini"
 ARCHIVE_DIR="$TEST_DIR/archive"
 mkdir -p "${ARCHIVE_DIR}"
 
-7z x "${TEST_DIR}/elaspic.kimlab.org/provean/provean.7z" -o "${ARCHIVE_DIR}"
-7z x "${TEST_DIR}/elaspic.kimlab.org/uniprot_domain/uniprot_domain.7z" -o "${ARCHIVE_DIR}"
-7z x "${TEST_DIR}/elaspic.kimlab.org/uniprot_domain_pair/uniprot_domain_pair.7z" -o "${ARCHIVE_DIR}"
+7z x "${TEST_DIR}/elaspic.kimlab.org/provean/provean.7z" -o"${ARCHIVE_DIR}"
+7z x "${TEST_DIR}/elaspic.kimlab.org/uniprot_domain/uniprot_domain.7z" -o"${ARCHIVE_DIR}"
+7z x "${TEST_DIR}/elaspic.kimlab.org/uniprot_domain_pair/uniprot_domain_pair.7z" -o"${ARCHIVE_DIR}"
 
 # Update the configuration file
 cp -f "${TEST_DIR}/tests/travis_config_file.ini" "${CONFIG_FILE}"
