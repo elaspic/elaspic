@@ -1,12 +1,12 @@
 package:
   name: elaspic
-  version: "1.0.2"
+  version: "{{ environ.get('GIT_DESCRIBE_TAG', '') }}"
 
 source:
-  path: ../..
+  path: ../../
 
 build:
-  number: 1
+  number: "{{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}"
   entry_points: 
     - elaspic = elaspic.__main__:elaspic
     - elaspic_database = elaspic.__main__:elaspic_database
@@ -71,7 +71,7 @@ test:
   commands:
     - elaspic --help
     - elaspic_database --help
-      
+
 about:
   home: elaspic.kimlab.org
   license: MIT
