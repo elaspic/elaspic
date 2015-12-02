@@ -267,7 +267,7 @@ def test_database_pipeline(uniprot_id_mutation):
     logger.debug('uniprot_domain_pair_ids: {}'.format(uniprot_domain_pair_ids))
     #
     sp = database_pipeline.DatabasePipeline(
-        uniprot_id, mutation, CONFIG_FILE,
+        uniprot_id, mutation,
         run_type=5, uniprot_domain_pair_ids=uniprot_domain_pair_ids)
     sp.run()
     logger.debug('Finished running database pipeline. Now checking results...')
