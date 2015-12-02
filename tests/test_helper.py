@@ -44,4 +44,4 @@ def test_open_exclusively(cleanup):
 # %%
 if __name__ == '__main__':
     import pytest
-    pytest.cmdlined.main(['test_helper.py', '-vsx', '--quick'])
+    pytest.main(['test_helper.py', '-vsx', '--quick'])
