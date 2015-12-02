@@ -36,6 +36,7 @@ sed -i "s|^blast_db_dir = .*|blast_db_dir = $BLAST_DB_DIR|" ./tests/travis_confi
 
 
 # ====== Database ======
+if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == database* ]] ; then
 
 # Download external files
 wget -r --no-parent --reject "index.html*" --cut-dirs=4 \
@@ -105,3 +106,4 @@ mysql -u root travis_test -e "DELETE FROM provean LIMIT 100";
 mysql -u root travis_test -e "DELETE FROM uniprot_domain_model LIMIT 100";
 mysql -u root travis_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 100";
 
+fi
