@@ -37,6 +37,7 @@ engine:
 ## Run before the script
 before_script:
   - conda config --add channels ostrokach
+  - conda config --add channels salilab
   - conda config --add channels r
   - conda config --add channels bioconda
 
