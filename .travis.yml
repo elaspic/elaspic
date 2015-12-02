@@ -28,11 +28,11 @@ before_script:
   - source activate _testing
   - conda install -q -n _testing pytest pytest-cov
   - $TRAVIS_BUILD_DIR/scripts/configure_test.sh
+  - ls $TEST_DIR
 script:
-  - python -c "import elaspic"
+  - ls $TEST_DIR
   - $TEST_DIR/scripts/run_test.sh
 after_script:
-  - python -c "import elaspic"
   - $TEST_DIR/scripts/cleanup_test.sh
 after_success:
   - coveralls
