@@ -24,10 +24,14 @@ install:
   - conda install p7zip
   - which 7z
   - 7z --help || echo "Error!"
-  - $HOME/anaconda/lib/p7zip/7z --help || echo "Error!"
   - ls $HOME/anaconda/lib || echo "Error!"
   - ls $HOME/anaconda/lib/p7zip || echo "Error!"
+  - $HOME/anaconda/lib/p7zip/7z --help || echo "Error!"
   - ldd $HOME/anaconda/lib/p7zip/7z || echo "Error!"
+  - cat $HOME/anaconda/lib/p7zip/7z || echo "Error!"
+  - bash $HOME/anaconda/lib/p7zip/7z || echo "Error!"
+  - bash -c "$HOME/anaconda/lib/p7zip/7z" || echo "Error!"
+  - "$HOME/anaconda/lib/p7zip/7z" || echo "Error!"
   - bash -c "7z --help" || echo "Error!"
   - sed -i 's|#! /bin/sh|#!/bin/bash|' $(which 7z)
   - sed -i 's|#! /bin/sh|#!/bin/bash|' $(which 7za)
