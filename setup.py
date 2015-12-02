@@ -100,7 +100,7 @@ with open('conda/elaspic/meta.yaml') as ifh:
 
 setup(
     name=meta['package']['name'],
-    version="1.0.2",
+    version=meta['package']['version'],
     description=meta['about']['summary'],
     author='kimlab',
     author_email='alex.strokach@utoronto.ca',
