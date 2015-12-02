@@ -22,7 +22,7 @@ platform:
 ## The engine are the inital conda packages you want to run with 
 engine:
   # - python=2.7
-  - python=3.4
+  - python=3.5
 ## The env param is an environment variable list 
 # env:
 #  - MY_ENV=A CC=gcc
@@ -36,23 +36,24 @@ engine:
 
 ## Run before the script
 before_script:
-  - conda config --add channels http://conda.anaconda.org/ostrokach
-  - conda config --add channels http://conda.anaconda.org/bioconda
+  - conda config --add channels ostrokach
+  - conda config --add channels r
+  - conda config --add channels bioconda
 
 ## Put your main computations here!  
 script:
-  - conda build .
+  - conda build conda/elaspic
   
 ## This will run after the script regardless of the result of script
 ## BINSTAR_BUILD_RESULT=[succcess|failure] 
-# after_script:
-#   - echo "The build was a $BINSTAR_BUILD_RESULT" | tee artifact1.txt
+after_script:
+  - echo "The build was a $BINSTAR_BUILD_RESULT" | tee artifact1.txt
 ## This will be run only after a successful build
-# after_success:
-#   - echo "after_success!"
+after_success:
+  - echo "after_success!"
 ## This will be run only after a build failure
-# after_failure:
-#   - echo "after_failure!"
+after_failure:
+  - echo "after_failure!"
 
 #===============================================================================
 # Build Results
@@ -68,3 +69,4 @@ script:
 ## e.g. conda is an alias for /opt/anaconda/conda-bld/<os-arch>/*.tar.bz2
 build_targets:
   - conda
+
