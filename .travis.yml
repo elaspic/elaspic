@@ -23,6 +23,7 @@ install:
   # Playing
   - conda install p7zip
   - which 7z
+  - $HOME/lib/p7zip/7z --help || echo "Error!"
   - 7z --help || echo "Error!"
   - bash -c "7z --help" || echo "Error!"
   - sed -i 's|#! /bin/sh|#!/bin/bash|' $(which 7z)
