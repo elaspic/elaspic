@@ -20,6 +20,13 @@ install:
   - conda info -a
   - conda update -q conda
   - conda install -q conda-build
+  # Playing
+  - conda install p7zip
+  - which 7z
+  - 7z --help
+  - sed -i 's|#! /bin/sh|#!/bin/bash|' $(which 7z)
+  - sed -i 's|#! /bin/sh|#!/bin/bash|' $(which 7za)
+  - sed -i 's|#! /bin/sh|#!/bin/bash|' $(which 7zr)
   # Build elaspic
   - conda build conda/elaspic
 before_script:
