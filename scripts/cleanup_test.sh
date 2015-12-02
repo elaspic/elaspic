@@ -1,5 +1,8 @@
 #!/bin/bash
 
+
+cd "${TEST_DIR}"
+
 # ====== Database ======
 if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == database* ]] ; then
 

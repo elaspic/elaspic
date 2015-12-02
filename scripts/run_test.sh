@@ -10,6 +10,8 @@ if [[ -z ${TEST_DIR} ]] ; then
 fi
 
 
+cd "${TEST_DIR}"
+
 # ====== Local Test 1 ======
 if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == 'local_1' ]] ; then
 

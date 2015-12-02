@@ -12,21 +12,24 @@ elif [[ $TRAVIS ]] ; then
         echo 'Error! The ${TEST_DIR} environment variable must be set when using travis-ci!'
         exit 1
     fi
-    mkdir -p "$TEST_DIR"
-    cd "$TEST_DIR" 
+    mkdir -p "${TEST_DIR}"
+    cd "${TEST_DIR}"
     SRC_DIR="$TRAVIS_BUILD_DIR"
 else 
     echo 'Unknown environment!'
     exit
 fi
 
+
+cd "${TEST_DIR}"
+
 # Copy test data
-rsync -av $SRC_DIR/tests ./ --exclude='[._]*'
-rsync -av $SRC_DIR/setup.cfg ./
+rsync -av "${SRC_DIR}/tests" "${TEST_DIR}" --exclude='[._]*'
+rsync -av "${SRC_DIR}/setup.cfg" "${TEST_DIR}"
 
 # Common directories
-PDB_DIR="$TEST_DIR/pdb"
-BLAST_DB_DIR="$TEST_DIR/blast/db"
+PDB_DIR="${TEST_DIR}/pdb"
+BLAST_DB_DIR="${TEST_DIR}/blast/db"
 
 mkdir -p "$PDB_DIR"
 mkdir -p "$BLAST_DB_DIR"
