@@ -118,7 +118,7 @@ def decode_domain_def(domains, merge=True, return_string=False):
     preserving letter numbering (e.g. 10B)
     """
     if not domains:
-        return None
+        return None, None
 
     if domains[-1] == ',':
         domains = domains[:-1]
