@@ -26,7 +26,7 @@ sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" "${CONFIG_FILE}"
 
 # Run tests
 py.test -vsx --cache-clear --quick \
-    --config-file="${CONFIG_FILE}"
+    --config-file="${CONFIG_FILE}" "${TEST_DIR}"
 
 fi
 
@@ -50,7 +50,7 @@ sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" "${CONFIG_FILE}"
 
 # Run tests
 py.test tests/test_database_pipeline.py -vsx --cache-clear --quick \
-    --config-file="${CONFIG_FILE}"
+    --config-file="${CONFIG_FILE}" "${TEST_DIR}"
 
 fi
 
@@ -68,6 +68,6 @@ sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" "${CONFIG_FILE}"
 
 # Run tests
 py.test tests/test_database_pipeline.py -vsx --cache-clear --quick \
-    --config-file="${CONFIG_FILE}"
+    --config-file="${CONFIG_FILE}" "${TEST_DIR}"
 
 fi
