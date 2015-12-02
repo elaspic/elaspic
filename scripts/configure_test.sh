@@ -30,15 +30,18 @@ rsync -av "${SRC_DIR}/setup.cfg" "${TEST_DIR}"
 cd "${TEST_DIR}"
 PDB_DIR="${TEST_DIR}/pdb"
 BLAST_DB_DIR="${TEST_DIR}/blast/db"
+ARCHIVE_DIR="${TEST_DIR}/archive"
 
-mkdir -p "$PDB_DIR"
-mkdir -p "$BLAST_DB_DIR"
+mkdir -p "${PDB_DIR}"
+mkdir -p "${BLAST_DB_DIR}"
+mkdir -p "${ARCHIVE_DIR}"
 
-touch "$BLAST_DB_DIR/nr.pal"
-touch "$BLAST_DB_DIR/pdbaa.pal"
+touch "${BLAST_DB_DIR}/nr.pal"
+touch "${BLAST_DB_DIR}/pdbaa.pal"
 
 sed -i "s|^pdb_dir = .*|pdb_dir = $PDB_DIR|" "${TEST_DIR}/tests/travis_config_file.ini"
 sed -i "s|^blast_db_dir = .*|blast_db_dir = $BLAST_DB_DIR|" "${TEST_DIR}/tests/travis_config_file.ini"
+sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" "${TEST_DIR}/tests/travis_config_file.ini"
 
 
 # ====== Database ======
