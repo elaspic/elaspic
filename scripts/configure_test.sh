@@ -24,6 +24,7 @@ fi
 cd "${TEST_DIR}"
 
 # Copy test data
+rsync -av "${SRC_DIR}/scripts" "${TEST_DIR}" --exclude='[._]*'
 rsync -av "${SRC_DIR}/tests" "${TEST_DIR}" --exclude='[._]*'
 rsync -av "${SRC_DIR}/setup.cfg" "${TEST_DIR}"
 
