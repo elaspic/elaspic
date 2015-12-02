@@ -22,7 +22,7 @@ install:
   - conda install -q conda-build pytest-cov
   # Build elaspic
   - conda build conda/elaspic
-before_script
+before_script:
   # Create a test environment
   - conda create -n _test_elaspic elaspic --use-local -y
   - source activate _test_elaspic
