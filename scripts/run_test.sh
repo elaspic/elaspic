@@ -36,7 +36,6 @@ if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == 'database_1' ]] ; then
 
 CONFIG_FILE="$TEST_DIR/database_1.ini"
 ARCHIVE_DIR="$TEST_DIR/archive"
-rm -rf $ARCHIVE_DIR
 mkdir -p $ARCHIVE_DIR
 
 7z x "$TEST_DIR/elaspic.kimlab.org/provean/provean.7z -o $ARCHIVE_DIR"
@@ -60,6 +59,7 @@ if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == 'database_2' ]] ; then
 
 CONFIG_FILE="$TEST_DIR/database_2.ini"
 ARCHIVE_DIR="$TEST_DIR/elaspic.kimlab.org"
+mkdir -p $ARCHIVE_DIR
 
 # Update the configuration file
 cp -f "$TEST_DIR/tests/travis_config_file.ini" "${CONFIG_FILE}"

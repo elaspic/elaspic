@@ -13,7 +13,6 @@ elif [[ $TRAVIS ]] ; then
         exit 1
     fi
     mkdir -p "${TEST_DIR}"
-    cd "${TEST_DIR}"
     SRC_DIR="$TRAVIS_BUILD_DIR"
 else 
     echo 'Unknown environment!'
@@ -21,14 +20,14 @@ else
 fi
 
 
-cd "${TEST_DIR}"
-
 # Copy test data
 rsync -av "${SRC_DIR}/scripts" "${TEST_DIR}" --exclude='[._]*'
 rsync -av "${SRC_DIR}/tests" "${TEST_DIR}" --exclude='[._]*'
 rsync -av "${SRC_DIR}/setup.cfg" "${TEST_DIR}"
 
+
 # Common directories
+cd "${TEST_DIR}"
 PDB_DIR="${TEST_DIR}/pdb"
 BLAST_DB_DIR="${TEST_DIR}/blast/db"
 
@@ -38,20 +37,24 @@ mkdir -p "$BLAST_DB_DIR"
 touch "$BLAST_DB_DIR/nr.pal"
 touch "$BLAST_DB_DIR/pdbaa.pal"
 
-sed -i "s|^pdb_dir = .*|pdb_dir = $PDB_DIR|" ./tests/travis_config_file.ini
-sed -i "s|^blast_db_dir = .*|blast_db_dir = $BLAST_DB_DIR|" ./tests/travis_config_file.ini
+sed -i "s|^pdb_dir = .*|pdb_dir = $PDB_DIR|" "${TEST_DIR}/tests/travis_config_file.ini"
+sed -i "s|^blast_db_dir = .*|blast_db_dir = $BLAST_DB_DIR|" "${TEST_DIR}/tests/travis_config_file.ini"
 
 
 # ====== Database ======
 if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == database* ]] ; then
 
 # Download external files
-wget -r --no-parent --reject "index.html*" --cut-dirs=4 \
+wget -P "${TEST_DIR}" \
+    -r --no-parent --reject "index.html*" --cut-dirs=4  \
     http://elaspic.kimlab.org/static/download/current_release/Homo_sapiens_test/
-wget -P elaspic.kimlab.org \
+wget -P "${TEST_DIR}/elaspic.kimlab.org" \
     http://elaspic.kimlab.org/static/download/current_release/domain.tsv.gz
-wget -P elaspic.kimlab.org \
+wget -P "${TEST_DIR}/elaspic.kimlab.org" \
     http://elaspic.kimlab.org/static/download/current_release/domain_contact.tsv.gz
+
+ls "${TEST_DIR}"
+
 
 # Configure the database
 mysql -u root -e 'drop database if exists travis_test';
@@ -105,8 +108,9 @@ DELIMITER ;
 EOF
 
 # Load precalculated data to the database
-elaspic_database -c tests/travis_config_file.ini create
-elaspic_database -c tests/travis_config_file.ini load_data --data_folder elaspic.kimlab.org
+elaspic_database -c "${TEST_DIR}/tests/travis_config_file.ini" create
+elaspic_database -c "${TEST_DIR}/tests/travis_config_file.ini" load_data \
+    --data_folder "${TEST_DIR}/elaspic.kimlab.org"
 
 # Remove some rows from the database, so that we have something to calculate
 mysql -u root travis_test -e "DELETE FROM provean LIMIT 100";
