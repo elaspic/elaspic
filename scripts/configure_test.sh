@@ -8,7 +8,10 @@ if [[ $CONDA_BUILD ]] ; then
     export TEST_DIR=`pwd`
 elif [[ $TRAVIS ]] ; then
     echo 'TRAVIS'
-    export TEST_DIR="${HOME}/_test"
+    if [[ -z ${TEST_DIR} ]] ; then
+        echo 'Error! The ${TEST_DIR} environment variable must be set when using travis-ci!'
+        exit 1
+    fi
     mkdir -p "$TEST_DIR"
     cd "$TEST_DIR" 
     SRC_DIR="$TRAVIS_BUILD_DIR"
