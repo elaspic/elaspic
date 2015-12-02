@@ -265,16 +265,18 @@ def run_subprocess_locally(working_path, system_command, **popen_argvars):
 
 
 def subprocess_communicate(child_process):
-    # Print a message every 5 minutes for long-running subprocesses
+    # Spawn a fork that prints a message every minute
     # (This is required for travis-ci)
-    time_counter = 0
-    while child_process.poll() == None:
-        time.sleep(1)
-        time_counter += 1
-        if (time_counter % 5) == 0:
+    pid = os.fork()
+    if pid == 0:
+        while True:
+            time.sleep(60)
             logger.debug("Subprocess is still running...")
+        os._exit()
     # Collect output
     result, error_message = child_process.communicate()
+    os.kill(pid, 15)
+    os.waitpid(pid, 0)
     result = _try_decoding_bytes_string(result)
     error_message = _try_decoding_bytes_string(error_message)
     return_code = child_process.returncode
