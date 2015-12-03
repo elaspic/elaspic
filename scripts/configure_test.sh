@@ -63,6 +63,7 @@ ls "${TEST_DIR}"
 mysql -u root -e 'drop database if exists travis_test';
 mysql -u root -e 'create database travis_test';
 mysql -u root -e "grant all on travis_test.* to 'travis'@'127.0.0.1'";
+mysql -u root -e "set global max_allowed_packet=67108864;"
 mysql -u root travis_test <<'EOF'
 DROP FUNCTION IF EXISTS MUTATION_IN_DOMAIN;
 DELIMITER $$
