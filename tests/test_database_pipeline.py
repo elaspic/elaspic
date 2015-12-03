@@ -176,34 +176,46 @@ def uniprot_id_mutation(request):
 
 
 # %%
-def validate_mutation(uniprot_id, mutation):
-    # Select Provean; assert length > 0
+@database.retry_database
+def validate_mutation_1(uniprot_id, mutation):
+    """Select Provean; assert length > 0
+    """
     logger.debug(helper.underline('Validating that we have provean...'))
     sql_query = """\
 select *
 from {db_schema}.provean
-where uniprot_id = '{uniprot_id}'
-and provean_supset_filename is not null;
+where uniprot_id = '{uniprot_id}' and
+provean_supset_filename is not null;
 """.format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
     logger.debug(sql_query)
     df = pd.read_sql_query(sql_query, engine)
     logger.debug(df)
     assert len(df) >= 1
 
-    # Select domains without models; assert length 0
+
+@database.retry_database
+def validate_mutation_2(uniprot_id, mutation):
+    """Select domains without models; assert length 0
+    """
     logger.debug(helper.underline('Validating that we have domain models...'))
     sql_query = """\
 select *
 from {db_schema}.uniprot_domain
 join {db_schema}.uniprot_domain_template using (uniprot_domain_id)
 left join {db_schema}.uniprot_domain_model using (uniprot_domain_id)
-where uniprot_id = '{uniprot_id}' and model_filename is null;
+where uniprot_id = '{uniprot_id}' and
+model_filename is null and
+model_errors is null;
 """.format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
     logger.debug(sql_query)
     df = pd.read_sql_query(sql_query, engine)
     assert len(df) == 0
 
-    # Select interfaces without models; assert length 0
+
+@database.retry_database
+def validate_mutation_3(uniprot_id, mutation):
+    """Select interfaces without models; assert length 0
+    """
     logger.debug(helper.underline('Validating that we have domain pair models...'))
     sql_query = """\
 select *
@@ -212,14 +224,18 @@ join {db_schema}.uniprot_domain ud1 on (ud1.uniprot_domain_id = udp.uniprot_doma
 join {db_schema}.uniprot_domain ud2 on (ud2.uniprot_domain_id = udp.uniprot_domain_id_2)
 join {db_schema}.uniprot_domain_pair_template udpt using (uniprot_domain_pair_id)
 left join {db_schema}.uniprot_domain_pair_model udpm using (uniprot_domain_pair_id)
-where (ud1.uniprot_id = '{uniprot_id}' or ud2.uniprot_id = '{uniprot_id}')
-and model_filename is null and model_errors is null;
+where (ud1.uniprot_id = '{uniprot_id}' or ud2.uniprot_id = '{uniprot_id}') and
+model_filename is null and model_errors is null;
 """.format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
     logger.debug(sql_query)
     df = pd.read_sql_query(sql_query, engine)
     assert len(df) == 0
 
-    # Select domains where we don't have mutatons even though we should; assert length 0
+
+@database.retry_database
+def validate_mutation_4(uniprot_id, mutation):
+    """Select domains where we don't have mutatons even though we should; assert length 0
+    """
     logger.debug(helper.underline('Validating that we have domain mutations...'))
     sql_query = """\
 select *
@@ -236,7 +252,11 @@ and model_filename_wt is null;
     df = pd.read_sql_query(sql_query, engine)
     assert len(df) == 0
 
-    # Select domain pairs where we don't have mutatons even though we should; assert length 0
+
+@database.retry_database
+def validate_mutation_5(uniprot_id, mutation):
+    """Select domain pairs where we don't have mutatons even though we should; assert length 0
+    """
     logger.debug(helper.underline('Validating that we have domain pair mutations...'))
     sql_query = """\
 select *
@@ -277,7 +297,11 @@ def test_database_pipeline(uniprot_id_mutation):
         run_type=5, uniprot_domain_pair_ids=uniprot_domain_pair_ids)
     sp.run()
     logger.debug('Finished running database pipeline. Now checking results...')
-    validate_mutation(uniprot_id, mutation)
+    validate_mutation_1(uniprot_id, mutation)
+    validate_mutation_2(uniprot_id, mutation)
+    validate_mutation_3(uniprot_id, mutation)
+    validate_mutation_4(uniprot_id, mutation)
+    validate_mutation_5(uniprot_id, mutation)
 
 
 # %%

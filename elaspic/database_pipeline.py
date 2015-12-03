@@ -438,7 +438,7 @@ class _PrepareModel:
                     "Making a homology model failed!!!\n"
                     "Adding error '{0}' to the domain with cath_id {1}..."
                     .format(bad_domain.domain_errors, d.template.cath_id))
-            else:
+            else:  # UniprotDomainPair
                 if d.template.model == None:   # analysis:ignore
                     d.template.model = database_tables.UniprotDomainPairModel()
                     d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
