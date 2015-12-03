@@ -620,11 +620,11 @@ class MyDatabase(object):
 #                subprocess.check_call("cp -f '{}' '{}'".format(
 #                    archive_save_path + d.template.model.model_filename,
 #                    tmp_save_path + d.template.model.model_filename), shell=True)
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_save_path, d.template.model.alignment_filename),
                     op.join(tmp_save_path, d.template.model.alignment_filename),
                 )
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_save_path, d.template.model.model_filename),
                     op.join(tmp_save_path, d.template.model.model_filename),
                 )
@@ -673,13 +673,13 @@ class MyDatabase(object):
 #                subprocess.check_call("cp -f '{}' '{}'".format(
 #                    archive_save_path + d.template.model.model_filename,
 #                    tmp_save_path + d.template.model.model_filename), shell=True)
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_save_path, d.template.model.alignment_filename_1),
                     op.join(tmp_save_path, d.template.model.alignment_filename_1))
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_save_path, d.template.model.alignment_filename_2),
                     op.join(tmp_save_path, d.template.model.alignment_filename_2))
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_save_path, d.template.model.model_filename),
                     op.join(tmp_save_path, d.template.model.model_filename))
 
@@ -742,7 +742,7 @@ class MyDatabase(object):
 #                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
 #                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
 #                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
-        shutil.copy(
+        shutil.copyfile(
             op.join(
                 archive_dir,
                 get_uniprot_base_path(ud),
@@ -751,7 +751,7 @@ class MyDatabase(object):
                 configs['archive_temp_dir'],
                 get_uniprot_base_path(ud),
                 ud.uniprot_sequence.provean.provean_supset_filename))
-        shutil.copy(
+        shutil.copyfile(
             op.join(
                 archive_dir,
                 get_uniprot_base_path(ud),
@@ -848,10 +848,10 @@ class MyDatabase(object):
 #                subprocess.check_call("cp -f '{}' '{}'".format(
 #                    archive_save_path + mutation.model_filename_mut,
 #                    tmp_save_path + mutation.model_filename_mut), shell=True)
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_save_path, mutation.model_filename_wt),
                     op.join(tmp_save_path, mutation.model_filename_wt))
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_save_path, mutation.model_filename_mut),
                     op.join(tmp_save_path, mutation.model_filename_mut))
 
@@ -919,10 +919,10 @@ class MyDatabase(object):
             .format(op.join(archive_dir, path_to_data)))
         subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
             op.join(archive_dir, path_to_data)), shell=True)
-        shutil.copy(
+        shutil.copyfile(
             provean_supset_file,
             op.join(archive_dir, path_to_data, provean.provean_supset_filename))
-        shutil.copy(
+        shutil.copyfile(
             provean_supset_file + '.fasta',
             op.join(archive_dir, path_to_data, provean.provean_supset_filename + '.fasta'))
         self.merge_row(provean)
@@ -950,16 +950,16 @@ class MyDatabase(object):
             if d.template.model.model_filename is not None:
                 # Save alignments
                 if isinstance(d.template.model, UniprotDomainModel):
-                    shutil.copy(
+                    shutil.copyfile(
                         files_dict['alignment_files'][0],
                         op.join(archive_save_path, d.template.model.alignment_filename)
                     )
                 elif isinstance(d.template.model, UniprotDomainPairModel):
-                    shutil.copy(
+                    shutil.copyfile(
                         files_dict['alignment_files'][0],
                         op.join(archive_save_path, d.template.model.alignment_filename_1)
                     )
-                    shutil.copy(
+                    shutil.copyfile(
                         files_dict['alignment_files'][1],
                         op.join(archive_save_path, d.template.model.alignment_filename_2)
                     )
@@ -967,7 +967,7 @@ class MyDatabase(object):
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'"
                     .format(archive_save_path), shell=True)
-                shutil.copy(
+                shutil.copyfile(
                     files_dict['model_file'],
                     op.join(archive_save_path, d.template.model.model_filename)
                 )
@@ -991,11 +991,11 @@ class MyDatabase(object):
                     .format(op.dirname(op.join(archive_save_dir, mut.model_filename_wt))),
                     shell=True
                 )
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_temp_save_dir, mut.model_filename_wt),
                     op.join(archive_save_dir, mut.model_filename_wt)
                 )
-                shutil.copy(
+                shutil.copyfile(
                     op.join(archive_temp_save_dir, mut.model_filename_mut),
                     op.join(archive_save_dir, mut.model_filename_mut)
                 )
