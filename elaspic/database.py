@@ -154,21 +154,22 @@ class MyDatabase(object):
         if configs['db_type'] == 'sqlite':
             autocommit = False  # True
             autoflush = True  # True
-            retry_on_failure = True
+            # retry_on_failure = True
         elif configs['db_type'] in ['postgresql', 'mysql']:
             autocommit = False
             autoflush = True
-            retry_on_failure = True
+            # retry_on_failure = True
         Session.configure(bind=self.engine, autocommit=autocommit, autoflush=autoflush)
-        if retry_on_failure:
-            decorator = (
-                decorate_all_methods(
-                    retry(retry_on_exception=lambda exc: isinstance(exc, sa.exc.OperationalError),
-                          wait_exponential_multiplier=1000,  # start with one second delay
-                          wait_exponential_max=600000)  # go up to 10 minutes
-                )
-            )
-            Session = decorator(Session)
+        # Good idea, but does not work for some reason...
+#        if retry_on_failure:
+#            decorator = (
+#                decorate_all_methods(
+#                    retry(retry_on_exception=lambda exc: isinstance(exc, sa.exc.OperationalError),
+#                          wait_exponential_multiplier=1000,  # start with one second delay
+#                          wait_exponential_max=600000)  # go up to 10 minutes
+#                )
+#            )
+#            Session = decorator(Session)
 
     @contextmanager
     def session_scope(self):
@@ -889,6 +890,9 @@ class MyDatabase(object):
                 raise Exception("'d' is of incorrect type!")
 
     # %% Add objects to the database
+    @retry(retry_on_exception=lambda exc: isinstance(exc, sa.exc.OperationalError),
+           wait_exponential_multiplier=1000,  # start with one second delay
+           wait_exponential_max=60000)
     def merge_row(self, row_instance):
         """Adds a list of rows (`row_instances`) to the database.
         """
@@ -900,6 +904,9 @@ class MyDatabase(object):
                     for instance in row_instance:
                         session.merge(instance)
 
+    @retry(retry_on_exception=lambda exc: isinstance(exc, sa.exc.OperationalError),
+           wait_exponential_multiplier=1000,  # start with one second delay
+           wait_exponential_max=60000)
     def merge_provean(self, provean, provean_supset_file, path_to_data):
         """Adds provean score to the database.
         """
@@ -920,6 +927,9 @@ class MyDatabase(object):
             op.join(archive_dir, path_to_data, provean.provean_supset_filename + '.fasta'))
         self.merge_row(provean)
 
+    @retry(retry_on_exception=lambda exc: isinstance(exc, sa.exc.OperationalError),
+           wait_exponential_multiplier=1000,  # start with one second delay
+           wait_exponential_max=60000)
     def merge_model(self, d, files_dict={}):
         """Adds MODELLER models to the database.
         """
@@ -963,6 +973,9 @@ class MyDatabase(object):
                 )
         self.merge_row(d.template.model)
 
+    @retry(retry_on_exception=lambda exc: isinstance(exc, sa.exc.OperationalError),
+           wait_exponential_multiplier=1000,  # start with one second delay
+           wait_exponential_max=60000)
     def merge_mutation(self, mut, path_to_data=False):
         """
         """
