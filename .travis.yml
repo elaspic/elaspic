@@ -20,6 +20,7 @@ install:
   - conda info -a
   - conda update -q conda
   - conda install -q conda-build
+  - pip install codecov
   # Build elaspic
   - conda build conda/elaspic
 before_script:
@@ -36,6 +37,7 @@ script:
   # Run tests
   - $TEST_DIR/scripts/run_test.sh
 after_success:
+  - codecov
   # travis_after_all
   - python travis_after_all.py https://api.travis-ci.com
   - export $(cat .to_export_back)
