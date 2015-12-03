@@ -3,6 +3,12 @@
 Created on Sat Sep 26 13:39:23 2015
 
 @author: strokach
+
+TODO: Modify the export database scripts to only export proteins with <= 2 domains
+      and <= 3 interactions.
+
+TODO: Add cases for precalculated mutations (can do many of these :).
+
 """
 import os
 import os.path as op
@@ -133,7 +139,7 @@ df = pd.read_sql_query(sql_query, engine)
 logger.debug("Have provean and domain model but not interface model: {}".format(len(df)))
 if df.empty:
     logger.error("Skipping...")
-else:
+elif not QUICK:
     append_test_cases(df)
 
 
