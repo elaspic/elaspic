@@ -49,8 +49,6 @@ after_success:
           echo "Some jobs failed"
         fi
       fi
-  # Test coverage
-  - coveralls
 after_failure:
   # travis_after_all
   - python travis_after_all.py https://api.travis-ci.com
