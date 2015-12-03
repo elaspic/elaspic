@@ -81,7 +81,7 @@ def enable_sqlite_foreign_key_checks(engine):
 # Get the session that will be used for all future queries.
 # `expire_on_commit` so that you keep all the table objects even after the session closes.
 Session = sa.orm.sessionmaker(expire_on_commit=False)
-# Session = scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
+# Session = sa.orm.scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
 
 
 # %%
@@ -89,15 +89,15 @@ class MyDatabase(object):
     """
     """
 
-    def __init__(self):
+    def __init__(self, echo=False):
         """
         Parameters
         ----------
         configs : dict
             ELASPIC configuration options specified in :py:data:`elaspic.configs`
         """
-        self.engine = self.get_engine()
-        self.Session = self.configure_session()
+        self.engine = self.get_engine(echo=echo)
+        self.configure_session()
 
         logger.info(
             "Using precalculated data from the following folder: '{archive_dir}'"
@@ -120,6 +120,7 @@ class MyDatabase(object):
                 '{db_type}:///{sqlite_db_path}'.format(**configs),
                 isolation_level='READ UNCOMMITTED',
                 echo=echo,
+                pool_size=1,
             )
             enable_sqlite_foreign_key_checks(engine)
         elif configs['db_type'] in ['postgresql', 'mysql']:
@@ -134,6 +135,7 @@ class MyDatabase(object):
                 .format(**configs),
                 pool_recycle=3600,
                 echo=echo,
+                pool_size=1,
             )
         else:
             raise Exception("Unsupported `db_type`: '{}'".format(configs['db_type']))
@@ -146,14 +148,16 @@ class MyDatabase(object):
 
         `autocommit` and `autoflush` are enabled for the `sqlite` database in order to improve
         performance.
+
         """
+        global Session
         if configs['db_type'] == 'sqlite':
             autocommit = False  # True
-            autoflush = False  # True
+            autoflush = True  # True
             retry_on_failure = True
         elif configs['db_type'] in ['postgresql', 'mysql']:
             autocommit = False
-            autoflush = False
+            autoflush = True
             retry_on_failure = True
         Session.configure(bind=self.engine, autocommit=autocommit, autoflush=autoflush)
         if retry_on_failure:
@@ -164,9 +168,7 @@ class MyDatabase(object):
                           wait_exponential_max=600000)  # go up to 10 minutes
                 )
             )
-            return decorator(Session)
-        else:
-            return Session
+            Session = decorator(Session)
 
     @contextmanager
     def session_scope(self):
@@ -174,7 +176,7 @@ class MyDatabase(object):
         Provide a transactional scope around a series of operations.
         Enables the following construct: ``with self.session_scope() as session:``.
         """
-        session = self.Session()
+        session = Session()
         try:
             yield session
             if not configs['db_is_immutable']:
@@ -892,7 +894,7 @@ class MyDatabase(object):
         """
         if not configs['db_is_immutable']:
             with self.session_scope() as session:
-                if not hasattr(row_instance, '__getitem__'):
+                if not isinstance(row_instance, (tuple, list)):
                     session.merge(row_instance)
                 else:
                     for instance in row_instance:
@@ -959,7 +961,7 @@ class MyDatabase(object):
                     files_dict['model_file'],
                     op.join(archive_save_path, d.template.model.model_filename)
                 )
-        self.merge_row([d.template, d.template.model])
+        self.merge_row(d.template.model)
 
     def merge_mutation(self, mut, path_to_data=False):
         """

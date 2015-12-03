@@ -192,8 +192,7 @@ class Foo:
 
 
 # %%
-@execute_and_remember
-class PrepareSequence:
+class _PrepareSequence:
 
     def __init__(self, d, db):
         self.d = d
@@ -261,9 +260,11 @@ class PrepareSequence:
         return self.sequence
 
 
+PrepareSequence = execute_and_remember(_PrepareSequence)
+
+
 # %%
-@execute_and_remember
-class PrepareModel:
+class _PrepareModel:
 
     handled_errors = (
         errors.ModellerError,
@@ -437,7 +438,7 @@ class PrepareModel:
                     "Making a homology model failed!!!\n"
                     "Adding error '{0}' to the domain with cath_id {1}..."
                     .format(bad_domain.domain_errors, d.template.cath_id))
-            elif isinstance(d, database_tables.UniprotDomainPair):
+            else:
                 if d.template.model == None:   # analysis:ignore
                     d.template.model = database_tables.UniprotDomainPairModel()
                     d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
@@ -484,29 +485,27 @@ class PrepareModel:
             # TODO: there must be a more elegant solution...
             return
 
-        d = self.d
-        model = self.model
-
         # Domains
         if isinstance(d, database.UniprotDomain):
             if d.template.model == None:   # analysis:ignore
                 d.template.model = database_tables.UniprotDomainModel()
                 d.template.model.uniprot_domain_id = d.uniprot_domain_id
 
-            d.template.model.model_filename = op.basename(model.modeller_results['model_file'])
-            d.template.model.norm_dope = model.modeller_results['norm_dope']
-            d.template.model.chain = model.chain_ids[0]
+            d.template.model.model_filename = op.basename(
+                self.model.modeller_results['model_file'])
+            d.template.model.norm_dope = self.model.modeller_results['norm_dope']
+            d.template.model.chain = self.model.chain_ids[0]
             d.template.model.alignment_filename = (
                 op.basename(self.model.modeller_results['alignment_files'][0])
             )
 
-            sasa_score = model.relative_sasa_scores[model.chain_ids[0]]
+            sasa_score = self.model.relative_sasa_scores[self.model.chain_ids[0]]
             d.template.model.sasa_score = ','.join('{:.2f}'.format(x) for x in sasa_score)
 
             d.template.model.model_domain_def = (
                 self._truncate_domain_defs(
                     d.template.domain_def,
-                    model.modeller_results['domain_def_offsets'][0])
+                    self.model.modeller_results['domain_def_offsets'][0])
             )
 
         # Domain pairs
@@ -514,10 +513,11 @@ class PrepareModel:
             if d.template.model == None:   # analysis:ignore
                 d.template.model = database.UniprotDomainPairModel()
                 d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
-            d.template.model.model_filename = op.basename(model.modeller_results['model_file'])
-            d.template.model.norm_dope = model.modeller_results['norm_dope']
-            d.template.model.chain_1 = model.chain_ids[0]
-            d.template.model.chain_2 = model.chain_ids[1]
+            d.template.model.model_filename = op.basename(
+                self.model.modeller_results['model_file'])
+            d.template.model.norm_dope = self.model.modeller_results['norm_dope']
+            d.template.model.chain_1 = self.model.chain_ids[0]
+            d.template.model.chain_2 = self.model.chain_ids[1]
             d.template.model.alignment_filename_1 = (
                 op.basename(self.model.modeller_results['alignment_files'][0])
             )
@@ -527,19 +527,19 @@ class PrepareModel:
 
             model_domain_def_1 = self._truncate_domain_defs(
                 d.uniprot_domain_1.template.domain_def,
-                model.modeller_results['domain_def_offsets'][0])
+                self.model.modeller_results['domain_def_offsets'][0])
 
             model_domain_def_2 = self._truncate_domain_defs(
                 d.uniprot_domain_2.template.domain_def,
-                model.modeller_results['domain_def_offsets'][1])
+                self.model.modeller_results['domain_def_offsets'][1])
 
             # Convert interacting AA from indexes to uniprot numbers
             domain_start_1 = int(model_domain_def_1.split(':')[0])
             domain_start_2 = int(model_domain_def_2.split(':')[0])
             chain_1_interacting_uninum = [
-                i + domain_start_1 - 1 for i in model.interacting_aa_1]
+                i + domain_start_1 - 1 for i in self.model.interacting_aa_1]
             chain_2_interacting_uninum = [
-                i + domain_start_2 - 1 for i in model.interacting_aa_2]
+                i + domain_start_2 - 1 for i in self.model.interacting_aa_2]
 
             d.template.model.interacting_aa_1 = (
                 ','.join([str(uniprot_num) for uniprot_num in chain_1_interacting_uninum])
@@ -549,9 +549,9 @@ class PrepareModel:
             )
 
             # Get interacting amino acids and interface area
-            d.template.model.interface_area_hydrophobic = model.interface_area_hydrophobic
-            d.template.model.interface_area_hydrophilic = model.interface_area_hydrophilic
-            d.template.model.interface_area_total = model.interface_area_total
+            d.template.model.interface_area_hydrophobic = self.model.interface_area_hydrophobic
+            d.template.model.interface_area_hydrophilic = self.model.interface_area_hydrophilic
+            d.template.model.interface_area_total = self.model.interface_area_total
 
             # Save model_domain_defs, which might be truncated compared to uniprot_domain_template
             # domain defs
@@ -559,12 +559,12 @@ class PrepareModel:
             d.template.model.model_domain_def_2 = model_domain_def_2
 
         # Values common for single domains and interactions
-        model_errors = ', '.join('{}'.format(e) for e in model.errors)
+        model_errors = ', '.join('{}'.format(e) for e in self.model.errors)
         if model_errors != '':
             d.template.model.model_errors = model_errors
 
         logger.info('Adding model...')
-        self.db.merge_model(d, model.modeller_results)
+        self.db.merge_model(d, self.model.modeller_results)
 
     def _truncate_domain_defs(self, domain_def, domain_def_offset):
         if (domain_def_offset is None or
@@ -638,9 +638,11 @@ class PrepareModel:
         return self.model
 
 
+PrepareModel = execute_and_remember(_PrepareModel)
+
+
 # %%
-@execute_and_remember
-class PrepareMutation:
+class _PrepareMutation:
 
     handled_exceptions = (
         errors.PDBError,
@@ -994,6 +996,9 @@ class PrepareMutation:
         return self
 
 
+PrepareMutation = execute_and_remember(_PrepareMutation)
+
+
 # %%
 def get_unique_id(d):
     if isinstance(d, database_tables.UniprotDomain):
@@ -1014,5 +1019,3 @@ def add_new_error(d_error_log, e):
         return str(type(e))
     else:
         return '{}; {}: {}'.format(d_error_log, type(e), str(e))
-
-

@@ -2,7 +2,8 @@
 
 set -ev
 
-# Environment variables
+
+# Set ${TEST_DIR}
 if [[ $CONDA_BUILD ]] ; then
     echo 'CONDA'
     export TEST_DIR=`pwd`
@@ -27,7 +28,6 @@ rsync -av "${SRC_DIR}/setup.cfg" "${TEST_DIR}"
 
 
 # Common directories
-cd "${TEST_DIR}"
 PDB_DIR="${TEST_DIR}/pdb"
 BLAST_DB_DIR="${TEST_DIR}/blast/db"
 ARCHIVE_DIR="${TEST_DIR}/archive"
