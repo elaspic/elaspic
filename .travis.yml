@@ -28,13 +28,13 @@ before_script:
   - source activate _testing
   - conda install -q -n _testing pytest pytest-cov
   - $TRAVIS_BUILD_DIR/scripts/configure_test.sh
-  - ls $TEST_DIR
+  - cd ${TEST_DIR}
+  - ls 
 script:
   # travis_after_all
-  - curl -Lo travis_after_all.py https://raw.github.com/dmakhno/travis_after_all/master/travis_after_all.py
+  - wget https://raw.github.com/dmakhno/travis_after_all/master/travis_after_all.py
   # Run tests
   - $TEST_DIR/scripts/run_test.sh
-  - ls $TEST_DIR
 after_success:
   # travis_after_all
   - python travis_after_all.py https://api.travis-ci.com
@@ -68,7 +68,6 @@ after_script:
   - echo leader=$BUILD_LEADER status=$BUILD_AGGREGATE_STATUS
   # Cleanup
   - $TEST_DIR/scripts/cleanup_test.sh
-  - ls $TEST_DIR
 env:
   global:
     - TEST_DIR="${HOME}/_testing"
