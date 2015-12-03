@@ -265,18 +265,8 @@ def run_subprocess_locally(working_path, system_command, **popen_argvars):
 
 
 def subprocess_communicate(child_process):
-    # Spawn a fork that prints a message every minute
-    # (This is required for travis-ci)
-    pid = os.fork()
-    if pid == 0:
-        while True:
-            time.sleep(60)
-            logger.debug("Subprocess is still running...")
-        os._exit()
-    # Collect output
-    result, error_message = child_process.communicate()
-    os.kill(pid, 15)
-    os.waitpid(pid, 0)
+    with print_heartbeets():
+        result, error_message = child_process.communicate()
     result = _try_decoding_bytes_string(result)
     error_message = _try_decoding_bytes_string(error_message)
     return_code = child_process.returncode
@@ -291,6 +281,23 @@ def subprocess_check_output(system_command, **popen_argvars):
 def subprocess_check_output_locally(working_path, system_command, **popen_argvars):
     child_process = run_subprocess_locally(working_path, system_command, **popen_argvars)
     return subprocess_communicate(child_process)
+
+
+@contextmanager
+def print_heartbeets():
+    # Spawn a fork that prints a message every minute
+    # (This is required for travis-ci)
+    pid = os.fork()
+    if pid == 0:
+        while True:
+            time.sleep(60)
+            logger.debug("Subprocess is still running...")
+        os._exit()
+    try:
+        yield
+    finally:
+        os.kill(pid, 15)
+        os.waitpid(pid, 0)
 
 
 # %% Function-level locking

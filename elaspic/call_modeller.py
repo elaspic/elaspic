@@ -175,8 +175,9 @@ class Modeller(object):
 
         a.max_molpdf = 2e5
 
-        with helper.log_print_statements(logger):
-            a.make()  # do the actual homology modeling
+        with helper.print_heartbeets():
+            with helper.log_print_statements(logger):
+                a.make()  # do the actual homology modeling
 
         # The output produced by modeller is stored in a.loop.outputs or a.outputs
         # it is a dictionary
