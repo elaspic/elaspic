@@ -51,13 +51,24 @@ except NameError:
 
 db = database.MyDatabase()
 engine = db.get_engine()
+engine.execute("SET sql_mode = ''")
 
 
 # %%
 test_cases = []
 
 
-def append_test_cases(df, num=3):
+def append_test_cases(df, num=3, num_mutations=3):
+    """
+    Parameters
+    ----------
+    df : DataFrame
+        Contains the following columns:
+          - `uniprot_id`
+          - `uniprot_sequence`
+          - `interacting_aa` OR `model_domain_def` OR `domain_def`
+
+    """
     if QUICK:
         num = 1
     for i in range(num):
@@ -65,39 +76,40 @@ def append_test_cases(df, num=3):
         row = df.iloc[row_idx]
         uniprot_id = row['uniprot_id']
         uniprot_sequence = row['uniprot_sequence']
-        if 'interacting_aa_1' in row and row['interacting_aa_1'] != None:
-            mutation_pos = random.choice([int(x) for x in row['interacting_aa_1'].split(',')])
-            logger.debug('Selected interface AA: {}'.format(mutation_pos))
-        elif 'model_domain_def' in row and row['model_domain_def'] != None:
-            domain_start, domain_end = (int(x) for x in row['model_domain_def'].split(':'))
-            mutation_pos = random.randint(domain_start, domain_end)
-            logger.debug(
-                'Selected AA: {} falling inside model domain: {}'
-                .format(mutation_pos, row['model_domain_def'])
-            )
-        elif 'domain_def' in row and ['domain_def'] != None:
-            domain_start, domain_end = (int(x) for x in row['domain_def'].split(':'))
-            mutation_pos = random.randint(domain_start, domain_end)
-            logger.debug(
-                'Selected AA: {} falling inside domain: {}'
-                .format(mutation_pos, row['model_domain_def'])
-            )
-        else:
-            mutation_pos = random.randint(1, len(uniprot_sequence))
-
-        mutation_from = uniprot_sequence[mutation_pos-1]
-        mutation_to = random.choice('GVALICMFWPDESTYQNKRH')
-        mutation = '{}{}{}'.format(mutation_from, mutation_pos, mutation_to)
-        test_cases.append((uniprot_id, mutation,))
+        logger.debug('Protein ID: {}'.format(uniprot_id))
+        for i in range(num_mutations):
+            if 'interacting_aa_1' in row and row['interacting_aa_1'] != None:
+                mutation_pos = random.choice([int(x) for x in row['interacting_aa_1'].split(',')])
+                logger.debug('Selected interface AA: {}'.format(mutation_pos))
+            elif 'model_domain_def' in row and row['model_domain_def'] != None:
+                domain_start, domain_end = (int(x) for x in row['model_domain_def'].split(':'))
+                mutation_pos = random.randint(domain_start, domain_end)
+                logger.debug(
+                    'Selected AA: {} falling inside model domain: {}'
+                    .format(mutation_pos, row['model_domain_def'])
+                )
+            elif 'domain_def' in row and ['domain_def'] != None:
+                domain_start, domain_end = (int(x) for x in row['domain_def'].split(':'))
+                mutation_pos = random.randint(domain_start, domain_end)
+                logger.debug(
+                    'Selected AA: {} falling inside domain: {}'
+                    .format(mutation_pos, row['domain_def'])
+                )
+            else:
+                mutation_pos = random.randint(1, len(uniprot_sequence))
+            mutation_from = uniprot_sequence[mutation_pos-1]
+            mutation_to = random.choice('GVALICMFWPDESTYQNKRH')
+            mutation = '{}{}{}'.format(mutation_from, mutation_pos, mutation_to)
+            test_cases.append((uniprot_id, mutation,))
 
 
 # %% Everything is missing
 sql_query = """
-select ud.*, us.uniprot_sequence
+select ud.uniprot_id, us.uniprot_sequence, udt.domain_def
 from {db_schema}.uniprot_domain ud
-join {db_schema}.uniprot_domain_template using (uniprot_domain_id)
+join {db_schema}.uniprot_domain_template udt using (uniprot_domain_id)
 join {db_schema}.uniprot_domain_pair udp on (udp.uniprot_domain_id_1 = ud.uniprot_domain_id)
-join {db_schema}.uniprot_domain_pair_template using (uniprot_domain_pair_id)
+join {db_schema}.uniprot_domain_pair_template udpt using (uniprot_domain_pair_id)
 join {db_schema_uniprot}.uniprot_sequence us using (uniprot_id)
 where uniprot_id not in
     (select uniprot_id from {db_schema}.provean)
@@ -120,7 +132,7 @@ else:
 
 # %% Have provean and domain model but not interface model
 sql_query = """
-select ud.*, udm.*, us.uniprot_sequence
+select ud.uniprot_id, us.uniprot_sequence, udm.model_domain_def
 from {db_schema}.uniprot_domain ud
 join {db_schema}.provean using (uniprot_id)
 join {db_schema}.uniprot_domain_template using (uniprot_domain_id)
@@ -145,7 +157,7 @@ elif not QUICK:
 
 # %% Have provean and all models
 sql_query = """
-select ud.*,udpm.*, us.uniprot_sequence
+select ud.uniprot_id, us.uniprot_sequence, udpm.interacting_aa_1
 from {db_schema}.uniprot_domain ud
 join {db_schema}.provean using (uniprot_id)
 join {db_schema}.uniprot_domain_template using (uniprot_domain_id)
@@ -305,13 +317,30 @@ def test_database_pipeline(uniprot_id_mutation):
 
 
 # %%
+problematic_inputs = [
+    ('P15153', 'P34S'),
+    ('P15891', 'I305H'),  # mutation outside domain
+    ('A1VXZ7', 'I92W'),  # mutation outside interface
+    ('P24941', 'V197N'),  # chains not interacting
+    ('O00522', 'K343Y'),  # model is already calculated; should not calculate again
+] + [
+    ('P0A910', m)
+    for m in 'F144A,F191A,F72A,W164A,W28A,W36A,W78A,Y150A,Y162A,Y189A,Y64A,Y76A'.split(',')
+]
+
+
+# %%
 if __name__ == '__main__':
-    import pytest
-    pytest.main([__file__, '-svx', '--quick'])
+    # import pytest
+    # pytest.main([__file__, '-svx', '--quick'])
+
+    # %%
+    test_database_pipeline(problematic_inputs[0])
 
     # %%
     # uniprot_id_mutation = ('A1VXZ7', 'I92W')
     # test_database_pipeline(uniprot_id_mutation)
+
 
     # %%
 #    uniprot_ids_mutations = [
