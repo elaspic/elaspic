@@ -359,6 +359,8 @@ class Model:
                 [int(mutation[1:-1]) - domain_def[0]])[0]
         )
         mutation_modeller = (mutation[0] + str(position_modeller) + mutation[-1])
+        logger.debug('position_modeller: {}'.format(position_modeller))
+        logger.debug('mutation_modeller: {}'.format(mutation_modeller))
 
         if len(self.sequence_seqrecords) == 1:
             partner_chain_idx = None
@@ -373,10 +375,14 @@ class Model:
             partner_chain_id = (
                 self.modeller_structure.child_list[0].child_list[partner_chain_idx].id
             )
-            if partner_chain_idx == 0:
+            logger.debug('sequence_idx: {}'.format(sequence_idx))
+            logger.debug('partner_chain_idx: {}'.format(partner_chain_idx))
+            if sequence_idx == 0:
+                logger.debug('interacting_aa_1: {}'.format(self.interacting_aa_1))
                 if int(position_modeller) not in self.interacting_aa_1:
                     raise errors.MutationOutsideInterfaceError()
-            elif partner_chain_idx == 1:
+            elif sequence_idx == 1:
+                logger.debug('interacting_aa_2: {}'.format(self.interacting_aa_2))
                 if int(position_modeller) not in self.interacting_aa_2:
                     raise errors.MutationOutsideInterfaceError()
             else:
@@ -402,8 +408,6 @@ class Model:
 
         # ...
         logger.debug('Running mutation with mutation_id: {}'.format(mutation_id))
-        logger.debug('sequence_idx: {}'.format(sequence_idx))
-        logger.debug('partner_chain_idx: {}'.format(partner_chain_idx))
         logger.debug('chain_id: {}'.format(chain_id))
         logger.debug('partner_chain_id: {}'.format(partner_chain_id))
 
