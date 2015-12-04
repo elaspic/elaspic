@@ -353,6 +353,13 @@ class Model:
         if mutation_pos < domain_def[0] or mutation_pos > domain_def[1]:
             raise errors.MutationOutsideDomainError()
 
+        position_modeller = (
+            structure_tools.convert_position_to_resid(
+                self.modeller_structure[0][chain_id],
+                [int(mutation[1:-1]) - domain_def[0]])[0]
+        )
+        mutation_modeller = (mutation[0] + str(position_modeller) + mutation[-1])
+
         if len(self.sequence_seqrecords) == 1:
             partner_chain_idx = None
             partner_protein_id = ''
@@ -367,10 +374,10 @@ class Model:
                 self.modeller_structure.child_list[0].child_list[partner_chain_idx].id
             )
             if partner_chain_idx == 0:
-                if int(mutation[1:-1]) not in self.interacting_aa_1:
+                if int(position_modeller) not in self.interacting_aa_1:
                     raise errors.MutationOutsideInterfaceError()
             elif partner_chain_idx == 1:
-                if int(mutation[1:-1]) not in self.interacting_aa_2:
+                if int(position_modeller) not in self.interacting_aa_2:
                     raise errors.MutationOutsideInterfaceError()
             else:
                 logger.warning(
@@ -419,12 +426,6 @@ class Model:
 
         #######################################################################
         # 3rd: introduce the mutation using FoldX
-        position_modeller = (
-            structure_tools.convert_position_to_resid(
-                self.modeller_structure[0][chain_id],
-                [int(mutation[1:-1]) - domain_def[0]])[0]
-        )
-        mutation_modeller = (mutation[0] + str(position_modeller) + mutation[-1])
         mutCodes = [mutation_modeller[0] + chain_id + mutation_modeller[1:], ]
         logger.debug('Mutcodes for foldx: {}'.format(mutCodes))
 
