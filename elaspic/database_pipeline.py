@@ -819,6 +819,8 @@ class _PrepareMutation:
             )
             mutation_idx = 0
             core_or_interface = 'core'
+            domain_start = domain_start or 1
+            domain_end = domain_end or len(self.sequence.sequence)
 
             if int(mutation[1:-1]) < domain_start or int(mutation[1:-1]) > domain_end:
                 raise errors.MutationOutsideDomainError(
@@ -831,6 +833,7 @@ class _PrepareMutation:
             interacting_aa_1 = self._get_interacting_aa(d, 1)
             interacting_aa_2 = self._get_interacting_aa(d, 2)
             assert uniprot_id_1 in [d.uniprot_domain_1.uniprot_id, d.uniprot_domain_2.uniprot_id]
+            logger.debug('sequence: {}'.format(self.sequence.sequence))
 
             if (uniprot_id_1 == d.uniprot_domain_1.uniprot_id and
                     mutation_pos in interacting_aa_1):
@@ -838,8 +841,12 @@ class _PrepareMutation:
                 logger.debug('model_domain_def: {}'.format(d.template.model.model_domain_def_1))
                 domain_start, domain_end = helper.decode_domain_def(
                     d.template.model.model_domain_def_1)
+                if domain_start is None:
+                    domain_start = 1
                 mutation_idx = 0
                 core_or_interface = 'interface'
+                domain_start = domain_start or 1  # if None
+                domain_end = domain_end or len(self.sequence.sequence)
 
             elif (uniprot_id_1 == d.uniprot_domain_2.uniprot_id and
                     mutation_pos in interacting_aa_2):
@@ -849,6 +856,8 @@ class _PrepareMutation:
                     d.template.model.model_domain_def_2)
                 mutation_idx = 1
                 core_or_interface = 'interface'
+                domain_start = domain_start or 1
+                domain_end = domain_end or len(self.sequence.sequence)
 
             else:
                 # Mutation is outside the interface
