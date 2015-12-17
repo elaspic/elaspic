@@ -48,7 +48,6 @@ requirements:
     - sqlite
     - mysqlclient
     - pymysql
-    - mysql-connector-python
     - psycopg2
     # Binary files
     - p7zip
