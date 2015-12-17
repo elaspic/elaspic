@@ -177,7 +177,7 @@ class MyDatabase(object):
                 .format(**configs)
             )
             engine = sa.create_engine(
-                "{db_type}+pymysql://{db_username}:{db_password}@"
+                "{db_type}://{db_username}:{db_password}@"
                 "{db_url}:{db_port}/{db_database}{db_socket}"
                 .format(**configs),
                 pool_recycle=3600,

@@ -47,7 +47,6 @@ requirements:
     - sqlalchemy
     - sqlite
     - mysqlclient
-    - pymysql
     - psycopg2
     # Binary files
     - p7zip
