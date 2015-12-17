@@ -73,6 +73,8 @@ def append_test_cases(df, num=3, num_mutations=3):
         num = 1
     for i in range(num):
         row_idx = random.randint(0, len(df))
+        if df.empty:
+            raise Exception('empty dataframe supplied: {}'.format(df))
         row = df.iloc[row_idx]
         uniprot_id = row['uniprot_id']
         uniprot_sequence = row['uniprot_sequence']

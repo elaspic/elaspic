@@ -294,7 +294,7 @@ class Sequence:
         if return_code != 0 or provean_score is None:
             logger.error('return_code: {}'.format(return_code))
             logger.error('provean_score: {}'.format(provean_score))
-            logger.error('provean_score: {}'.format(error_message))
+            logger.error('error_message: {}'.format(error_message))
             raise errors.ProveanError(error_message)
 
         return provean_score
