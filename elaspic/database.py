@@ -156,7 +156,7 @@ class MyDatabase(object):
                 pool_size=1,
             )
             enable_sqlite_foreign_key_checks(engine)
-        elif configs['db_type'] in ['postgresql', 'mysql']:
+        elif configs['db_type'] == 'postgresql':
             info_message = (
                 "Connected to a {db_type} database: "
                 "{db_url}:{db_port}/{db_database}{db_socket}"
@@ -164,6 +164,20 @@ class MyDatabase(object):
             )
             engine = sa.create_engine(
                 "{db_type}://{db_username}:{db_password}@"
+                "{db_url}:{db_port}/{db_database}{db_socket}"
+                .format(**configs),
+                pool_recycle=3600,
+                echo=echo,
+                pool_size=1,
+            )
+        elif configs['db_type'] == 'mysql':
+            info_message = (
+                "Connected to a {db_type} database: "
+                "{db_url}:{db_port}/{db_database}{db_socket}"
+                .format(**configs)
+            )
+            engine = sa.create_engine(
+                "{db_type}+mysqlconnector://{db_username}:{db_password}@"
                 "{db_url}:{db_port}/{db_database}{db_socket}"
                 .format(**configs),
                 pool_recycle=3600,
