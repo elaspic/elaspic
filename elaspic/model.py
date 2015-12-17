@@ -25,6 +25,16 @@ logger = logging.getLogger(__name__)
 class Model:
 
     def __init__(self, sequence_file, structure_file, modeller_results_file=None):
+        """
+        Parameters
+        ----------
+        sequence_file
+            fasta file containing the sequence of the protein that should be mutated.
+        structure_file
+            pdb file containing the structure to be used as a template for homology modelling.
+        modeller_results_file
+            Precalculated data from a previous modeller run.
+        """
         logger.debug('Initialising a Model instance with parameters:')
         logger.debug('sequence_file: {}:'.format(sequence_file))
         logger.debug('structure_file: {}:'.format(structure_file))
@@ -542,10 +552,13 @@ class Model:
             mutations=self.mutations,
             modeller_results_file=self.modeller_results_file,
             modeller_chain_ids=tuple(self.modeller_chain_ids),
-            modeller_results=self.modeller_results,
             relative_sasa_scores=self.relative_sasa_scores,
             core_or_interface=self.core_or_interface,
         )
+        # Dump modeller resutls
+        for key, value in self.modeller_results.items():
+            result[key] = value
+        # For interfaces
         if len(self.sequence_seqrecords) > 1:
             result_interface = dict(
                 interacting_aa_1=self.interacting_aa_1,

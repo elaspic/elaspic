@@ -1,4 +1,9 @@
-# -*- coding: utf-8 -*-
+"""
+
+TODO: The model object has two serialization steps:
+    1. Inside the modeller class to save modeller results.
+    2. In the local_pipeline to save all results.
+"""
 import os.path as op
 import logging
 import json
