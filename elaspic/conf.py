@@ -6,6 +6,7 @@ import os.path as op
 import subprocess
 import tempfile
 import logging
+import re
 
 from configparser import SafeConfigParser, NoOptionError
 from Bio.SubsMat import MatrixInfo
@@ -243,7 +244,7 @@ def _validate_provean_temp_dir(configParser, configs):
 
 def _prepare_temp_folders(configs):
     for key, value in configs.items():
-        if key.endswith('_dir'):
+        if key.endswith('_dir') and not re.match('{.*}', value):
             logger.debug("Creating '{}' folder: {}...".format(key, value))
             os.makedirs(value, exist_ok=True)
 
