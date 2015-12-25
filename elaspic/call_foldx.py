@@ -90,12 +90,10 @@ class FoldX(object):
         self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
             return self.__read_result(
-                op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'),
-                self.pdb_filename, whatToRun)
+                op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'), whatToRun)
         elif whatToRun == 'Stability':
             return self.__read_result(
-                op.join(self.foldx_dir, 'Stability.txt'),
-                self.pdb_filename, whatToRun)
+                op.join(self.foldx_dir, 'Stability.txt'), whatToRun)
         elif whatToRun == 'RepairPDB':
             return op.join(self.foldx_dir, 'RepairPDB_' + self.pdb_filename)
         elif whatToRun == 'BuildModel':
@@ -195,7 +193,7 @@ class FoldX(object):
             if 'Specified residue not found.' in result:
                 raise errors.MutationMismatchError()
 
-    def __read_result(self, outFile, pdb, whatToRead):
+    def __read_result(self, outFile, whatToRead):
         with open(outFile, 'r') as f:
             lines = f.readlines()
             line = lines[-1].split('\t')

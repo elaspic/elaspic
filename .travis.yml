@@ -27,7 +27,7 @@ before_script:
   # Create a test environment
   - conda create -n _testing elaspic --use-local -y
   - source activate _testing
-  - conda install -q -n _testing pytest pytest-cov fake_provean
+  - conda install -q -n _testing pytest pytest-cov fake_provean fake_foldx
   - $TRAVIS_BUILD_DIR/scripts/configure_test.sh
   - cd ${TEST_DIR}
   - ls 

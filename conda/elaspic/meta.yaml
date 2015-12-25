@@ -65,6 +65,7 @@ test:
   requires:
     - pytest
     - fake_provean
+    - fake_foldx
   imports:
     - elaspic
   commands:
