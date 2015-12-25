@@ -308,7 +308,7 @@ def test_database_pipeline(uniprot_id_mutation):
     #
     sp = database_pipeline.DatabasePipeline(
         uniprot_id, mutation,
-        run_type=5, uniprot_domain_pair_ids=uniprot_domain_pair_ids)
+        run_type='5', uniprot_domain_pair_ids=uniprot_domain_pair_ids)
     sp.run()
     logger.debug('Finished running database pipeline. Now checking results...')
     validate_mutation_1(uniprot_id, mutation)

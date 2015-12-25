@@ -46,6 +46,8 @@ class DatabasePipeline(Pipeline):
         """
         super().__init__(configurations)
 
+        if isinstance(run_type, (int, float)):
+            run_type = str(int(run_type))
         self.uniprot_id = uniprot_id
         self.calculated_mutations = []
         self.run_type = run_type
@@ -99,7 +101,7 @@ class DatabasePipeline(Pipeline):
             logger.info('Warning! Uniprot {} has no pfam domains!'.format(self.uniprot_id))
 
         # Find provean
-        if self.run_type in ['1', '5', 'sequence'] and self.uniprot_domains and not self.sequences:
+        if self.run_type in ['1', '5', 'sequence'] and self.uniprot_domains:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Computing provean...")
             self.get_sequence(self.uniprot_domains[0])
