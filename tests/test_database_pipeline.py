@@ -282,10 +282,11 @@ join {db_schema}.uniprot_domain_pair_model udpm using (uniprot_domain_pair_id)
 left join {db_schema}.uniprot_domain_pair_mutation udpmut on
     (udpmut.uniprot_domain_pair_id = udp.uniprot_domain_pair_id and
      udpmut.uniprot_id = '{uniprot_id}' and udpmut.mutation = '{mutation}')
-where (ud1.uniprot_id = '{uniprot_id}' and
+where
+((ud1.uniprot_id = '{uniprot_id}' and
     {db_schema}.mutation_in_interface('{mutation}', udpm.interacting_aa_1))
 or (ud2.uniprot_id = '{uniprot_id}' and
-    {db_schema}.mutation_in_interface('{mutation}', udpm.interacting_aa_2))
+    {db_schema}.mutation_in_interface('{mutation}', udpm.interacting_aa_2)))
 and model_filename_wt is null;
 """.format(uniprot_id=uniprot_id, mutation=mutation, db_schema=configs['db_schema'])
     logger.debug(sql_query)
