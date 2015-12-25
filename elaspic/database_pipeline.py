@@ -28,17 +28,17 @@ class DatabasePipeline(Pipeline):
 
     def __init__(
             self, uniprot_id, mutations, configurations=None,
-            run_type=5, number_of_tries=[], uniprot_domain_pair_ids=[]):
+            run_type='5', number_of_tries=[], uniprot_domain_pair_ids=[]):
         """Run the main function of the program and parse errors.
 
         Parameters
         ----------
         uniprot_domain_pair_ids : list of integers
             List of uniprot_domain_pair_ids specifying which uniprot domain pairs to analyse.
-        run_type : int
-            1 : Calculate provean supporting set.
-            2 : Calculate all homology models.
-            3 : Calculate mutations using precalculated provean and models
+        run_type : str
+            1 / sequence: Calculate provean supporting set.
+            2 / model: Calculate all homology models.
+            3 / mutations: Calculate mutations using precalculated provean and models
                 (not working)
             4 : Calculate mutations using precalculated provean (calculating mutations on the fly)
                 (not working)
@@ -99,7 +99,7 @@ class DatabasePipeline(Pipeline):
             logger.info('Warning! Uniprot {} has no pfam domains!'.format(self.uniprot_id))
 
         # Find provean
-        if self.run_type in [1, 5] and self.uniprot_domains and not self.sequences:
+        if self.run_type in ['1', '5', 'sequence'] and self.uniprot_domains and not self.sequences:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Computing provean...")
             self.get_sequence(self.uniprot_domains[0])
@@ -112,7 +112,7 @@ class DatabasePipeline(Pipeline):
             self._update_path_to_data(self.uniprot_domain_pairs)
 
         # Make models
-        if self.run_type in [2, 4, 5]:
+        if self.run_type in ['2', '4', '5', 'model']:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Building models...")
             for d in self.uniprot_domains + self.uniprot_domain_pairs:
@@ -123,7 +123,7 @@ class DatabasePipeline(Pipeline):
             )
 
         # Analyse mutations
-        if self.run_type in [3, 4, 5] and self.mutations:
+        if self.run_type in ['3', '4', '5', 'mutations'] and self.mutations:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Analyzing mutations...")
             for d in self.uniprot_domains + self.uniprot_domain_pairs:

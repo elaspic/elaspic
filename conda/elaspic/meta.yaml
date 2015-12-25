@@ -8,8 +8,7 @@ source:
 build:
   number: 1
   entry_points: 
-    - elaspic = elaspic.__main__:elaspic
-    - elaspic_database = elaspic.__main__:elaspic_database
+    - elaspic = elaspic.__main__:main
 
 requirements:
   build:
