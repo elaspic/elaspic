@@ -78,26 +78,33 @@ pdb_mutatations = {
 
 
 sequence_mutations = {
+    ('2FOY', 'P23280'): {
+        # mutation_type == 1
+        'A': [
+            'Q15A',
+            'N24A',
+        ],
+        # mutation_type == 2
+        'A': [
+            'H34A',
+            'G43A',
+        ],
+        # mutation_type == 3
+        '1': [
+            'H34A',
+            'G43A',
+        ],
+    },
     ('2Z5Y', 'Q5NU32'): {
+        # mutation_type == 2
+        'A': [
+            'H12A',
+            'M13A',
+        ],
+        # mutation_type == 3
         '1': [
             'H12A',
             'M13A',
-            'F14A',
-            'D15A',
-            'V16A',
-            'V17A',
-            'V18A',
-            'I19A',
-            'G20A',
-            'G21A',
-            'G22A',
-            'I23A',
-            'S24A',
-            'G25A',
-            'L26A',
-            'S27A',
-            'A28G',
-            'A29G',
             'K30A',
             'L31A',
         ]

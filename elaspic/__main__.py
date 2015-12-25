@@ -111,6 +111,15 @@ def get_elaspic_parser():
              "and residue INDEX (e.g. '1_M1C,2_C20P' to mutate the first residue in sequence 1 "
              "to Cysteine, and the 20th residue in sequence 2 to Proline).")
     parser.add_argument(
+        '-n', '--mutation_format', nargs='?', default=None,
+        help="Mutation format:\n"
+             "  1. {pdb_chain}_{pdb_mutation},...\n"
+             "  2. {pdb_chain}_{sequence_mutation},...\n"
+             "  3. {sequence_pos}_{sequence_mutation}... (default)\n\n"
+             "If `sequence_file` is None, this does not matter "
+             "(always {pdb_chain}_{pdb_mutation})."
+    )
+    parser.add_argument(
         '-i', '--uniprot_domain_pair_ids',  nargs='?', default='',
         help="List of uniprot_domain_pair_ids to analyse "
              "(useful if you want to restrict your analysis to only a handful of domains).")
@@ -224,6 +233,7 @@ def elaspic():
         from elaspic import local_pipeline
         pipeline = local_pipeline.LocalPipeline(
             args.structure_file, args.sequence_file, args.mutations,
+            mutation_format=args.mutation_format,
         )
         if args.run_type in ['1', 'sequence']:
             pipeline.run_all_sequences()
