@@ -259,14 +259,12 @@ Examples:
 
 # %% ELASPIC DATABASE
 def elaspic_database(args):
-    if 'func' not in args.__dict__:
-        args = parser.parse_args(['--help'])
     conf.read_configuration_file(args.config_file)
     print("Running function '{}'...".format(args.func.__name__))
-    args.func(args)
 
 
 def create_database(args):
+    conf.read_configuration_file(args.config_file)
     from elaspic import database
     db = database.MyDatabase()
     db.create_database_tables(args.clear_schema, args.keep_uniprot_sequence)
@@ -293,6 +291,7 @@ def open_gzip(filename):
 
 
 def load_data_to_database(args):
+    conf.read_configuration_file(args.config_file)
     from elaspic import database
     db = database.MyDatabase()
     args.data_folder = args.data_folder.rstrip('/')
@@ -319,6 +318,7 @@ def test_database(args):
 
 
 def delete_database(args):
+    conf.read_configuration_file(args.config_file)
     from elaspic import database
     db = database.MyDatabase()
     db.delete_database_tables(args.drop_schema, args.keep_uniprot_sequence)
@@ -351,7 +351,7 @@ Examples:
     subparsers = parser.add_subparsers(
         title='tasks',
         help='Maintenance tasks to perform')
-    parser.set_defaults(func=elaspic_database)
+    # parser.set_defaults(func=elaspic_database)
 
     # Create an empty database schema
     parser_create = subparsers.add_parser(
