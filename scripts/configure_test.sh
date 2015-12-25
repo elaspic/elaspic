@@ -117,8 +117,8 @@ elaspic database -c "${TEST_DIR}/tests/travis_config_file.ini" load_data \
     --data_folder "${TEST_DIR}/elaspic.kimlab.org"
 
 # Remove some rows from the database, so that we have something to calculate
-mysql -u root travis_test -e "DELETE FROM provean LIMIT 100";
-mysql -u root travis_test -e "DELETE FROM uniprot_domain_model LIMIT 100";
-mysql -u root travis_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 100";
+mysql -u root travis_test -e "DELETE FROM provean LIMIT 20";
+mysql -u root travis_test -e "DELETE FROM uniprot_domain_model LIMIT 20";
+mysql -u root travis_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 20";
 
 fi
