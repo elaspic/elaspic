@@ -4,7 +4,7 @@ package:
 
 build:
   noarch_python: True
-  number: 2
+  number: 4
 
 requirements:
   run:

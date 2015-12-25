@@ -185,6 +185,7 @@ class FoldX(object):
             helper.subprocess_check_output_locally(self.foldx_dir, system_command)
         )
         if error_message:
+            logger.debug('foldx result: {}'.format(result))
             logger.error('foldx error message: {}'.format(error_message))
             if 'Cannot allocate memory' in error_message:
                 raise errors.ResourceError(error_message)

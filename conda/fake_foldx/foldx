@@ -89,6 +89,7 @@ class FakeFoldx:
             # Mutate
             res = structure[0][chain_id][resid]
             if AAA_DICT[res.resname] != mutation[0]:
+                print('There was a problem...\nSpecified residue not found!')
                 raise Exception("Structure residue '{}' does not match mutation '{}'!"
                                 .format(res.resname, mutation[0]))
             res.resname = A_DICT[mutation[-1]]
