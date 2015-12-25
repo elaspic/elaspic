@@ -112,8 +112,8 @@ DELIMITER ;
 EOF
 
 # Load precalculated data to the database
-elaspic_database -c "${TEST_DIR}/tests/travis_config_file.ini" create
-elaspic_database -c "${TEST_DIR}/tests/travis_config_file.ini" load_data \
+elaspic database -c "${TEST_DIR}/tests/travis_config_file.ini" create
+elaspic database -c "${TEST_DIR}/tests/travis_config_file.ini" load_data \
     --data_folder "${TEST_DIR}/elaspic.kimlab.org"
 
 # Remove some rows from the database, so that we have something to calculate

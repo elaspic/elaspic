@@ -8,7 +8,7 @@ if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == database* ]] ; then
 
 # Clear the database 
 # ..or keep it so you run tests if something goes wrong
-# elaspic_database -c "${TEST_DIR}/tests/travis_config_file.ini" delete
+# elaspic database -c "${TEST_DIR}/tests/travis_config_file.ini" delete
 
 fi
 
