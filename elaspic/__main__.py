@@ -74,14 +74,130 @@ def configure_logger():
     logging.config.dictConfig(LOGGING_CONFIGS)
 
 
-# %% Parse arguments
-def get_elaspic_parser():
+# %% ELASPIC RUN
+def validate_args(args):
+    if not os.path.isfile(args.config_file):
+        raise Exception('The configuration file {} does not exist!'.format(args.config_file))
+
+    if args.input_file and not os.path.isfile(args.input_file):
+        raise Exception('The input file {} does not exist!'.format(args.input_file))
+
+    choose_one = [
+        args.uniprot_id is not None, args.input_file is not None, args.structure_file is not None,
+    ]
+    if sum(choose_one) != 1:
+        raise Exception(
+            "One of '--uniprot_id', '--input_file', or '--structure_file' must be specified!"
+        )
+
+    if args.sequence_file and not args.structure_file:
+        raise Exception(
+            "A template PDB file must be specified using the '--structure_file' option, "
+            "when you specify a target sequence using the '--sequence_file' option!"
+        )
+
+
+def parse_input_file(input_file):
+    """
+    Does not work! Do not use!
+    """
+    uniprot_ids = []
+    mutations = []
+    uniprot_domain_pair_ids = []
+    with open(input_file, 'r') as fh:
+        for line in fh:
+            # Can skip lines by adding spaces or tabs before them
+            if line[0][0] == ' ' or line[0][0] == '\t':
+                print('Skipping line: {}'.format(line))
+                continue
+            row = [l.strip() for l in line.split('\t')]
+            # Specifying the mutation is optional
+            if len(row) == 2:
+                uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], row[2]
+            elif len(row) == 1:
+                uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], ''
+            elif len(row) == 1:
+                uniprot_id, mutation, uniprot_domain_pair_id = row[0], '', ''
+            uniprot_ids.append(uniprot_id)
+            mutations.append(mutation)
+            uniprot_domain_pair_ids.append(uniprot_domain_pair_id)
+    return uniprot_ids, mutations, uniprot_domain_pair_ids
+
+
+def elaspic(args):
+    validate_args(args)
+
+    if args.input_file:
+        conf.read_configuration_file(args.config_file)
+        configure_logger()
+        # Run database pipeline for each row in file
+        from elaspic import database_pipeline
+        for uniprot_id, mutations, uniprot_domain_pair_id in \
+                zip(*parse_input_file(args.input_file)):
+            pipeline = database_pipeline.DatabasePipeline(
+                uniprot_id, mutations,
+                run_type=args.run_type,
+            )
+            pipeline.run()
+    elif args.uniprot_id:
+        conf.read_configuration_file(args.config_file)
+        configure_logger()
+        # Run database pipeline
+        if args.uniprot_domain_pair_ids:
+            logger.debug('uniprot_domain_pair_ids: {}'.format(args.uniprot_domain_pair_ids))
+            uniprot_domain_pair_ids_asint = (
+                [int(x) for x in args.uniprot_domain_pair_ids.split(',') if x]
+            )
+        else:
+            uniprot_domain_pair_ids_asint = []
+        # Run database pipeline
+        from elaspic import database_pipeline
+        pipeline = database_pipeline.DatabasePipeline(
+            args.uniprot_id, args.mutations,
+            run_type=args.run_type,
+            uniprot_domain_pair_ids=uniprot_domain_pair_ids_asint
+        )
+        pipeline.run()
+    elif args.structure_file:
+        conf.read_configuration_file(args.config_file, unique_temp_dir=os.getcwd())
+        configure_logger()
+        # Run local pipeline
+        from elaspic import local_pipeline
+        pipeline = local_pipeline.LocalPipeline(
+            args.structure_file, args.sequence_file, args.mutations,
+            mutation_format=args.mutation_format,
+        )
+        if args.run_type in ['1', 'sequence']:
+            pipeline.run_all_sequences()
+        elif args.run_type in ['2', 'model']:
+            pipeline.run_all_models()
+        elif args.run_type in ['3', 'mutations']:
+            pipeline.run_all_mutations()
+        elif args.run_type in ['5']:
+            pipeline.run()
+        else:
+            raise RuntimeError("Incorrect value for run_type: '{}'".format(args.run_type))
+
+
+def configure_run_parser(sub_parsers):
     description = """
     Run the ELASPIC pipeline.
     """
-    parser = argparse.ArgumentParser(
+    help = "Run ELASPIC."
+    description = help + """
+"""
+    example = """
+Examples:
+
+    elaspic run -u P00044 -m M1A -c config_file.ini
+
+"""
+    parser = sub_parsers.add_parser(
+        'run',
+        help=help,
         description=description,
-        formatter_class=argparse.RawTextHelpFormatter)
+        epilog=example,
+    )
 
     parser.add_argument(
         '-c', '--config_file', required=True,
@@ -138,116 +254,18 @@ def get_elaspic_parser():
               '  3 / mutations: Evaluate mutations only \n'
               '  4: Create homology models and evaluate mutations \n'
               '  5: Calculate Provean, create homology models, and evaluate mutations \n'))
-    return parser
+    parser.set_defaults(func=elaspic)
 
 
-def validate_args(args):
-    if not os.path.isfile(args.config_file):
-        raise Exception('The configuration file {} does not exist!'.format(args.config_file))
-
-    if args.input_file and not os.path.isfile(args.input_file):
-        raise Exception('The input file {} does not exist!'.format(args.input_file))
-
-    choose_one = [
-        args.uniprot_id is not None, args.input_file is not None, args.structure_file is not None,
-    ]
-    if sum(choose_one) != 1:
-        raise Exception(
-            "One of '--uniprot_id', '--input_file', or '--structure_file' must be specified!"
-        )
-
-    if args.sequence_file and not args.structure_file:
-        raise Exception(
-            "A template PDB file must be specified using the '--structure_file' option, "
-            "when you specify a target sequence using the '--sequence_file' option!"
-        )
+# %% ELASPIC DATABASE
+def elaspic_database(args):
+    if 'func' not in args.__dict__:
+        args = parser.parse_args(['--help'])
+    conf.read_configuration_file(args.config_file)
+    print("Running function '{}'...".format(args.func.__name__))
+    args.func(args)
 
 
-def parse_input_file(input_file):
-    """
-    Does not work! Do not use!
-    """
-    uniprot_ids = []
-    mutations = []
-    uniprot_domain_pair_ids = []
-    with open(input_file, 'r') as fh:
-        for line in fh:
-            # Can skip lines by adding spaces or tabs before them
-            if line[0][0] == ' ' or line[0][0] == '\t':
-                print('Skipping line: {}'.format(line))
-                continue
-            row = [l.strip() for l in line.split('\t')]
-            # Specifying the mutation is optional
-            if len(row) == 2:
-                uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], row[2]
-            elif len(row) == 1:
-                uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], ''
-            elif len(row) == 1:
-                uniprot_id, mutation, uniprot_domain_pair_id = row[0], '', ''
-            uniprot_ids.append(uniprot_id)
-            mutations.append(mutation)
-            uniprot_domain_pair_ids.append(uniprot_domain_pair_id)
-    return uniprot_ids, mutations, uniprot_domain_pair_ids
-
-
-def elaspic():
-    parser = get_elaspic_parser()
-    args = parser.parse_args()
-    validate_args(args)
-
-    if args.input_file:
-        conf.read_configuration_file(args.config_file)
-        configure_logger()
-        # Run database pipeline for each row in file
-        from elaspic import database_pipeline
-        for uniprot_id, mutations, uniprot_domain_pair_id in \
-                zip(*parse_input_file(args.input_file)):
-            pipeline = database_pipeline.DatabasePipeline(
-                uniprot_id, mutations,
-                run_type=args.run_type,
-            )
-            pipeline.run()
-    elif args.uniprot_id:
-        conf.read_configuration_file(args.config_file)
-        configure_logger()
-        # Run database pipeline
-        if args.uniprot_domain_pair_ids:
-            logger.debug('uniprot_domain_pair_ids: {}'.format(args.uniprot_domain_pair_ids))
-            uniprot_domain_pair_ids_asint = (
-                [int(x) for x in args.uniprot_domain_pair_ids.split(',') if x]
-            )
-        else:
-            uniprot_domain_pair_ids_asint = []
-        # Run database pipeline
-        from elaspic import database_pipeline
-        pipeline = database_pipeline.DatabasePipeline(
-            args.uniprot_id, args.mutations,
-            run_type=args.run_type,
-            uniprot_domain_pair_ids=uniprot_domain_pair_ids_asint
-        )
-        pipeline.run()
-    elif args.structure_file:
-        conf.read_configuration_file(args.config_file, unique_temp_dir=os.getcwd())
-        configure_logger()
-        # Run local pipeline
-        from elaspic import local_pipeline
-        pipeline = local_pipeline.LocalPipeline(
-            args.structure_file, args.sequence_file, args.mutations,
-            mutation_format=args.mutation_format,
-        )
-        if args.run_type in ['1', 'sequence']:
-            pipeline.run_all_sequences()
-        elif args.run_type in ['2', 'model']:
-            pipeline.run_all_models()
-        elif args.run_type in ['3', 'mutations']:
-            pipeline.run_all_mutations()
-        elif args.run_type in ['5']:
-            pipeline.run()
-        else:
-            raise RuntimeError("Incorrect value for run_type: '{}'".format(args.run_type))
-
-
-# %%
 def create_database(args):
     from elaspic import database
     db = database.MyDatabase()
@@ -307,16 +325,33 @@ def delete_database(args):
     logger.info('Done!')
 
 
-def get_database_parser():
-    parser = argparse.ArgumentParser(
-        prog='ELASPIC database',
-        description="Perform maintenance tasks on the ELASPIC database.")
+def configure_database_parser(sub_parsers):
+    description = """
+    Run the ELASPIC pipeline.
+    """
+    help = "Perform maintenance tasks on the ELASPIC database."
+    description = help + """
+"""
+    example = """
+Examples:
+
+    elaspic database -c config_file.ini create
+
+"""
+    parser = sub_parsers.add_parser(
+        'database',
+        help=help,
+        description=description,
+        epilog=example,
+    )
+
     parser.add_argument(
         '-c', '--config_file', required=True,
         help='ELASPIC configuration file')
     subparsers = parser.add_subparsers(
         title='tasks',
         help='Maintenance tasks to perform')
+    parser.set_defaults(func=elaspic_database)
 
     # Create an empty database schema
     parser_create = subparsers.add_parser(
@@ -384,20 +419,9 @@ def get_database_parser():
              "Only applicable if ``--drop_schema`` is set to ``True``.")
     parser_delete.set_defaults(func=delete_database)
 
-    return parser
 
-
-def elaspic_database():
-    parser = get_database_parser()
-    args = parser.parse_args()
-    if 'func' not in args.__dict__:
-        args = parser.parse_args(['--help'])
-    conf.read_configuration_file(args.config_file)
-    print("Running function '{}'...".format(args.func.__name__))
-    args.func(args)
-
-
-def elaspic_train():
+# %%
+def elaspic_train(args):
     import pandas as pd
     from elaspic import DATA_DIR, machine_learning
 
@@ -458,14 +482,45 @@ def elaspic_train():
         pickle.dump(interface_clf_p1, ofh)
 
 
+def configure_train_parser(sub_parsers):
+    description = """
+    Run the ELASPIC pipeline.
+    """
+    help = "Train the ELASPIC classifiers."
+    description = help + """
+"""
+    example = """
+Examples:
+
+    elaspic train
+
+"""
+    parser = sub_parsers.add_parser(
+        'train',
+        help=help,
+        description=description,
+        epilog=example,
+    )
+    parser.set_defaults(func=elaspic_train)
+
+
+# %%
 def main():
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == 'train':
-        elaspic_train()
-    elif len(sys.argv) > 1 and sys.argv[1] == 'database':
-        elaspic_database()
-    else:
-        elaspic()
+    parser = argparse.ArgumentParser(
+        prog='elaspic',
+
+    )
+    sub_parsers = parser.add_subparsers(
+        title='command',
+        help=''
+    )
+    configure_run_parser(sub_parsers)
+    configure_database_parser(sub_parsers)
+    configure_train_parser(sub_parsers)
+    args = parser.parse_args()
+    if 'func' not in args.__dict__:
+        args = parser.parse_args(['--help'])
+    args.func(args)
 
 
 # %%

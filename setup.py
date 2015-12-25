@@ -18,7 +18,7 @@ class TrainPredictors(Command):
 
     def run(self):
         from elaspic.__main__ import elaspic_train
-        elaspic_train()
+        elaspic_train(None)
 
     def finalize_options(self):
         """Abstract method that is required to be overwritten"""
