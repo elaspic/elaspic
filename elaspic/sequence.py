@@ -260,6 +260,7 @@ class Sequence:
         logger.debug('Child group id: {}'.format(child_process_group_id))
 
         # Keep an eye on provean to make sure it doesn't do anything crazy
+        time.sleep(5)
         while check_mem_usage and child_process.poll() is None:
             disk_space_availible_now = (
                 psutil.disk_usage(configs['provean_temp_dir']).free / float(1024)**3

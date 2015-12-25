@@ -104,6 +104,7 @@ def read_configuration_file(config_file, unique_temp_dir=None):
             'web_server': 'False',
             'copy_data': 'True',
             'allow_internet': 'False',
+            'testing': 'False',
         })
     configParser.read(config_file)
 
@@ -121,6 +122,7 @@ def read_configuration_file(config_file, unique_temp_dir=None):
     configs['copy_data'] = configParser.getboolean('DEFAULT', 'copy_data')
     configs['allow_internet'] = configParser.getboolean(
         'DEFAULT', 'allow_internet')
+    configs['testing'] = configParser.getboolean('DEFAULT', 'testing')
 
     # Temporary directories
     configs['temp_dir'] = get_temp_dir(configs['global_temp_dir'], 'elaspic')
