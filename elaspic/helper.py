@@ -240,13 +240,12 @@ def _set_process_group(parent_process_group_id):
 
 def _try_decoding_bytes_string(bytes_string):
     try:
-        bytes_string = bytes_string.decode('utf-8')
+        return bytes_string.decode('utf-8')
     except AttributeError:
-        pass
+        return bytes_string
     except UnicodeDecodeError:
         logger.debug("Could not decode bytes string using utf-8 encoding. Trying iso-8859-1...")
-        bytes_string = bytes_string.decode('iso-8859-1')
-    return bytes_string
+        return bytes_string.decode('iso-8859-1')
 
 
 def run_subprocess(system_command, **popen_argvars):
