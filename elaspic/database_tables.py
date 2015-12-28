@@ -412,7 +412,7 @@ class UniprotDomain(Base):
         None, sa.ForeignKey(
             UniprotSequence.uniprot_id,
             onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+        nullable=False)
     pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
     pdbfam_idx = sa.Column(sa.Integer, nullable=False)
     pfam_clan = sa.Column(sa.Text)
@@ -429,10 +429,14 @@ class UniprotDomain(Base):
             (['uniprot_id', 'alignment_def', 'max_seq_identity'],
              {'unique': True, 'index_name': 'ix_uniprot_id_unique'}),
             (['pdbfam_name'], {'mysql_length': 255}),
+            (['uniprot_id', 'uniprot_domain_id'],
+             {'unique': True, 'index_name': 'ix_uniprot_id_uniprot_domain_id'}),
         ]
     else:
         _indexes = [
             (['pdbfam_name'], {'mysql_length': 255}),
+            (['uniprot_id', 'uniprot_domain_id'],
+             {'unique': True, 'index_name': 'ix_uniprot_id_uniprot_domain_id'}),
         ]
     __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
 
