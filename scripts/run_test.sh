@@ -23,8 +23,7 @@ sed -i "s|^archive_type = .*|archive_type = directory|" "${CONFIG_FILE}"
 sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" "${CONFIG_FILE}"
 
 # Run tests
-py.test "${TEST_DIR}" -vsx --cache-clear --quick \
-    --config-file="${CONFIG_FILE}" 
+py.test "${TEST_DIR}" -vsx --cache-clear --config-file="${CONFIG_FILE}" 
 
 fi
 
