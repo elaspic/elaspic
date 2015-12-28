@@ -43,9 +43,10 @@ pdb_mutatations = {
     },
     # test_2; this one has three symetric chains
     '1THJ': {
+        # Chain B interacts with A & C
+        # All of these mutations should had one core and two interface predictions
+        # Mutation type 1
         'B': [
-            # interface with A & C
-            # all of these should had one core and two interface predictions
             'P36A',
             'E37A',
             'P54A',
@@ -56,6 +57,32 @@ pdb_mutatations = {
             'P152A',
             'R153A',
             'G170A',
+        ],
+        # Mutation type 2
+        'B': [
+            'P37A',
+            'E38A',
+            'P55A',
+            'M56A',
+            'G78A',
+            'Q119A',
+            'Q137A',
+            'P153A',
+            'R154A',
+            'G171A',
+        ],
+        # Mutation type 3
+        '2': [
+            'P37A',
+            'E38A',
+            'P55A',
+            'M56A',
+            'G78A',
+            'Q119A',
+            'Q137A',
+            'P153A',
+            'R154A',
+            'G171A',
         ],
     },
     # this one has two chains and DNA in it...
@@ -79,29 +106,29 @@ pdb_mutatations = {
 
 sequence_mutations = {
     ('2FOY', 'P23280'): {
-        # mutation_type == 1
+        #  Mutation type 1
         'A': [
             'Q15A',
             'N24A',
         ],
-        # mutation_type == 2
+        #  Mutation type 2
         'A': [
             'H34A',
             'G43A',
         ],
-        # mutation_type == 3
+        #  Mutation type 3
         '1': [
             'H34A',
             'G43A',
         ],
     },
     ('2Z5Y', 'Q5NU32'): {
-        # mutation_type == 2
+        # Mutation type 1 / 2
         'A': [
             'H12A',
             'M13A',
         ],
-        # mutation_type == 3
+        #  Mutation type 3
         '1': [
             'H12A',
             'M13A',
