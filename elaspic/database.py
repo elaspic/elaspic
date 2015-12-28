@@ -73,9 +73,8 @@ def retry_archive(fn):
     r = retry(
         retry_on_exception=lambda exc:
             check_exception(exc, valid_exc=errors.Archive7zipError),
-        wait_exponential_multiplier=1000,
-        wait_exponential_max=60000,
-        stop_max_attempt_number=5)
+        wait_fixed=2000,
+        stop_max_attempt_number=2)
     return r(fn)
 
 
@@ -828,18 +827,10 @@ class MyDatabase(object):
             helper.subprocess_check_output_locally(configs['archive_temp_dir'], system_command)
         )
 
-        def log_error():
-            logger.error(
-                '\n result:{}\n error_message:{}\n return_code:{}'
-                .format(result, error_message, return_code)
-            )
-
         if 'No files to process' in result:
-            log_error()
             raise errors.Archive7zipFileNotFoundError(result, error_message, return_code)
 
         if return_code:
-            log_error()
             raise errors.Archive7zipError(result, error_message, return_code)
 
     @retry_database
