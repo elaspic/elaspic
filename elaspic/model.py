@@ -148,6 +148,7 @@ class Model:
         # Align sequence to structure.
         alignment_files = []
         domain_def_offsets = []
+        model_domain_defs = []
         alignment_stats = []
         self.sequence_seqrecords_aligned, self.structure_seqrecords_aligned = [], []
         for sequence_seqrec, structure_seqrec in zip(
@@ -204,6 +205,11 @@ class Model:
                 domain_def_offsets.append((0, 0,))
                 self.sequence_seqrecords_aligned.append(sequence_seqrec)
                 self.structure_seqrecords_aligned.append(structure_seqrec)
+            # either way
+            model_domain_def = (
+                (domain_def_offset[0] + 1, len(sequence_seqrec) - domain_def_offset[1],)
+            )
+            model_domain_defs.append(model_domain_def)
 
         # Add the HETATM chain if necesasry.
         assert len(self.sequence_seqrecords_aligned) == len(self.structure_seqrecords_aligned)
@@ -224,6 +230,7 @@ class Model:
         # Save additional alignment info
         self.modeller_results['alignment_files'] = alignment_files
         self.modeller_results['domain_def_offsets'] = domain_def_offsets
+        self.modeller_results['model_domain_defs'] = model_domain_defs
         self.modeller_results['alignment_stats'] = alignment_stats
 
     def _analyse_core(self):

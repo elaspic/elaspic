@@ -91,33 +91,36 @@ class LocalPipeline(Pipeline):
                     seq=Seq(self.sp.chain_sequence_dict[chain_id]))
                 for (i, chain_id) in enumerate(self.sp.chain_ids)
             ])
+            possible_mutation_formats = ['1', '2', '3']
             # Parse mutations
             # Mutations are specified in the {chain_id}_{mutation},... format for sure.
-            self.mutations = self._parse_mutations(mutations, '1')
+            # self.mutations = self._parse_mutations(mutations, '1')
         else:
             # Read template sequences from the sequence file
             self.seqrecords = tuple(SeqIO.parse(self.sequence_file, 'fasta'))
             for i, seqrec in enumerate(self.seqrecords):
                 seqrec.id = helper.slugify('{}_{}'.format(seqrec.id, str(i)))
-            # Parse mutations
-            # There are many ways mutations can be specified here...
-            # try one at at a time until something succeeds
-            if mutation_format is not None:
-                self.mutations = self._parse_mutations(mutations, mutation_format)
-            else:
-                for mutation_format in ['3', '2', '1']:
-                    try:
-                        self.mutations = self._parse_mutations(mutations, mutation_format)
-                        break
-                    except (IndexError, ValueError, errors.MutationMismatchError) as e:
-                        error_message = (
-                            "Error parsing mutations '{}' using mutation_format '{}':\n{} {}"
-                            .format(mutations, mutation_format, type(e), e)
-                        )
-                        logger.error(error_message)
-                        continue
-                if not self.mutations:
-                    raise errors.MutationMismatchError()
+            possible_mutation_formats = ['3', '2', '1']
+            
+        # Parse mutations
+        # There are many ways mutations can be specified here...
+        # try one at at a time until something succeeds
+        if mutation_format is not None:
+            self.mutations = self._parse_mutations(mutations, mutation_format)
+        else:
+            for mutation_format in possible_mutation_formats:
+                try:
+                    self.mutations = self._parse_mutations(mutations, mutation_format)
+                    break
+                except (IndexError, ValueError, errors.MutationMismatchError) as e:
+                    error_message = (
+                        "Error parsing mutations '{}' using mutation_format '{}':\n{} {}"
+                        .format(mutations, mutation_format, type(e), e)
+                    )
+                    logger.error(error_message)
+                    continue
+            if not self.mutations:
+                raise errors.MutationMismatchError()
 
         if len(self.sp.chain_ids) != len(self.seqrecords):
             logger.warning(
@@ -184,7 +187,8 @@ class LocalPipeline(Pipeline):
         sequence_results = []
         sequence_results_file = op.join(configs['unique_temp_dir'], 'sequence.json')
         if op.isfile(sequence_results_file):
-            logger.debug('Results file for model already exists: {}'.format(sequence_results_file))
+            logger.debug('Results file for sequence already exists: {}'
+                         .format(sequence_results_file))
             return
         for chain_id, _ in zip(self.sp.chain_ids, self.seqrecords):
             if chain_id == self.sp.hetatm_chain_id:

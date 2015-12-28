@@ -321,6 +321,7 @@ def test_database_pipeline(uniprot_id_mutation):
 
 # %%
 problematic_inputs = [
+    ('O00470', 'Y299H'),
     ('P15153', 'P34S'),
     ('P15891', 'I305H'),  # mutation outside domain
     ('A1VXZ7', 'I92W'),  # mutation outside interface
