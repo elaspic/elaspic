@@ -202,10 +202,11 @@ class Model:
                 with open(alignment_output_file, 'w') as ofh:
                     SeqIO.write([sequence_seqrec, structure_seqrec], ofh, 'clustal')
                 alignment_files.append(alignment_output_file)
-                domain_def_offsets.append((0, 0,))
+                domain_def_offset = (0, 0,)
                 self.sequence_seqrecords_aligned.append(sequence_seqrec)
                 self.structure_seqrecords_aligned.append(structure_seqrec)
             # either way
+            domain_def_offsets.append(domain_def_offset)
             model_domain_def = (
                 (domain_def_offset[0] + 1, len(sequence_seqrec) - domain_def_offset[1],)
             )
