@@ -118,6 +118,7 @@ def download_pdb_file(pdb_id, output_dir):
     """Move PDB structure to the local working directory.
     """
     PDB_URL = 'http://www.rcsb.org/pdb/files/{}.pdb'
+    PDB_EURO_URL = 'http://www.ebi.ac.uk/pdbe/entry-files/download/pdb{}.ent'
 
     output_pdb_filename = op.join(output_dir, pdb_id + '.pdb')
 
@@ -128,7 +129,16 @@ def download_pdb_file(pdb_id, output_dir):
 
     # Download the PDB file from the internet...
     logger.info('Downloading PDB {}...'.format(pdb_id + '.pdb'))
-    response = urllib.request.urlopen(PDB_URL.format(pdb_id))
+    try:
+        pdb_url = PDB_URL.format(pdb_id)
+        logger.debug(pdb_url)
+        response = urllib.request.urlopen(pdb_url)
+    except urllib.error.URLError as e:
+        logger.debug(e)
+        pdb_url = PDB_EURO_URL.format(pdb_id.lower())
+        logger.debug(pdb_url)
+        response = urllib.request.urlopen(pdb_url)
+
     with open(output_pdb_filename, 'wb') as ofh:
         ofh.write(response.read())
 
