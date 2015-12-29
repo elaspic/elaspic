@@ -101,7 +101,7 @@ class LocalPipeline(Pipeline):
             for i, seqrec in enumerate(self.seqrecords):
                 seqrec.id = helper.slugify('{}_{}'.format(seqrec.id, str(i)))
             possible_mutation_formats = ['3', '2', '1']
-            
+
         # Parse mutations
         # There are many ways mutations can be specified here...
         # try one at at a time until something succeeds
@@ -489,6 +489,11 @@ class PrepareMutation:
         features['solvent_accessibility_wt'] = results['solvent_accessibility_wt']
         features['secondary_structure_mut'] = results['secondary_structure_mut']
         features['solvent_accessibility_mut'] = results['solvent_accessibility_mut']
+
+        # new additions
+        features['mutation_errors'] = results['mutation_errors']
+        features['chain_modeller'] = results['chain_modeller']
+        features['mutation_modeller'] = results['mutation_modeller']
 
         if len(self.model.sequence_seqrecords) > 1:
             features['interface_area_hydrophobic'] = self.model.interface_area_hydrophobic
