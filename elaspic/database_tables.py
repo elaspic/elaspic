@@ -480,6 +480,8 @@ class UniprotDomainPair(Base):
     """
     __tablename__ = 'uniprot_domain_pair'
     _indexes = [
+            (['uniprot_id_1', 'uniprot_id_2']),
+            (['uniprot_id_2', 'uniprot_id_1']),
             (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {'unique': True}),
             (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {'unique': True}),
     ]
@@ -499,6 +501,9 @@ class UniprotDomainPair(Base):
     rigids = sa.Column(sa.Text)  # Interaction references from iRefsa.Index
     domain_contact_ids = sa.Column(sa.Text)  # interaction references from the PDB
     path_to_data = sa.Column(sa.Text)
+    # TODO: Move these columns higher up the next time creating a database
+    uniprot_id_1 = sa.Column(sa.String(MEDIUM))
+    uniprot_id_2 = sa.Column(sa.String(MEDIUM))
 
     # Relationships
     uniprot_domain_1 = sa.orm.relationship(
