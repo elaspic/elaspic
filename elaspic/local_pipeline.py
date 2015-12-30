@@ -216,7 +216,7 @@ class LocalPipeline(Pipeline):
             model_result['idx'] = self.sp.chain_ids.index(chain_id)
             model_results.append(model_result)
         for idxs in self.sp.interacting_chain_idxs:
-            if idxs not in range(len(self.seqrecords)):
+            if not all(i in range(len(self.seqrecords)) for i in idxs):
                 warning = (
                     "Skipping idxs: '{}' because we lack the corresponding seqrecord!"
                     .format(idxs)
@@ -250,7 +250,7 @@ class LocalPipeline(Pipeline):
             mutation_result['idx'] = mutation_idx
             mutation_results.append(mutation_result)
             for idxs in self.sp.interacting_chain_idxs:
-                if idxs not in range(len(self.seqrecords)):
+                if not all(i in range(len(self.seqrecords)) for i in idxs):
                     warning = (
                         "Skipping idxs: '{}' because we lack the corresponding seqrecord!"
                         .format(idxs)
