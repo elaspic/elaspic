@@ -17,7 +17,7 @@ configs = conf.Configs()
 # Default sizes for creating varchar fields
 SHORT = 15
 MEDIUM = 255
-LONG = 16384
+LONG = 5461
 
 naming_convention = {
   "ix": 'ix_%(column_0_label)s',
@@ -59,19 +59,17 @@ if DB_TYPE is None:
     print('The `DB_TYPE` has not been set. Do not know what database is being used!')
 
 
-
 # %% Functions
-
 def get_db_specific_param(key):
     if DB_TYPE is None:
         return
     if (DB_TYPE in ['mysql', 'postgresql'] and
-        (DB_DATABASE is None or DB_SCHEMA is None or DB_SCHEMA_UNIPROT is None)):
-            error_message = (
-                'Both the `DB_SCHEMA` and `DB_SCHEMA_UNIPROT` have to be specified when using '
-                'a MySQL or PostgreSQL database!'
-            )
-            raise Exception(error_message)
+            (DB_DATABASE is None or DB_SCHEMA is None or DB_SCHEMA_UNIPROT is None)):
+        error_message = (
+            'Both the `DB_SCHEMA` and `DB_SCHEMA_UNIPROT` have to be specified when using '
+            'a MySQL or PostgreSQL database!'
+        )
+        raise Exception(error_message)
     return db_specific_properties[DB_TYPE][key]
 
 
@@ -102,11 +100,9 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
     return tuple(table_args)
 
 
-
 # %%
 Base = sa_ext_declarative.declarative_base()
 Base.metadata.naming_conventions = naming_convention
-
 
 
 # %%
@@ -211,7 +207,8 @@ class DomainContact(Base):
         The residue number corresponds to the position of the residue in the domain.
 
       crystal_packing
-        The probability that the interaction is a crystallization artifacts, as defined by `NOXclass`_.
+        The probability that the interaction is a crystallization artifacts, as defined by
+        `NOXclass`_.
 
       domain_contact_errors
         List of errors that occurred when annotating this domain pair, or when using this domain
@@ -228,9 +225,11 @@ class DomainContact(Base):
 
     domain_contact_id = sa.Column(sa.Integer, primary_key=True)
     cath_id_1 = sa.Column(
-        None, sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'), nullable=False)
+        None, sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
+        nullable=False)
     cath_id_2 = sa.Column(
-        None, sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'), nullable=False)
+        None, sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
+        nullable=False)
 #    cath_id_2 = sa.Column(
 #        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')),
 #        nullable=False)
@@ -248,21 +247,23 @@ class DomainContact(Base):
 
     # Relationships
     domain_1 = sa.orm.relationship(
-        Domain, primaryjoin=cath_id_1==Domain.cath_id, cascade='expunge', lazy='joined')
-#    # the second domain may be a ligand or a peptide, and so the foreign key constraint does not work
+        Domain, primaryjoin=cath_id_1 == Domain.cath_id, cascade='expunge', lazy='joined')
+    # the second domain may be a ligand or a peptide, and so the foreign key constraint
+    # does not work
     domain_2 = sa.orm.relationship(
-        Domain, primaryjoin=cath_id_2==Domain.cath_id, cascade='expunge', lazy='joined')
+        Domain, primaryjoin=cath_id_2 == Domain.cath_id, cascade='expunge', lazy='joined')
 
 
 class UniprotSequence(Base):
     """
-    Protein sequences from the Uniprot KB, obtained by parsing ``uniprot_sprot_fasta.gz``,
-    ``uniprot_trembl_fasta.gz``, and ``homo_sapiens_variation.txt`` files from the `Uniprot ftp site`_.
+    Protein sequences from the Uniprot KB, obtained by parsing `uniprot_sprot_fasta.gz`,
+    `uniprot_trembl_fasta.gz`, and `homo_sapiens_variation.txt` files from the
+    `Uniprot ftp site`_.
 
     Columns:
       db
-        The database to which the protein sequence belongs. Possible values are ``sp`` for SwissProt
-        and ``tr`` for TrEMBL.
+        The database to which the protein sequence belongs. Possible values are `sp` for SwissProt
+        and `tr` for TrEMBL.
 
       uniprot_id
         The uniprot id of the protein.
@@ -294,7 +295,8 @@ class UniprotSequence(Base):
       uniprot_sequence
         Amino acid sequence of the protein.
 
-    .. _Uniprot ftp site: ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/
+    .. _Uniprot ftp site:
+       ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/
 
     """
     __tablename__ = 'uniprot_sequence'
@@ -313,18 +315,18 @@ class UniprotSequence(Base):
 
 class Provean(Base):
     """
-    Description of the `Provean`_ supporting set calculated for a protein sequence. The construction
-    of a supporting set is the most lengthy step in running Provean. Therefore, the supporting set is
-    precalculated and stored for every protein sequence.
+    Description of the `Provean`_ supporting set calculated for a protein sequence.
+    The construction of a supporting set is the most lengthy step in running Provean.
+    Therefore, the supporting set is precalculated and stored for every protein sequence.
 
     Columns:
       uniprot_id
         The uniprot id of the protein.
 
       provean_supset_filename
-        The filename of the Provean supporting set. The supporting set contains the ids and sequences
-        of all proteins in the NCBI nr database that are used by Provean to construct a multiple
-        sequence alignment for the given protein.
+        The filename of the Provean supporting set. The supporting set contains the ids
+        and sequences of all proteins in the NCBI nr database that are used by Provean
+        to construct a multiple sequence alignment for the given protein.
 
       provean_supset_length
         The number of sequences in Provean supporting set.
@@ -361,8 +363,9 @@ class Provean(Base):
 class UniprotDomain(Base):
     """
     Pfam domain definitions for proteins in the :ref:`uniprot_sequence` table. This table was
-    obtained by downloading Pfam domain definitions for all known proteins from the `SIMAP`_ website,
-    and mapping the protein sequence to uniprot using the MD5 hash of each sequence.
+    obtained by downloading Pfam domain definitions for all known proteins
+    from the `SIMAP`_ website, and mapping the protein sequence to uniprot
+    using the MD5 hash of each sequence.
 
     Columns:
       uniprot_domain_id
@@ -372,7 +375,8 @@ class UniprotDomain(Base):
         The uniprot id of the protein containing the domain.
 
       pdbfam_name
-        The Profs name of the domain. In most cases this will be equivalent to the Pfam name of the domain.
+        The Profs name of the domain. In most cases this will be equivalent
+        to the Pfam name of the domain.
 
       pdbfam_idx
         The index of the Profs domain. ``pdbfam_idx`` ranges from 1 to the number of domains with
@@ -394,8 +398,8 @@ class UniprotDomain(Base):
         the given Profs domain.
 
       path_to_data
-        Location for storing homology models, mutation results, and all other data that are relevant
-        to this domain. This path is prefixed by :term:`path_to_archive`.
+        Location for storing homology models, mutation results, and all other data that
+        are relevant to this domain. This path is prefixed by :term:`path_to_archive`.
 
     .. _SIMAP: http://liferay.csb.univie.ac.at/portal/web/simap
     """
@@ -408,7 +412,7 @@ class UniprotDomain(Base):
         None, sa.ForeignKey(
             UniprotSequence.uniprot_id,
             onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+        nullable=False)
     pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
     pdbfam_idx = sa.Column(sa.Integer, nullable=False)
     pfam_clan = sa.Column(sa.Text)
@@ -425,18 +429,21 @@ class UniprotDomain(Base):
             (['uniprot_id', 'alignment_def', 'max_seq_identity'],
              {'unique': True, 'index_name': 'ix_uniprot_id_unique'}),
             (['pdbfam_name'], {'mysql_length': 255}),
+            (['uniprot_id', 'uniprot_domain_id'],
+             {'unique': True, 'index_name': 'ix_uniprot_id_uniprot_domain_id'}),
         ]
     else:
         _indexes = [
             (['pdbfam_name'], {'mysql_length': 255}),
+            (['uniprot_id', 'uniprot_domain_id'],
+             {'unique': True, 'index_name': 'ix_uniprot_id_uniprot_domain_id'}),
         ]
     __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
 
     # Relationships
     uniprot_sequence = sa.orm.relationship(
         UniprotSequence, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('uniprot_domain', cascade='expunge')) # many to one
-
+        backref=sa.orm.backref('uniprot_domain', cascade='expunge'))  # many to one
 
 
 class UniprotDomainPair(Base):
@@ -460,8 +467,8 @@ class UniprotDomainPair(Base):
       domain_contact_ids
         List of unique ids identifying all domain-domain pairs in the PDB, where one domain
         belongs to the protein containing ``uniprot_domain_id_1`` and the other domain
-        belongs to the protein containing ``uniprot_domain_id_2``. This was used as crystallographic
-        evidence that the two proteins interact.
+        belongs to the protein containing ``uniprot_domain_id_2``. This was used as
+        crystallographic evidence that the two proteins interact.
 
       path_to_data
         Location for storing homology models, mutation results, and all other data that is relevant
@@ -473,6 +480,8 @@ class UniprotDomainPair(Base):
     """
     __tablename__ = 'uniprot_domain_pair'
     _indexes = [
+            (['uniprot_id_1', 'uniprot_id_2']),
+            (['uniprot_id_2', 'uniprot_id_1']),
             (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {'unique': True}),
             (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {'unique': True}),
     ]
@@ -489,25 +498,28 @@ class UniprotDomainPair(Base):
             UniprotDomain.uniprot_domain_id,
             onupdate='cascade', ondelete='cascade'),
         nullable=False)
-    rigids = sa.Column(sa.Text) # Interaction references from iRefsa.Index
-    domain_contact_ids = sa.Column(sa.Text) # interaction references from the PDB
+    rigids = sa.Column(sa.Text)  # Interaction references from iRefsa.Index
+    domain_contact_ids = sa.Column(sa.Text)  # interaction references from the PDB
     path_to_data = sa.Column(sa.Text)
+    # TODO: Move these columns higher up the next time creating a database
+    uniprot_id_1 = sa.Column(sa.String(MEDIUM))
+    uniprot_id_2 = sa.Column(sa.String(MEDIUM))
 
     # Relationships
     uniprot_domain_1 = sa.orm.relationship(
         UniprotDomain,
-        primaryjoin=uniprot_domain_id_1==UniprotDomain.uniprot_domain_id,
-        cascade='expunge', lazy='joined') # many to one
+        primaryjoin=uniprot_domain_id_1 == UniprotDomain.uniprot_domain_id,
+        cascade='expunge', lazy='joined')  # many to one
     uniprot_domain_2 = sa.orm.relationship(
         UniprotDomain,
-        primaryjoin=uniprot_domain_id_2==UniprotDomain.uniprot_domain_id,
-        cascade='expunge', lazy='joined') # many to one
+        primaryjoin=uniprot_domain_id_2 == UniprotDomain.uniprot_domain_id,
+        cascade='expunge', lazy='joined')  # many to one
 
 
 class UniprotDomainTemplate(Base):
     """
-    Structural templates for domains in the :ref:`uniprot_domain` table. Lists PDB crystal structures
-    that will be used for making homology models.
+    Structural templates for domains in the :ref:`uniprot_domain` table.
+    Lists PDB crystal structures that will be used for making homology models.
 
     Columns:
       uniprot_domain_id
@@ -812,8 +824,7 @@ class UniprotDomainMutation(Base):
     # Relationships
     model = sa.orm.relationship(
         UniprotDomainModel, cascade='expunge', uselist=False, lazy='joined',
-        backref=sa.orm.backref('mutations', cascade='expunge')) # many to one
-
+        backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one
 
 
 class UniprotDomainPairTemplate(Base):
@@ -839,7 +850,8 @@ class UniprotDomainPairTemplate(Base):
         *identical*.
 
       conserved_1
-        Fraction of residues in the Blast alignment of the first domain to its template that are *conserved*.
+        Fraction of residues in the Blast alignment of the first domain to its template
+        that are *conserved*.
 
       coverage_1
         Fraction of the first domain that is covered by the blast alignment.
@@ -848,23 +860,28 @@ class UniprotDomainPairTemplate(Base):
         Score obtained by multiplying ``identical_1`` by ``coverage_1``.
 
       identical_if_1
-        Fraction of interface residues [#f1]_ that are *identical* in the Blast alignment of the first domain.
+        Fraction of interface residues [#f1]_ that are *identical* in the Blast alignment
+        of the first domain.
 
       conserved_if_1
-        Fraction of interface residues [#f1]_ that are *conserved* in the Blast alignment of the first domain.
+        Fraction of interface residues [#f1]_ that are *conserved* in the Blast alignment
+        of the first domain.
 
       coverage_if_1
-        Fraction of interface residues [#f1]_ that are *covered* by the Blast alignment of the first domain.
+        Fraction of interface residues [#f1]_ that are *covered* by the Blast alignment
+        of the first domain.
 
       score_if_1
-        Score obtained by combining ``identical_if_1`` and ``coverage_if_1`` using :eq:`score_function`.
+        Score obtained by combining ``identical_if_1`` and ``coverage_if_1`` using
+        :eq:`score_function`.
 
       identical_2
         Fraction of residues in the Blast alignment of the second domain to its template that are
         *identical*.
 
       conserved_2
-        Fraction of residues in the Blast alignment of the second domain to its template that are *conserved*.
+        Fraction of residues in the Blast alignment of the second domain to its template
+        that are *conserved*.
 
       coverage_2
         Fraction of the second domain that is covered by the blast alignment.
@@ -873,16 +890,20 @@ class UniprotDomainPairTemplate(Base):
         Score obtained by multiplying ``identical_2`` by ``coverage_2``.
 
       identical_if_2
-        Fraction of interface residues [#f1]_ that are *identical* in the Blast alignment of the second domain.
+        Fraction of interface residues [#f1]_ that are *identical* in the Blast alignment
+        of the second domain.
 
       conserved_if_2
-        Fraction of interface residues [#f1]_ that are *conserved* in the Blast alignment of the second domain.
+        Fraction of interface residues [#f1]_ that are *conserved* in the Blast alignment
+        of the second domain.
 
       coverage_if_2
-        Fraction of interface residues [#f1]_ that are *covered* by the Blast alignment of the second domain.
+        Fraction of interface residues [#f1]_ that are *covered* by the Blast alignment
+        of the second domain.
 
       score_if_2
-        Score obtained by combining ``identical_if_2`` and ``coverage_if_2`` using :eq:`score_function`.
+        Score obtained by combining ``identical_if_2`` and ``coverage_if_2``
+        using :eq:`score_function`.
 
       score_total
         The product of ``score_1`` and ``score_2``.
@@ -901,7 +922,8 @@ class UniprotDomainPairTemplate(Base):
         List of errors that occured while looking for the structural template.
 
 
-    .. [#f1] Interface residues are defined as residues that are within 5 \u212B of the partner domain.
+    .. [#f1] Interface residues are defined as residues that are within 5 \u212B
+              of the partner domain.
     """
     __tablename__ = 'uniprot_domain_pair_template'
     _indexes = [
@@ -961,19 +983,19 @@ class UniprotDomainPairTemplate(Base):
     template_errors = sa.Column(sa.Text)
 
     # Relationships
+    # one to one
     domain_pair = sa.orm.relationship(
         UniprotDomainPair, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('template', uselist=False, cascade='expunge', lazy='joined')) # one to one
+        backref=sa.orm.backref('template', uselist=False, cascade='expunge', lazy='joined'))
     domain_contact = sa.orm.relationship(
         DomainContact, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('uniprot', cascade='expunge')) # one to one
+        backref=sa.orm.backref('uniprot', cascade='expunge'))  # one to one
     domain_1 = sa.orm.relationship(
         Domain, uselist=False, cascade='expunge', lazy='joined',
-        primaryjoin=(cath_id_1==Domain.cath_id)) # many to one
+        primaryjoin=(cath_id_1 == Domain.cath_id))  # many to one
     domain_2 = sa.orm.relationship(
         Domain, uselist=False, cascade='expunge', lazy='joined',
-        primaryjoin=(cath_id_2==Domain.cath_id)) # many to one
-
+        primaryjoin=(cath_id_2 == Domain.cath_id))  # many to one
 
 
 class UniprotDomainPairModel(Base):
@@ -989,10 +1011,12 @@ class UniprotDomainPairModel(Base):
         List of errors that occured while making the homology model.
 
       alignment_filename_1
-        Name of the file containing the alignment of the first domain with its structural template.
+        Name of the file containing the alignment of the first domain
+        with its structural template.
 
       alignment_filename_2
-        Name of the file containing the alignment of the second domain with its structural template.
+        Name of the file containing the alignment of the second domain
+        with its structural template.
 
       model_filename
         Name of the file containing the homology model of the domain-domain interaction
@@ -1021,8 +1045,8 @@ class UniprotDomainPairModel(Base):
         Not implemented yet!
 
       interacting_aa_1
-        List of amino acid positions in the first domain that are within 5 \u212B of the second domain.
-        Positions are specified using uniprot coordinates.
+        List of amino acid positions in the first domain that are within 5 \u212B
+        of the second domain. Positions are specified using uniprot coordinates.
 
       interacting_aa_2
         List of amino acids in the second domain that are within 5 \u212B of the first domain.
@@ -1069,10 +1093,10 @@ class UniprotDomainPairModel(Base):
     model_domain_def_2 = sa.Column(sa.String(MEDIUM))
 
     # Relationships
+    # one to one
     template = sa.orm.relationship(
         UniprotDomainPairTemplate, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('model', uselist=False, cascade='expunge', lazy='joined')) # one to one
-
+        backref=sa.orm.backref('model', uselist=False, cascade='expunge', lazy='joined'))
 
 
 class UniprotDomainPairMutation(Base):
@@ -1105,7 +1129,8 @@ class UniprotDomainPairMutation(Base):
         ``model_filename_wt`` and ``model_filename_mut``.
 
       mutation_modeller
-        Mutation for which the :math:`\Delta \Delta G` score is being predicted, specified in PDB RESNUM coordinates.
+        Mutation for which the :math:`\Delta \Delta G` score is being predicted,
+        specified in PDB RESNUM coordinates.
 
       analyse_complex_energy_wt
         Comma-separated list of FoldX scores describing the effect of the wildtype residue on
@@ -1181,8 +1206,7 @@ class UniprotDomainPairMutation(Base):
     uniprot_domain_pair_id = sa.Column(None, sa.ForeignKey(
         UniprotDomainPairModel.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False, primary_key=True)
-    mutation = sa.Column(sa.String(SHORT),
-        nullable=False, primary_key=True)
+    mutation = sa.Column(sa.String(SHORT), nullable=False, primary_key=True)
     mutation_errors = sa.Column(sa.Text)
     model_filename_wt = sa.Column(sa.String(MEDIUM))
     model_filename_mut = sa.Column(sa.String(MEDIUM))
@@ -1206,12 +1230,8 @@ class UniprotDomainPairMutation(Base):
     provean_score = sa.Column(sa.Float)
     ddg = sa.Column(sa.Float, index=False)
     mut_date_modified = sa.Column(sa.DateTime, default=datetime.datetime.utcnow,
-                               onupdate=datetime.datetime.utcnow, nullable=False)
+                                  onupdate=datetime.datetime.utcnow, nullable=False)
     # Relationships
     model = sa.orm.relationship(
         UniprotDomainPairModel, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('mutations', cascade='expunge')) # many to one
-
-
-
-
+        backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one

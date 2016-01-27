@@ -4,14 +4,6 @@ elaspic package
 Submodules
 ----------
 
-elaspic.analyze_structure module
---------------------------------
-
-.. automodule:: elaspic.analyze_structure
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 elaspic.call_foldx module
 -------------------------
 
@@ -44,6 +36,15 @@ elaspic.conf module
     :undoc-members:
     :show-inheritance:
 
+elaspic.database_pipeline module
+---------------------------------
+
+.. automodule:: elaspic.database_pipeline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 elaspic.database_tables module
 ------------------------------
 
@@ -52,34 +53,10 @@ elaspic.database_tables module
     :undoc-members:
     :show-inheritance:
 
-elaspic.domain_alignment module
--------------------------------
-
-.. automodule:: elaspic.domain_alignment
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-elaspic.domain_model module
----------------------------
-
-.. automodule:: elaspic.domain_model
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-elaspic.domain_mutation module
+elaspic.database module
 ------------------------------
 
-.. automodule:: elaspic.domain_mutation
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-elaspic.elaspic_database module
--------------------------------
-
-.. automodule:: elaspic.elaspic_database
+.. automodule:: elaspic.database
     :members:
     :undoc-members:
     :show-inheritance:
@@ -92,38 +69,77 @@ elaspic.errors module
     :undoc-members:
     :show-inheritance:
 
-elaspic.helper_functions module
+elaspic.helper module
 -------------------------------
 
-.. automodule:: elaspic.helper_functions
+.. automodule:: elaspic.helper
     :members:
     :undoc-members:
     :show-inheritance:
 
-elaspic.pdb_template module
----------------------------
+elaspic.local_pipeline module
+------------------------------
 
-.. automodule:: elaspic.pdb_template
+.. automodule:: elaspic.local_pipeline
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+elaspic.machine_learning module
+--------------------------------
+
+.. automodule:: elaspic.machine_learning
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+elaspic.model module
+---------------------
+
+.. automodule:: elaspic.model
     :members:
     :undoc-members:
     :show-inheritance:
 
 elaspic.pipeline module
------------------------
+------------------------
 
 .. automodule:: elaspic.pipeline
     :members:
     :undoc-members:
     :show-inheritance:
+    
+elaspic.predictor module
+-------------------------
 
-elaspic.sql_db module
----------------------
+.. automodule:: elaspic.predictor
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    
+elaspic.sequence module
+-------------------------
 
-.. automodule:: elaspic.sql_db
+.. automodule:: elaspic.sequence
     :members:
     :undoc-members:
     :show-inheritance:
 
+elaspic.structure_analysis module
+----------------------------------
+
+.. automodule:: elaspic.structure_analysis
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    
+elaspic.structure_tools module
+------------------------------
+
+.. automodule:: elaspic.structure_tools
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 Module contents
 ---------------

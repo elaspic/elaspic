@@ -1,0 +1,132 @@
+#!/usr/bin/env python
+import os.path as op
+import shutil
+import re
+from Bio.PDB import PDBParser, PDBIO
+
+
+# %% From `structure_tools.py`
+A_DICT = {
+    'A': 'ALA', 'R': 'ARG', 'N': 'ASN', 'D': 'ASP', 'C': 'CYS', 'E': 'GLU',
+    'Q': 'GLN', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE', 'L': 'LEU', 'K': 'LYS',
+    'M': 'MET', 'F': 'PHE', 'P': 'PRO', 'S': 'SER', 'T': 'THR', 'W': 'TRP',
+    'Y': 'TYR', 'V': 'VAL', 'U': 'SEC', 'O': 'PYL',
+    'B': 'ASX', 'Z': 'GLX', 'J': 'XLE', 'X': 'XAA', '*': 'TER'
+}
+AAA_DICT = dict([(value, key) for key, value in list(A_DICT.items())])
+AAA_DICT['UNK'] = 'X'
+AAA_DICT['MSE'] = 'M'
+AAA_DICT['CSD'] = 'C'
+
+# Methylated lysines
+AAA_DICT['MLZ'] = 'K'
+AAA_DICT['MLY'] = 'K'
+AAA_DICT['M3L'] = 'K'
+
+AMINO_ACIDS = list(AAA_DICT.keys())
+
+
+# %%
+class FakeFoldx:
+
+    def __call__(self, runfile):
+        basedir = op.dirname(runfile)
+        with open(runfile) as ifh:
+            runfile_data = ifh.read()
+        if '<RepairPDB>' in runfile_data:
+            pdb_file = re.findall('<PDBS>(.*);', runfile_data)[0]
+            self.run_repair(op.join(basedir, pdb_file))
+        elif '<BuildModel>' in runfile_data:
+            pdb_file = re.findall('<PDBS>(.*);', runfile_data)[0]
+            individual_list = re.findall('<BuildModel>BuildModel,(.*);', runfile_data)[0]
+            number_of_runs = int(re.findall('<numberOfRuns>(.*);', runfile_data)[0])
+            self.run_build(
+                op.join(basedir, pdb_file),
+                op.join(basedir, individual_list),
+                number_of_runs)
+        elif '<Stability>' in runfile_data:
+            out_filename = re.findall('<Stability>(.*);', runfile_data)[0]
+            self.run_stability(op.join(basedir, out_filename))
+        elif '<AnalyseComplex>' in runfile_data:
+            out_filename = re.findall('<AnalyseComplex>(.*),.*;', runfile_data)[0]
+            self.run_analyze_complex(op.join(basedir, out_filename))
+        else:
+            raise ValueError("Bad runfile '{}':\n{}".format(runfile, runfile_data))
+
+    def run_repair(self, pdb_file):
+        file_dir = op.dirname(pdb_file)
+        file_basename = op.basename(pdb_file)
+        file_name, file_ext = op.splitext(file_basename)
+
+        repair_pdb = op.join(file_dir, 'RepairPDB_' + file_name + file_ext)
+        repair_fxout = op.join(file_dir, 'RepairPDB_' + file_name + '.fxout')
+        shutil.copy2(pdb_file, repair_pdb)
+        with open(repair_fxout, 'w') as ofh:
+            ofh.write('File created by fake_foldx run_repair.')
+
+    def run_build(self, pdb_file, individual_list='individual_list.txt', number_of_runs=1):
+        file_dir = op.dirname(pdb_file)
+        file_basename = op.basename(pdb_file)
+        file_name, file_ext = op.splitext(file_basename)
+
+        with open(op.join(file_dir, individual_list)) as ifh:
+            individual_list_data = ifh.read()
+        individual_list_data = individual_list_data.strip().rstrip(';')
+        chain_id = individual_list_data[1]
+        mutation = individual_list_data[0] + individual_list_data[2:]
+        resid = (' ', int(mutation[1:-1]), ' ')
+        print("individual_list_data: '{}'".format(individual_list_data))
+        print("chain_id: '{}'".format(chain_id))
+        print("mutation: '{}'".format(mutation))
+
+        def mutate(wt_file, mut_file):
+            parser = PDBParser()
+            structure = parser.get_structure(file_name, pdb_file)
+            # Save WT
+            io = PDBIO()
+            io.set_structure(structure)
+            io.save(wt_file)
+            # Mutate
+            res = structure[0][chain_id][resid]
+            if AAA_DICT[res.resname] != mutation[0]:
+                print('There was a problem...\nSpecified residue not found!')
+                raise Exception("Structure residue '{}' does not match mutation '{}'!"
+                                .format(res.resname, mutation[0]))
+            res.resname = A_DICT[mutation[-1]]
+            # Save MUT
+            io.set_structure(structure)
+            io.save(mut_file)
+
+        if number_of_runs == 1:
+            wt_file = op.join(file_dir, 'WT_' + file_name + '_1' + file_ext)
+            mut_file = op.join(file_dir, file_name + '_1' + file_ext)
+            mutate(wt_file, mut_file)
+
+        else:
+            for i in range(1, number_of_runs):
+                wt_file = op.join(file_dir, 'WT_' + file_name + '_1_' + str(i) + file_ext)
+                mut_file = op.join(file_dir, file_name + '_1_' + str(i) + file_ext)
+                mutate(wt_file, mut_file)
+
+    def run_stability(self, out_filename):
+        with open('Stability.txt', 'w') as ofh:
+            ofh.writelines(['xxx.pdb\t'] + ['0\t' for _ in range(23)])
+
+    def run_analyze_complex(self, out_filename):
+        with open('Interaction_AnalyseComplex_resultFile.txt', 'w') as ofh:
+            ofh.writelines(['xxx.pdb\t'] + ['0\t' for _ in range(27)])
+
+
+# %%
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) == 2 and sys.argv[1] in ['-h', '--help']:
+        print('Welcome to my the Fake FoldX program!')
+        sys.exit(0)
+    if len(sys.argv) != 3 or sys.argv[1] != '-runfile':
+        raise ValueError("Incorrect arguments: '{}'".format(sys.argv))
+    elif not op.isfile(sys.argv[2]):
+        raise ValueError("runfile '{}' does not exist!".format(sys.argv[2]))
+
+    foldx = FakeFoldx()
+    foldx(sys.argv[2])

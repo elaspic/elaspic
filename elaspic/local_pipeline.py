@@ -1,4 +1,9 @@
-# -*- coding: utf-8 -*-
+"""
+
+TODO: The model object has two serialization steps:
+    1. Inside the modeller class to save modeller results.
+    2. In the local_pipeline to save all results.
+"""
 import os.path as op
 import logging
 import json
@@ -20,12 +25,30 @@ domain_model = None
 domain_mutation = None
 
 
-
 # %%
 class LocalPipeline(Pipeline):
 
-    def __init__(self, structure_file, sequence_file=None, mutations=None, configurations=None):
+    def __init__(
+            self, structure_file, sequence_file=None, mutations=None, configurations=None,
+            mutation_format=None):
         """
+        Parameters
+        ----------
+        structure_file : str
+            Full path to the structure *pdb* file.
+        sequence_file : str
+            Full path to the sequence *fasta* file.
+        mutations : str
+            Comma-separated list of mutations.
+        configurations : str
+            Full path to the configurations *ini* file.
+        mutation_format : int, default None
+            1. {pdb_chain}_{pdb_mutation},...
+            2. {pdb_chain}_{sequence_mutation},...
+            3. {sequence_pos}_{sequence_mutation}...
+
+            If `sequence_file` is None, this does not matter (always {pdb_chain}_{pdb_mutation}).
+
         TODO: Add an option to store provean results based on sequence hash.
         """
         super().__init__(configurations)
@@ -37,8 +60,8 @@ class LocalPipeline(Pipeline):
         logger.info('pdb_file: {}'.format(self.pdb_file))
         logger.info('pwd: {}'.format(self.PWD))
 
-        ### Load PDB structure and extract required sequences and chains.
-        #fix_pdb(self.pdb_file, self.pdb_file)
+        # Load PDB structure and extract required sequences and chains.
+        # fix_pdb(self.pdb_file, self.pdb_file)
         self.sp = structure_tools.StructureParser(self.pdb_file)
         self.sp.extract()
         self.sp.save_structure(configs['unique_temp_dir'])
@@ -58,6 +81,8 @@ class LocalPipeline(Pipeline):
             mutations = mutations
         logger.debug('mutations: {}'.format(mutations))
 
+        # Use the PDB chain to index mutations both with and without the index file
+        self.mutations = dict()
         if not self.sequence_file:
             # Read template sequences from the PDB
             self.seqrecords = tuple([
@@ -66,63 +91,106 @@ class LocalPipeline(Pipeline):
                     seq=Seq(self.sp.chain_sequence_dict[chain_id]))
                 for (i, chain_id) in enumerate(self.sp.chain_ids)
             ])
-            ### Parse mutations
-            self.mutations = dict()
-            for mutation_in in mutations:
-                mutation_chain, mutation_resnum = mutation_in.split('_')
-                # This is the index of the chain that is being mutated
-                mutation_idx = self.sp.chain_ids.index(mutation_chain)
-                # Converting mutation from PDB to index coordinates
-                mutation_id = (' ', int(mutation_resnum[1:-1]), ' ',)
-                chain_aa_residues = (
-                    structure_tools.get_aa_residues(self.sp.structure[0][mutation_chain])
-                )
-                mutation_pos = chain_aa_residues.index(mutation_id) + 1
-                mutation = mutation_resnum[0] + str(mutation_pos) + mutation_resnum[-1]
-                # Validating
-                mutation_expected_aa = (
-                    structure_tools.AAA_DICT
-                    [self.sp.structure[0][mutation_chain][mutation_id].resname]
-                )
-                if mutation_resnum[0] != mutation_expected_aa:
-                    raise errors.MutationMismatchError()
-                self.mutations[(mutation_idx, mutation,)] = mutation_in
+            possible_mutation_formats = ['1', '2', '3']
+            # Parse mutations
+            # Mutations are specified in the {chain_id}_{mutation},... format for sure.
+            # self.mutations = self._parse_mutations(mutations, '1')
         else:
             # Read template sequences from the sequence file
             self.seqrecords = tuple(SeqIO.parse(self.sequence_file, 'fasta'))
             for i, seqrec in enumerate(self.seqrecords):
                 seqrec.id = helper.slugify('{}_{}'.format(seqrec.id, str(i)))
-            ### Parse mutations
-            self.mutations = dict()
-            for mutation_in in mutations:
-                mutation_idx, mutation = mutation_in.split('_')
-                mutation_idx = int(mutation_idx)
+            possible_mutation_formats = ['3', '2', '1']
+
+        # Parse mutations
+        # There are many ways mutations can be specified here...
+        # try one at at a time until something succeeds
+        if mutation_format is not None:
+            self.mutations = self._parse_mutations(mutations, mutation_format)
+        else:
+            for mutation_format in possible_mutation_formats:
+                try:
+                    self.mutations = self._parse_mutations(mutations, mutation_format)
+                    break
+                except (IndexError, ValueError, errors.MutationMismatchError) as e:
+                    error_message = (
+                        "Error parsing mutations '{}' using mutation_format '{}':\n{} {}"
+                        .format(mutations, mutation_format, type(e), e)
+                    )
+                    logger.error(error_message)
+                    continue
+            if not self.mutations:
+                raise errors.MutationMismatchError()
+
+        if len(self.sp.chain_ids) != len(self.seqrecords):
+            logger.warning(
+                'The number of chain ids ({}) does not match the number of sequences ({})!'
+                .format(len(self.sp.chain_ids), len(self.seqrecords))
+            )
+
+    def _parse_mutations(self, mutations, mutation_format='1'):
+        """Parse mutations.
+
+        Parse mutations provided using the {pdb_chain}_{mutation} naming scheme (default)
+        or the {mutation_pos}_{mutation} naming scheme (fallback for when the`pdb_chain`
+        is not found in the structure).
+        """
+        logger.debug("Parsing mutations using mutation_format: '{}'".format(mutation_format))
+        mutations_out = dict()
+        for mutation_in in mutations:
+            mutation_chain, mutation_residue = mutation_in.split('_')
+
+            if mutation_format in ['1', '2']:
+                # This is the index of the chain that is being mutated
+                mutation_idx = self.sp.chain_ids.index(mutation_chain)
+            elif mutation_format in ['3']:
+                # Mutation pos starts at 1
+                mutation_idx = int(mutation_chain) - 1
+
+            if mutation_format in ['1']:
+                # Converting mutation from PDB to sequence coordinates
+                mutation_id = (' ', int(mutation_residue[1:-1]), ' ',)
+                chain_aa_residues = (
+                    structure_tools.get_aa_residues(self.sp.structure[0][mutation_chain])
+                )
+                mutation_pos = chain_aa_residues.index(mutation_id) + 1
+                mutation = mutation_residue[0] + str(mutation_pos) + mutation_residue[-1]
                 # Validation
                 mutation_expected_aa = (
-                    str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1])]
+                    structure_tools.AAA_DICT
+                    [self.sp.structure[0][mutation_chain][mutation_id].resname]
+                )
+                if mutation_residue[0] != mutation_expected_aa:
+                    raise errors.MutationMismatchError()
+            elif mutation_format in ['2', '3']:
+                # Mutation is already in sequence coordinates
+                mutation = mutation_residue
+                # Validation
+                mutation_expected_aa = (
+                    str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1]) - 1]
                 )
                 if mutation[0] != mutation_expected_aa:
                     raise errors.MutationMismatchError()
-                self.mutations[(mutation_idx, mutation,)] = mutation_in
+                mutations_out[(mutation_idx, mutation,)] = mutation_in
 
+            mutations_out[(mutation_idx, mutation,)] = mutation_in
+        return mutations_out
 
-    #==============================================================================
-    # Run methods
-    #==============================================================================
+    # === Run methods ===
 
     def run(self):
         self.run_all_sequences()
         self.run_all_models()
         self.run_all_mutations()
 
-
     def run_all_sequences(self):
         sequence_results = []
         sequence_results_file = op.join(configs['unique_temp_dir'], 'sequence.json')
         if op.isfile(sequence_results_file):
-            logger.debug('Results file for model already exists: {}'.format(sequence_results_file))
+            logger.debug('Results file for sequence already exists: {}'
+                         .format(sequence_results_file))
             return
-        for chain_id in self.sp.chain_ids:
+        for chain_id, _ in zip(self.sp.chain_ids, self.seqrecords):
             if chain_id == self.sp.hetatm_chain_id:
                 continue
             idx = self._get_chain_idx(chain_id)
@@ -139,7 +207,7 @@ class LocalPipeline(Pipeline):
         if op.isfile(model_results_file):
             logger.debug('Results file for model already exists: {}'.format(model_results_file))
             return
-        for chain_id in self.sp.chain_ids:
+        for chain_id, _ in zip(self.sp.chain_ids, self.seqrecords):
             if chain_id == self.sp.hetatm_chain_id:
                 continue
             idx = self._get_chain_idx(chain_id)
@@ -148,6 +216,13 @@ class LocalPipeline(Pipeline):
             model_result['idx'] = self.sp.chain_ids.index(chain_id)
             model_results.append(model_result)
         for idxs in self.sp.interacting_chain_idxs:
+            if not all(i in range(len(self.seqrecords)) for i in idxs):
+                warning = (
+                    "Skipping idxs: '{}' because we lack the corresponding seqrecord!"
+                    .format(idxs)
+                )
+                logger.warning(warning)
+                continue
             model = self.get_model(idxs)
             model_result = model.result
             model_result['idxs'] = tuple(idxs)
@@ -175,6 +250,13 @@ class LocalPipeline(Pipeline):
             mutation_result['idx'] = mutation_idx
             mutation_results.append(mutation_result)
             for idxs in self.sp.interacting_chain_idxs:
+                if not all(i in range(len(self.seqrecords)) for i in idxs):
+                    warning = (
+                        "Skipping idxs: '{}' because we lack the corresponding seqrecord!"
+                        .format(idxs)
+                    )
+                    logger.warning(warning)
+                    continue
                 if mutation_idx in idxs:
                     try:
                         mutation_result = self.get_mutation_score(idxs, mutation_idx, mutation)
@@ -187,10 +269,7 @@ class LocalPipeline(Pipeline):
             with open(mutation_results_file, 'w') as ofh:
                 json.dump(mutation_results, ofh)
 
-
-    #==============================================================================
-    # Get methods
-    #==============================================================================
+    # === Get methods ===
 
     def get_sequence(self, idx):
         """
@@ -198,7 +277,6 @@ class LocalPipeline(Pipeline):
         logger.debug('-' * 80)
         logger.debug('get_sequence({})'.format(idx))
         return PrepareSequence(self.seqrecords, idx, None)
-
 
     def get_model(self, idxs):
         """
@@ -210,7 +288,6 @@ class LocalPipeline(Pipeline):
         idxs = self._sort_chain_idxs(idxs)
         return PrepareModel(self.seqrecords, self.sp, idxs)
 
-
     def get_mutation_score(self, idxs, mutation_idx, mutation):
         logger.debug('-' * 80)
         logger.debug('get_mutation_score({}, {}, {})'.format(idxs, mutation_idx, mutation))
@@ -219,9 +296,7 @@ class LocalPipeline(Pipeline):
         model = self.get_model(idxs)
         return PrepareMutation(sequence, model, idxs.index(mutation_idx), mutation)
 
-    #==============================================================================
-    # Helper functions
-    #==============================================================================
+    # === Helper functions ===
 
     def _get_chain_idx(self, chain_id):
         """chain_id -> chain_idx
@@ -239,7 +314,6 @@ class LocalPipeline(Pipeline):
                 'Chain {} was found more than once in PDB {}!'.format(chain_id, self.sp.pdb_file))
         return chain_idx[0]
 
-
     def _sort_chain_idxs(self, idxs):
         """Sort positions and return as as tuple.
         """
@@ -248,7 +322,6 @@ class LocalPipeline(Pipeline):
         else:
             idxs = tuple(sorted(idxs))
         return idxs
-
 
 
 # %%
@@ -286,7 +359,6 @@ class PrepareSequence:
     @property
     def result(self):
         return self.sequence
-
 
 
 # %%
@@ -346,7 +418,6 @@ class PrepareModel:
         return self.model
 
 
-
 # %%
 @execute_and_remember
 class PrepareMutation:
@@ -378,12 +449,12 @@ class PrepareMutation:
         features = dict()
         features['mutation'] = self.mutation
 
-        ### Sequence features
+        # Sequence features
         results = self.sequence.mutate(self.mutation)
         features['provean_score'] = results['provean_score']
         features['matrix_score'] = results['matrix_score']
 
-        ### Structure features
+        # Structure features
         results = self.model.mutate(self.mutation_idx, self.mutation)
 
         features['norm_dope'] = self.model.modeller_results['norm_dope']
@@ -419,6 +490,11 @@ class PrepareMutation:
         features['secondary_structure_mut'] = results['secondary_structure_mut']
         features['solvent_accessibility_mut'] = results['solvent_accessibility_mut']
 
+        # new additions
+        features['mutation_errors'] = results['mutation_errors']
+        features['chain_modeller'] = results['chain_modeller']
+        features['mutation_modeller'] = results['mutation_modeller']
+
         if len(self.model.sequence_seqrecords) > 1:
             features['interface_area_hydrophobic'] = self.model.interface_area_hydrophobic
             features['interface_area_hydrophilic'] = self.model.interface_area_hydrophilic
@@ -429,7 +505,6 @@ class PrepareMutation:
             features['contact_distance_wt'] = results['contact_distance_wt']
             features['contact_distance_mut'] = results['contact_distance_mut']
 
-
         logger.debug('feature_dict: {}'.format(features))
         feature_df = pd.DataFrame(features, index=[0])
 
@@ -439,10 +514,8 @@ class PrepareMutation:
 
         self.mutation_features = features
 
-
     def __exit__(self, exc_type, exc_value, traceback):
         return False
-
 
     @property
     def result(self):
@@ -458,21 +531,23 @@ class Unused:
         structure_sequence = []
         # After running `sp.extract()`, all but the last chain are guaranteed to be without HATATMS
         for chain in self.sp.structure.child_list[0].child_list[:-1]:
-            chain_sequence, chain_numbering_extended = self.sp.get_chain_sequence_and_numbering(chain.id)
+            chain_sequence, chain_numbering_extended = (
+                self.sp.get_chain_sequence_and_numbering(chain.id)
+            )
             structure_sequence += [chain_sequence]
 
         # If the last chain starts with a HETATM, it should be entirely HETATMs.
         last_chain = self.sp.structure.child_list[0].child_list[-1]
         if last_chain.child_list[0].resname in structure_tools.AAA_DICT:
-            chain_sequence, chain_numbering_extended = self.sp.get_chain_sequence_and_numbering(last_chain.id)
+            chain_sequence, chain_numbering_extended = (
+                self.sp.get_chain_sequence_and_numbering(last_chain.id)
+            )
             structure_sequence += [chain_sequence]
         else:
             structure_sequence += ['.' * len(last_chain.child_list)]
 
         structure_sequence = '/'.join(structure_sequence)
         return structure_sequence
-
-
 
     def get_mutation_data(self, pdb_chain, pdb_mutation, provean_results, modeller_results):
         """
@@ -496,7 +571,7 @@ class Unused:
         mutation_modeller = self.mutation_to_modeller(pdb_chain, pdb_mutation)
         mutation_modeller_pos = mutation_modeller[1:-1]
 
-        ### Assign values to appropriate variables
+        # ## Assign values to appropriate variables
         mut_data = domain_mutation.MutationData()
 
         # Mutation info
@@ -520,8 +595,6 @@ class Unused:
         # Provean results
         mut_data.provean_mutation = None
         mut_data.provean
-
-
 
     def _mutation_to_modeller(self, pdb_chain, pdb_mutation):
         """
@@ -550,8 +623,6 @@ class Unused:
             mutation_modeller = "{}{}{}".format(pdb_mutation[0], mutation_idx, pdb_mutation[-1])
             return mutation_modeller
 
-
-
     def _get_interactions(self, pdb_chain, pdb_mutation):
         interactions = structure_analysis.get_interactions(
             self.sp.structure.child_list[0], pdb_chain, self.R_CUTOFF)
@@ -563,4 +634,3 @@ class Unused:
                     mutation_contacts.append(chain)
 
         return mutation_contacts
-

@@ -61,9 +61,13 @@ class Modeller(object):
         # values: alignment, pdb filename, whether or not using loop refinement
         ranking = dict()
         ranking_knotted = dict()
-        knotted = True
         counter = 0
-        while knotted and counter < 10:
+        max_counter = 3 if not configs['testing'] else 1
+        while not ranking and counter < max_counter:
+            logger.debug(
+                "counter: {}, ranking: '{}', ranking_knotted: '{}'"
+                .format(counter, ranking, ranking_knotted)
+            )
             counter += 1
             # NB: You can actually supply many alignments and modeller will give
             # you the alignment with the best model
@@ -91,11 +95,10 @@ class Modeller(object):
                         ranking_knotted[normDOPE] = (aln, pdbFile, loop,)
                     else:
                         ranking[normDOPE] = (aln, pdbFile, loop,)
-                        knotted = False
-        if not knotted:
-            return min(ranking), ranking[min(ranking)][1], knotted
+        if ranking:
+            return min(ranking), ranking[min(ranking)][1], False
         else:
-            return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], knotted
+            return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], True
 
     def __run_modeller(self, alignFile, loopRefinement):
         """
@@ -155,28 +158,36 @@ class Modeller(object):
                 assess_methods=(assess.DOPE, assess.normalized_dope),
                 loop_assess_methods=(assess.DOPE, assess.normalized_dope)
             )
-            a.loop.starting_model = self.loopStart  # index of the first loop model
-            a.loop.ending_model = self.loopEnd  # index of the last loop model
-            a.loop.md_level = refine.slow  # loop refinement method; this yields
+            # index of the first loop model
+            a.loop.starting_model = self.loopStart
+            # index of the last loop model
+            a.loop.ending_model = self.loopEnd if not configs['testing'] else self.loopStart
+            # loop refinement method; this yields
+            a.loop.md_level = refine.slow if not configs['testing'] else None
 
         a.starting_model = self.start  # index of the first model
         a.ending_model = self.end  # index of the last model
 
-        # Very thorough VTFM optimization:
-        a.library_schedule = autosched.slow
-        a.max_var_iterations = 300
+        if configs['testing']:
+            logger.debug("Creating a quick-and-dirty model because testing...")
+            a.very_fast()
+        else:
+            # Very thorough VTFM optimization:
+            a.library_schedule = autosched.slow
+            a.max_var_iterations = 300
 
-        # Thorough MD optimization:
-#        a.md_level = refine.slow
-        a.md_level = None
+            # Thorough MD optimization:
+    #        a.md_level = refine.slow
+            a.md_level = None
 
-        # Repeat the whole cycle 2 times and do not stop unless obj.func. > 1E6
-#        a.repeat_optimization = 2
+            # Repeat the whole cycle 2 times and do not stop unless obj.func. > 1E6
+    #        a.repeat_optimization = 2
 
-        a.max_molpdf = 2e5
+            a.max_molpdf = 2e5
 
-        with helper.log_print_statements(logger):
-            a.make()  # do the actual homology modeling
+        with helper.print_heartbeets():
+            with helper.log_print_statements(logger):
+                a.make()  # do the actual homology modeling
 
         # The output produced by modeller is stored in a.loop.outputs or a.outputs
         # it is a dictionary
@@ -265,4 +276,6 @@ class Modeller(object):
         else:
             # in case the output can't be read, the model is classified as
             # knotted and thus disregarded. This could be improved.
+            logger.error("'knot' failed with some strange output:\n{}".format(result))
+            logger.error('Assuming knotted...')
             return True

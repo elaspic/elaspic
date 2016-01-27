@@ -8,23 +8,14 @@ Created on Sat Sep 26 14:28:57 2015
 import os
 import os.path as op
 import shutil
-import urllib.request
 import pytest
-
-def pytest_runtest_makereport(item, call):
-    if "incremental" in item.keywords:
-        if call.excinfo is not None:
-            parent = item.parent
-            parent._previousfailed = item
-
-def pytest_runtest_setup(item):
-    if "incremental" in item.keywords:
-        previousfailed = getattr(item.parent, "_previousfailed", None)
-        if previousfailed is not None:
-            pytest.xfail("previous test failed (%s)" %previousfailed.name)
+import logging
+import logging.config
+from elaspic import structure_tools, sequence
+logger = logging.getLogger(__name__)
 
 
-#%% Directories
+# %% Directories
 try:
     TESTS_BASE_DIR = op.dirname(__file__)
 except NameError:
@@ -34,13 +25,11 @@ assert op.split(TESTS_BASE_DIR)[-1] == 'tests'
 TESTS_DATA_DIR = op.join(TESTS_BASE_DIR, 'data')
 
 
-#%%
-import logging
-import logging.config
+# %% Logger
 logger = logging.getLogger(__name__)
 
 LOGGING_CONFIGS = {
-    'version': 1,              
+    'version': 1,
     'disable_existing_loggers': False,  # this fixes the problem
 
     'formatters': {
@@ -53,76 +42,99 @@ LOGGING_CONFIGS = {
     },
     'handlers': {
         'default': {
-            'level':'DEBUG',    
-            'class':'logging.StreamHandler',
-            'formatter':'clean',
-        },  
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'clean',
+        },
     },
     'loggers': {
-        '': {                  
-            'handlers': ['default'],        
-            'level': 'DEBUG',  
-            'propagate': True  
+        '': {
+            'handlers': ['default'],
+            'level': 'DEBUG',
+            'propagate': True
         }
     }
 }
 logging.config.dictConfig(LOGGING_CONFIGS)
 
 
-
-#%% Functions
+# %% Functions
 PDB_URL = 'http://www.rcsb.org/pdb/files/{}.pdb'
 
-def get_pdb(pdb_id, input_folder, output_folder, use_remote=False):
+
+def get_structure(pdb_id, input_folder, output_folder, use_remote=True):
     """Move PDB structure to the local working directory.
     """
-    input_pdb_filename = op.join(input_folder, pdb_id + '.pdb')
-    output_pdb_filename = op.join(output_folder, pdb_id + '.pdb')
+    input_file = op.join(input_folder, pdb_id + '.pdb')
+    output_file = op.join(output_folder, pdb_id + '.pdb')
 
     # If the PDB already exists, do nothing...
-    if op.isfile(output_pdb_filename):
-        message = (
-            'PDB file already exists in the temp folder ({}). No need to move or download.'
-            .format(output_pdb_filename)
-        )
-        logger.debug(message)
-        return output_pdb_filename
+    if op.isfile(output_file):
+        logger.debug('Structure file {} already exists!'.format(output_file))
+        return output_file
 
     # Look for PDB file in the same folder
-    if not op.isfile(input_pdb_filename):
+    if not op.isfile(input_file):
         if use_remote:
-            logger.info('Downloading PDB from the web to {}...'.format(input_pdb_filename))
-            response = urllib.request.urlopen(PDB_URL.format(pdb_id.upper()))
-            with open(input_pdb_filename, 'wb') as ofh:
-                ofh.write(response.read())
+            input_file = structure_tools.download_pdb_file(pdb_id, input_folder)
         else:
             raise Exception('No PDB input file found!')
 
-    logger.info('Copying {} to {}...'.format(input_pdb_filename, output_pdb_filename))
-    shutil.copy(input_pdb_filename, output_pdb_filename)
-    return output_pdb_filename
+    logger.info('Copying {} to {}...'.format(input_file, output_file))
+    shutil.copy(input_file, output_file)
+    return output_file
 
 
-
-def download_pdb(pdb_id, output_folder):
+def get_sequence(uniprot_id, input_dir, output_dir, use_remote=True):
     """Move PDB structure to the local working directory.
     """
-    output_pdb_filename = op.join(output_folder, pdb_id + '.pdb')
+    input_file = op.join(input_dir, uniprot_id + '.fasta')
+    output_file = op.join(output_dir, uniprot_id + '.fasta')
 
     # If the PDB already exists, do nothing...
-    if op.isfile(output_pdb_filename):
-        logger.debug('PDB file already exists in the folder: {}.'.format(output_folder))
-        return output_pdb_filename
+    if op.isfile(output_file):
+        logger.debug('Sequence file {} already exists!'.format(output_file))
+        return output_file
 
-    # Download the PDB file from the internet...
-    logger.info('Downloading PDB {}...'.format(pdb_id + '.pdb'))
-    response = urllib.request.urlopen(PDB_URL.format(pdb_id))
-    with open(output_pdb_filename, 'wb') as ofh:
-        ofh.write(response.read())
+    # Look for PDB file in the same folder
+    if not op.isfile(input_file):
+        if use_remote:
+            input_file = sequence.download_uniport_sequence(uniprot_id, input_dir)
+        else:
+            raise Exception('No PDB input file found!')
 
-    return output_pdb_filename
+    logger.info('Copying {} to {}...'.format(input_file, output_file))
+    shutil.copy(input_file, output_file)
+    return output_file
 
 
+# %% Pytest
+def pytest_runtest_makereport(item, call):
+    if "incremental" in item.keywords:
+        if call.excinfo is not None:
+            parent = item.parent
+            parent._previousfailed = item
 
-#%%
+
+def pytest_runtest_setup(item):
+    if "incremental" in item.keywords:
+        previousfailed = getattr(item.parent, "_previousfailed", None)
+        if previousfailed is not None:
+            pytest.xfail("previous test failed (%s)" % previousfailed.name)
+
+
+# %% Command line options
+def pytest_addoption(parser):
+    parser.addoption("--quick", action="store_true", default=False,
+                     help="Run only quick tests.")
+    parser.addoption("--config-file", default=None,
+                     help="Name of the configuration file.")
+
+
+@pytest.fixture
+def quick(request):
+    return request.config.getoption("--quick")
+
+
+# %%
 print('Conftest loaded!')

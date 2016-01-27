@@ -1,57 +1,53 @@
-# -*- coding: utf-8 -*-
-import os
-from setuptools import setup
-#~ import distutils.command.bdist_conda
+import os.path as op
+from setuptools import setup, Command
+
+import yaml
 
 
+# %%
 def read(fname):
-    """Utility function to read the README file.
+    return open(op.join(op.dirname(__file__), fname)).read()
 
-    Used for the long_description.  It's nice, because now 
-      1) we have a top level README file and 
-      2) it's easier to type in the README file than to put a raw string in below ...
 
-    Source: https://pythonhosted.org/an_example_pypi_project/setuptools.html
-    """
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
-    
+class TrainPredictors(Command):
+    user_options = []
+
+    def initialize_options(self):
+        """Abstract method that is required to be overwritten"""
+        pass
+
+    def run(self):
+        from elaspic.__main__ import elaspic_train
+        elaspic_train(None)
+
+    def finalize_options(self):
+        """Abstract method that is required to be overwritten"""
+        pass
+
+
+# %% Load conda configuration file
+with open('conda/elaspic/meta.yaml') as ifh:
+    meta = yaml.load(ifh)
+
 
 setup(
-    name='elaspic',
-    version='1.0.0', # now in meta.yaml
-    
-    description=(
-		'Ensemble Learning Approach for Stability Prediction of Interface '
-		'and Core mutations (ELASPIC).'),
+    name=meta['package']['name'],
+    version=meta['package']['version'],
+    description=meta['about']['summary'],
     author='kimlab',
     author_email='alex.strokach@utoronto.ca',
-    url='http://elaspic.kimlab.org',
+    url=meta['about']['home'],
     packages=['elaspic'],
     package_data={'elaspic': ['data/*']},
     long_description=read("README.rst"),
-    
-    # Conda specific features
-    #~ distclass=distutils.command.bdist_conda.CondaDistribution,
-    #~ conda_buildnum=1,
-    #~ conda_features=['mkl'],
-    #~ conda_import_tests=False,
-    
-    # Specify install requirements in the conda `meta.yaml` file
-    # install_requires=[],
-    tests_require=[
-        'pytest',
-    ],
-    entry_points={
-          'console_scripts': [
-              'elaspic = elaspic.__main__:elaspic',
-              'elaspic_database = elaspic.__main__:elaspic_database',
-          ]
-      },
+    # install_requires=meta['requirements']['run'],
+    # tests_require=meta['test']['requires'],
+    entry_points={'console_scripts': meta['build']['entry_points']},
     classifiers=[
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3",
         "Topic :: Structural Biology",
         "Topic :: Bioinformatics",
     ],
+    cmdclass={'train': TrainPredictors},
 )
-

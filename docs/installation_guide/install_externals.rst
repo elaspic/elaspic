@@ -3,6 +3,13 @@
 Installing external software
 =============================
 
+.. note::
+ 
+  If you install elaspic from the Anaconda repository (see: :ref:`install_using_conda`),
+  all required programs will be installed automatically, and the following steps are not 
+  necessary.
+  
+
 Blast, Modeller, Tcoffee
 ------------------------
 

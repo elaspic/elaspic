@@ -1,0 +1,21 @@
+package:
+  name: fake_foldx
+  version: "3.0.6"
+
+build:
+  noarch_python: True
+  number: 4
+
+requirements:
+  run:
+    - python
+    - biopython
+
+test:
+  commands:
+    - foldx -h
+
+about:
+  license: MIT
+  summary: A dummy script that pretends that it's foldx when testing ELASPIC.
+

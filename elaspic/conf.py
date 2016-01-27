@@ -6,6 +6,7 @@ import os.path as op
 import subprocess
 import tempfile
 import logging
+import re
 
 from configparser import SafeConfigParser, NoOptionError
 from Bio.SubsMat import MatrixInfo
@@ -29,10 +30,7 @@ class Singleton(type):
 
 # %%
 class Configs:
-    """
-    A singleton class that keeps track of ELASPIC configuration settings.
-
-    Uses a `composition <>`_ design pattern.
+    """A singleton class that keeps track of ELASPIC configuration settings.
     """
     class _Configs:
         pass
@@ -106,6 +104,8 @@ def read_configuration_file(config_file, unique_temp_dir=None):
             'n_cores': '1',
             'web_server': 'False',
             'copy_data': 'True',
+            'allow_internet': 'False',
+            'testing': 'False',
         })
     configParser.read(config_file)
 
@@ -121,9 +121,12 @@ def read_configuration_file(config_file, unique_temp_dir=None):
     configs['n_cores'] = configParser.getint('DEFAULT', 'n_cores')
     configs['web_server'] = configParser.get('DEFAULT', 'web_server')
     configs['copy_data'] = configParser.getboolean('DEFAULT', 'copy_data')
+    configs['allow_internet'] = configParser.getboolean(
+        'DEFAULT', 'allow_internet')
+    configs['testing'] = configParser.getboolean('DEFAULT', 'testing')
 
     # Temporary directories
-    configs['temp_dir'] = op.join(configs['global_temp_dir'], 'elaspic')
+    configs['temp_dir'] = get_temp_dir(configs['global_temp_dir'], 'elaspic')
     os.makedirs(configs['temp_dir'], exist_ok=True)
     if unique_temp_dir is not None:
         configs['unique_temp_dir'] = unique_temp_dir
@@ -176,8 +179,6 @@ def read_database_configs(configParser):
     configs['archive_type'] = configParser.get('DATABASE', 'archive_type', fallback='directory')
     configs['archive_dir'] = configParser.get('DATABASE', 'archive_dir')
     # supported archive types are 'directory' and 'archive'
-    configs['pdb_dir'] = configParser.get('DATABASE', 'pdb_dir')
-
     configs['archive_temp_dir'] = op.join(configs['temp_dir'], 'archive')
 
 
@@ -191,6 +192,7 @@ def read_sequence_configs(configParser):
     configs['provean_temp_dir'] = op.join(configs['sequence_dir'], 'provean_temp')
     _validate_provean_temp_dir(configParser, configs)
 
+    configs['pdb_dir'] = configParser.get('SEQUENCE', 'pdb_dir')
     configs['blast_db_dir'] = configParser.get('SEQUENCE', 'blast_db_dir')
     configs['blast_db_dir_fallback'] = (
         configParser.get('SEQUENCE', 'blast_db_dir_fallback', fallback=''))
@@ -242,7 +244,7 @@ def _validate_provean_temp_dir(configParser, configs):
 
 def _prepare_temp_folders(configs):
     for key, value in configs.items():
-        if key.endswith('_dir'):
+        if key.endswith('_dir') and not re.match('{.*}', value):
             logger.debug("Creating '{}' folder: {}...".format(key, value))
             os.makedirs(value, exist_ok=True)
 
@@ -256,21 +258,21 @@ def _validate_blast_db_dir(configs):
 
     if blast_db_dir_isvalid(configs['blast_db_dir']):
         pass
-    elif blast_db_dir_isvalid(configs['blast_db_dir_2']):
+    elif blast_db_dir_isvalid(configs['blast_db_dir_fallback']):
         message = (
-            "Using 'blast_db_dir_2' because 'blast_db_dir' is not valid!\n"
+            "Using 'blast_db_dir_fallback' because 'blast_db_dir' is not valid!\n"
             "blast_db_dir: {}\n"
-            "blast_db_dir_2: {}"
-            .format(configs['blast_db_dir'], configs['blast_db_dir_2'])
+            "blast_db_dir_fallback: {}"
+            .format(configs['blast_db_dir'], configs['blast_db_dir_fallback'])
         )
         logger.info(message)
-        configs['blast_db_dir'] = configs['blast_db_dir_2']
+        configs['blast_db_dir'] = configs['blast_db_dir_fallback']
     else:
         message = (
-            "Both 'blast_db_dir' and 'blast_db_dir_2' are not valid!"
+            "Both 'blast_db_dir' and 'blast_db_dir_fallback' are not valid!"
             "blast_db_dir: {}\n"
-            "blast_db_dir_2: {}"
-            .format(configs['blast_db_dir'], configs['blast_db_dir_2'])
+            "blast_db_dir_fallback: {}"
+            .format(configs['blast_db_dir'], configs['blast_db_dir_fallback'])
         )
         logger.error(message)
 

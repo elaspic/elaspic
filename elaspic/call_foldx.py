@@ -90,12 +90,10 @@ class FoldX(object):
         self.__run_runfile()
         if whatToRun == 'AnalyseComplex':
             return self.__read_result(
-                op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'),
-                self.pdb_filename, whatToRun)
+                op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'), whatToRun)
         elif whatToRun == 'Stability':
             return self.__read_result(
-                op.join(self.foldx_dir, 'Stability.txt'),
-                self.pdb_filename, whatToRun)
+                op.join(self.foldx_dir, 'Stability.txt'), whatToRun)
         elif whatToRun == 'RepairPDB':
             return op.join(self.foldx_dir, 'RepairPDB_' + self.pdb_filename)
         elif whatToRun == 'BuildModel':
@@ -186,13 +184,17 @@ class FoldX(object):
         result, error_message, return_code = (
             helper.subprocess_check_output_locally(self.foldx_dir, system_command)
         )
-        if return_code != 0:
-            logger.debug('FoldX result: %s' % result)
-            logger.debug('FoldX error: %s' % error_message)
+        if error_message:
+            logger.debug('foldx result: {}'.format(result))
+            logger.error('foldx error message: {}'.format(error_message))
             if 'Cannot allocate memory' in error_message:
                 raise errors.ResourceError(error_message)
+        if 'There was a problem' in result:
+            logger.error('foldx result: {}'.format(result))
+            if 'Specified residue not found.' in result:
+                raise errors.MutationMismatchError()
 
-    def __read_result(self, outFile, pdb, whatToRead):
+    def __read_result(self, outFile, whatToRead):
         with open(outFile, 'r') as f:
             lines = f.readlines()
             line = lines[-1].split('\t')

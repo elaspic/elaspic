@@ -5,6 +5,7 @@ dist
 
 # Hidden files and folders
 _*
+.*
 
 # Compiled source code
 *.pyc
@@ -20,4 +21,5 @@ _*
 
 # Configuration files with private information
 config/*.ini
+elaspic/data/ml_clf_*
 

@@ -1,0 +1,79 @@
+package:
+  name: elaspic
+  version: 1.0.13
+
+source:
+  path: ../../
+
+build:
+  number: 3
+  entry_points: 
+    - elaspic = elaspic.__main__:main
+
+requirements:
+  build:
+    # Basic python
+    - python
+    - pyyaml
+    - requests
+    # Scientific python
+    - numpy
+    - scipy
+    - pandas
+    - scikit-learn
+    - biopython
+    # Python 2 / 3 compatibility
+    - future
+    - six
+  run:
+    # Basic python
+    - python
+    - pyyaml
+    - psutil
+    - retrying
+    - fastcache
+    - requests
+    # Scientific python
+    - numpy
+    - scipy
+    - pandas
+    - scikit-learn
+    - biopython
+    # Python 2 / 3 compatibility
+    - future
+    - six
+    # Database access
+    - sqlalchemy
+    - sqlite
+    - mysqlclient
+    - psycopg2
+    # Binary files
+    - p7zip
+    - blast
+    - stride
+    - knot
+    - pops
+    - msms
+    - t_coffee
+    - modeller ==9.15
+    - cd-hit
+    - provean 
+    - foldx
+    - libfaketime
+
+test:
+  requires:
+    - pytest
+    - fake_provean
+    - fake_foldx
+  imports:
+    - elaspic
+  commands:
+    - elaspic --help
+    - elaspic_database --help
+
+about:
+  home: elaspic.kimlab.org
+  license: MIT
+  summary: Ensemble Learning Approach for Stability Prediction of 
+           Interface and Core mutations (ELASPIC).

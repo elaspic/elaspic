@@ -1,22 +1,15 @@
 # -*- coding: utf-8 -*-
 import os
-import os.path as op
 import json
 import six
 import logging
 from functools import wraps
 
-from . import conf, helper, sequence
+from . import conf, helper
 
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
 
-sql_db = None
-domain_alignment = None
-domain_model = None
-domain_mutation = None
-
-MAX_DISTANCE_BETWEEN_INTERACTING_CHAINS = 6 # Angstrom
 ELASPIC_LOGO = """
 
 8888888888 888             d8888  .d8888b.  8888888b. 8888888 .d8888b.
@@ -29,7 +22,6 @@ ELASPIC_LOGO = """
 8888888888 88888888 d88P     888  "Y8888P"  888       8888888 "Y8888P"
 
 """
-
 
 
 # %%
@@ -60,7 +52,6 @@ class Pipeline:
         self.models = {}
         self.predictions = {}
 
-
     def _validate_temp_path(self):
         """
         Make sure that we are using a job specific temporary folder if we are on a cluster.
@@ -73,12 +64,13 @@ class Pipeline:
             any([(x.lower() in hostname) for x in ['node', 'behemoth', 'grendel', 'beagle']])
         )
         if no_job_specific_folder and on_node_with_manditory_job_specific_folder:
-            raise Exception('You should be using a temp folder that it specific to the particular job!')
-
+            raise Exception(
+                'You should be using a temp folder that it specific to the particular job!')
 
 
 # %%
 _instances = {}
+
 
 def execute_and_remember(f):
     """ Some basic memoizer.
@@ -97,8 +89,6 @@ def execute_and_remember(f):
             return _instances[key].result
 
     return f_new
-
-
 
 
 # %%
@@ -125,7 +115,6 @@ class Foo:
     def __bool__(self):
         print(self.info)
         return True
-
 
 
 # %%
@@ -187,5 +176,3 @@ def lock(fn):
             raise
 
     return locked_fn
-
-
