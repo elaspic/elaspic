@@ -1,8 +1,12 @@
 name: elaspic
+
 channels:
-- https://conda.anaconda.org/bioconda
-- https://conda.anaconda.org/r
-- https://conda.anaconda.org/ostrokach
+- bioconda
+- r
+- salilab
+- defaults
+- ostrokach
+
 dependencies:
 - python=3.5.1=0
 - elaspic=1.0.11=py35_1
