@@ -57,7 +57,7 @@ extensions = [
     'sphinx.ext.mathjax',
     # 'sphinxarg.ext',
     # 'sphinxcontrib.autoprogram',
-    'sphinxcontrib.programoutput',
+    # 'sphinxcontrib.programoutput',  # Add back when dust on conda RTD settles
 ]
 
 def linkcode_resolve(domain, info):
