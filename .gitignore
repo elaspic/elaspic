@@ -23,3 +23,4 @@ _*
 config/*.ini
 elaspic/data/ml_clf_*
 
+*.pptx

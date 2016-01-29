@@ -37,32 +37,55 @@ elaspic.conf module
     :show-inheritance:
 
 elaspic.database_pipeline module
----------------------------------
+--------------------------------
 
 .. automodule:: elaspic.database_pipeline
     :members:
     :undoc-members:
     :show-inheritance:
 
+elaspic.elaspic_database module
+-------------------------------
 
-elaspic.database_tables module
-------------------------------
-
-.. automodule:: elaspic.database_tables
+.. automodule:: elaspic.elaspic_database
     :members:
     :undoc-members:
     :show-inheritance:
 
-elaspic.database module
-------------------------------
+elaspic.elaspic_database_tables module
+--------------------------------------
 
-.. automodule:: elaspic.database
+.. automodule:: elaspic.elaspic_database_tables
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+elaspic.elaspic_model module
+----------------------------
+
+.. automodule:: elaspic.elaspic_model
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+elaspic.elaspic_predictor module
+--------------------------------
+
+.. automodule:: elaspic.elaspic_predictor
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+elaspic.elaspic_sequence module
+-------------------------------
+
+.. automodule:: elaspic.elaspic_sequence
     :members:
     :undoc-members:
     :show-inheritance:
 
 elaspic.errors module
-----------------------
+---------------------
 
 .. automodule:: elaspic.errors
     :members:
@@ -70,7 +93,7 @@ elaspic.errors module
     :show-inheritance:
 
 elaspic.helper module
--------------------------------
+---------------------
 
 .. automodule:: elaspic.helper
     :members:
@@ -78,7 +101,7 @@ elaspic.helper module
     :show-inheritance:
 
 elaspic.local_pipeline module
-------------------------------
+-----------------------------
 
 .. automodule:: elaspic.local_pipeline
     :members:
@@ -86,53 +109,29 @@ elaspic.local_pipeline module
     :show-inheritance:
 
 elaspic.machine_learning module
---------------------------------
+-------------------------------
 
 .. automodule:: elaspic.machine_learning
     :members:
     :undoc-members:
     :show-inheritance:
 
-elaspic.model module
----------------------
-
-.. automodule:: elaspic.model
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 elaspic.pipeline module
-------------------------
+-----------------------
 
 .. automodule:: elaspic.pipeline
     :members:
     :undoc-members:
     :show-inheritance:
-    
-elaspic.predictor module
--------------------------
-
-.. automodule:: elaspic.predictor
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    
-elaspic.sequence module
--------------------------
-
-.. automodule:: elaspic.sequence
-    :members:
-    :undoc-members:
-    :show-inheritance:
 
 elaspic.structure_analysis module
-----------------------------------
+---------------------------------
 
 .. automodule:: elaspic.structure_analysis
     :members:
     :undoc-members:
     :show-inheritance:
-    
+
 elaspic.structure_tools module
 ------------------------------
 
@@ -140,6 +139,7 @@ elaspic.structure_tools module
     :members:
     :undoc-members:
     :show-inheritance:
+
 
 Module contents
 ---------------
