@@ -265,8 +265,8 @@ def elaspic_database(args):
 
 def create_database(args):
     conf.read_configuration_file(args.config_file)
-    from elaspic import database
-    db = database.MyDatabase()
+    from elaspic import elaspic_database
+    db = elaspic_database.MyDatabase()
     db.create_database_tables(args.clear_schema, args.keep_uniprot_sequence)
     logger.info('Done!')
 
@@ -292,12 +292,12 @@ def open_gzip(filename):
 
 def load_data_to_database(args):
     conf.read_configuration_file(args.config_file)
-    from elaspic import database
-    db = database.MyDatabase()
+    from elaspic import elaspic_database
+    db = elaspic_database.MyDatabase()
     args.data_folder = args.data_folder.rstrip('/')
     table_names = args.data_files.split(',') if args.data_files else None
     dirpath, dirnames, filenames = next(os.walk(args.data_folder))
-    for table in database.Base.metadata.sorted_tables:
+    for table in elaspic_database.Base.metadata.sorted_tables:
         if table_names is not None and table.name not in table_names:
             print("Skipping table '{}' because it was not included in the 'table_names' list..."
                   .format(table.name))
@@ -319,8 +319,8 @@ def test_database(args):
 
 def delete_database(args):
     conf.read_configuration_file(args.config_file)
-    from elaspic import database
-    db = database.MyDatabase()
+    from elaspic import elaspic_database
+    db = elaspic_database.MyDatabase()
     db.delete_database_tables(args.drop_schema, args.keep_uniprot_sequence)
     logger.info('Done!')
 

@@ -13,7 +13,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from . import conf, helper, errors, structure_tools, structure_analysis, sequence, model, predictor
+from . import conf, helper, errors, structure_tools, structure_analysis, elaspic_sequence, elaspic_model, elaspic_predictor
 from .pipeline import Pipeline, execute_and_remember
 
 logger = logging.getLogger(__name__)
@@ -351,7 +351,7 @@ class PrepareSequence:
         self.sequence_file = sequence_file
 
     def run(self):
-        self.sequence = sequence.Sequence(self.sequence_file, self.provean_supset_file)
+        self.sequence = elaspic_sequence.Sequence(self.sequence_file, self.provean_supset_file)
 
     def __exit__(self, exc_type, exc_value, traceback):
         return False
@@ -408,7 +408,7 @@ class PrepareModel:
         assert op.isfile(self.structure_file)
 
     def run(self):
-        self.model = model.Model(self.sequence_file, self.structure_file)
+        self.model = elaspic_model.Model(self.sequence_file, self.structure_file)
 
     def __exit__(self, exc_type, exc_value, traceback):
         return False
@@ -508,7 +508,7 @@ class PrepareMutation:
         logger.debug('feature_dict: {}'.format(features))
         feature_df = pd.DataFrame(features, index=[0])
 
-        pred = predictor.Predictor()
+        pred = elaspic_predictor.Predictor()
         features['ddg'] = pred.score(feature_df, len(self.model.sequence_seqrecords) > 1)
         logger.debug('Predicted ddG: {}'.format(features['ddg']))
 

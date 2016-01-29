@@ -8,7 +8,7 @@ import os.path as op
 import logging
 import pytest
 from elaspic import (
-    conf, sequence, structure_tools, local_pipeline
+    conf, elaspic_sequence, structure_tools, local_pipeline
 )
 from conftest import TESTS_BASE_DIR
 
@@ -198,7 +198,7 @@ def test_sequence_mutation_pipeline(pdb_id_sequence, working_dir=None):
     conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=working_dir)
     configs = conf.Configs()
     pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
-    sequence_file = sequence.download_uniport_sequence(sequence_id, configs['unique_temp_dir'])
+    sequence_file = elaspic_sequence.download_uniport_sequence(sequence_id, configs['unique_temp_dir'])
     for chain_pos in sequence_mutations[pdb_id_sequence]:
         for mutation in sequence_mutations[pdb_id_sequence][chain_pos]:
             mutation_sequence = '{}_{}'.format(chain_pos, mutation)
