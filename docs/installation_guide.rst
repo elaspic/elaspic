@@ -11,6 +11,7 @@ In order to use the ELASPIC :ref:`database pipeline`, in addition to the steps a
   #. Create a local database and modify the configuration file to match your system and database setting (:ref:`config_file`).
   #. Download Profs domain definitions for your organism of interest, and upload the data to a local database (:ref:`import_precalculated`).
 
+
 .. toctree::
    :maxdepth: 2
    :hidden:

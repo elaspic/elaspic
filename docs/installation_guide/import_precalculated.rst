@@ -47,11 +47,11 @@ To download all precalculated data for a given organism, use the ``wget`` comman
         http://elaspic.kimlab.org/static/download/current_release/Homo_sapiens_test/
 
 You need to extract the provean supporting sets and domain homology models into a folder
-specified by the :term:`path_to_archive` variable in your :ref:`configuration_file <config_file>`:
+specified by the :term:`archive_dir` variable in your :ref:`configuration_file <config_file>`:
 
 .. code-block:: bash
 
-    mkdir archive  # Set 'path_to_archive' variable in the config file to this folder
+    mkdir archive  # Set 'archive_dir' variable in the config file to this folder
 
     7z x "${TEST_DIR}/elaspic.kimlab.org/provean/provean.7z" -o"archive"
     7z x "${TEST_DIR}/elaspic.kimlab.org/uniprot_domain/uniprot_domain.7z" -o"archive"
