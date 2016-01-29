@@ -2,11 +2,6 @@
 
 set -ev
 
-# Do this right before the test so that they are not overwritten 
-# by the original elaspic binaries.
-conda install -q --yes -n ${CONDA_ENV} fake_provean fake_foldx
-
-
 # Set ${TEST_DIR}
 if [[ $CONDA_BUILD ]] ; then
     echo 'CONDA'
