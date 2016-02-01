@@ -781,10 +781,10 @@ class MyDatabase(object):
         )
 
         if 'No files to process' in result:
-            raise helper.Archive7zipFileNotFoundError(result, error_message, return_code)
+            raise errors.Archive7zipFileNotFoundError(result, error_message, return_code)
 
         if return_code:
-            raise helper.Archive7zipError(result, error_message, return_code)
+            raise errors.Archive7zipError(result, error_message, return_code)
 
     @helper.retry_database
     def get_uniprot_mutation(self, d, mutation, uniprot_id=None, copy_data=False):

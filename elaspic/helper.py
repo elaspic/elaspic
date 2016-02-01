@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+.. note::
+
+    Wrap package dependencies inside functions.
+"""
 import os
 import os.path as op
 import sys
@@ -13,10 +18,8 @@ import string
 import fcntl
 import inspect
 
-from retrying import retry
 from functools import wraps
 from contextlib import contextmanager
-import sqlalchemy as sa
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +228,8 @@ def check_exception(exc, valid_exc):
 def retry_database(fn):
     """Decorator to keep probing the database untill you succeed.
     """
+    from retrying import retry
+    import sqlalchemy as sa
     r = retry(
         retry_on_exception=lambda exc:
             check_exception(exc, valid_exc=sa.exc.OperationalError),
@@ -234,23 +239,14 @@ def retry_database(fn):
     return r(fn)
 
 
-class Archive7zipError(Exception):
-    def __init__(self, result, error_message, return_code):
-        super(Archive7zipError, self).__init__(result)
-        self.error_message = error_message
-        self.return_code = return_code
-
-
-class Archive7zipFileNotFoundError(Archive7zipError):
-    pass
-
-
 def retry_archive(fn):
     """Decorator to keep probing the database untill you succeed.
     """
+    from retrying import retry
+    from elaspic import errors
     r = retry(
         retry_on_exception=lambda exc:
-            check_exception(exc, valid_exc=Archive7zipError),
+            check_exception(exc, valid_exc=errors.Archive7zipError),
         wait_fixed=2000,
         stop_max_attempt_number=2)
     return r(fn)

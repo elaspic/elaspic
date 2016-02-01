@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 
+
 # %% Tcoffee
 class TcoffeeError(Exception):
+
     def __init__(self, result, error, alignInFile, system_command):
         message = (
             'tcoffee blast error for file: {0}, with error message: {1}, '
@@ -30,8 +32,10 @@ class MutationMismatchError(Exception):
 class PDBError(Exception):
     pass
 
+
 class PDBNotFoundError(Exception):
     pass
+
 
 class PDBEmptySequenceError(Exception):
     """ One of the sequences is missing from the alignment. The most likely cause
@@ -39,10 +43,12 @@ class PDBEmptySequenceError(Exception):
     """
     pass
 
+
 class PDBDomainDefsError(Exception):
     """ PDB domain definitions not found in the pdb file
     """
     pass
+
 
 class PDBChainError(Exception):
     pass
@@ -102,4 +108,15 @@ class MutationOutsideInterfaceError(Exception):
 class ModelHasMutationsError(Exception):
     """Don't delete a model that has precalculated mutations!
     """
+    pass
+
+
+class Archive7zipError(Exception):
+    def __init__(self, result, error_message, return_code):
+        super(Archive7zipError, self).__init__(result)
+        self.error_message = error_message
+        self.return_code = return_code
+
+
+class Archive7zipFileNotFoundError(Archive7zipError):
     pass
