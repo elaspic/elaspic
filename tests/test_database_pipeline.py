@@ -37,7 +37,7 @@ print('Config file: {}'.format(CONFIG_FILE))
 
 # %%
 conf.read_configuration_file(CONFIG_FILE)
-from elaspic import database, database_pipeline
+from elaspic import elaspic_database, database_pipeline
 
 
 # %%
@@ -49,7 +49,7 @@ try:
 except NameError:
     base_dir = os.getcwd()
 
-db = database.MyDatabase()
+db = elaspic_database.MyDatabase()
 engine = db.get_engine()
 engine.execute("SET sql_mode = ''")
 
@@ -190,7 +190,7 @@ def uniprot_id_mutation(request):
 
 
 # %%
-@database.retry_database
+@elaspic_database.retry_database
 def validate_mutation_1(uniprot_id, mutation):
     """Select Provean; assert length > 0
     """
@@ -207,7 +207,7 @@ provean_supset_filename is not null;
     assert len(df) >= 1
 
 
-@database.retry_database
+@elaspic_database.retry_database
 def validate_mutation_2(uniprot_id, mutation):
     """Select domains without models; assert length 0
     """
@@ -226,7 +226,7 @@ model_errors is null;
     assert len(df) == 0
 
 
-@database.retry_database
+@elaspic_database.retry_database
 def validate_mutation_3(uniprot_id, mutation):
     """Select interfaces without models; assert length 0
     """
@@ -246,7 +246,7 @@ model_filename is null and model_errors is null;
     assert len(df) == 0
 
 
-@database.retry_database
+@elaspic_database.retry_database
 def validate_mutation_4(uniprot_id, mutation):
     """Select domains where we don't have mutatons even though we should; assert length 0
     """
@@ -267,7 +267,7 @@ and model_filename_wt is null;
     assert len(df) == 0
 
 
-@database.retry_database
+@elaspic_database.retry_database
 def validate_mutation_5(uniprot_id, mutation):
     """Select domain pairs where we don't have mutatons even though we should; assert length 0
     """
@@ -321,6 +321,7 @@ def test_database_pipeline(uniprot_id_mutation):
 
 # %%
 problematic_inputs = [
+    ('P45844', 'L148Y'),
     ('O00470', 'Y299H'),
     ('P15153', 'P34S'),
     ('P15891', 'I305H'),  # mutation outside domain

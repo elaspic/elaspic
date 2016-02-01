@@ -1,7 +1,9 @@
+
 # Folders
 elaspic.egg-info
 build
 dist
+extras
 
 # Hidden files and folders
 _*
@@ -23,3 +25,4 @@ _*
 config/*.ini
 elaspic/data/ml_clf_*
 
+*.pptx

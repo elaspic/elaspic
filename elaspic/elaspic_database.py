@@ -31,8 +31,8 @@ from Bio.SeqRecord import SeqRecord
 
 # import parse_pfamscan
 
-from . import helper, errors, conf, sequence
-from .database_tables import (
+from . import helper, errors, conf, elaspic_sequence
+from .elaspic_database_tables import (
     Base,
     Domain, DomainContact, UniprotSequence, Provean,
     UniprotDomain, UniprotDomainTemplate, UniprotDomainModel, UniprotDomainMutation,
@@ -1074,7 +1074,7 @@ class MyDatabase(object):
                     .format(uniprot_id))
                 return None
             else:
-                sequence_file = sequence.download_uniport_sequence(
+                sequence_file = elaspic_sequence.download_uniport_sequence(
                     uniprot_id, configs['unique_temp_dir'])
                 with open(sequence_file) as ifh:
                     seqrecord = SeqIO.read(ifh, 'fasta')

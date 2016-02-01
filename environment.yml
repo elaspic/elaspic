@@ -1,4 +1,8 @@
 name: elaspic
+channels:
+- https://conda.anaconda.org/bioconda
+- https://conda.anaconda.org/r
+- https://conda.anaconda.org/ostrokach
 dependencies:
 - biopython=1.65=np19py34_0
 - cython=0.22=py34_0

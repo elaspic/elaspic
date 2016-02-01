@@ -3,7 +3,7 @@
 domain
 ~~~~~~
 
-.. autosimple:: elaspic.database_tables.Domain
+.. autosimple:: elaspic.elaspic_database_tables.Domain
    :noindex:
 
 
@@ -13,7 +13,7 @@ domain
 domain_contact
 ~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.DomainContact
+.. autosimple:: elaspic.elaspic_database_tables.DomainContact
    :noindex:
 
 
@@ -23,7 +23,7 @@ domain_contact
 uniprot_sequence
 ~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotSequence
+.. autosimple:: elaspic.elaspic_database_tables.UniprotSequence
    :noindex:
 
 
@@ -33,7 +33,7 @@ uniprot_sequence
 provean
 ~~~~~~~
 
-.. autosimple:: elaspic.database_tables.Provean
+.. autosimple:: elaspic.elaspic_database_tables.Provean
    :noindex:
 
 
@@ -43,7 +43,7 @@ provean
 uniprot_domain
 ~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotDomain
+.. autosimple:: elaspic.elaspic_database_tables.UniprotDomain
    :noindex:
 
 
@@ -53,7 +53,7 @@ uniprot_domain
 uniprot_domain_template
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotDomainTemplate
+.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainTemplate
    :noindex:
 
 
@@ -63,7 +63,7 @@ uniprot_domain_template
 uniprot_domain_model
 ~~~~~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotDomainModel
+.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainModel
    :noindex:
 
 
@@ -73,7 +73,7 @@ uniprot_domain_model
 uniprot_domain_mutation
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotDomainMutation
+.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainMutation
    :noindex:
 
 
@@ -83,7 +83,7 @@ uniprot_domain_mutation
 uniprot_domain_pair
 ~~~~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotDomainPair
+.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainPair
    :noindex:
 
 
@@ -93,7 +93,7 @@ uniprot_domain_pair
 uniprot_domain_pair_template
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotDomainPairTemplate
+.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainPairTemplate
    :noindex:
 
 
@@ -103,7 +103,7 @@ uniprot_domain_pair_template
 uniprot_domain_pair_model
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotDomainPairModel
+.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainPairModel
    :noindex:
 
 
@@ -112,6 +112,5 @@ uniprot_domain_pair_model
 uniprot_domain_pair_mutation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database_tables.UniprotDomainPairMutation
+.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainPairMutation
    :noindex:
-

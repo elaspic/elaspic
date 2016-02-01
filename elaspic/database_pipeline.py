@@ -14,8 +14,8 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 from . import (
-    conf, errors, helper, structure_tools, sequence, model, predictor,
-    database, database_tables
+    conf, errors, helper, structure_tools, elaspic_sequence, elaspic_model, elaspic_predictor,
+    elaspic_database, elaspic_database_tables
 )
 from .pipeline import Pipeline, execute_and_remember
 
@@ -75,7 +75,7 @@ class DatabasePipeline(Pipeline):
         os.chdir(configs['unique_temp_dir'])
 
         # Initialise the sql database for accessing all information
-        self.db = database.MyDatabase()
+        self.db = elaspic_database.MyDatabase()
 
         # Obtain all domains and interactions for a given uniprot
         logger.info('Obtaining protein domain information...')
@@ -91,7 +91,7 @@ class DatabasePipeline(Pipeline):
         for d in d_list:
             if not d.path_to_data or any([len(x) > 255 for x in d.path_to_data.split('/')]):
                 d.path_to_data = (
-                    database.get_uniprot_base_path(d) + database.get_uniprot_domain_path(d)
+                    elaspic_database.get_uniprot_base_path(d) + elaspic_database.get_uniprot_domain_path(d)
                 )
                 self.db.merge_row(d)
             os.makedirs(op.join(configs['archive_temp_dir'], d.path_to_data), exist_ok=True)
@@ -151,9 +151,9 @@ class DatabasePipeline(Pipeline):
     def get_mutation_score(self, d, mutation):
         logger.debug('-' * 80)
         logger.debug('get_mutation_score({}, {})'.format(d, mutation))
-        if isinstance(d, database_tables.UniprotDomain):
+        if isinstance(d, elaspic_database_tables.UniprotDomain):
             sequence = self.get_sequence(d)
-        elif isinstance(d, database_tables.UniprotDomainPair):
+        elif isinstance(d, elaspic_database_tables.UniprotDomainPair):
             if self.uniprot_id == d.uniprot_domain_1.uniprot_id:
                 sequence = self.get_sequence(d.uniprot_domain_1)
             elif self.uniprot_id == d.uniprot_domain_2.uniprot_id:
@@ -209,7 +209,7 @@ class _PrepareSequence:
             # Provean supset has already been calculated
             self.provean_supset_file = op.join(
                 configs['archive_temp_dir'],
-                database.get_uniprot_base_path(d),
+                elaspic_database.get_uniprot_base_path(d),
                 d.uniprot_sequence.provean.provean_supset_filename
             )
         else:
@@ -230,7 +230,7 @@ class _PrepareSequence:
         assert op.isfile(self.sequence_file)
 
     def run(self):
-        self.sequence = sequence.Sequence(self.sequence_file, self.provean_supset_file)
+        self.sequence = elaspic_sequence.Sequence(self.sequence_file, self.provean_supset_file)
 #            if provean:
 #                if self.run_type == 1:
 #                    logger.info('Finished run_type {}'.format(self.run_type))
@@ -247,14 +247,14 @@ class _PrepareSequence:
         if exc_type is not None:
             return False
 
-        provean = database.Provean()
+        provean = elaspic_database.Provean()
         provean.uniprot_id = d.uniprot_id
         provean.provean_supset_filename = op.basename(self.sequence.provean_supset_file)
         provean.provean_supset_length = self.sequence.provean_supset_length
         self.db.merge_provean(
             provean,
             self.sequence.provean_supset_file,
-            configs['copy_data'] and database.get_uniprot_base_path(d)
+                configs['copy_data'] and elaspic_database.get_uniprot_base_path(d)
         )
 
     @property
@@ -291,10 +291,10 @@ class _PrepareModel:
         self.modeller_results_file = None
 
         # Check if we should skip the model
-        if (isinstance(d, database.UniprotDomain) and not (d.template and d.template.cath_id)):
+        if (isinstance(d, elaspic_database.UniprotDomain) and not (d.template and d.template.cath_id)):
             logger.error('No structural template availible for this domain. Skipping...')
             self.skip = True
-        elif (isinstance(d, database.UniprotDomainPair) and not
+        elif (isinstance(d, elaspic_database.UniprotDomainPair) and not
                 (d.template and d.template.cath_id_1 and d.template.cath_id_2)):
             logger.error('No structural template availible for this domain pair. Skipping...')
             self.skip = True
@@ -313,7 +313,7 @@ class _PrepareModel:
         """Save relevant precalculated data to a json file.
         """
         modeller_results = dict()
-        if isinstance(d, database.UniprotDomain):
+        if isinstance(d, elaspic_database.UniprotDomain):
             unique_id = d.uniprot_domain_id
             modeller_results['model_file'] = op.join(
                 configs['archive_temp_dir'],
@@ -329,7 +329,7 @@ class _PrepareModel:
             ]
             modeller_results['norm_dope'] = d.template.model.norm_dope
             modeller_results['domain_def_offsets'] = [(0, 0)]
-        elif isinstance(d, database.UniprotDomainPair):
+        elif isinstance(d, elaspic_database.UniprotDomainPair):
             unique_id = d.uniprot_domain_pair_id
             modeller_results['model_file'] = op.join(
                 configs['archive_temp_dir'],
@@ -365,7 +365,7 @@ class _PrepareModel:
     def __enter__(self):
         d = self.d
         # Load data from database ORM to model input
-        if isinstance(d, database.UniprotDomain):
+        if isinstance(d, elaspic_database.UniprotDomain):
             protein_ids = [d.uniprot_id]
             if d.template.model and d.template.model.model_domain_def:
                 protein_domain_defs = [d.template.model.model_domain_def]
@@ -376,7 +376,7 @@ class _PrepareModel:
             pdb_chains = [d.template.domain.pdb_chain]
             pdb_domain_defs = [d.template.domain.pdb_domain_def]
 
-        elif isinstance(d, database.UniprotDomainPair):
+        elif isinstance(d, elaspic_database.UniprotDomainPair):
             protein_ids = [
                 d.uniprot_domain_1.uniprot_id,
                 d.uniprot_domain_2.uniprot_id
@@ -416,7 +416,7 @@ class _PrepareModel:
         )
 
     def run(self):
-        self.model = model.Model(
+        self.model = elaspic_model.Model(
             self.sequence_file, self.structure_file, self.modeller_results_file
         )
 
@@ -427,12 +427,12 @@ class _PrepareModel:
             # the error in the model, and add the error to their `domain_errors`
             # or `domain_contact_errors` fields.
             logger.error(exc_value)
-            if isinstance(d, database.UniprotDomain):
+            if isinstance(d, elaspic_database.UniprotDomain):
                 if d.template.model == None:  # analysis:ignore
-                    d.template.model = database_tables.UniprotDomainModel()
+                    d.template.model = elaspic_database_tables.UniprotDomainModel()
                     d.template.model.uniprot_domain_id = d.uniprot_domain_id
                 bad_domains = self.db.get_rows_by_ids(
-                    database_tables.Domain, [database_tables.Domain.cath_id], [d.template.cath_id])
+                    elaspic_database_tables.Domain, [elaspic_database_tables.Domain.cath_id], [d.template.cath_id])
                 assert len(bad_domains) == 1
                 bad_domain = bad_domains[0]
                 bad_domain.domain_errors = str(d.uniprot_domain_id) + ': ' + str(exc_type)
@@ -442,18 +442,18 @@ class _PrepareModel:
                     .format(bad_domain.domain_errors, d.template.cath_id))
             else:  # UniprotDomainPair
                 if d.template.model == None:   # analysis:ignore
-                    d.template.model = database_tables.UniprotDomainPairModel()
+                    d.template.model = elaspic_database_tables.UniprotDomainPairModel()
                     d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
                 bad_domains = self.db.get_rows_by_ids(
-                    database_tables.DomainContact,
-                    [database_tables.DomainContact.cath_id_1,
-                     database_tables.DomainContact.cath_id_2],
+                    elaspic_database_tables.DomainContact,
+                    [elaspic_database_tables.DomainContact.cath_id_1,
+                     elaspic_database_tables.DomainContact.cath_id_2],
                     [d.template.cath_id_1, d.template.cath_id_2])
                 if len(bad_domains) == 0:
                     bad_domains = self.db.get_rows_by_ids(
-                        database_tables.DomainContact,
-                        [database_tables.DomainContact.cath_id_1,
-                         database_tables.DomainContact.cath_id_2],
+                        elaspic_database_tables.DomainContact,
+                        [elaspic_database_tables.DomainContact.cath_id_1,
+                         elaspic_database_tables.DomainContact.cath_id_2],
                         [d.template.cath_id_2, d.template.cath_id_1])
                 assert len(bad_domains) == 1
                 bad_domain = bad_domains[0]
@@ -488,9 +488,9 @@ class _PrepareModel:
             return
 
         # Domains
-        if isinstance(d, database.UniprotDomain):
+        if isinstance(d, elaspic_database.UniprotDomain):
             if d.template.model == None:   # analysis:ignore
-                d.template.model = database_tables.UniprotDomainModel()
+                d.template.model = elaspic_database_tables.UniprotDomainModel()
                 d.template.model.uniprot_domain_id = d.uniprot_domain_id
 
             d.template.model.model_filename = op.basename(
@@ -511,9 +511,9 @@ class _PrepareModel:
             )
 
         # Domain pairs
-        elif isinstance(d, database.UniprotDomainPair):
+        elif isinstance(d, elaspic_database.UniprotDomainPair):
             if d.template.model == None:   # analysis:ignore
-                d.template.model = database.UniprotDomainPairModel()
+                d.template.model = elaspic_database.UniprotDomainPairModel()
                 d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
             d.template.model.model_filename = op.basename(
                 self.model.modeller_results['model_file'])
@@ -669,9 +669,9 @@ class _PrepareMutation:
         if not mutation:
             logger.debug('Not evaluating mutations because no mutations specified...')
             self.skip = True
-        elif ((isinstance(d, database_tables.UniprotDomain) and not
+        elif ((isinstance(d, elaspic_database_tables.UniprotDomain) and not
                d.template.domain) or
-              (isinstance(d, database_tables.UniprotDomainPair) and not
+              (isinstance(d, elaspic_database_tables.UniprotDomainPair) and not
                (d.template.domain_1 and d.template.domain_2))):
             logger.debug('Skipping because no structural template is availible...')
             self.skip = True
@@ -708,14 +708,14 @@ class _PrepareMutation:
             self.skip = True
         elif precalculated_mutation:
             self.mut = precalculated_mutation
-        elif isinstance(d, database_tables.UniprotDomain):
+        elif isinstance(d, elaspic_database_tables.UniprotDomain):
             # Construct empty models that will be used if we have errors
-            self.mut = database_tables.UniprotDomainMutation()
+            self.mut = elaspic_database_tables.UniprotDomainMutation()
             self.mut.uniprot_domain_id = d.uniprot_domain_id
             self.mut.uniprot_id = self.uniprot_id
             self.mut.mutation = self.mutation
-        elif isinstance(d, database_tables.UniprotDomainPair):
-            self.mut = database_tables.UniprotDomainPairMutation()
+        elif isinstance(d, elaspic_database_tables.UniprotDomainPair):
+            self.mut = elaspic_database_tables.UniprotDomainPairMutation()
             self.mut.uniprot_domain_pair_id = d.uniprot_domain_pair_id
             self.mut.uniprot_id = self.uniprot_id
             self.mut.mutation = self.mutation
@@ -791,14 +791,14 @@ class _PrepareMutation:
         self.mut.secondary_structure_mut = results['secondary_structure_mut']
         self.mut.solvent_accessibility_mut = results['solvent_accessibility_mut']
         #
-        if isinstance(d, database_tables.UniprotDomainPair):
+        if isinstance(d, elaspic_database_tables.UniprotDomainPair):
             self.mut.analyse_complex_energy_wt = results['analyse_complex_energy_wt']
             self.mut.analyse_complex_energy_mut = results['analyse_complex_energy_mut']
             self.mut.contact_distance_wt = results['contact_distance_wt']
             self.mut.contact_distance_mut = results['contact_distance_mut']
 
         # Machine learning
-        pred = predictor.Predictor()
+        pred = elaspic_predictor.Predictor()
         row_idx = 0
         df = self.get_mutation_features(d, self.mut, row_idx=row_idx)
         self.mut.ddg = pred.score(df, mut_data.core_or_interface)
@@ -813,7 +813,7 @@ class _PrepareMutation:
         uniprot_id_1 = self.uniprot_id
         mutation = self.mutation
 
-        if isinstance(d, database.UniprotDomain):
+        if isinstance(d, elaspic_database.UniprotDomain):
             logger.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
             logger.debug('model_domain_def: {}'.format(d.template.model.model_domain_def))
             domain_start, domain_end = (
@@ -830,7 +830,7 @@ class _PrepareMutation:
                     .format(mutation, d.template.model.model_domain_def)
                 )
 
-        elif isinstance(d, database.UniprotDomainPair):
+        elif isinstance(d, elaspic_database.UniprotDomainPair):
             mutation_pos = int(mutation[1:-1])
             interacting_aa_1 = self._get_interacting_aa(d, 1)
             interacting_aa_2 = self._get_interacting_aa(d, 2)
@@ -1012,7 +1012,7 @@ PrepareMutation = execute_and_remember(_PrepareMutation)
 
 # %%
 def get_unique_id(d):
-    if isinstance(d, database_tables.UniprotDomain):
+    if isinstance(d, elaspic_database_tables.UniprotDomain):
         return ('uniprot_domain_id', d.uniprot_domain_id)
     else:
         return('uniprot_domain_pair_id', d.uniprot_domain_pair_id)

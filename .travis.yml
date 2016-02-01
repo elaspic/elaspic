@@ -4,6 +4,14 @@ python:
   - '3.5'
 services:
   - mysql
+env:
+  global:
+    - CONDA_ENV="_traivs"
+    - TEST_DIR="${HOME}/_testing"
+  matrix:
+    - TEST_SUITE='local_1'
+    - TEST_SUITE='database_1'
+    - TEST_SUITE='database_2'
 install:
   # - wget https://repo.continuum.io/archive/Anaconda3-2.4.0-Linux-x86_64.sh -O anaconda.sh;
   - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O anaconda.sh;
@@ -19,15 +27,16 @@ install:
   - conda config --add channels bioconda
   - conda info -a
   - conda update -q conda
-  - conda install -q conda-build
-  - pip install coveralls pytest-cov
+  - conda install -q --yes conda-build
+  - pip install coveralls codecov pytest-cov
   # Build elaspic
   - conda build conda/elaspic
 before_script:
   # Create a test environment
-  - conda create -n _testing elaspic --use-local -y
-  - source activate _testing
-  - conda install -q -n _testing pytest pytest-cov fake_provean fake_foldx
+  - conda create -n ${CONDA_ENV} elaspic --use-local -y
+  - source activate ${CONDA_ENV}
+  - conda install -q --yes -n ${CONDA_ENV} pytest pytest-cov
+  - conda install -q --yes -n ${CONDA_ENV} fake_provean fake_foldx
   - $TRAVIS_BUILD_DIR/scripts/configure_test.sh
   - cd ${TEST_DIR}
   - ls 
@@ -38,6 +47,7 @@ script:
   - $TEST_DIR/scripts/run_test.sh
 after_success:
   - coveralls
+  - codecov
   # travis_after_all
   - python travis_after_all.py https://api.travis-ci.com
   - export $(cat .to_export_back)
@@ -68,10 +78,3 @@ after_script:
   - echo leader=$BUILD_LEADER status=$BUILD_AGGREGATE_STATUS
   # Cleanup
   - $TEST_DIR/scripts/cleanup_test.sh
-env:
-  global:
-    - TEST_DIR="${HOME}/_testing"
-  matrix:
-    - TEST_SUITE='local_1'
-    - TEST_SUITE='database_1'
-    - TEST_SUITE='database_2'

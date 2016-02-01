@@ -11,7 +11,7 @@ import shutil
 import pytest
 import logging
 import logging.config
-from elaspic import structure_tools, sequence
+from elaspic import structure_tools, elaspic_sequence
 logger = logging.getLogger(__name__)
 
 
@@ -99,7 +99,7 @@ def get_sequence(uniprot_id, input_dir, output_dir, use_remote=True):
     # Look for PDB file in the same folder
     if not op.isfile(input_file):
         if use_remote:
-            input_file = sequence.download_uniport_sequence(uniprot_id, input_dir)
+            input_file = elaspic_sequence.download_uniport_sequence(uniprot_id, input_dir)
         else:
             raise Exception('No PDB input file found!')
 

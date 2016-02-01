@@ -399,7 +399,7 @@ class UniprotDomain(Base):
 
       path_to_data
         Location for storing homology models, mutation results, and all other data that
-        are relevant to this domain. This path is prefixed by :term:`path_to_archive`.
+        are relevant to this domain. This path is prefixed by :term:`archive_dir`.
 
     .. _SIMAP: http://liferay.csb.univie.ac.at/portal/web/simap
     """
@@ -472,7 +472,7 @@ class UniprotDomainPair(Base):
 
       path_to_data
         Location for storing homology models, mutation results, and all other data that is relevant
-        to this domain pair. This path is prefixed by :term:`path_to_archive`.
+        to this domain pair. This path is prefixed by :term:`archive_dir`.
 
     .. _Hippie: http://cbdm.mdc-berlin.de/tools/hippie/
     .. _IRefIndex: http://irefindex.org

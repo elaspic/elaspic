@@ -2,7 +2,6 @@
 
 set -ev
 
-
 # Set ${TEST_DIR}
 if [[ $CONDA_BUILD ]] ; then
     echo 'CONDA'
