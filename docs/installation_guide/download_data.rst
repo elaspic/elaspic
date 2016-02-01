@@ -1,13 +1,17 @@
-.. _download_data:
+.. _external_data:
 
 Downloading external datasets
 =============================
+
+.. _Blast:
 
 Blast
 -----
 
 Download and extract the `nr` and `pdbaa` databases from ftp://ftp.ncbi.nlm.nih.gov/blast/db/, and change the :term:`blast_db_dir` variable in your :ref:`configuration file <config_file>` to point to the directory containing the uncompressed files.
 
+
+.. _PDB:
 
 PDB
 ---

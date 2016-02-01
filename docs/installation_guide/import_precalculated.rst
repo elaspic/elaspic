@@ -1,4 +1,4 @@
-.. _import_precalculated:
+.. _precalculated_data:
 
 Importing precalculated data
 =============================

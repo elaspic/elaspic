@@ -1,7 +1,9 @@
+
 # Folders
 elaspic.egg-info
 build
 dist
+extras
 
 # Hidden files and folders
 _*
