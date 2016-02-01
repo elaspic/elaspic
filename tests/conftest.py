@@ -4,14 +4,11 @@ Created on Sat Sep 26 14:28:57 2015
 
 @author: strokach
 """
-
 import os
 import os.path as op
-import shutil
 import pytest
 import logging
 import logging.config
-from elaspic import structure_tools, elaspic_sequence
 logger = logging.getLogger(__name__)
 
 
@@ -58,54 +55,9 @@ LOGGING_CONFIGS = {
 logging.config.dictConfig(LOGGING_CONFIGS)
 
 
-# %% Functions
-PDB_URL = 'http://www.rcsb.org/pdb/files/{}.pdb'
-
-
-def get_structure(pdb_id, input_folder, output_folder, use_remote=True):
-    """Move PDB structure to the local working directory.
-    """
-    input_file = op.join(input_folder, pdb_id + '.pdb')
-    output_file = op.join(output_folder, pdb_id + '.pdb')
-
-    # If the PDB already exists, do nothing...
-    if op.isfile(output_file):
-        logger.debug('Structure file {} already exists!'.format(output_file))
-        return output_file
-
-    # Look for PDB file in the same folder
-    if not op.isfile(input_file):
-        if use_remote:
-            input_file = structure_tools.download_pdb_file(pdb_id, input_folder)
-        else:
-            raise Exception('No PDB input file found!')
-
-    logger.info('Copying {} to {}...'.format(input_file, output_file))
-    shutil.copy(input_file, output_file)
-    return output_file
-
-
-def get_sequence(uniprot_id, input_dir, output_dir, use_remote=True):
-    """Move PDB structure to the local working directory.
-    """
-    input_file = op.join(input_dir, uniprot_id + '.fasta')
-    output_file = op.join(output_dir, uniprot_id + '.fasta')
-
-    # If the PDB already exists, do nothing...
-    if op.isfile(output_file):
-        logger.debug('Sequence file {} already exists!'.format(output_file))
-        return output_file
-
-    # Look for PDB file in the same folder
-    if not op.isfile(input_file):
-        if use_remote:
-            input_file = elaspic_sequence.download_uniport_sequence(uniprot_id, input_dir)
-        else:
-            raise Exception('No PDB input file found!')
-
-    logger.info('Copying {} to {}...'.format(input_file, output_file))
-    shutil.copy(input_file, output_file)
-    return output_file
+# Config files
+DEFAULT_LOCAL_CONFIG = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
+DEFAULT_DATABASE_CONFIG = op.join(TESTS_BASE_DIR, 'test_database_pipeline.ini')
 
 
 # %% Pytest

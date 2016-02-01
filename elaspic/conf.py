@@ -17,76 +17,51 @@ logger = logging.getLogger(__name__)
 
 
 # %%
-# Dictionary of configuration values used throughout the ELASPIC pipeline
-
-class Singleton(type):
-    instance = None
-
-    def __call__(cls, *args, **kw):
-        if not cls.instance:
-            cls.instance = super(Singleton, cls).__call__(*args, **kw)
-        return cls.instance
-
-
-# %%
 class Configs:
     """A singleton class that keeps track of ELASPIC configuration settings.
     """
-    class _Configs:
-        pass
-
-    _configs = None
+    _configs = {}
 
     def __init__(self):
-        if Configs._configs is None:
-            Configs._configs = Configs._Configs()
+        self.__dict__ = Configs._configs
 
     def __getitem__(self, key):
-        return getattr(Configs._configs, key)
-
-    def __getattr__(self, key):
-        return getattr(Configs._configs, key)
+        return self.__dict__[key]
 
     def __setitem__(self, key, value):
-        setattr(Configs._configs, key, value)
-
-    def __setattr__(self, key, value):
-        setattr(Configs._configs, key, value)
-
-    def __dir__(self):
-        return sorted(set(Configs.__dict__.keys()) | set(Configs._configs.__dict__.keys()))
+        self.__dict__[key] = value
 
     def update(self, **kwargs):
-        logger.debug(
-            'The following configurations will be overwritten: {}'
-            .format(set(Configs._configs.__dict__) & set(kwargs))
-        )
-        Configs._configs.__dict__.update(kwargs)
+        self.__dict__.update(kwargs)
 
     def keys(self):
-        return Configs._configs.__dict__.keys()
+        return self.__dict__.keys()
 
     def values(self):
-        return Configs._configs.__dict__.values()
+        return self.__dict__.values()
 
     def items(self):
-        return Configs._configs.__dict__.items()
+        return self.__dict__.items()
 
     def clear(self):
-        Configs._configs = Configs._Configs
+        self.__dict__.clear()
 
     def get(self, key, fallback=None):
         try:
-            return getattr(Configs._configs, key)
-        except AttributeError:
+            return self.__dict__[key]
+        except KeyError:
             return fallback
 
     def copy(self):
-        return Configs._configs.__dict__.copy()
+        new_copy = Configs()
+        new_copy.__dict__ = self.__dict__.copy()
+        return new_copy
 
+
+# %% Process a configuration file
+configs = Configs()
 
 # %%
-configs = Configs()
 
 
 def read_configuration_file(config_file, unique_temp_dir=None):

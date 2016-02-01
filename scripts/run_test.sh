@@ -31,7 +31,7 @@ fi
 # ====== Database Test 1 ======
 if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == 'database_1' ]] ; then
 
-CONFIG_FILE="$TEST_DIR/database_1.ini"
+CONFIG_FILE="$TEST_DIR/travis_database_1.ini"
 ARCHIVE_DIR="$TEST_DIR/archive"
 mkdir -p "${ARCHIVE_DIR}"
 

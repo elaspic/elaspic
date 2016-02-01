@@ -1,26 +1,22 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import absolute_import
-from builtins import range
-from builtins import object
-
 import os
 import os.path as op
 import sys
 import shlex
 import subprocess
 import signal
-import tarfile
 import datetime
 import logging
 import time
 import json
 import string
 import fcntl
+import inspect
 
+from retrying import retry
 from functools import wraps
 from contextlib import contextmanager
+import sqlalchemy as sa
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +34,9 @@ def slugify(filename_string):
 
 # %%
 class WritableObject(object):
-    """ A class for collecting all the print statements from modeller in order
-    to redirect them to the logger later on
+    """
+    A class for collecting all the print statements from modeller in order
+    to redirect them to the logger later on.
     """
     def __init__(self, logger):
         self.logger = logger
@@ -50,7 +47,10 @@ class WritableObject(object):
 
 @contextmanager
 def log_print_statements(logger):
-    """ Channel print statements to the debug logger
+    """Channel print statements to the debug logger.
+
+    Useful for modules that default to printing things
+    instead of using a logger (Modeller...).
     """
     original_stdout = sys.stdout
     original_formatters = []
@@ -70,31 +70,19 @@ def log_print_statements(logger):
 
 
 # %%
-def get_path_to_current_file():
-    """ Find the location of the file that is being executed
+def configure_logger(
+        logger, do_debug=True, logger_filename=None,
+        formatter='%(asctime)s [%(levelname)s] %(name)s: %(message)s'):
+    """Standard logger configuration, with optional tee to a file.
     """
-    encoding = sys.getfilesystemencoding()
-    if hasattr(sys, "frozen"):
-        # All of the modules are built-in to the interpreter, e.g., by py2exe
-        return op.dirname(str(sys.executable, encoding))
-    else:
-        return op.dirname(str(__file__, encoding))
-
-
-def get_logger(do_debug=True, logger_filename=None):
-    global logger
-    if logger is not None:
-        return logger
-    import logging
-    # Initialize logger
-    logger = logging.getLogger(__name__)
     if do_debug:
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
+        formatter = '%(message)s'
     logger.handlers = []
     # Initialize formatter
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(formatter)
     # Initialize streamhandler
     sh = logging.StreamHandler()
     sh.setFormatter(formatter)
@@ -107,8 +95,11 @@ def get_logger(do_debug=True, logger_filename=None):
     return logger
 
 
-def make_tarfile(output_filename, source_dir):
-    with tarfile.open(output_filename, "w:bz2") as tar:
+def make_tarfile(source_dir, output_filename):
+    """Compress folder into a `*.tar.gz` file.
+    """
+    import tarfile
+    with tarfile.open(output_filename, "w:gz") as tar:
         tar.add(source_dir, arcname=op.basename(source_dir))
 
 
@@ -222,8 +213,61 @@ def kill_child_process(child_process):
     print('OK')
 
 
-# %%
-# ##############################################################################
+# %% Retrying
+def check_exception(exc, valid_exc):
+    logger.error('The following exception occured:\n{}'.format(exc))
+    to_retry = isinstance(exc, valid_exc)
+    if to_retry:
+        logger.error('Retrying...')
+    return to_retry
+
+
+def retry_database(fn):
+    """Decorator to keep probing the database untill you succeed.
+    """
+    r = retry(
+        retry_on_exception=lambda exc:
+            check_exception(exc, valid_exc=sa.exc.OperationalError),
+        wait_exponential_multiplier=1000,
+        wait_exponential_max=60000,
+        stop_max_attempt_number=7)
+    return r(fn)
+
+
+class Archive7zipError(Exception):
+    def __init__(self, result, error_message, return_code):
+        super(Archive7zipError, self).__init__(result)
+        self.error_message = error_message
+        self.return_code = return_code
+
+
+class Archive7zipFileNotFoundError(Archive7zipError):
+    pass
+
+
+def retry_archive(fn):
+    """Decorator to keep probing the database untill you succeed.
+    """
+    r = retry(
+        retry_on_exception=lambda exc:
+            check_exception(exc, valid_exc=Archive7zipError),
+        wait_fixed=2000,
+        stop_max_attempt_number=2)
+    return r(fn)
+
+
+def decorate_all_methods(decorator):
+    """Decorate all methods of a class with `decorator`.
+    """
+    def apply_decorator(cls):
+        for k, f in cls.__dict__.items():
+            if inspect.isfunction(f):
+                setattr(cls, k, decorator(f))
+        return cls
+    return apply_decorator
+
+
+# %% Subprocess
 # The two functions below can be used to set the subproces group id to the same
 # value as the parent process group id. This is a simple way of ensuring that
 # all the child processes are terminated when the parent quits, but it makes
@@ -264,7 +308,7 @@ def run_subprocess_locally(working_path, system_command, **popen_argvars):
 
 
 def subprocess_communicate(child_process):
-    with print_heartbeets():
+    with print_heartbeats():
         result, error_message = child_process.communicate()
     result = _try_decoding_bytes_string(result)
     error_message = _try_decoding_bytes_string(error_message)
@@ -283,9 +327,11 @@ def subprocess_check_output_locally(working_path, system_command, **popen_argvar
 
 
 @contextmanager
-def print_heartbeets():
-    # Spawn a fork that prints a message every minute
-    # (This is required for travis-ci)
+def print_heartbeats():
+    """
+    Spawn a fork that prints a message every minute.
+    (This is required for travis-ci).
+    """
     pid = os.fork()
     if pid == 0:
         while True:
@@ -299,7 +345,7 @@ def print_heartbeets():
         os.waitpid(pid, 0)
 
 
-# %% Function-level locking
+# %% Function-level locking.
 @contextmanager
 def get_lock(name):
     lock = None

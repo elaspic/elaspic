@@ -15,7 +15,6 @@ import time
 import pickle
 import six
 import logging
-import inspect
 import shutil
 
 from contextlib import contextmanager
@@ -23,13 +22,10 @@ from contextlib import contextmanager
 import pandas as pd
 import sqlalchemy as sa
 
-from retrying import retry
 from Bio import SeqIO
 from Bio import AlignIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-
-# import parse_pfamscan
 
 from . import helper, errors, conf, elaspic_sequence
 from .elaspic_database_tables import (
@@ -44,49 +40,6 @@ standard_library.install_aliases()
 
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
-
-
-# %% Retrying
-def check_exception(exc, valid_exc):
-    logger.error('The following exception occured:\n{}'.format(exc))
-    to_retry = isinstance(exc, valid_exc)
-    if to_retry:
-        logger.error('Retrying...')
-    return to_retry
-
-
-def retry_database(fn):
-    """Decorator to keep probing the database untill you succeed.
-    """
-    r = retry(
-        retry_on_exception=lambda exc:
-            check_exception(exc, valid_exc=sa.exc.OperationalError),
-        wait_exponential_multiplier=1000,
-        wait_exponential_max=60000,
-        stop_max_attempt_number=7)
-    return r(fn)
-
-
-def retry_archive(fn):
-    """Decorator to keep probing the database untill you succeed.
-    """
-    r = retry(
-        retry_on_exception=lambda exc:
-            check_exception(exc, valid_exc=errors.Archive7zipError),
-        wait_fixed=2000,
-        stop_max_attempt_number=2)
-    return r(fn)
-
-
-def decorate_all_methods(decorator):
-    """Decorate all methods of a class with `decorator`.
-    """
-    def apply_decorator(cls):
-        for k, f in cls.__dict__.items():
-            if inspect.isfunction(f):
-                setattr(cls, k, decorator(f))
-        return cls
-    return apply_decorator
 
 
 # %%
@@ -393,7 +346,7 @@ class MyDatabase(object):
             raise Exception("Unsupported database type: '{}'".format(cmd_options['db_type']))
 
     # %% Get objects from the database
-    @retry_database
+    @helper.retry_database
     def get_rows_by_ids(self, row_object, row_object_identifiers, row_object_identifier_values):
         """ Get the rows from the table *row_object* identified by keys
         *row_object_identifiers* with values *row_object_identifier_values*
@@ -427,7 +380,7 @@ class MyDatabase(object):
                     .all())
             return row_instances
 
-    @retry_database
+    @helper.retry_database
     def get_domain(self, pfam_names, subdomains=False):
         """
         Returns pdbfam-based definitions of all pfam domains in the pdb.
@@ -460,7 +413,7 @@ class MyDatabase(object):
             logger.debug('No domain definitions found for pfam: %s' % str(pfam_names))
         return list(domain_set)
 
-    @retry_database
+    @helper.retry_database
     def get_domain_contact(self, pfam_names_1, pfam_names_2, subdomains=False):
         """
         Returns domain-domain interaction information from pdbfam.
@@ -526,7 +479,7 @@ class MyDatabase(object):
                 domain_contact_set.update(domain_contact)
         return list(domain_contact_set)
 
-    @retry_database
+    @helper.retry_database
     def get_uniprot_domain(self, uniprot_id, copy_data=False):
         """
         """
@@ -575,7 +528,7 @@ class MyDatabase(object):
 
         return uniprot_domains
 
-    @retry_database
+    @helper.retry_database
     def get_uniprot_domain_pair(self, uniprot_id, copy_data=False, uniprot_domain_pair_ids=[]):
         """
         """
@@ -812,7 +765,7 @@ class MyDatabase(object):
                 get_uniprot_base_path(ud),
                 ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'))
 
-    @retry_archive
+    @helper.retry_archive
     def _extract_files_from_7zip(self, path_to_7zip, filenames):
         """Extract files to `config['archive_temp_dir']`
         """
@@ -828,12 +781,12 @@ class MyDatabase(object):
         )
 
         if 'No files to process' in result:
-            raise errors.Archive7zipFileNotFoundError(result, error_message, return_code)
+            raise helper.Archive7zipFileNotFoundError(result, error_message, return_code)
 
         if return_code:
-            raise errors.Archive7zipError(result, error_message, return_code)
+            raise helper.Archive7zipError(result, error_message, return_code)
 
-    @retry_database
+    @helper.retry_database
     def get_uniprot_mutation(self, d, mutation, uniprot_id=None, copy_data=False):
         """
         """
@@ -897,7 +850,7 @@ class MyDatabase(object):
                     op.join(archive_save_path, mutation.model_filename_mut),
                     op.join(tmp_save_path, mutation.model_filename_mut))
 
-    @retry_database
+    @helper.retry_database
     def remove_model(self, d):
         """Remove a model from the database.
 
@@ -933,7 +886,7 @@ class MyDatabase(object):
                 raise Exception("'d' is of incorrect type!")
 
     # %% Add objects to the database
-    @retry_database
+    @helper.retry_database
     def merge_row(self, row_instance):
         """Adds a list of rows (`row_instances`) to the database.
         """
@@ -1034,7 +987,7 @@ class MyDatabase(object):
         self.merge_row(mut)
 
     # %%
-    @retry_database
+    @helper.retry_database
     def get_uniprot_sequence(self, uniprot_id, check_external=True):
         """
         Parameters
@@ -1100,7 +1053,7 @@ class MyDatabase(object):
 
         return uniprot_seqrecord
 
-    @retry_database
+    @helper.retry_database
     def add_uniprot_sequence(self, uniprot_sequence):
         """ Add new sequences to the database.
         :param uniprot_sequence: UniprotSequence object
@@ -1110,7 +1063,7 @@ class MyDatabase(object):
             session.add(uniprot_sequence)
 
     # %% Domain and domain contact
-    @retry_database
+    @helper.retry_database
     def add_domain(self, d):
         with self.session_scope() as session:
             if isinstance(d, Domain):
@@ -1128,7 +1081,7 @@ class MyDatabase(object):
                     .update({DomainContact.domain_contact_errors: d.domain_contact_errors})
                 )
 
-    @retry_database
+    @helper.retry_database
     def add_domain_errors(self, t, error_string):
         with self.session_scope() as session:
             if isinstance(t, UniprotDomain):

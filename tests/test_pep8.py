@@ -23,4 +23,4 @@ def test_pep8_conformance():
 
 
 if __name__ == '__main__':
-    pytest.main(['test_pep8.py', '-sv'])
+    pytest.main([__file__, '-svx'])

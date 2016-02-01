@@ -18,8 +18,6 @@ equivalent to the ``$PYTHONPATH`` variable in bash):
         for c in sys.path
     ]
     import modeller
-
-
 """
 # %%
 from __future__ import unicode_literals
@@ -34,44 +32,16 @@ from contextlib import contextmanager
 import logging
 import logging.config
 
-from elaspic import conf
+from elaspic import conf, helper
 
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
 
 
 # %%
-def configure_logger():
-    level = 'DEBUG' if configs['debug'] else 'INFO'
-
-    LOGGING_CONFIGS = {
-        'version': 1,
-        'disable_existing_loggers': False,  # this fixes the problem
-
-        'formatters': {
-            'standard': {
-                'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-            },
-            'clean': {
-                'format': '%(message)s',
-            },
-        },
-        'handlers': {
-            'default': {
-                'level': level,
-                'class': 'logging.StreamHandler',
-                'formatter': 'standard',
-            },
-        },
-        'loggers': {
-            '': {
-                'handlers': ['default'],
-                'level': 'DEBUG',
-                'propagate': True
-            }
-        }
-    }
-    logging.config.dictConfig(LOGGING_CONFIGS)
+helper.configure_logger(
+    logger, do_debug=configs.get('debug', True),
+    formatter='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 
 
 # %% ELASPIC RUN
@@ -129,7 +99,7 @@ def elaspic(args):
 
     if args.input_file:
         conf.read_configuration_file(args.config_file)
-        configure_logger()
+        helper.configure_logger(logger, do_debug=configs['debug'])
         # Run database pipeline for each row in file
         from elaspic import database_pipeline
         for uniprot_id, mutations, uniprot_domain_pair_id in \
@@ -141,7 +111,7 @@ def elaspic(args):
             pipeline.run()
     elif args.uniprot_id:
         conf.read_configuration_file(args.config_file)
-        configure_logger()
+        helper.configure_logger(logger, do_debug=configs['debug'])
         # Run database pipeline
         if args.uniprot_domain_pair_ids:
             logger.debug('uniprot_domain_pair_ids: {}'.format(args.uniprot_domain_pair_ids))
@@ -160,7 +130,7 @@ def elaspic(args):
         pipeline.run()
     elif args.structure_file:
         conf.read_configuration_file(args.config_file, unique_temp_dir=os.getcwd())
-        configure_logger()
+        helper.configure_logger(logger, do_debug=configs['debug'])
         # Run local pipeline
         from elaspic import local_pipeline
         pipeline = local_pipeline.LocalPipeline(

@@ -4,13 +4,13 @@ Created on Sat Sep 26 13:39:23 2015
 
 @author: strokach
 """
-import os.path as op
 import logging
 import pytest
-from elaspic import (
-    conf, elaspic_sequence, structure_tools, local_pipeline
-)
-from conftest import TESTS_BASE_DIR
+
+from elaspic import conf, helper
+
+from conftest import DEFAULT_LOCAL_CONFIG as CONFIG_FILE
+import helper_fns
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
     CONFIG_FILE = (
-        pytest.config.getoption('--config-file') or
-        op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
+        pytest.config.getoption('--config-file') or CONFIG_FILE
     )
 else:
     QUICK = False
-    CONFIG_FILE = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
 
+helper.configure_logger(logger)
+conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=None)
 
 logger.debug('Running quick: {}'.format(QUICK))
 logger.debug('Config file: {}'.format(CONFIG_FILE))
@@ -37,8 +37,8 @@ pdb_mutatations = {
     # test_1; only one chain
     '3M7R': {
         'A': [
-             'I271A',  # core
-             'Y401A',  # core
+            'I271A',  # core
+            'Y401A',  # core
         ]
     },
     # test_2; this one has three symetric chains
@@ -168,47 +168,15 @@ def pdb_id_sequence(request):
     return request.param
 
 
-# %%
 def test_pdb_mutation_pipeline(pdb_id):
-    working_dir = None  # can set to something if don't want to rerun entire pipeline
-    conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=working_dir)
-    configs = conf.Configs()
-    pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
-    for chain_id in pdb_mutatations[pdb_id]:
-        for mutation in pdb_mutatations[pdb_id][chain_id]:
-            mutation_pdb = '{}_{}'.format(chain_id, mutation)
-            lp = local_pipeline.LocalPipeline(
-                pdb_file, mutations=mutation_pdb)
-            lp.run_all_sequences()
-            lp.run_all_models()
-            lp.run_all_mutations()
+    return helper_fns.run_pdb_mutation_pipeline(pdb_id, pdb_mutatations)
 
 
-def test_sequence_mutation_pipeline(pdb_id_sequence, working_dir=None):
-    """
-    Parameters
-    ----------
-    pdb_id_sequence : tuple
-        (pdb_id, uniprot_id)
-    working_dir : str, optional
-        `unique_temp_dir` to use for this run.
-        (Useful if you want to resume a previous job).
-    """
-    pdb_id, sequence_id = pdb_id_sequence
-    conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=working_dir)
-    configs = conf.Configs()
-    pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
-    sequence_file = elaspic_sequence.download_uniport_sequence(sequence_id, configs['unique_temp_dir'])
-    for chain_pos in sequence_mutations[pdb_id_sequence]:
-        for mutation in sequence_mutations[pdb_id_sequence][chain_pos]:
-            mutation_sequence = '{}_{}'.format(chain_pos, mutation)
-            lp = local_pipeline.LocalPipeline(
-                pdb_file, sequence_file, mutations=mutation_sequence)
-            lp.run_all_sequences()
-            lp.run_all_models()
-            lp.run_all_mutations()
+def test_sequence_mutation_pipeline(pdb_id_sequence):
+    return helper_fns.run_sequence_mutation_pipeline(pdb_id_sequence, sequence_mutations,)
 
 
 # %%
 if __name__ == '__main__':
-    test_sequence_mutation_pipeline(('2Z5Y', 'Q5NU32'), working_dir='/tmp/elaspic/nm9omiv6')
+    import pytest
+    pytest.main([__file__, '-svx', '--quick'])

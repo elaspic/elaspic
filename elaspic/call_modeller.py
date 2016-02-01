@@ -185,7 +185,7 @@ class Modeller(object):
 
             a.max_molpdf = 2e5
 
-        with helper.print_heartbeets():
+        with helper.print_heartbeats():
             with helper.log_print_statements(logger):
                 a.make()  # do the actual homology modeling
 
