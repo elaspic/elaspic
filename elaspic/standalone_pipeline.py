@@ -28,7 +28,7 @@ domain_mutation = None
 
 
 # %%
-class LocalPipeline(Pipeline):
+class StandalonePipeline(Pipeline):
 
     def __init__(
             self, structure_file, sequence_file=None, mutations=None, configurations=None,

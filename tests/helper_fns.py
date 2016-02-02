@@ -86,7 +86,7 @@ def run_pdb_mutation_pipeline(
     for chain_id in pdb_mutatations[pdb_id]:
         for mutation in pdb_mutatations[pdb_id][chain_id]:
             mutation_pdb = '{}_{}'.format(chain_id, mutation)
-            lp = standalone_pipeline.LocalPipeline(
+            lp = standalone_pipeline.StandalonePipeline(
                 pdb_file, mutations=mutation_pdb)
             lp.run_all_sequences()
             lp.run_all_models()
@@ -113,7 +113,7 @@ def run_sequence_mutation_pipeline(
     for chain_pos in sequence_mutations[pdb_id_sequence]:
         for mutation in sequence_mutations[pdb_id_sequence][chain_pos]:
             mutation_sequence = '{}_{}'.format(chain_pos, mutation)
-            lp = standalone_pipeline.LocalPipeline(
+            lp = standalone_pipeline.StandalonePipeline(
                 pdb_file, sequence_file, mutations=mutation_sequence)
             lp.run_all_sequences()
             lp.run_all_models()
