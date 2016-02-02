@@ -1,5 +1,4 @@
 """
-
 TODO: The model object has two serialization steps:
     1. Inside the modeller class to save modeller results.
     2. In the local_pipeline to save all results.
@@ -13,7 +12,10 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from . import conf, helper, errors, structure_tools, structure_analysis, elaspic_sequence, elaspic_model, elaspic_predictor
+from . import (
+    conf, helper, errors, structure_tools, structure_analysis, elaspic_sequence,
+    elaspic_model, elaspic_predictor
+)
 from .pipeline import Pipeline, execute_and_remember
 
 logger = logging.getLogger(__name__)

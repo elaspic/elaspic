@@ -306,7 +306,7 @@ def convert_position_to_resid(chain, positions, domain_def_tuple=None):
         chain, domain_def_tuple)
     logger.debug('chain_numbering: {}'.format(chain_numbering))
     logger.debug('positions: {}'.format(positions))
-    return [chain_numbering[p-1] for p in positions]
+    return [chain_numbering[p - 1] for p in positions]
 
 
 def get_structure_sequences(file_or_structure, seqres_sequence=False):

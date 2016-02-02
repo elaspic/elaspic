@@ -171,13 +171,8 @@ def read_model_configs(configParser):
 def read_logger_configs(configParser):
     """Standard logger configuration, with optional tee to a file.
     """
-
     default_level = 'DEBUG'
     default_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    new_format = configParser.get('LOGGER', 'format')
-
-    print(default_format)
-    print(new_format)
     LOGGING_CONFIGS = {
         'version': 1,
         'disable_existing_loggers': False,

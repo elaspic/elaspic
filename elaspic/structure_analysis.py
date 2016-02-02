@@ -1,23 +1,10 @@
 # -*- coding: utf-8 -*-
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import absolute_import
-from builtins import zip
-from builtins import object
-
 import os
 import os.path as op
 import time
-import subprocess
 import logging
-from collections import OrderedDict
 
-import six
 import pandas as pd
-
-from Bio.PDB import PDBIO
-from Bio.PDB.PDBParser import PDBParser
 
 from . import errors, helper, structure_tools
 
@@ -51,7 +38,9 @@ ATOM S   2  VAL  151.44   0.0 114.28   0.0   0.00   0.0 114.28   0.0  37.16   0.
 ATOM S   2  TRP  249.36   0.0 187.67   0.0  23.60   0.0 211.26   0.0  38.10   0.0 189.67   0.0  59.69   0.0
 ATOM S   2  TYR  212.76   0.0 135.35   0.0  42.03   0.0 177.38   0.0  35.38   0.0 136.50   0.0  76.26   0.0
 """
-STANDARD_SASA_ALL = [[l.strip() for l in line.split()] for line in STANDARD_DATA.strip().split('\n')[1:]]
+STANDARD_SASA_ALL = [
+    [l.strip() for l in line.split()] for line in STANDARD_DATA.strip().split('\n')[1:]
+]
 STANDARD_SASA = {x[3]: float(x[4]) for x in STANDARD_SASA_ALL}
 
 
@@ -78,14 +67,11 @@ class AnalyzeStructure(object):
 
         self.chain_ids = self.sp.chain_ids
 
-
     def _prepare_temp_folder(self, temp_folder):
         # ./analyze_structure
         os.makedirs(temp_folder, exist_ok=True)
 
-
-
-    #%%
+    # %%
     def __call__(self, chain_id, mutation, chain_id_other=None):
         """Calculate all properties.
         """
@@ -138,21 +124,18 @@ class AnalyzeStructure(object):
 
         # Compile results
         results = dict(
-            solvent_accessibility = solvent_accessibility,
-            secondary_structure = secondary_structure,
-            contact_distance = contact_distance,
-            physchem = physchem,
-            physchem_ownchain = physchem_ownchain,
+            solvent_accessibility=solvent_accessibility,
+            secondary_structure=secondary_structure,
+            contact_distance=contact_distance,
+            physchem=physchem,
+            physchem_ownchain=physchem_ownchain,
         )
         return results
-
 
     def get_structure_file(self, chains, ext='.pdb'):
         return op.join(self.working_dir, self.sp.pdb_id + chains + ext)
 
-
-
-    #%%
+    # %%
     def get_physi_chem(self, chain_id, mutation):
         """
         Return the atomic contact vector, that is, counting how many interactions
@@ -169,7 +152,7 @@ class AnalyzeStructure(object):
         """
         model = self.sp.structure[0]
         mutated_chain = model[chain_id]
-        opposite_chains = [ chain for chain in model.child_list if chain.id != chain_id ]
+        opposite_chains = [chain for chain in model.child_list if chain.id != chain_id]
         main_chain_atoms = ['CA', 'C', 'N', 'O']
 
         # Find the mutated residue (assuming mutation is in index coordinates)
@@ -231,7 +214,6 @@ class AnalyzeStructure(object):
 
         return opposite_chain_contact_vector, same_chain_contact_vector
 
-
     def _validate_mutation(self, resname, mutation):
         valid_aa = [mutation[0].upper(), mutation[-1].upper()]
         if structure_tools.AAA_DICT.get(resname, resname) not in valid_aa:
@@ -239,7 +221,6 @@ class AnalyzeStructure(object):
             logger.error(mutation)
             logger.error(structure_tools.AAA_DICT[resname])
             raise errors.MutationMismatchError()
-
 
     def _increment_vector(
             self, mutated_residue, mutated_atoms, partner_residue, contact_features_dict):
@@ -249,7 +230,7 @@ class AnalyzeStructure(object):
             # And each partner residue and partner atom
             for partner_atom in partner_residue:
                 r = structure_tools.calculate_distance(
-                        mutated_atom, partner_atom, self.vdw_distance)
+                    mutated_atom, partner_atom, self.vdw_distance)
                 if r is not None:
                     partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
                     if partner_atom_type == 'ignore':
@@ -259,23 +240,37 @@ class AnalyzeStructure(object):
                         # nonredundant. Thus, the atomic coordinates are
                         # used to keep track of which interactions where
                         # already counted. Does not matter as much for others.
-                        contact_features_dict['carbon_contact'].append(tuple(partner_atom.coord))
+                        contact_features_dict['carbon_contact'].append(
+                            tuple(partner_atom.coord))
                     if r <= self.min_contact_distance:
-                        if mutated_atom_type == 'charged_plus' and partner_atom_type == 'charged_plus':
-                            contact_features_dict['equal_charge'].append(tuple(mutated_atom.coord))
-                        if mutated_atom_type == 'charged_minus' and partner_atom_type == 'charged_plus':
-                            contact_features_dict['opposite_charge'].append(tuple(mutated_atom.coord))
-                        if mutated_atom_type == 'charged_plus' and partner_atom_type == 'charged_minus':
-                            contact_features_dict['opposite_charge'].append(tuple(mutated_atom.coord))
-                        if mutated_atom_type == 'charged_minus' and partner_atom_type == 'charged_minus':
-                            contact_features_dict['equal_charge'].append(tuple(mutated_atom.coord))
-                        if mutated_atom_type == 'charged' and partner_atom_type == 'polar':
-                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
-                        if mutated_atom_type == 'polar' and partner_atom_type == 'charged':
-                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
-                        if mutated_atom_type == 'polar' and partner_atom_type == 'polar':
-                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
-
+                        if (mutated_atom_type == 'charged_plus' and
+                                partner_atom_type == 'charged_plus'):
+                            contact_features_dict['equal_charge'].append(
+                                tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'charged_minus' and
+                                partner_atom_type == 'charged_plus'):
+                            contact_features_dict['opposite_charge'].append(
+                                tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'charged_plus' and
+                                partner_atom_type == 'charged_minus'):
+                            contact_features_dict['opposite_charge'].append(
+                                tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'charged_minus' and
+                                partner_atom_type == 'charged_minus'):
+                            contact_features_dict['equal_charge'].append(
+                                tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'charged' and
+                                partner_atom_type == 'polar'):
+                            contact_features_dict['h_bond'].append(
+                                tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'polar' and
+                                partner_atom_type == 'charged'):
+                            contact_features_dict['h_bond'].append(
+                                tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'polar' and
+                                partner_atom_type == 'polar'):
+                            contact_features_dict['h_bond'].append(
+                                tuple(mutated_atom.coord))
 
     def _get_atom_type(self, residue, atom):
         """
@@ -288,11 +283,14 @@ class AnalyzeStructure(object):
         at, and hence, one can determine which "interaction" two atoms are forming.
         """
         # This is based on the naming convention for the atoms in crystalography
-        charged_plus  = ['NH1', 'NH2', 'NZ']
+        charged_plus = ['NH1', 'NH2', 'NZ']
         # Label of negatively charged atoms
         charged_minus = ['OD1', 'OD2', 'OE1', 'OE2']
         # Label of polar atoms
-        polar = ['OG', 'OG1', 'OD1', 'OD2', 'ND1', 'OE1', 'NE', 'NE1', 'NE2', 'ND1', 'ND2', 'SG', 'OH', 'O', 'N']
+        polar = [
+            'OG', 'OG1', 'OD1', 'OD2', 'ND1', 'OE1', 'NE', 'NE1', 'NE2', 'ND1', 'ND2', 'SG',
+            'OH', 'O', 'N'
+        ]
 
         if residue.upper() in ['ARG', 'R', 'LYS', 'K']:
             if atom.name in charged_plus:
@@ -310,8 +308,7 @@ class AnalyzeStructure(object):
 
         return 'ignore'
 
-
-    #%% SASA New
+    # %% SASA New
     def get_seasa(self):
         structure_file = self.get_structure_file(''.join(self.chain_ids))
         seasa_by_chain, seasa_by_residue = self._run_msms(structure_file)
@@ -325,10 +322,12 @@ class AnalyzeStructure(object):
                 seasa_by_residue_separately.append(seasa_by_residue)
             seasa_by_chain_separately = pd.concat(seasa_by_chain_separately, ignore_index=True)
             seasa_by_residue_separately = pd.concat(seasa_by_residue_separately, ignore_index=True)
-            return [seasa_by_chain, seasa_by_chain_separately, seasa_by_residue, seasa_by_residue_separately]
+            return [
+                seasa_by_chain, seasa_by_chain_separately, seasa_by_residue,
+                seasa_by_residue_separately
+            ]
         else:
             return [None, seasa_by_chain, None, seasa_by_residue]
-
 
     def _run_msms(self, filename):
         """ In the future, could add an option to measure residue depth
@@ -364,7 +363,9 @@ class AnalyzeStructure(object):
             '-surface ases '
             '-if {0}.xyzrn '
             '-af {0}.area')
-        system_command = system_command_string.format(op.join(self.working_dir, base_filename), probe_radius)
+        system_command = (
+            system_command_string.format(op.join(self.working_dir, base_filename), probe_radius)
+        )
         logger.debug('msms system command 2: %s' % system_command)
         result, error_message, return_code = (
             helper.subprocess_check_output_locally(self.working_dir, system_command)
@@ -374,7 +375,9 @@ class AnalyzeStructure(object):
             logger.error('MSMS exited with an error!')
             probe_radius -= 0.1
             logger.debug('Reducing probe radius to {}'.format(probe_radius))
-            system_command = system_command_string.format(op.join(self.working_dir, base_filename), probe_radius)
+            system_command = system_command_string.format(
+                op.join(self.working_dir, base_filename), probe_radius
+            )
             result, error_message, return_code = (
                 helper.subprocess_check_output_locally(self.working_dir, system_command)
             )
@@ -391,12 +394,15 @@ class AnalyzeStructure(object):
         # Read and parse the output
         with open(op.join(self.working_dir, base_filename + '.area'), 'r') as fh:
             file_data = fh.readlines()
-        file_data = [ [l.strip() for l in line.split()] for line in file_data]
+        file_data = [
+            [l.strip() for l in line.split()] for line in file_data
+        ]
         del file_data[0]
 
         msms_columns = [
             'atom_num', 'abs_sesa', 'abs_sasa', 'atom_id', 'res_name', 'res_num', 'pdb_chain'
         ]
+
         def msms_parse_row(row):
             parsed_row = [
                 int(row[0]), float(row[1]), float(row[2]),
@@ -422,8 +428,7 @@ class AnalyzeStructure(object):
 
         return seasa_by_chain, seasa_by_residue
 
-
-    #%% SASA Old
+    # %% SASA Old
     def get_sasa(self, program_to_use='pops'):
         """Get Solvent Accessible Surface Area scores.
 
@@ -443,7 +448,6 @@ class AnalyzeStructure(object):
             sasa_score_splitchains.update(run_sasa_atom(chain_id + '.pdb'))
         sasa_score_allchains = run_sasa_atom(''.join(self.chain_ids) + '.pdb')
         return [sasa_score_splitchains, sasa_score_allchains]
-
 
     def _run_naccess_atom(self, filename):
         """
@@ -469,34 +473,41 @@ class AnalyzeStructure(object):
                     continue
                 try:
                     (line_id, res, chain, num, all_abs, all_rel,
-                    sidechain_abs, sidechain_rel, mainchain_abs, mainchain_rel,
-                    nonpolar_abs, nonpolar_rel, polar_abs, polar_rel) = row
+                     sidechain_abs, sidechain_rel, mainchain_abs, mainchain_rel,
+                     nonpolar_abs, nonpolar_rel, polar_abs, polar_rel) = row
                 except ValueError as e:
                     print(e)
                     print(line)
                     print(row)
-                sasa_scores.setdefault(chain, []).append(sidechain_rel) # percent sasa on sidechain
+                # percent sasa on sidechain
+                sasa_scores.setdefault(chain, []).append(sidechain_rel)
         return sasa_scores
-
 
     def _run_pops_atom(self, chain_id):
         # Use pops to calculate sasa score for the given chain
         termination, rc, e = self.__run_pops_atom(chain_id)
         if termination != 'Clean termination':
-            logger.error('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
-            logger.error(e)
+            logger.warning(
+                'Pops error for pdb: %s, chains: %s: ' %
+                (self.pdb_file, ' '.join(self.chain_ids))
+            )
+            logger.warning(e)
             raise errors.PopsError(e, self.pdb_file, self.chain_ids)
         else:
-            logger.warning('Pops error for pdb: %s, chains: %s: ' % (self.pdb_file, ' '.join(self.chain_ids),) )
+            logger.warning(
+                'Pops error for pdb: %s, chains: %s: ' %
+                (self.pdb_file, ' '.join(self.chain_ids),)
+            )
             logger.warning(e)
 
         # Read the sasa scores from a text file
         sasa_scores = self.__read_pops_atom(chain_id)
         return sasa_scores
 
-
     def __run_pops_atom(self, chain_id):
-        system_command = ('pops --noHeaderOut --noTotalOut --atomOut --pdb {0}.pdb --popsOut {0}.out'.format(chain_id))
+        system_command = (
+            'pops --noHeaderOut --noTotalOut --atomOut --pdb {0}.pdb --popsOut {0}.out'
+            .format(chain_id))
         result, error_message, return_code = (
             helper.subprocess_check_output_locally(self.working_dir, system_command)
         )
@@ -505,9 +516,8 @@ class AnalyzeStructure(object):
         # to the output. Hence this check:
         # if output[-1] == 'Clean termination' the run should be OK
         logger.debug('result: %s' % result)
-        output = [ line for line in result.split('\n') if line != '' ]
+        output = [line for line in result.split('\n') if line != '']
         return output[-1], return_code, error_message
-
 
     def __read_pops_atom(self, chain_id):
         """
@@ -517,14 +527,16 @@ class AnalyzeStructure(object):
         ignore = ['N', 'C', 'O']
         per_residue_sasa_scores = []
         current_residue_number = None
-        total_sasa, total_sa = None, None # so pylint stops complaining
+        total_sasa, total_sa = None, None  # so pylint stops complaining
         with open(self.working_dir + chain_id + '.out', 'r') as fh:
             for line in fh:
                 row = line.split()
                 if len(row) != 11:
                     continue
-                atom_number, atom_name, residue_name, chain, residue_number, sasa, __, __, __, __, sa = line.split()
-                atom_number, residue_number, sasa, sa = int(atom_number), int(residue_number), float(sasa), float(sa)
+                (atom_number, atom_name, residue_name, chain, residue_number, sasa,
+                 __, __, __, __, sa) = line.split()
+                atom_number, residue_number, sasa, sa = (
+                    int(atom_number), int(residue_number), float(sasa), float(sa))
                 if atom_name in ignore:
                     continue
                 if current_residue_number != residue_number:
@@ -538,11 +550,9 @@ class AnalyzeStructure(object):
             per_residue_sasa_scores.append(total_sasa / float(total_sa))
         return per_residue_sasa_scores
 
-
-    #%% Secondary Structure
+    # %% Secondary Structure
     def get_secondary_structure(self):
         return self.get_stride()
-
 
     def get_stride(self):
         structure_file = self.get_structure_file(''.join(self.chain_ids))
@@ -563,10 +573,9 @@ class AnalyzeStructure(object):
             file_data_df = pd.DataFrame(
                 [[structure_tools.AAA_DICT[row.split()[1]], row.split()[2],
                   row.split()[3], int(row.split()[4]), row.split()[5]]
-                for row in fh.readlines() if row[:3] == 'ASG'],
+                 for row in fh.readlines() if row[:3] == 'ASG'],
                 columns=['amino_acid', 'chain', 'resnum', 'idx', 'ss_code'])
         return file_data_df
-
 
     def get_dssp(self):
         """Not used because crashes on server.
@@ -577,7 +586,8 @@ class AnalyzeStructure(object):
             if n_tries > 0:
                 logger.debug('Waiting for 1 minute before trying again...')
                 time.sleep(60)
-            system_command = ('dssp -v -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
+            system_command = (
+                'dssp -v -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
             logger.debug('dssp system command: %s' % system_command)
             result, error_message, return_code = (
                 helper.subprocess_check_output_locally(self.working_dir, system_command)
@@ -601,20 +611,20 @@ class AnalyzeStructure(object):
                 if not row or len(row) < 2:
                     continue
                 if row[1] == "RESIDUE":
-                    start = True # Start parsing from here
+                    start = True  # Start parsing from here
                     continue
                 if not start:
                     continue
                 if l[9] == ' ':
-                    continue # Skip -- missing residue
+                    continue  # Skip -- missing residue
                 # resseq, icode, chainid, aa, ss = int(l[5:10]), l[10], l[11], l[13], l[16]
                 chainid, ss = l[11], l[16]
                 if ss == ' ':
                     ss = '-'
                 try:
                     acc = int(l[34:38])
-                    #phi = float(l[103:109])
-                    #psi = float(l[109:115])
+                    # phi = float(l[103:109])
+                    # psi = float(l[109:115])
                 except ValueError as e:
                     # DSSP output breaks its own format when there are >9999
                     # residues, since only 4 digits are allocated to the seq num
@@ -623,19 +633,18 @@ class AnalyzeStructure(object):
                     # digits, and shift parsing the rest of the line by that amount.
                     if l[34] != ' ':
                         shift = l[34:].find(' ')
-                        acc = int((l[34+shift:38+shift]))
-                        #phi = float(l[103+shift:109+shift])
-                        #psi = float(l[109+shift:115+shift])
+                        acc = int((l[34 + shift:38 + shift]))
+                        # phi = float(l[103+shift:109+shift])
+                        # psi = float(l[109+shift:115+shift])
                     else:
                         raise e
-                dssp_ss.setdefault(chainid, []).append(ss) # percent sasa on sidechain
+                dssp_ss.setdefault(chainid, []).append(ss)  # percent sasa on sidechain
                 dssp_acc.setdefault(chainid, []).append(acc)
         for key in list(dssp_ss.keys()):
             dssp_ss[key] = ''.join(dssp_ss[key])
         return dssp_ss, dssp_acc
 
-
-    #%%
+    # %%
     def get_interchain_distances(self, pdb_chain=None, pdb_mutation=None, cutoff=None):
         """
         """
@@ -650,7 +659,7 @@ class AnalyzeStructure(object):
                     continue
                 chain_2_ids = [pdb_chain]
             else:
-                chain_2_ids = self.sp.chain_ids[i+1:]
+                chain_2_ids = self.sp.chain_ids[i + 1:]
             # Chain 2
             for chain_2_id in chain_2_ids:
                 chain_2 = model[chain_2_id]
@@ -658,22 +667,24 @@ class AnalyzeStructure(object):
                 # Residue 1
                 for residue_1 in chain_1:
                     if (residue_1.resname not in structure_tools.AMINO_ACIDS or
-                        residue_1.id[0] != ' '):
-                            continue
+                            residue_1.id[0] != ' '):
+                        continue
                     # Residue 2
                     for residue_2_idx, residue_2 in enumerate(chain_2):
                         if (residue_2.resname not in structure_tools.AMINO_ACIDS or
-                            residue_2.id[0] != ' '):
-                                continue
+                                residue_2.id[0] != ' '):
+                            continue
                         if pdb_mutation:
                             if str(residue_2.id[1]) != pdb_mutation[1:-1]:
                                 continue
-                            if (structure_tools.convert_aa(residue_2.resname) != pdb_mutation[0] and
-                                structure_tools.convert_aa(residue_2.resname) != pdb_mutation[-1]):
-                                    logger.debug(pdb_mutation)
-                                    logger.debug(structure_tools.convert_aa(residue_2.resname))
-                                    logger.debug(residue_2.id)
-                                    raise errors.MutationMismatchError()
+                            if ((structure_tools.convert_aa(residue_2.resname) !=
+                                    pdb_mutation[0]) and (
+                                    structure_tools.convert_aa(residue_2.resname) !=
+                                    pdb_mutation[-1])):
+                                logger.debug(pdb_mutation)
+                                logger.debug(structure_tools.convert_aa(residue_2.resname))
+                                logger.debug(residue_2.id)
+                                raise errors.MutationMismatchError()
                         # Atom 1
                         for atom_1 in residue_1:
                             # Atom 2
@@ -683,7 +694,6 @@ class AnalyzeStructure(object):
                                     min_r = r
 
                 shortest_interchain_distances[chain_1_id][chain_2_id] = min_r
-
 
         if not shortest_interchain_distances:
             logger.error(
@@ -721,8 +731,7 @@ class AnalyzeStructure(object):
 
         return shortest_interchain_distances
 
-
-    #%%
+    # %%
     def get_interface_area(self, chain_ids):
         """
         """
@@ -783,7 +792,7 @@ class AnalyzeStructure(object):
                 total = float(item[1])
         sasa_oppositeChain = hydrophobic, hydrophilic, total
 
-        sasa = [ 0, 0, 0 ]
+        sasa = [0, 0, 0]
         # hydrophobic
         sasa[0] = (sasa_chain[0] + sasa_oppositeChain[0] - sasa_complex[0]) / 2.0
         # hydrophilic
@@ -793,9 +802,9 @@ class AnalyzeStructure(object):
 
         return sasa
 
-
     def __run_pops_area(self, full_filename):
-        system_command = ('pops --chainOut'
+        system_command = (
+            'pops --chainOut'
             ' --pdb ' + full_filename +
             ' --popsOut ' + full_filename + '.out')
         result, error_message, return_code = (
@@ -805,7 +814,7 @@ class AnalyzeStructure(object):
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:
         # if output[-1] == 'Clean termination' the run should be OK
-        output = [ line for line in result.split('\n') if line != '' ]
+        output = [line for line in result.split('\n') if line != '']
         logger.debug(system_command)
 #        logger.debug('pops result: %s' % result) # Prints the entire POPs output
 #        logger.debug('pops error: %s' % e)
@@ -814,7 +823,6 @@ class AnalyzeStructure(object):
             logger.error(error_message_1)
         logger.debug('pops rc: %s' % return_code)
         return output[-1], return_code, error_message
-
 
     def __read_pops_area(self, filename):
         """
@@ -829,12 +837,15 @@ class AnalyzeStructure(object):
         """
         keep = ['hydrophobic:', 'hydrophilic:', 'total:']
         with open(filename, 'r') as pops:
-            result = [ x.split(' ') for x in pops.readlines() if x != '' and x.split(' ')[0] in keep ]
-            result = [ [ x.strip() for x in item if x != '' ] for item in result ]
+            result = [
+                x.split(' ') for x in pops.readlines() if x != '' and x.split(' ')[0] in keep
+            ]
+            result = [
+                [x.strip() for x in item if x != ''] for item in result
+            ]
         if not result or len(result) != 3:
             result = self.__read_pops_area_new(filename)
         return result
-
 
     def __read_pops_area_new(self, filename):
         """
@@ -854,7 +865,8 @@ class AnalyzeStructure(object):
                     continue
                 if use_next_line:
                     row = line.strip().split()
-                    result = [['hydrophobic:', row[0]], ['hydrophilic:', row[1]], ['total:', row[2]]]
+                    result = [
+                        ['hydrophobic:', row[0]], ['hydrophilic:', row[1]], ['total:', row[2]]
+                    ]
                     break
         return result
-
