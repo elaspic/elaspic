@@ -425,7 +425,9 @@ class _PrepareModel:
 
     def __exit__(self, exc_type, exc_value, traceback):
         d = self.d
-        if exc_type is not None and exc_type in self.handled_errors:
+        if (exc_type is not None and
+                not configs['testing'] and
+                exc_type in self.handled_errors):
             # Find domains that were used as a template and eventually led to
             # the error in the model, and add the error to their `domain_errors`
             # or `domain_contact_errors` fields.
@@ -971,7 +973,6 @@ class _PrepareMutation:
     def __exit__(self, exc_type, exc_value, traceback):
         d = self.d
         mutation = self.mutation
-
         if (exc_type is not None and
                 exc_type in (errors.MutationOutsideDomainError,
                              errors.MutationOutsideInterfaceError)):
