@@ -602,12 +602,6 @@ class MyDatabase(object):
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'"
                     .format(path_to_alignment), shell=True)
-#                subprocess.check_call("cp -f '{}' '{}'".format(
-#                    archive_save_path + d.template.model.alignment_filename,
-#                    tmp_save_path + d.template.model.alignment_filename), shell=True)
-#                subprocess.check_call("cp -f '{}' '{}'".format(
-#                    archive_save_path + d.template.model.model_filename,
-#                    tmp_save_path + d.template.model.model_filename), shell=True)
                 shutil.copyfile(
                     op.join(archive_save_path, d.template.model.alignment_filename),
                     op.join(tmp_save_path, d.template.model.alignment_filename),
@@ -653,15 +647,6 @@ class MyDatabase(object):
                     "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
-#                subprocess.check_call("cp -f '{}' '{}'".format(
-#                    archive_save_path + d.template.model.alignment_filename_1,
-#                    tmp_save_path + d.template.model.alignment_filename_1), shell=True)
-#                subprocess.check_call("cp -f '{}' '{}'".format(
-#                    archive_save_path + d.template.model.alignment_filename_2,
-#                    tmp_save_path + d.template.model.alignment_filename_2), shell=True)
-#                subprocess.check_call("cp -f '{}' '{}'".format(
-#                    archive_save_path + d.template.model.model_filename,
-#                    tmp_save_path + d.template.model.model_filename), shell=True)
                 shutil.copyfile(
                     op.join(archive_save_path, d.template.model.alignment_filename_1),
                     op.join(tmp_save_path, d.template.model.alignment_filename_1))
@@ -845,12 +830,6 @@ class MyDatabase(object):
                 path_to_mutation = op.dirname(op.join(tmp_save_path, mutation.model_filename_wt))
                 subprocess.check_call(
                     "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_mutation), shell=True)
-#                subprocess.check_call("cp -f '{}' '{}'".format(
-#                    archive_save_path + mutation.model_filename_wt,
-#                    tmp_save_path + mutation.model_filename_wt), shell=True)
-#                subprocess.check_call("cp -f '{}' '{}'".format(
-#                    archive_save_path + mutation.model_filename_mut,
-#                    tmp_save_path + mutation.model_filename_mut), shell=True)
                 shutil.copyfile(
                     op.join(archive_save_path, mutation.model_filename_wt),
                     op.join(tmp_save_path, mutation.model_filename_wt))
