@@ -22,9 +22,6 @@ requirements:
     - pandas
     - scikit-learn
     - biopython
-    # Python 2 / 3 compatibility
-    - future
-    - six
   run:
     # Basic python
     - python
@@ -33,15 +30,13 @@ requirements:
     - retrying
     - fastcache
     - requests
+    - pytest
     # Scientific python
     - numpy
     - scipy
     - pandas
     - scikit-learn
     - biopython
-    # Python 2 / 3 compatibility
-    - future
-    - six
     # Database access
     - sqlalchemy
     - sqlite
@@ -63,7 +58,6 @@ requirements:
 
 test:
   requires:
-    - pytest
     - fake_provean
     - fake_foldx
   imports:
