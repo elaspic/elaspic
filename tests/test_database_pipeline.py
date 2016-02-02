@@ -63,7 +63,7 @@ def append_test_cases(df, num=3, num_mutations=3):
     if QUICK:
         num = 1
     for i in range(num):
-        row_idx = random.randint(0, len(df))
+        row_idx = random.randint(0, len(df) - 1)
         if df.empty:
             raise Exception('empty dataframe supplied: {}'.format(df))
         row = df.iloc[row_idx]
