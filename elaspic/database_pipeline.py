@@ -271,15 +271,17 @@ class _PrepareModel:
 
     handled_errors = (
         errors.ModellerError,
-        errors.PDBChainError,
-        errors.PDBEmptySequenceError,
-        errors.PDBNotFoundError,
         errors.ChainsNotInteractingError,
         errors.MutationOutsideDomainError,
         errors.MutationOutsideInterfaceError,
+    )
+    bad_errors = (
+        errors.PDBChainError,
+        errors.PDBEmptySequenceError,
+        errors.PDBNotFoundError,
         errors.NoSequenceFound,
         errors.TcoffeeError,
-        errors.InterfaceMismatchError
+        errors.InterfaceMismatchError,
     )
 
     def __init__(self, d, db):
@@ -426,8 +428,8 @@ class _PrepareModel:
     def __exit__(self, exc_type, exc_value, traceback):
         d = self.d
         if (exc_type is not None and
-                not configs['testing'] and
-                exc_type in self.handled_errors):
+                ((exc_type in self.handled_errors) or
+                 (exc_type in self.bad_errors and not configs['testing']))):
             # Find domains that were used as a template and eventually led to
             # the error in the model, and add the error to their `domain_errors`
             # or `domain_contact_errors` fields.
