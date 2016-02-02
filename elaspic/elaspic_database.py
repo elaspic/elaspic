@@ -30,7 +30,7 @@ from Bio.SeqRecord import SeqRecord
 from . import helper, errors, conf, elaspic_sequence
 from .elaspic_database_tables import (
     Base,
-    Domain, DomainContact, UniprotSequence, Provean,
+    Domain, DomainContact, UniprotSequence,
     UniprotDomain, UniprotDomainTemplate, UniprotDomainModel, UniprotDomainMutation,
     UniprotDomainPair, UniprotDomainPairTemplate, UniprotDomainPairModel,
     UniprotDomainPairMutation,
@@ -221,10 +221,10 @@ class MyDatabase(object):
                 logger.error(str(e))
                 if re.search('schema .* does not exist', str(e)):
                     missing_schema = str(e)[
-                        str(e).find('schema "')+8:str(e).find('" does not exist')]
+                        str(e).find('schema "') + 8:str(e).find('" does not exist')]
                 elif 'Unknown database ' in str(e):
                     missing_schema = str(e)[
-                        str(e).find("Unknown database '")+18:str(e).find("'\")")]
+                        str(e).find("Unknown database '") + 18:str(e).find("'\")")]
                 else:
                     raise e
                 sql_command = 'create schema {};'.format(missing_schema)
@@ -398,13 +398,13 @@ class MyDatabase(object):
                     domain = (
                         session.query(Domain).filter(
                             (Domain.pfam_name.like(pfam_name)) |
-                            (Domain.pfam_name.like(pfam_name+'+%')) |
+                            (Domain.pfam_name.like(pfam_name + '+%')) |
                             # need an escape character because _ matches any single character
-                            (Domain.pfam_name.like(pfam_name+'\_%')) |
-                            (Domain.pfam_name.like('%+'+pfam_name)) |
-                            (Domain.pfam_name.like('%+'+pfam_name+'+%')) |
+                            (Domain.pfam_name.like(pfam_name + '\_%')) |
+                            (Domain.pfam_name.like('%+' + pfam_name)) |
+                            (Domain.pfam_name.like('%+' + pfam_name + '+%')) |
                             # need an escape character because _ matches any single character
-                            (Domain.pfam_name.like('%+'+pfam_name+'\_%'))
+                            (Domain.pfam_name.like('%+' + pfam_name + '\_%'))
                         )
                         .distinct().all()
                     )
@@ -455,24 +455,24 @@ class MyDatabase(object):
                         # .join(domain_1, DomainContact.cath_id_1==domain_1.cath_id)
                         .filter(
                             (domain_1.pfam_name.like(pfam_name_1)) |
-                            (domain_1.pfam_name.like(pfam_name_1+'+%')) |
+                            (domain_1.pfam_name.like(pfam_name_1 + '+%')) |
                             # need an escape character because _ matches any single character
-                            (domain_1.pfam_name.like(pfam_name_1+'\_%')) |
-                            (domain_1.pfam_name.like('%+'+pfam_name_1)) |
-                            (domain_1.pfam_name.like('%+'+pfam_name_1+'+%')) |
+                            (domain_1.pfam_name.like(pfam_name_1 + '\_%')) |
+                            (domain_1.pfam_name.like('%+' + pfam_name_1)) |
+                            (domain_1.pfam_name.like('%+' + pfam_name_1 + '+%')) |
                             # need an escape character because _ matches any single character
-                            (domain_1.pfam_name.like('%+'+pfam_name_1+'\_%'))
+                            (domain_1.pfam_name.like('%+' + pfam_name_1 + '\_%'))
                         )
                         # .join(domain_2, DomainContact.cath_id_2==domain_2.cath_id)
                         .filter(
                             (domain_2.pfam_name.like(pfam_name_2)) |
-                            (domain_2.pfam_name.like(pfam_name_2+'+%')) |
+                            (domain_2.pfam_name.like(pfam_name_2 + '+%')) |
                             # need an escape character because _ matches any single character
-                            (domain_2.pfam_name.like(pfam_name_2+'\_%')) |
-                            (domain_2.pfam_name.like('%+'+pfam_name_2)) |
-                            (domain_2.pfam_name.like('%+'+pfam_name_2+'+%')) |
+                            (domain_2.pfam_name.like(pfam_name_2 + '\_%')) |
+                            (domain_2.pfam_name.like('%+' + pfam_name_2)) |
+                            (domain_2.pfam_name.like('%+' + pfam_name_2 + '+%')) |
                             # need an escape character because _ matches any single character
-                            (domain_2.pfam_name.like('%+'+pfam_name_2+'\_%'))
+                            (domain_2.pfam_name.like('%+' + pfam_name_2 + '\_%'))
                         )
                         .distinct().all()
                     )

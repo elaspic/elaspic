@@ -91,6 +91,7 @@ def run_pdb_mutation_pipeline(
             lp.run_all_sequences()
             lp.run_all_models()
             lp.run_all_mutations()
+    logger.info('Pass')
 
 
 def run_sequence_mutation_pipeline(
@@ -117,6 +118,7 @@ def run_sequence_mutation_pipeline(
             lp.run_all_sequences()
             lp.run_all_models()
             lp.run_all_mutations()
+    logger.info('Pass')
 
 
 # %% Database tests
@@ -225,6 +227,8 @@ and model_filename_wt is null;
 
 
 def run_database_pipeline(uniprot_id_mutation):
+    if 'engine' not in configs:
+        raise Exception('You must add an `engine` to the configs to use this function!')
     if len(uniprot_id_mutation) == 2:
         uniprot_id, mutation = uniprot_id_mutation
         uniprot_domain_pair_ids = []
@@ -245,3 +249,4 @@ def run_database_pipeline(uniprot_id_mutation):
     validate_mutation_3(uniprot_id, mutation)
     validate_mutation_4(uniprot_id, mutation)
     validate_mutation_5(uniprot_id, mutation)
+    logger.info('Pass')

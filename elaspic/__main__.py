@@ -32,16 +32,10 @@ from contextlib import contextmanager
 import logging
 import logging.config
 
-from elaspic import conf, helper
+from elaspic import conf
 
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
-
-
-# %%
-helper.configure_logger(
-    logger, do_debug=configs.get('debug', True),
-    formatter='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 
 
 # %% ELASPIC RUN
@@ -99,7 +93,6 @@ def elaspic(args):
 
     if args.input_file:
         conf.read_configuration_file(args.config_file)
-        helper.configure_logger(logger, do_debug=configs['debug'])
         # Run database pipeline for each row in file
         from elaspic import database_pipeline
         for uniprot_id, mutations, uniprot_domain_pair_id in \
@@ -111,7 +104,6 @@ def elaspic(args):
             pipeline.run()
     elif args.uniprot_id:
         conf.read_configuration_file(args.config_file)
-        helper.configure_logger(logger, do_debug=configs['debug'])
         # Run database pipeline
         if args.uniprot_domain_pair_ids:
             logger.debug('uniprot_domain_pair_ids: {}'.format(args.uniprot_domain_pair_ids))
@@ -130,7 +122,6 @@ def elaspic(args):
         pipeline.run()
     elif args.structure_file:
         conf.read_configuration_file(args.config_file, unique_temp_dir=os.getcwd())
-        helper.configure_logger(logger, do_debug=configs['debug'])
         # Run local pipeline
         from elaspic import local_pipeline
         pipeline = local_pipeline.LocalPipeline(
@@ -206,7 +197,7 @@ Examples:
              "(always {pdb_chain}_{pdb_mutation})."
     )
     parser.add_argument(
-        '-i', '--uniprot_domain_pair_ids',  nargs='?', default='',
+        '-i', '--uniprot_domain_pair_ids', nargs='?', default='',
         help="List of uniprot_domain_pair_ids to analyse "
              "(useful if you want to restrict your analysis to only a handful of domains).")
     parser.add_argument(

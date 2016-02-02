@@ -247,10 +247,10 @@ class Model:
         # Get SASA only for amino acids in the chain of interest
         def _filter_df(df, chain_id, resname, resnum):
             df2 = df[
-                    (df['pdb_chain'] == chain_id) &
-                    (df['res_name'] == resname) &
-                    (df['res_num'] == resnum)
-                ]
+                (df['pdb_chain'] == chain_id) &
+                (df['res_name'] == resname) &
+                (df['res_num'] == resnum)
+            ]
             return df2.iloc[0]['rel_sasa']
 
         self.relative_sasa_scores = {}
@@ -301,7 +301,7 @@ class Model:
         a2b_contacts = _get_a2b_contacts(0, 1)
         b2a_contacts = _get_a2b_contacts(1, 0)
 
-        if not a2b_contacts and not b2a_contacts:
+        if not a2b_contacts or not b2a_contacts:
             logger.error('Chains are not interacting!')
             logger.error('a2b_contacts: {}\n'.format(a2b_contacts))
             logger.error('b2a_contacts: {}\n'.format(b2a_contacts))
@@ -309,11 +309,16 @@ class Model:
 
         def _validate_a2b_contacts(a2b_contacts, chain_idx):
             logger.debug('Validating chain {} interacting AA...'.format(chain_idx))
-            interface_aa_a = ''.join(list(zip(*a2b_contacts))[2])
-            interface_aa_b = ''.join([
-                str(self.sequence_seqrecords[chain_idx].seq)[i]
-                for i in list(zip(*a2b_contacts))[0]
+            interface_aa_a = ''.join([
+                i[2] for i in a2b_contacts
             ])
+            try:
+                interface_aa_b = ''.join([
+                    str(self.sequence_seqrecords[chain_idx].seq)[i[0]] for i in a2b_contacts
+                ])
+            except IndexError as e:
+                logger.error('{}: {}'.format(type(e), e))
+                interface_aa_b = None
             if interface_aa_a != interface_aa_b:
                 logger.error('interface_aa_a: {}'.format(interface_aa_a))
                 logger.error('interface_aa_b: {}'.format(interface_aa_b))
@@ -330,8 +335,8 @@ class Model:
         # Using residue indexes
         # self.interacting_residues_x uses the POSITION of the residue
         # (e.g. [1,2,3] means the first three residues are interacting)
-        self.interacting_aa_1 = sorted(i+1 for i in list(zip(*a2b_contacts))[0])
-        self.interacting_aa_2 = sorted(i+1 for i in list(zip(*b2a_contacts))[0])
+        self.interacting_aa_1 = sorted(i[0] + 1 for i in a2b_contacts)
+        self.interacting_aa_2 = sorted(i[0] + 1 for i in b2a_contacts)
 
         # Interface area
         analyze_structure = structure_analysis.AnalyzeStructure(
@@ -431,7 +436,7 @@ class Model:
 
         #######################################################################
         # Create a folder for all mutation data.
-        mutation_dir = op.join(configs['model_dir'], 'mutations',  mutation_id)
+        mutation_dir = op.join(configs['model_dir'], 'mutations', mutation_id)
         os.makedirs(mutation_dir, exist_ok=True)
         os.makedirs(mutation_dir, exist_ok=True)
         shutil.copy(op.join(configs['data_dir'], 'rotabase.txt'), mutation_dir)

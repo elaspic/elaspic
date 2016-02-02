@@ -7,9 +7,6 @@ Created on Sat Sep 26 14:28:57 2015
 import os
 import os.path as op
 import pytest
-import logging
-import logging.config
-logger = logging.getLogger(__name__)
 
 
 # %% Directories
@@ -20,40 +17,6 @@ except NameError:
 assert op.split(TESTS_BASE_DIR)[-1] == 'tests'
 
 TESTS_DATA_DIR = op.join(TESTS_BASE_DIR, 'data')
-
-
-# %% Logger
-logger = logging.getLogger(__name__)
-
-LOGGING_CONFIGS = {
-    'version': 1,
-    'disable_existing_loggers': False,  # this fixes the problem
-
-    'formatters': {
-        'standard': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        },
-        'clean': {
-            'format': '%(message)s',
-        },
-    },
-    'handlers': {
-        'default': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'clean',
-        },
-    },
-    'loggers': {
-        '': {
-            'handlers': ['default'],
-            'level': 'DEBUG',
-            'propagate': True
-        }
-    }
-}
-logging.config.dictConfig(LOGGING_CONFIGS)
-
 
 # Config files
 DEFAULT_LOCAL_CONFIG = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')

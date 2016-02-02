@@ -70,7 +70,7 @@ test:
     - elaspic
   commands:
     - elaspic --help
-    - elaspic_database --help
+    - elaspic database --help
 
 about:
   home: elaspic.kimlab.org

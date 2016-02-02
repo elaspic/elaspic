@@ -6,9 +6,11 @@ import os.path as op
 import subprocess
 import tempfile
 import logging
+import logging.config
 import re
 
 from configparser import SafeConfigParser, NoOptionError
+from collections import UserDict
 from Bio.SubsMat import MatrixInfo
 
 from . import DATA_DIR, helper
@@ -16,54 +18,21 @@ from . import DATA_DIR, helper
 logger = logging.getLogger(__name__)
 
 
-# %%
-class Configs:
-    """A singleton class that keeps track of ELASPIC configuration settings.
+# %% Class to store all configurations
+class Configs(UserDict):
+    """All instances keep data in the same `Configs._data` dictionary.
+
+    TODO: Either replace this with a dictionary or turn all the functions below into methods.
     """
-    _configs = {}
+    _data = {}
 
     def __init__(self):
-        self.__dict__ = Configs._configs
+        self.data = Configs._data
 
-    def __getitem__(self, key):
-        return self.__dict__[key]
-
-    def __setitem__(self, key, value):
-        self.__dict__[key] = value
-
-    def update(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-    def keys(self):
-        return self.__dict__.keys()
-
-    def values(self):
-        return self.__dict__.values()
-
-    def items(self):
-        return self.__dict__.items()
-
-    def clear(self):
-        self.__dict__.clear()
-
-    def get(self, key, fallback=None):
-        try:
-            return self.__dict__[key]
-        except KeyError:
-            return fallback
-
-    def copy(self):
-        new_copy = Configs()
-        new_copy.__dict__ = self.__dict__.copy()
-        return new_copy
+configs = Configs()
 
 
 # %% Process a configuration file
-configs = Configs()
-
-# %%
-
-
 def read_configuration_file(config_file, unique_temp_dir=None):
     if not os.path.isfile(config_file):
         raise Exception("The configuration file '{}' does not exist!".format(config_file))
@@ -84,8 +53,7 @@ def read_configuration_file(config_file, unique_temp_dir=None):
         })
     configParser.read(config_file)
 
-    # ### [DEFAULT] ###
-
+    # [DEFAULT]
     # These settings won't change most of the time.
     configs['global_temp_dir'] = configParser.get('DEFAULT', 'global_temp_dir')
     configs['elaspic_foldername'] = configParser.get('DEFAULT', 'elaspic_foldername')
@@ -113,22 +81,26 @@ def read_configuration_file(config_file, unique_temp_dir=None):
     configs['unique'] = op.basename(configs['unique_temp_dir'])
     configs['data_dir'] = configParser.get('SETTINGS', 'data_dir', fallback=DATA_DIR)
 
-    # ### [DATABASE]
+    # [DATABASE]
     if configParser.has_section('DATABASE'):
         read_database_configs(configParser)
 
-    # ### [SEQUENCE]
+    # [SEQUENCE]
     if configParser.has_section('SEQUENCE'):
         read_sequence_configs(configParser)
 
-    # ### [MODEL]
+    # [MODEL]
     if configParser.has_section('MODEL'):
         read_model_configs(configParser)
+
+    # [LOGGER]
+    read_logger_configs(configParser)
 
     # TODO: Update `unique_temp_dir` and dependencies.
     _prepare_temp_folders(configs)
 
 
+# %% Section parsers
 def read_database_configs(configParser):
     """[DATABASE]
     """
@@ -196,6 +168,44 @@ def read_model_configs(configParser):
     configs['matrix'] = getattr(MatrixInfo, configs['matrix_type'])
 
 
+def read_logger_configs(configParser):
+    """Standard logger configuration, with optional tee to a file.
+    """
+
+    default_level = 'DEBUG'
+    default_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    new_format = configParser.get('LOGGER', 'format')
+
+    print(default_format)
+    print(new_format)
+    LOGGING_CONFIGS = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'default': {
+                'format':
+                    configParser.get('LOGGER', 'format', fallback=default_format)
+            },
+        },
+        'handlers': {
+            'default': {
+                'level': configParser.get('LOGGER', 'level', fallback=default_level),
+                'class': 'logging.StreamHandler',
+                'formatter': 'default',
+            },
+        },
+        'loggers': {
+            '': {
+                'handlers': ['default'],
+                'level': 'DEBUG',
+                'propagate': True
+            }
+        }
+    }
+    logging.config.dictConfig(LOGGING_CONFIGS)
+
+
+# %% Helpers
 def _validate_provean_temp_dir(configParser, configs):
     """
     Some nodes on the cluster have a very limited amount of memory for temp storage.

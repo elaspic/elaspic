@@ -73,31 +73,6 @@ def log_print_statements(logger):
 
 
 # %%
-def configure_logger(
-        logger, do_debug=True, logger_filename=None,
-        formatter='%(asctime)s [%(levelname)s] %(name)s: %(message)s'):
-    """Standard logger configuration, with optional tee to a file.
-    """
-    if do_debug:
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
-        formatter = '%(message)s'
-    logger.handlers = []
-    # Initialize formatter
-    formatter = logging.Formatter(formatter)
-    # Initialize streamhandler
-    sh = logging.StreamHandler()
-    sh.setFormatter(formatter)
-    logger.addHandler(sh)
-    # Initialize filehandler
-    if logger_filename is not None:
-        fh = logging.FileHandler(logger_filename, mode='w')
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-    return logger
-
-
 def make_tarfile(source_dir, output_filename):
     """Compress folder into a `*.tar.gz` file.
     """
