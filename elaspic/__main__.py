@@ -123,8 +123,8 @@ def elaspic(args):
     elif args.structure_file:
         conf.read_configuration_file(args.config_file, unique_temp_dir=os.getcwd())
         # Run local pipeline
-        from elaspic import local_pipeline
-        pipeline = local_pipeline.LocalPipeline(
+        from elaspic import standalone_pipeline
+        pipeline = standalone_pipeline.LocalPipeline(
             args.structure_file, args.sequence_file, args.mutations,
             mutation_format=args.mutation_format,
         )

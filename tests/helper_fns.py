@@ -16,7 +16,7 @@ import pandas as pd
 
 from elaspic import (
     conf, helper,
-    elaspic_sequence, structure_tools, local_pipeline, database_pipeline
+    elaspic_sequence, structure_tools, standalone_pipeline, database_pipeline
 )
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ def run_pdb_mutation_pipeline(
     for chain_id in pdb_mutatations[pdb_id]:
         for mutation in pdb_mutatations[pdb_id][chain_id]:
             mutation_pdb = '{}_{}'.format(chain_id, mutation)
-            lp = local_pipeline.LocalPipeline(
+            lp = standalone_pipeline.LocalPipeline(
                 pdb_file, mutations=mutation_pdb)
             lp.run_all_sequences()
             lp.run_all_models()
@@ -113,7 +113,7 @@ def run_sequence_mutation_pipeline(
     for chain_pos in sequence_mutations[pdb_id_sequence]:
         for mutation in sequence_mutations[pdb_id_sequence][chain_pos]:
             mutation_sequence = '{}_{}'.format(chain_pos, mutation)
-            lp = local_pipeline.LocalPipeline(
+            lp = standalone_pipeline.LocalPipeline(
                 pdb_file, sequence_file, mutations=mutation_sequence)
             lp.run_all_sequences()
             lp.run_all_models()
@@ -135,7 +135,7 @@ provean_supset_filename is not null;
 """.format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
     logger.debug(sql_query)
     df1 = pd.read_sql_query(sql_query, configs['engine'])
-    logger.debug(df1)
+    logger.debug(df1.head(2))
     #
     logger.debug(helper.underline('And that we have at least one domain with a template...'))
     sql_query = """\
@@ -146,7 +146,7 @@ where uniprot_id = '{uniprot_id}';
 """.format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
     logger.debug(sql_query)
     df2 = pd.read_sql_query(sql_query, configs['engine'])
-    logger.debug(df2)
+    logger.debug(df2.head(2))
     assert len(df1) >= 1 or len(df2) == 0
 
 

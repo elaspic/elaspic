@@ -179,7 +179,7 @@ class FoldX(object):
         TODO: Add a fallback plan using libfaketime.
         """
 #        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
-        system_command = 'foldx -runfile ' + self.foldx_runfile
+        system_command = "faketime '15-12-26 00:00:00' foldx -runfile " + self.foldx_runfile
         logger.debug('FoldX system command: {}'.format(system_command))
         result, error_message, return_code = (
             helper.subprocess_check_output_locally(self.foldx_dir, system_command)
