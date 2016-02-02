@@ -287,7 +287,7 @@ class _PrepareModel:
         errors.InterfaceMismatchError,
     )
 
-    def __init__(self, d, db):
+    def __init__(self, d, db, new_model=False):
         """
         """
         print_header(d)
@@ -298,7 +298,9 @@ class _PrepareModel:
         self.modeller_results_file = None
 
         # Check if we should skip the model
-        if (isinstance(d, elaspic_database.UniprotDomain) and
+        if new_model:
+            pass
+        elif (isinstance(d, elaspic_database.UniprotDomain) and
                 not (d.template and d.template.cath_id)):
             logger.error('No structural template availible for this domain. Skipping...')
             self.skip = True
@@ -431,6 +433,16 @@ class _PrepareModel:
     def __exit__(self, exc_type, exc_value, traceback):
         d = self.d
         if (exc_type is not None and
+                exc_type in self.bad_errors and
+                self.modeller_results_file is not None):
+            logger.error('{}: {}'.format(exc_type, exc_value))
+            logger.error("Removing model due to an error and trying again...")
+            self.db.remove_model(self.d)
+            self.d.template.model.model_filename = None
+            new_model = PrepareModel(self.d, self.db, new_model=True)
+            self.model = new_model.model
+            return True
+        elif (exc_type is not None and
                 ((exc_type in self.handled_errors) or
                  (exc_type in self.bad_errors and not configs['testing']))):
             # Find domains that were used as a template and eventually led to

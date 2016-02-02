@@ -75,13 +75,13 @@ _instances = {}
 def execute_and_remember(f):
     """ Some basic memoizer.
     """
-    def f_new(*args):
+    def f_new(*args, **kwargs):
         key = tuple([f] + list(args))
         if key in _instances:
             return _instances[key].result
 
         else:
-            instance = f(*args)
+            instance = f(*args, **kwargs)
             if instance:
                 with instance:
                     instance.run()

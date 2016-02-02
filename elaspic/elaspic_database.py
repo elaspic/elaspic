@@ -186,6 +186,7 @@ class MyDatabase(object):
                 session.rollback()
             raise
         finally:
+            session.expunge_all()
             session.close()
 
     # %%
@@ -488,8 +489,8 @@ class MyDatabase(object):
                 session
                 .query(UniprotDomain)
                 .filter(UniprotDomain.uniprot_id == uniprot_id)
-                # .options(sa.orm.joinedload('template').sa.orm.joinedload('model'))
-                .options(sa.orm.joinedload('template', innerjoin=True))
+                # .options(sa.orm.joinedload('template').joinedload('model'))
+                # .options(sa.orm.joinedload('template', innerjoin=True))
                 .limit(100)
                 .all()
             )
@@ -547,8 +548,8 @@ class MyDatabase(object):
                 )
             uniprot_domain_pairs = (
                 uniprot_domain_pairs_query
-                # .options(sa.orm.joinedload('template').sa.orm.joinedload('model'))
-                .options(sa.orm.joinedload('template', innerjoin=True))
+                # .options(sa.orm.joinedload('template', innerjoin=True).joinedload('model'))
+                # .options(sa.orm.joinedload('template', innerjoin=True))
                 .limit(100)
                 .all()
             )
@@ -878,16 +879,6 @@ class MyDatabase(object):
             so it can't be that bad. Delete those mutations and try again.
         """
         with self.session_scope() as session:
-            validation_query = (
-                "select count(*) from {0}.uniprot_domain_mutation "
-                "where uniprot_domain_id = {1} "
-                "and ddg is not null;"
-            ).format(configs['db_schema'], d.uniprot_domain_id)
-            num_mutations = session.execute(validation_query).fetchone()[0]
-            if num_mutations != 0:
-                raise errors.ModelHasMutationsError(
-                    'Domain {} has {} mutations!'
-                    .format(d.uniprot_domain_id, num_mutations))
             if isinstance(d, UniprotDomain):
                 session.execute(
                     'delete from {0}.uniprot_domain_model where uniprot_domain_id = {1}'

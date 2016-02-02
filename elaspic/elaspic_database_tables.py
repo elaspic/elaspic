@@ -589,11 +589,12 @@ class UniprotDomainTemplate(Base):
 
     # Relationships
     uniprot_domain = sa.orm.relationship(
-        UniprotDomain, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('template', uselist=False, cascade='expunge', lazy='joined')) # one to one
+        UniprotDomain, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
+        backref=sa.orm.backref(
+            'template', uselist=False, cascade='expunge', innerjoin=True, lazy='joined'))
     domain = sa.orm.relationship(
-        Domain, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('uniprot_domain', cascade='expunge')) # many to one
+        Domain, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
+        backref=sa.orm.backref('uniprot_domain', cascade='expunge'))
 
 
 
@@ -985,10 +986,11 @@ class UniprotDomainPairTemplate(Base):
     # Relationships
     # one to one
     domain_pair = sa.orm.relationship(
-        UniprotDomainPair, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('template', uselist=False, cascade='expunge', lazy='joined'))
+        UniprotDomainPair, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
+        backref=sa.orm.backref(
+            'template', uselist=False, cascade='expunge', lazy='joined', innerjoin=True))
     domain_contact = sa.orm.relationship(
-        DomainContact, uselist=False, cascade='expunge', lazy='joined',
+        DomainContact, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
         backref=sa.orm.backref('uniprot', cascade='expunge'))  # one to one
     domain_1 = sa.orm.relationship(
         Domain, uselist=False, cascade='expunge', lazy='joined',
