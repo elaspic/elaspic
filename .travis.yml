@@ -14,7 +14,7 @@ env:
     - TEST_SUITE='database_2'
 install:
   # - wget https://repo.continuum.io/archive/Anaconda3-2.4.0-Linux-x86_64.sh -O anaconda.sh;
-  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O anaconda.sh;
+  - wget --quiet https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O anaconda.sh;
   - bash anaconda.sh -b -p $HOME/anaconda
   - export PATH="$HOME/anaconda/bin:$PATH"
   - hash -r
@@ -28,9 +28,9 @@ install:
   - conda info -a
   - conda update -q conda
   - conda install -q --yes conda-build
-  - pip install coveralls codecov pytest-cov
+  - pip install -q coveralls codecov pytest-cov
   # Build elaspic
-  - conda build conda/elaspic
+  - conda build -q conda/elaspic
 before_script:
   # Create a test environment
   - conda create -n ${CONDA_ENV} elaspic --use-local -y
@@ -42,7 +42,7 @@ before_script:
   - ls 
 script:
   # travis_after_all
-  - wget https://raw.github.com/dmakhno/travis_after_all/master/travis_after_all.py
+  - wget --quiet https://raw.github.com/dmakhno/travis_after_all/master/travis_after_all.py
   # Run tests
   - $TEST_DIR/scripts/run_test.sh
 after_success:

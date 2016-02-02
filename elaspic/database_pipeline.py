@@ -90,10 +90,12 @@ class DatabasePipeline(Pipeline):
             d_list = [d_list]
         for d in d_list:
             if not d.path_to_data or any([len(x) > 255 for x in d.path_to_data.split('/')]):
+                logger.debug("Updating 'path_to_data' from '{}'...".format(d.path_to_data))
                 d.path_to_data = (
                     elaspic_database.get_uniprot_base_path(d) +
                     elaspic_database.get_uniprot_domain_path(d)
                 )
+                logger.debug("to '{}'...".format(d.path_to_data))
                 self.db.merge_row(d)
             os.makedirs(op.join(configs['archive_temp_dir'], d.path_to_data), exist_ok=True)
 
@@ -248,15 +250,16 @@ class _PrepareSequence:
         if exc_type is not None:
             return False
 
-        provean = elaspic_database_tables.Provean()
-        provean.uniprot_id = d.uniprot_id
-        provean.provean_supset_filename = op.basename(self.sequence.provean_supset_file)
-        provean.provean_supset_length = self.sequence.provean_supset_length
-        self.db.merge_provean(
-            provean,
-            self.sequence.provean_supset_file,
-            configs['copy_data'] and elaspic_database.get_uniprot_base_path(d)
-        )
+        if self.provean_supset_file is None:
+            provean = elaspic_database_tables.Provean()
+            provean.uniprot_id = d.uniprot_id
+            provean.provean_supset_filename = op.basename(self.sequence.provean_supset_file)
+            provean.provean_supset_length = self.sequence.provean_supset_length
+            self.db.merge_provean(
+                provean,
+                self.sequence.provean_supset_file,
+                configs['copy_data'] and elaspic_database.get_uniprot_base_path(d)
+            )
 
     @property
     def result(self):

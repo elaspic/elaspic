@@ -303,11 +303,18 @@ def print_heartbeats():
     Spawn a fork that prints a message every minute.
     (This is required for travis-ci).
     """
+    from elaspic import conf
+    configs = conf.Configs()
+    # Don't print random stuff if not testing
+    if not configs['testing']:
+        yield
+        return
+    # Print a heartbeat to keep travis happy.
     pid = os.fork()
     if pid == 0:
         while True:
             time.sleep(60)
-            logger.debug("Subprocess is still running...")
+            logger.info("Subprocess is still running...")
         os._exit()
     try:
         yield

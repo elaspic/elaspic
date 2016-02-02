@@ -490,6 +490,7 @@ class MyDatabase(object):
                 .filter(UniprotDomain.uniprot_id == uniprot_id)
                 # .options(sa.orm.joinedload('template').sa.orm.joinedload('model'))
                 .options(sa.orm.joinedload('template', innerjoin=True))
+                .limit(100)
                 .all()
             )
 
@@ -536,8 +537,8 @@ class MyDatabase(object):
             uniprot_domain_pairs_query = (
                 session.query(UniprotDomainPair)
                 .filter(sa.or_(
-                    sa.text("uniprot_domain_1.uniprot_id='{}'".format(uniprot_id)),
-                    sa.text("uniprot_domain_2.uniprot_id='{}'".format(uniprot_id))))
+                    sa.text("uniprot_id_1='{}'".format(uniprot_id)),
+                    sa.text("uniprot_id_2='{}'".format(uniprot_id))))
             )
             if uniprot_domain_pair_ids:
                 uniprot_domain_pairs_query = (
@@ -548,6 +549,7 @@ class MyDatabase(object):
                 uniprot_domain_pairs_query
                 # .options(sa.orm.joinedload('template').sa.orm.joinedload('model'))
                 .options(sa.orm.joinedload('template', innerjoin=True))
+                .limit(100)
                 .all()
             )
 
@@ -565,9 +567,9 @@ class MyDatabase(object):
                 continue
             # Copy precalculated Provean data
             if copy_data:
-                if d.uniprot_domain_1.uniprot_id == uniprot_id:
+                if d.uniprot_id_1 == uniprot_id:
                     ud = d.uniprot_domain_1
-                elif d.uniprot_domain_2.uniprot_id == uniprot_id:
+                elif d.uniprot_id_2 == uniprot_id:
                     ud = d.uniprot_domain_2
                 try:
                     self._copy_provean(ud, archive_dir, archive_type)
@@ -598,19 +600,7 @@ class MyDatabase(object):
                 d.template.model and
                 d.template.model.alignment_filename and
                 d.template.model.model_filename):
-            if archive_type == '7zip':
-                # Extract files from a 7zip archive
-                filenames = [
-                    op.join(path_to_data, d.template.model.alignment_filename),
-                    op.join(path_to_data, d.template.model.model_filename),
-                ]
-                path_to_7z = os.path.join(
-                    archive_dir,
-                    'uniprot_domain',
-                    'uniprot_domain.7z'
-                )
-                self._extract_files_from_7zip(path_to_7z, filenames)
-            else:
+            try:
                 tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 args = [tmp_save_path] + d.template.model.alignment_filename.split('/')[:-1]
@@ -632,6 +622,20 @@ class MyDatabase(object):
                     op.join(archive_save_path, d.template.model.model_filename),
                     op.join(tmp_save_path, d.template.model.model_filename),
                 )
+            except FileNotFoundError:
+                if archive_type != '7zip':
+                    raise
+                # Extract files from a 7zip archive
+                filenames = [
+                    op.join(path_to_data, d.template.model.alignment_filename),
+                    op.join(path_to_data, d.template.model.model_filename),
+                ]
+                path_to_7z = os.path.join(
+                    archive_dir,
+                    'uniprot_domain',
+                    'uniprot_domain.7z'
+                )
+                self._extract_files_from_7zip(path_to_7z, filenames)
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, archive_dir, archive_type):
         if path_to_data is None:
@@ -642,20 +646,7 @@ class MyDatabase(object):
                 d.template.model.alignment_filename_1 and
                 d.template.model.alignment_filename_2 and
                 d.template.model.model_filename):
-            if archive_type == '7zip':
-                # Extract files from a 7zip archive
-                filenames = [
-                    op.join(path_to_data, d.template.model.alignment_filename_1),
-                    op.join(path_to_data, d.template.model.alignment_filename_2),
-                    op.join(path_to_data, d.template.model.model_filename),
-                ]
-                path_to_7zip = os.path.join(
-                    archive_dir,
-                    'uniprot_domain_pair',
-                    'uniprot_domain_pair.7z'
-                )
-                self._extract_files_from_7zip(path_to_7zip, filenames)
-            else:
+            try:
                 tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 path_to_alignment_1 = op.join(
@@ -686,6 +677,21 @@ class MyDatabase(object):
                 shutil.copyfile(
                     op.join(archive_save_path, d.template.model.model_filename),
                     op.join(tmp_save_path, d.template.model.model_filename))
+            except FileNotFoundError:
+                if archive_type != '7zip':
+                    raise
+                # Extract files from a 7zip archive
+                filenames = [
+                    op.join(path_to_data, d.template.model.alignment_filename_1),
+                    op.join(path_to_data, d.template.model.alignment_filename_2),
+                    op.join(path_to_data, d.template.model.model_filename),
+                ]
+                path_to_7zip = os.path.join(
+                    archive_dir,
+                    'uniprot_domain_pair',
+                    'uniprot_domain_pair.7z'
+                )
+                self._extract_files_from_7zip(path_to_7zip, filenames)
 
     def _copy_provean(self, ud, archive_dir, archive_type):
         if not (ud.uniprot_sequence and
@@ -702,7 +708,46 @@ class MyDatabase(object):
                             ud.uniprot_sequence.provean.provean_supset_filename))
             return
 
-        if archive_type == '7zip':
+        try:
+            # archive_type != '7zip' or extraction failed
+            subprocess.check_call(
+                "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
+                    op.dirname(op.join(
+                        configs['archive_temp_dir'],
+                        get_uniprot_base_path(ud),
+                        ud.uniprot_sequence.provean.provean_supset_filename))),
+                shell=True)
+    #            subprocess.check_call("cp -f '{}' '{}'".format(
+    #                archive_dir + get_uniprot_base_path(ud) +
+    #                ud.uniprot_sequence.provean.provean_supset_filename,
+    #                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
+    #                ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
+    #            subprocess.check_call("cp -f '{}' '{}'".format(
+    #                archive_dir + get_uniprot_base_path(ud) +
+    #                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
+    #                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
+    #                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
+            shutil.copyfile(
+                op.join(
+                    archive_dir,
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename),
+                op.join(
+                    configs['archive_temp_dir'],
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename))
+            shutil.copyfile(
+                op.join(
+                    archive_dir,
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
+                op.join(
+                    configs['archive_temp_dir'],
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'))
+        except FileNotFoundError:
+            if archive_type != '7zip':
+                raise
             filenames = [
                 op.join(
                     get_uniprot_base_path(ud),
@@ -728,54 +773,23 @@ class MyDatabase(object):
                     .format(filenames, path_to_7zip)
                 )
 
-        # archive_type != '7zip' or extraction failed
-        subprocess.check_call(
-            "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-                op.dirname(op.join(
-                    configs['archive_temp_dir'],
-                    get_uniprot_base_path(ud),
-                    ud.uniprot_sequence.provean.provean_supset_filename))),
-            shell=True)
-#            subprocess.check_call("cp -f '{}' '{}'".format(
-#                archive_dir + get_uniprot_base_path(ud) +
-#                ud.uniprot_sequence.provean.provean_supset_filename,
-#                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-#                ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
-#            subprocess.check_call("cp -f '{}' '{}'".format(
-#                archive_dir + get_uniprot_base_path(ud) +
-#                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-#                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-#                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
-        shutil.copyfile(
-            op.join(
-                archive_dir,
-                get_uniprot_base_path(ud),
-                ud.uniprot_sequence.provean.provean_supset_filename),
-            op.join(
-                configs['archive_temp_dir'],
-                get_uniprot_base_path(ud),
-                ud.uniprot_sequence.provean.provean_supset_filename))
-        shutil.copyfile(
-            op.join(
-                archive_dir,
-                get_uniprot_base_path(ud),
-                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
-            op.join(
-                configs['archive_temp_dir'],
-                get_uniprot_base_path(ud),
-                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'))
-
     @helper.retry_archive
-    def _extract_files_from_7zip(self, path_to_7zip, filenames):
+    def _extract_files_from_7zip(self, path_to_7zip, filenames_in):
         """Extract files to `config['archive_temp_dir']`
         """
+        logger.debug("Extracting the following files: {}".format(filenames_in))
+        filenames = [
+            f for f in filenames_in
+            if not op.isfile(op.join(configs['archive_temp_dir'], f))
+        ]
+        if not filenames:
+            logger.debug("All files already been extracted. Done!")
+            return
         system_command = "7za x '{path_to_7zip}' '{files}' -y".format(
             path_to_7zip=path_to_7zip,
             files="' '".join(filenames)
         )
-        logger.debug(
-            'Extracting files from 7zip archive using the following system command:\n{}'
-            .format(system_command))
+        logger.debug('System command:\n{}'.format(system_command))
         result, error_message, return_code = (
             helper.subprocess_check_output_locally(configs['archive_temp_dir'], system_command)
         )

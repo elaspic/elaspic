@@ -47,12 +47,12 @@ sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" "${TEST_DIR}/tests/trav
 if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == database* ]] ; then
 
 # Download external files
-wget -P "${TEST_DIR}" \
+wget --quiet -P "${TEST_DIR}" \
     -r --no-parent --reject "index.html*" --cut-dirs=4  \
     http://elaspic.kimlab.org/static/download/current_release/Homo_sapiens_test/
-wget -P "${TEST_DIR}/elaspic.kimlab.org" \
+wget --quiet -P "${TEST_DIR}/elaspic.kimlab.org" \
     http://elaspic.kimlab.org/static/download/current_release/domain.tsv.gz
-wget -P "${TEST_DIR}/elaspic.kimlab.org" \
+wget --quiet -P "${TEST_DIR}/elaspic.kimlab.org" \
     http://elaspic.kimlab.org/static/download/current_release/domain_contact.tsv.gz
 
 ls "${TEST_DIR}"

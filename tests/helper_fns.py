@@ -128,15 +128,26 @@ def validate_mutation_1(uniprot_id, mutation):
     """
     logger.debug(helper.underline('Validating that we have provean...'))
     sql_query = """\
-select *
+select 1
 from {db_schema}.provean
 where uniprot_id = '{uniprot_id}' and
 provean_supset_filename is not null;
 """.format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
     logger.debug(sql_query)
-    df = pd.read_sql_query(sql_query, configs['engine'])
-    logger.debug(df)
-    assert len(df) >= 1
+    df1 = pd.read_sql_query(sql_query, configs['engine'])
+    logger.debug(df1)
+    #
+    logger.debug(helper.underline('And that we have at least one domain with a template...'))
+    sql_query = """\
+select 1
+from {db_schema}.uniprot_domain
+join {db_schema}.uniprot_domain_template using (uniprot_domain_id)
+where uniprot_id = '{uniprot_id}';
+""".format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
+    logger.debug(sql_query)
+    df2 = pd.read_sql_query(sql_query, configs['engine'])
+    logger.debug(df2)
+    assert len(df1) >= 1 or len(df2) == 0
 
 
 @helper.retry_database
