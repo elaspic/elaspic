@@ -382,6 +382,7 @@ class Model:
                 [int(mutation[1:-1]) - domain_def[0]])[0]
         )
         mutation_modeller = (mutation[0] + str(position_modeller) + mutation[-1])
+        logger.debug('mutation: {}'.format(mutation))
         logger.debug('position_modeller: {}'.format(position_modeller))
         logger.debug('mutation_modeller: {}'.format(mutation_modeller))
 
@@ -402,11 +403,11 @@ class Model:
             logger.debug('partner_chain_idx: {}'.format(partner_chain_idx))
             if sequence_idx == 0:
                 logger.debug('interacting_aa_1: {}'.format(self.interacting_aa_1))
-                if int(position_modeller) not in self.interacting_aa_1:
+                if int(mutation[1:-1]) not in self.interacting_aa_1:
                     raise errors.MutationOutsideInterfaceError()
             elif sequence_idx == 1:
                 logger.debug('interacting_aa_2: {}'.format(self.interacting_aa_2))
-                if int(position_modeller) not in self.interacting_aa_2:
+                if int(mutation[1:-1]) not in self.interacting_aa_2:
                     raise errors.MutationOutsideInterfaceError()
             else:
                 logger.warning(
