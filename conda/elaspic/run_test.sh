@@ -5,7 +5,7 @@ if [[ "$CI" ]] ; then
   exit
 fi
 
-conda intall -q --yes -n _test fake_provean fake_foldx
+conda install -q --yes -n _test fake_provean fake_foldx
 
 . $SRC_DIR/scripts/configure_test.sh
 . $SRC_DIR/scripts/run_test.sh
