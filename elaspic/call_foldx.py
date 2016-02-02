@@ -179,7 +179,7 @@ class FoldX(object):
         logger.debug('FoldX system command: {}'.format(system_command))
         env = os.environ.copy()
         env['LD_PRELOAD'] = config.libfaketime_so_file
-        env['FAKETIME'] = '15-12-26 00:00:00'
+        env['FAKETIME'] = '2015-12-26 00:00:00'
         result, error_message, return_code = (
             helper.subprocess_check_output_locally(self.foldx_dir, system_command, env=env)
         )
