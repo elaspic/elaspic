@@ -195,15 +195,17 @@ def validate_mutation_4(uniprot_id, mutation):
     """
     logger.debug(helper.underline('Validating that we have domain mutations...'))
     sql_query = """\
-select *
-from {db_schema}.uniprot_domain ud
-join {db_schema}.uniprot_domain_template using (uniprot_domain_id)
-join {db_schema}.uniprot_domain_model udm using (uniprot_domain_id)
-left join {db_schema}.uniprot_domain_mutation udmut on
-    (udmut.uniprot_domain_id = ud.uniprot_domain_id and mutation = '{mutation}')
-where ud.uniprot_id = '{uniprot_id}' and
-    {db_schema}.mutation_in_domain('{mutation}', model_domain_def)
-and model_filename_wt is null;
+SELECT *
+FROM {db_schema}.uniprot_domain ud
+JOIN {db_schema}.uniprot_domain_template using (uniprot_domain_id)
+JOIN {db_schema}.uniprot_domain_model udm using (uniprot_domain_id)
+LEFT JOIN {db_schema}.uniprot_domain_mutation udmut ON
+    (udmut.uniprot_domain_id = ud.uniprot_domain_id AND mutation = '{mutation}')
+WHERE
+ud.uniprot_id = '{uniprot_id}' AND
+{db_schema}.mutation_in_domain('{mutation}', model_domain_def) AND
+udm.model_errors is null AND  -- we allow for some model errors
+model_filename_wt is null;
 """.format(uniprot_id=uniprot_id, mutation=mutation, db_schema=configs['db_schema'])
     logger.debug(sql_query)
     df = pd.read_sql_query(sql_query, configs['engine'])
@@ -216,21 +218,22 @@ def validate_mutation_5(uniprot_id, mutation):
     """
     logger.debug(helper.underline('Validating that we have domain pair mutations...'))
     sql_query = """\
-select *
-from {db_schema}.uniprot_domain_pair udp
-join {db_schema}.uniprot_domain ud1 on (ud1.uniprot_domain_id = udp.uniprot_domain_id_1)
-join {db_schema}.uniprot_domain ud2 on (ud2.uniprot_domain_id = udp.uniprot_domain_id_2)
-join {db_schema}.uniprot_domain_pair_template udpt using (uniprot_domain_pair_id)
-join {db_schema}.uniprot_domain_pair_model udpm using (uniprot_domain_pair_id)
-left join {db_schema}.uniprot_domain_pair_mutation udpmut on
-    (udpmut.uniprot_domain_pair_id = udp.uniprot_domain_pair_id and
+SELECT *
+FROM {db_schema}.uniprot_domain_pair udp
+JOIN {db_schema}.uniprot_domain ud1 on (ud1.uniprot_domain_id = udp.uniprot_domain_id_1)
+JOIN {db_schema}.uniprot_domain ud2 on (ud2.uniprot_domain_id = udp.uniprot_domain_id_2)
+JOIN {db_schema}.uniprot_domain_pair_template udpt using (uniprot_domain_pair_id)
+JOIN {db_schema}.uniprot_domain_pair_model udpm using (uniprot_domain_pair_id)
+LEFT JOIN {db_schema}.uniprot_domain_pair_mutation udpmut ON
+    (udpmut.uniprot_domain_pair_id = udp.uniprot_domain_pair_id AND
      udpmut.uniprot_id = '{uniprot_id}' and udpmut.mutation = '{mutation}')
-where
-((ud1.uniprot_id = '{uniprot_id}' and
+WHERE
+((ud1.uniprot_id = '{uniprot_id}' AND
     {db_schema}.mutation_in_interface('{mutation}', udpm.interacting_aa_1))
-or (ud2.uniprot_id = '{uniprot_id}' and
-    {db_schema}.mutation_in_interface('{mutation}', udpm.interacting_aa_2)))
-and model_filename_wt is null;
+OR (ud2.uniprot_id = '{uniprot_id}' AND
+    {db_schema}.mutation_in_interface('{mutation}', udpm.interacting_aa_2))) AND
+udpm.model_errors IS NULL AND  -- we allow for some model errors
+model_filename_wt IS NULL;
 """.format(uniprot_id=uniprot_id, mutation=mutation, db_schema=configs['db_schema'])
     logger.debug(sql_query)
     df = pd.read_sql_query(sql_query, configs['engine'])
