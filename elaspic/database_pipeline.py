@@ -91,7 +91,8 @@ class DatabasePipeline(Pipeline):
         for d in d_list:
             if not d.path_to_data or any([len(x) > 255 for x in d.path_to_data.split('/')]):
                 d.path_to_data = (
-                    elaspic_database.get_uniprot_base_path(d) + elaspic_database.get_uniprot_domain_path(d)
+                    elaspic_database.get_uniprot_base_path(d) +
+                    elaspic_database.get_uniprot_domain_path(d)
                 )
                 self.db.merge_row(d)
             os.makedirs(op.join(configs['archive_temp_dir'], d.path_to_data), exist_ok=True)
@@ -247,14 +248,14 @@ class _PrepareSequence:
         if exc_type is not None:
             return False
 
-        provean = elaspic_database.Provean()
+        provean = elaspic_database_tables.Provean()
         provean.uniprot_id = d.uniprot_id
         provean.provean_supset_filename = op.basename(self.sequence.provean_supset_file)
         provean.provean_supset_length = self.sequence.provean_supset_length
         self.db.merge_provean(
             provean,
             self.sequence.provean_supset_file,
-                configs['copy_data'] and elaspic_database.get_uniprot_base_path(d)
+            configs['copy_data'] and elaspic_database.get_uniprot_base_path(d)
         )
 
     @property
@@ -278,6 +279,7 @@ class _PrepareModel:
         errors.MutationOutsideInterfaceError,
         errors.NoSequenceFound,
         errors.TcoffeeError,
+        errors.InterfaceMismatchError
     )
 
     def __init__(self, d, db):
@@ -291,7 +293,8 @@ class _PrepareModel:
         self.modeller_results_file = None
 
         # Check if we should skip the model
-        if (isinstance(d, elaspic_database.UniprotDomain) and not (d.template and d.template.cath_id)):
+        if (isinstance(d, elaspic_database.UniprotDomain) and
+                not (d.template and d.template.cath_id)):
             logger.error('No structural template availible for this domain. Skipping...')
             self.skip = True
         elif (isinstance(d, elaspic_database.UniprotDomainPair) and not
@@ -432,7 +435,9 @@ class _PrepareModel:
                     d.template.model = elaspic_database_tables.UniprotDomainModel()
                     d.template.model.uniprot_domain_id = d.uniprot_domain_id
                 bad_domains = self.db.get_rows_by_ids(
-                    elaspic_database_tables.Domain, [elaspic_database_tables.Domain.cath_id], [d.template.cath_id])
+                    elaspic_database_tables.Domain,
+                    [elaspic_database_tables.Domain.cath_id],
+                    [d.template.cath_id])
                 assert len(bad_domains) == 1
                 bad_domain = bad_domains[0]
                 bad_domain.domain_errors = str(d.uniprot_domain_id) + ': ' + str(exc_type)
@@ -595,7 +600,7 @@ class _PrepareModel:
             seqrecord = SeqRecord(
                 id=sequence_id,
                 name=protein_id,
-                seq=Seq(protein_sequence[domain_def[0]-1:domain_def[1]])
+                seq=Seq(protein_sequence[domain_def[0] - 1:domain_def[1]])
             )
             sequence_seqrecords.append(seqrecord)
 
@@ -624,7 +629,7 @@ class _PrepareModel:
         structure_seqrecords = []
         for pdb_chain in pdb_chains:
             chain_sequence = sp.chain_sequence_dict[pdb_chain]
-            seqrecord = SeqRecord(id=pdb_id+pdb_chain, seq=Seq(chain_sequence))
+            seqrecord = SeqRecord(id=pdb_id + pdb_chain, seq=Seq(chain_sequence))
             structure_seqrecords.append(seqrecord)
 
         return structure_file, structure_seqrecords
@@ -990,8 +995,8 @@ class _PrepareMutation:
                 (isinstance(attr_field, six.binary_type) or
                  isinstance(attr_field, six.text_type))):
                     logger.debug(
-                         'Changing attribute {} from {} to {}...'
-                         .format(attr, attr_type, str(attr_field)))
+                        'Changing attribute {} from {} to {}...'
+                        .format(attr, attr_type, str(attr_field)))
                     setattr(self.mut, attr, str(attr_field))
             if six.PY3 and isinstance(attr_field, six.binary_type):
                 logger.debug(
