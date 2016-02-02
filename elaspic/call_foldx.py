@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import os.path as op
 import shutil
 import logging
@@ -174,13 +175,13 @@ class FoldX(object):
         TODO: Add a fallback plan using libfaketime.
         """
 #        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
-        system_command = (
-            "LD_PRELOAD='{}' '15-12-26 00:00:00' foldx -runfile {}"
-            .format(config.libfaketime_so_file_mt, self.foldx_runfile)
-        )
+        system_command = "foldx -runfile {}".format(self.foldx_runfile)
         logger.debug('FoldX system command: {}'.format(system_command))
+        env = os.environ.copy()
+        env['LD_PRELOAD'] = config.libfaketime_so_file
+        env['FAKETIME'] = '15-12-26 00:00:00'
         result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.foldx_dir, system_command)
+            helper.subprocess_check_output_locally(self.foldx_dir, system_command, env=env)
         )
         if error_message:
             logger.debug('foldx result: {}'.format(result))
