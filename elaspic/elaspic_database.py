@@ -31,8 +31,6 @@ from .elaspic_database_tables import (
     UniprotDomainPairMutation,
 )
 
-standard_library.install_aliases()
-
 logger = logging.getLogger(__name__)
 configs = conf.Configs()
 
