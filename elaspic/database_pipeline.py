@@ -687,14 +687,14 @@ class _PrepareMutation:
                (d.template.domain_1 and d.template.domain_2))):
             logger.debug('Skipping because no structural template is availible...')
             self.skip = True
-        elif (d.template.model == None or  # analysis:ignore
-                d.template.model.model_filename == None):  # analysis:ignore
+        elif (d.template.model == None or
+                d.template.model.model_filename == None):
             logger.debug('d.template.model: {}'.format(d.template.model))
             logger.debug('d.template.model.model_filename: {}'.format(
                 getattr(d.template.model, 'model_filename', 'does not exist!')))
             logger.debug('Skipping because no model...')
             self.skip = True
-        elif d.template.model.model_errors != None:   # analysis:ignore
+        elif d.template.model.model_errors != None:
             logger.debug(
                 'Skipping because the model has errors: {}!'
                 .format(d.template.model.model_errors))
@@ -907,7 +907,10 @@ class _PrepareMutation:
             interacting_aa = d.template.model.interacting_aa_2
         else:
             raise Exception("`domain_1or2` should be either '1' or '2'!")
-        return [int(uniprot_num) for uniprot_num in interacting_aa.split(',') if uniprot_num]
+        return (
+            [int(uniprot_num) for uniprot_num in interacting_aa.split(',') if uniprot_num]
+            if interacting_aa else []
+        )
 
     def get_mutation_features(self, d, mut, row_idx=0):
         """
