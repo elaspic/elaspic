@@ -10,12 +10,11 @@ TODO: Modify the export database scripts to only export proteins with <= 2 domai
 TODO: Add cases for precalculated mutations (can do many of these :).
 
 """
-import os.path as op
 import random
 import logging
 import pytest
 import pandas as pd
-from conftest import TESTS_BASE_DIR
+from conftest import DEFAULT_DATABASE_CONFIG as CONFIG_FILE
 from elaspic import conf
 
 logger = logging.getLogger(__name__)
@@ -25,12 +24,10 @@ logger = logging.getLogger(__name__)
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
     CONFIG_FILE = (
-        pytest.config.getoption('--config-file') or
-        op.join(TESTS_BASE_DIR, 'test_database_pipeline.ini')
+        pytest.config.getoption('--config-file') or CONFIG_FILE
     )
 else:
     QUICK = False
-    CONFIG_FILE = op.join(TESTS_BASE_DIR, 'test_database_pipeline.ini')
 
 conf.read_configuration_file(CONFIG_FILE)
 
@@ -38,7 +35,7 @@ print('Running quick: {}'.format(QUICK))
 print('Config file: {}'.format(CONFIG_FILE))
 
 
-# %% Constants
+# %% Imports that require a parsed config file
 import helper_fns
 from elaspic import elaspic_database
 

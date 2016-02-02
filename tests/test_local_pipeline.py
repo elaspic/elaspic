@@ -6,9 +6,7 @@ Created on Sat Sep 26 13:39:23 2015
 """
 import logging
 import pytest
-
-from elaspic import conf, helper
-
+from elaspic import conf
 from conftest import DEFAULT_LOCAL_CONFIG as CONFIG_FILE
 import helper_fns
 
@@ -24,7 +22,6 @@ if hasattr(pytest, "config"):
 else:
     QUICK = False
 
-helper.configure_logger(logger)
 conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=None)
 
 logger.debug('Running quick: {}'.format(QUICK))
