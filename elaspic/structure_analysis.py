@@ -112,11 +112,11 @@ class AnalyzeStructure(object):
                 if not contact_distance:
                     raise ValueError()
             except (IndexError, KeyError, ValueError) as e:
-                logger.error(
+                logger.warning(
                     'Could not calculate the shortest contact distance between two chains!'
                 )
-                logger.error(e)
-                logger.error(contact_distance)
+                logger.warning(e)
+                logger.warning(contact_distance)
                 raise
 
         # PhysiChem
@@ -217,9 +217,9 @@ class AnalyzeStructure(object):
     def _validate_mutation(self, resname, mutation):
         valid_aa = [mutation[0].upper(), mutation[-1].upper()]
         if structure_tools.AAA_DICT.get(resname, resname) not in valid_aa:
-            logger.error(resname)
-            logger.error(mutation)
-            logger.error(structure_tools.AAA_DICT[resname])
+            logger.warning(resname)
+            logger.warning(mutation)
+            logger.warning(structure_tools.AAA_DICT[resname])
             raise errors.MutationMismatchError()
 
     def _increment_vector(
@@ -372,7 +372,7 @@ class AnalyzeStructure(object):
         )
         number_of_tries = 0
         while return_code != 0 and number_of_tries < 5:
-            logger.error('MSMS exited with an error!')
+            logger.warning('MSMS exited with an error!')
             probe_radius -= 0.1
             logger.debug('Reducing probe radius to {}'.format(probe_radius))
             system_command = system_command_string.format(
@@ -696,7 +696,7 @@ class AnalyzeStructure(object):
                 shortest_interchain_distances[chain_1_id][chain_2_id] = min_r
 
         if not shortest_interchain_distances:
-            logger.error(
+            logger.warning(
                 'get_interchain_distances({pdb_chain}, {pdb_mutation}, {cutoff}) failed!'
                 .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff)
             )
@@ -715,13 +715,13 @@ class AnalyzeStructure(object):
         )
 
         if set(all_chains) != set(self.sp.chain_ids):
-            logger.error(
+            logger.warning(
                 'get_interchain_distances({pdb_chain}, {pdb_mutation}, {cutoff}) failed!'
                 .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff)
             )
-            logger.error('Did not calculate chain distances for all chain pairs!')
-            logger.error('all_chains: {}'.format(all_chains))
-            logger.error('self.sp.chain_ids: {}'.format(self.sp.chain_ids))
+            logger.warning('Did not calculate chain distances for all chain pairs!')
+            logger.warning('all_chains: {}'.format(all_chains))
+            logger.warning('self.sp.chain_ids: {}'.format(self.sp.chain_ids))
             raise Exception()
 
         for key_1, value_1 in shortest_interchain_distances.items():
@@ -740,8 +740,8 @@ class AnalyzeStructure(object):
         termination, rc, e = self.__run_pops_area(self.get_structure_file(''.join(chain_ids)))
         if rc != 0:
             if termination != 'Clean termination':
-                logger.error('Pops error for pdb: %s:' % self.pdb_file)
-                logger.error(e)
+                logger.warning('Pops error for pdb: %s:' % self.pdb_file)
+                logger.warning(e)
                 return [None, None, None]
         result = self.__read_pops_area(self.get_structure_file(''.join(chain_ids)) + '.out')
 
@@ -759,8 +759,8 @@ class AnalyzeStructure(object):
         termination, rc, e = self.__run_pops_area(self.get_structure_file(chain_ids[0]))
         if rc != 0:
             if termination != 'Clean termination':
-                logger.error('Error in pops for pdb: %s:' % self.pdb_file)
-                logger.error(e)
+                logger.warning('Error in pops for pdb: %s:' % self.pdb_file)
+                logger.warning(e)
                 return [None, None, None]
         result = self.__read_pops_area(self.get_structure_file(chain_ids[0]) + '.out')
 
@@ -778,8 +778,8 @@ class AnalyzeStructure(object):
         termination, rc, e = self.__run_pops_area(self.get_structure_file(chain_ids[1]))
         if rc != 0:
             if termination != 'Clean termination':
-                logger.error('Error in pops for pdb: %s:' % self.pdb_file)
-                logger.error(e)
+                logger.warning('Error in pops for pdb: %s:' % self.pdb_file)
+                logger.warning(e)
                 return [None, None, None]
         result = self.__read_pops_area(self.get_structure_file(chain_ids[1]) + '.out')
 
@@ -820,7 +820,7 @@ class AnalyzeStructure(object):
 #        logger.debug('pops error: %s' % e)
         error_message_1 = 'Warning: Atom distance too short! Probably incorrect POPS results!'
         if error_message_1 in error_message:
-            logger.error(error_message_1)
+            logger.warning(error_message_1)
         logger.debug('pops rc: %s' % return_code)
         return output[-1], return_code, error_message
 
