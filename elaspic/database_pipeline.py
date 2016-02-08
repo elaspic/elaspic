@@ -439,8 +439,7 @@ class _PrepareModel:
             logger.error("Removing model due to an error and trying again...")
             self.db.remove_model(self.d)
             self.d.template.model.model_filename = None
-            new_model = PrepareModel(self.d, self.db, new_model=True)
-            self.model = new_model.model
+            self.model = PrepareModel(self.d, self.db, new_model=True)
             return True
         elif (exc_type is not None and
                 ((exc_type in self.handled_errors) or
@@ -887,16 +886,18 @@ class _PrepareMutation:
 
             else:
                 # Mutation is outside the interface
+                error_message = (
+                    'Mutated residue {} not involved in the interaction!'
+                    .format(mutation[:-1])
+                )
+                logger.error(error_message)
                 logger.error('Uniprot ID: {}\tMutation: {}'.format(
                     uniprot_id_1, mutation))
                 logger.error('Uniprot ID 1: {}\tInteracting AA 1: {}'.format(
                     d.uniprot_domain_1.uniprot_id, interacting_aa_1))
                 logger.error('Uniprot ID 2: {}\tInteracting AA 2: {}'.format(
                     d.uniprot_domain_2.uniprot_id, interacting_aa_2))
-                raise errors.MutationOutsideInterfaceError(
-                    'Mutated residue {} not involved in the interaction!'
-                    .format(mutation[:-1])
-                )
+                raise errors.MutationOutsideInterfaceError(error_message)
 
         position_domain = int(mutation[1:-1]) - domain_start + 1
         mutation_domain = mutation[0] + str(position_domain) + mutation[-1]
