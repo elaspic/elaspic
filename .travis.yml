@@ -45,7 +45,7 @@ script:
   # travis_after_all
   - wget --quiet https://raw.github.com/dmakhno/travis_after_all/master/travis_after_all.py
   # Run tests
-  - long_wait $TEST_DIR/scripts/run_test.sh
+  - travis_wait 119 $TEST_DIR/scripts/run_test.sh
 after_success:
   - coveralls
   - codecov
