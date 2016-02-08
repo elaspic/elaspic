@@ -20,10 +20,10 @@ install:
   - hash -r
   # Add relevant channels and install packages
   - conda config --set always_yes yes --set changeps1 no
-  - conda config --add channels bokeh
+  - conda config --add channels omnia
   - conda config --add channels ostrokach
   - conda config --add channels salilab
-  - conda config --add channels r
+  # - conda config --add channels r
   - conda config --add channels bioconda
   - conda info -a
   - conda update -q conda
@@ -44,7 +44,7 @@ script:
   # travis_after_all
   - wget --quiet https://raw.github.com/dmakhno/travis_after_all/master/travis_after_all.py
   # Run tests
-  - $TEST_DIR/scripts/run_test.sh
+  - long_wait $TEST_DIR/scripts/run_test.sh
 after_success:
   - coveralls
   - codecov

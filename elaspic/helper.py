@@ -279,8 +279,8 @@ def run_subprocess_locally(working_path, system_command, **popen_argvars):
 
 
 def subprocess_communicate(child_process):
-    with print_heartbeats():
-        result, error_message = child_process.communicate()
+    # with print_heartbeats():  # use long_wait in .travis.yml instead
+    result, error_message = child_process.communicate()
     result = _try_decoding_bytes_string(result)
     error_message = _try_decoding_bytes_string(error_message)
     return_code = child_process.returncode
