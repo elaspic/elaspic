@@ -96,7 +96,7 @@ class Sequence:
         if mutation in self.mutations:
             return self.mutations[mutation]
 
-        if mutation[0] != self.sequence[int(mutation[1:-1])-1]:
+        if mutation[0] != self.sequence[int(mutation[1:-1]) - 1]:
             logger.error('sequence: {}'.format(self.sequence))
             logger.error('mutation: {}'.format(mutation))
             raise errors.MutationMismatchError()
@@ -104,7 +104,7 @@ class Sequence:
         results = dict(
             protein_id=self.protein_id,
             mutation=mutation,
-            provean_score=self._run_provean(mutation),
+            provean_score=self.run_provean(mutation),
             matrix_score=self.score_pairwise(mutation[0], mutation[-1])
         )
         return results
@@ -147,7 +147,7 @@ class Sequence:
         while self.sequence[any_position] not in helper.canonical_amino_acids:
             any_position += 1
         first_aa = self.sequence[any_position]
-        mutation = '{0}{1}{0}'.format(first_aa, any_position+1)
+        mutation = '{0}{1}{0}'.format(first_aa, any_position + 1)
 
         # Run provean
         provean_score = self._run_provean(
@@ -177,6 +177,28 @@ class Sequence:
                 if line and not line.startswith('#'):
                     provean_supset_length += 1
         return provean_supset_length
+
+    def run_provean(self, mutation, *args, **kwargs):
+        n_tries = 0
+        while n_tries < 5:
+            n_tries += 1
+            try:
+                provean_score = self._run_provean(mutation, *args, **kwargs)
+                break
+            except errors.ProveanError as e:
+                bad_ids = re.findall("Entry not found in BLAST database: '(.*)'", e.args[0])
+                provean_supset_data = []
+                with open(self.provean_supset_file, 'rt') as ifh:
+                    for line in ifh:
+                        if any([(gi_id in line) for gi_id in bad_ids]):
+                            logger.debug(
+                                "Removing line '{}' from the provean supset file..."
+                                .format(line.strip()))
+                        else:
+                            provean_supset_data.append(line)
+                with open(self.provean_supset_file, 'wt') as ofh:
+                    ofh.writelines(provean_supset_data)
+        return provean_score
 
     def _run_provean(self, mutation, save_supporting_set=False, check_mem_usage=False):
         """
@@ -268,7 +290,7 @@ class Sequence:
             if disk_space_availible_now < 5:  # less than 5 GB of free disk space left
                 raise errors.ProveanResourceError(
                     'Ran out of disk space and provean had to be terminated ({} GB used)'
-                    .format(disk_space_availible-disk_space_availible_now),
+                    .format(disk_space_availible - disk_space_availible_now),
                     child_process_group_id)
             memory_availible_now = (
                 psutil.virtual_memory().available / float(1024)**3
@@ -289,7 +311,7 @@ class Sequence:
         result_list = result.split('\n')
         for i in range(len(result_list)):
             if re.findall('# VARIATION\s*SCORE', result_list[i]):
-                provean_score = float(result_list[i+1].split()[-1])
+                provean_score = float(result_list[i + 1].split()[-1])
                 break
 
         if return_code != 0 or provean_score is None:

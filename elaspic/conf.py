@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 # %% Class to store all configurations
 class Configs(UserDict):
     """All instances keep data in the same `Configs._data` dictionary.
-
-    TODO: Either replace this with a dictionary or turn all the functions below into methods.
     """
     _data = {}
 
