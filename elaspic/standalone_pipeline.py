@@ -226,6 +226,8 @@ class StandalonePipeline(Pipeline):
                 logger.warning(warning)
                 continue
             model = self.get_model(idxs)
+            if model is None:
+                continue
             model_result = model.result
             model_result['idxs'] = tuple(idxs)
             model_results.append(model_result)
@@ -233,6 +235,11 @@ class StandalonePipeline(Pipeline):
             json.dump(model_results, ofh)
 
     def run_all_mutations(self):
+        handled_errors = (
+            errors.ChainsNotInteractingError,
+            errors.MutationOutsideDomainError,
+            errors.MutationOutsideInterfaceError,
+        )
         for (mutation_idx, mutation), mutation_in in self.mutations.items():
             mutation_results = []
             mutation_results_file = op.join(
@@ -246,7 +253,7 @@ class StandalonePipeline(Pipeline):
                 continue
             try:
                 mutation_result = self.get_mutation_score(mutation_idx, mutation_idx, mutation)
-            except errors.MutationOutsideDomainError as e:
+            except handled_errors as e:
                 logger.error(e)
                 continue
             mutation_result['idx'] = mutation_idx
@@ -262,7 +269,7 @@ class StandalonePipeline(Pipeline):
                 if mutation_idx in idxs:
                     try:
                         mutation_result = self.get_mutation_score(idxs, mutation_idx, mutation)
-                    except errors.MutationOutsideInterfaceError as e:
+                    except handled_errors as e:
                         logger.error(e)
                         continue
                     mutation_result['idx'] = mutation_idx
@@ -413,6 +420,12 @@ class PrepareModel:
         self.model = elaspic_model.Model(self.sequence_file, self.structure_file)
 
     def __exit__(self, exc_type, exc_value, traceback):
+        handled_errors = (
+            errors.ChainsNotInteractingError,
+        )
+        if exc_type in handled_errors:
+            logger.debug("Caught the following error: '{}'".format(exc_type))
+            return True
         return False
 
     @property
@@ -448,6 +461,9 @@ class PrepareMutation:
         pass
 
     def run(self):
+        if not self.sequence or not self.model:
+            raise errors.ChainsNotInteractingError
+
         features = dict()
         features['mutation'] = self.mutation
 
