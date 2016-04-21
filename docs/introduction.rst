@@ -8,7 +8,7 @@ Introduction
    :align: center
    :figclass: align-center
 
-   Flowchart describing the ELASPIC pipeline.
+   Flowchart describing the ELASPIC pipeline :download:`.<./introduction/elaspic_flowchart.pdf>`
 
 ELASPIC can be run using two different pipelines: the :ref:`local pipeline` and the :ref:`database pipeline`.
 

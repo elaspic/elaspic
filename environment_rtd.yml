@@ -1,59 +1,14 @@
 name: elaspic_rtd
 
 channels:
-- bioconda
-- salilab
-- defaults
-- ostrokach
+  - bioconda
+  - salilab
+  - omnia
+  - defaults
+  - conda-forge
+  - r
+  - ostrokach
 
 dependencies:
-- biopython=1.66=np110py34_0
-- blast=2.2.31=1
-- boost=1.58.0=3
-- bzip2=1.0.6=0
-- cd-hit=4.6.4=1
-- curl=7.45.0=1
-- elaspic=1.0.13=py34_1
-- fastcache=1.0.2=py34_0
-- foldx=3.0.6=5
-- future=0.15.2=py34_0
-- hdf5-1813=1.8.13=0
-- icu=55.1=0
-- knot=1.0.0=2
-- libfaketime=0.9.6=py34_4
-- libgcc=4.8.5=1
-- libgfortran=1.0=0
-- modeller=9.15=py34_4
-- msms=2.6.1=4
-- mysql-connector-c=6.1.6=1
-- mysqlclient=1.3.7=py34_1
-- numpy=1.10.2=py34_0
-- openblas=0.2.14=3
-- openssl=1.0.1k=1
-- p7zip=15.09=3
-- pandas=0.17.1=np110py34_0
-- pip=8.0.1=py34_0
-- pops=1.6.4=1
-- provean=1.1.5=1
-- psutil=3.4.1=py34_0
-- psycopg2=2.6.1=py34_0
-- python=3.4.0=0
-- python-dateutil=2.4.2=py34_0
-- pytz=2015.7=py34_0
-- pyyaml=3.11=py34_1
-- readline=6.2=2
-- requests=2.9.1=py34_0
-- retrying=1.3.3=py_1
-- scikit-learn=0.17=np110py34_1
-- scipy=0.16.1=np110py34_0
-- setuptools=19.4=py34_0
-- six=1.10.0=py34_0
-- sqlalchemy=1.0.11=py34_0
-- sqlite=3.9.2=0
-- stride=1.6.4=1
-- system=5.8=2
-- t_coffee=11.0.8=py34_1
-- tk=8.5.18=0
-- wheel=0.26.0=py34_1
-- yaml=0.1.6=0
-- zlib=1.2.8=0
+  - elaspic=1.0.21=py35_1
+

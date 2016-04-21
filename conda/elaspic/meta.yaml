@@ -50,7 +50,7 @@ requirements:
     - pops
     - msms
     - t_coffee
-    - modeller ==9.15
+    - modeller
     - cd-hit
     - provean 
     - foldx
