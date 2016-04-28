@@ -10,5 +10,6 @@ channels:
   - ostrokach
 
 dependencies:
+  - python>=3.5
   - elaspic
 
