@@ -5,7 +5,7 @@ Introduction
 
 Welcome to the ELASPIC code repository!
 
-Complete documentation is availible on `ReadTheDocs <http://elaspic.readthedocs.org>`_.
+Complete documentation is availible on `ReadTheDocs <http://elaspic.readthedocs.io>`_.
 
 For a small number of mutations, you can try running ELASPIC using our `webserver <http://elaspic.kimlab.org/>`_.
 
@@ -26,5 +26,6 @@ Berliner N, Teyra J, Çolak R, Garcia Lopez S, Kim PM (2014) Combining Structura
    :alt: Coverage Status
 
 .. |docs| image:: https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square&?version=latest
-   :target: http://elaspic.readthedocs.org/en/latest/?badge=latest
+   :target: http://elaspic.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
+
