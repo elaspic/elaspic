@@ -10,5 +10,5 @@ channels:
   - ostrokach
 
 dependencies:
-  - elaspic=1.0.21=py35_1
+  - elaspic
 

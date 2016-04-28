@@ -53,7 +53,7 @@ requirements:
     - modeller
     - cd-hit
     - provean 
-    - foldx
+    # - foldx  # private only and breaks readthedocs
     - libfaketime
 
 test:
@@ -71,3 +71,4 @@ about:
   license: MIT
   summary: Ensemble Learning Approach for Stability Prediction of 
            Interface and Core mutations (ELASPIC).
+

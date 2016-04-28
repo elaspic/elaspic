@@ -31,6 +31,7 @@ install:
   - conda install -q --yes conda-build
   - pip install -q coveralls codecov pytest-cov
   # Build elaspic
+  - conda install -q --yes foldx
   - conda build -q conda/elaspic
 before_script:
   # Create a test environment
