@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Nov  5 16:28:48 2015
-
-@author: strokach
-"""
 import os
 import os.path as op
 import pep8

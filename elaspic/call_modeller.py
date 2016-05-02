@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Homology modeling by the automodel class
 """

@@ -1,17 +1,8 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Sep 26 14:20:21 2015
-
-@author: strokach
-"""
 import os
-
 import pytest
-
 from elaspic import helper
 
 
-# %%
 @pytest.fixture(scope='function')
 def cleanup(request):
     def fin():
@@ -41,7 +32,6 @@ def test_open_exclusively(cleanup):
     assert len(data) == NUMBER_OF_WRITES
 
 
-# %%
 if __name__ == '__main__':
     import pytest
     pytest.main(['test_helper.py', '-vsx', '--quick'])

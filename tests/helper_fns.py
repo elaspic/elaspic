@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
 """
-Created on Mon Feb  1 12:25:42 2016
-
-@author: strokach
-
 ELASPIC configs should be initialized with a configuration file
 before sourcing this file, and should have an `engine` attribute.
 

@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jun 11 16:52:31 2015
-
-@author: ostrokach
-"""
 import datetime
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative as sa_ext_declarative

@@ -1,27 +1,27 @@
-
 # Folders
+__pycache__
+_build
 elaspic.egg-info
-build
-dist
-extras
 
-# Hidden files and folders
-_*
+# Hidden things
 .*
 
 # Compiled source code
 *.pyc
 *.o
 
-# Logs, backups, and databases
+# Logs and backups
 *.log
 *.bak
-*.sql
-
-# Git Windows configuration file
-.gitattributes
 
 # Configuration files with private information
 config/*.ini
 elaspic/data/ml_clf_*
+
+# Files not ready for release
+TODO.md
+docs/datasets.rst
+docs/introduction/elaspic_flowchart.pptx
+docs/introduction/elaspic_flowchart_database.pptx
+docs/introduction/elaspic_flowchart_local.pptx
 

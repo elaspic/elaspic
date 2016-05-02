@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Sep 26 14:28:57 2015
-
-@author: strokach
-"""
 import os
 import os.path as op
 import pytest

@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Sep 30 16:54:21 2015
-
-@author: strokach
-"""
 import os.path as op
 import pickle
 import logging

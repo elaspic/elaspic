@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-
-
 # %% Tcoffee
 class TcoffeeError(Exception):
 

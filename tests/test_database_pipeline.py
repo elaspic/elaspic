@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
 """
-Created on Sat Sep 26 13:39:23 2015
-
-@author: strokach
-
 TODO: Modify the export database scripts to only export proteins with <= 2 domains
       and <= 3 interactions.
 

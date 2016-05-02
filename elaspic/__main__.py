@@ -1,9 +1,4 @@
-#!/usr/bin/env python
 """
-Created on Fri Mar  6 18:18:24 2015
-@author: Alexey Strokach
-
-
 In order to run this script from a Spyder console, you first need to import modeller using the
 ``import modeller`` command. If your paths are set up to use modeller from python 3.4, but
 you're actually using python 2.7, you also need to update your ``sys.path`` variable (which is

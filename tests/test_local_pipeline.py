@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Sep 26 13:39:23 2015
-
-@author: strokach
-"""
 import logging
 import pytest
 from elaspic import conf
