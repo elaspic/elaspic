@@ -6,8 +6,8 @@ source:
   path: ../../
 
 build:
-  number: 1
-  entry_points: 
+  number: 0
+  entry_points:
     - elaspic = elaspic.__main__:main
 
 requirements:
@@ -26,11 +26,10 @@ requirements:
     # Basic python
     - python
     - pyyaml
+    - requests
     - psutil
     - retrying
     - fastcache
-    - requests
-    - pytest
     # Scientific python
     - numpy
     - scipy
@@ -52,12 +51,17 @@ requirements:
     - t_coffee
     - modeller
     - cd-hit
-    - provean 
+    # - provean  # can't install fake_provean for tests if this is installed...
     # - foldx  # private only and breaks readthedocs
     - libfaketime
 
 test:
   requires:
+    - pytest
+    - pytest-runner
+    - pytest-cov
+    - pep8
+    - flake8
     - fake_provean
     - fake_foldx
   imports:
@@ -69,6 +73,5 @@ test:
 about:
   home: elaspic.kimlab.org
   license: MIT
-  summary: Ensemble Learning Approach for Stability Prediction of 
+  summary: Ensemble Learning Approach for Stability Prediction of
            Interface and Core mutations (ELASPIC).
-

@@ -1,38 +1,30 @@
-"""
-TODO: Modify the export database scripts to only export proteins with <= 2 domains
-      and <= 3 interactions.
-
-TODO: Add cases for precalculated mutations (can do many of these :).
-
-"""
-import random
+import os.path as op
 import logging
+import random
 import pytest
 import pandas as pd
-from conftest import DEFAULT_DATABASE_CONFIG as CONFIG_FILE
 from elaspic import conf
 
 logger = logging.getLogger(__name__)
 
+# Constants
+CONFIG_FILE = op.join(op.dirname(__file__), 'database_pipeline.ini')
 
-# %% Configurations
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
-    CONFIG_FILE = (
-        pytest.config.getoption('--config-file') or CONFIG_FILE
-    )
+    CONFIG_FILE = pytest.config.getoption('--config-file') or CONFIG_FILE
 else:
     QUICK = False
 
-conf.read_configuration_file(CONFIG_FILE)
+conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=None)
 
-print('Running quick: {}'.format(QUICK))
-print('Config file: {}'.format(CONFIG_FILE))
+logger.debug('Running quick: {}'.format(QUICK))
+logger.debug('Config file: {}'.format(CONFIG_FILE))
 
 
-# %% Imports that require a parsed config file
-import helper_fns
-from elaspic import elaspic_database
+# Imports that require a parsed config file
+import helper_fns  # noqa
+from elaspic import elaspic_database  # noqa
 
 configs = conf.Configs()
 
@@ -41,7 +33,7 @@ configs['engine'] = db.get_engine()
 configs['engine'].execute("SET sql_mode = ''")
 
 
-# %%
+#
 test_cases = []
 
 

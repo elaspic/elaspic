@@ -1,18 +1,17 @@
+import os.path as op
 import logging
 import pytest
 from elaspic import conf
-from conftest import DEFAULT_LOCAL_CONFIG as CONFIG_FILE
 import helper_fns
 
 logger = logging.getLogger(__name__)
 
+# Constants
+CONFIG_FILE = op.join(op.dirname(__file__), 'standalone_pipeline.ini')
 
-# %% Constants
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
-    CONFIG_FILE = (
-        pytest.config.getoption('--config-file') or CONFIG_FILE
-    )
+    CONFIG_FILE = pytest.config.getoption('--config-file') or CONFIG_FILE
 else:
     QUICK = False
 
@@ -22,7 +21,6 @@ logger.debug('Running quick: {}'.format(QUICK))
 logger.debug('Config file: {}'.format(CONFIG_FILE))
 
 
-# %%
 # Source of good PDB stuctures: http://www.rcsb.org/pdb/101/motm_archive.do
 pdb_mutatations = {
     # test_1; only one chain

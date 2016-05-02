@@ -136,9 +136,6 @@ def elaspic(args):
 
 
 def configure_run_parser(sub_parsers):
-    description = """
-    Run the ELASPIC pipeline.
-    """
     help = "Run ELASPIC."
     description = help + """
 """
@@ -282,9 +279,6 @@ def delete_database(args):
 
 
 def configure_database_parser(sub_parsers):
-    description = """
-    Run the ELASPIC pipeline.
-    """
     help = "Perform maintenance tasks on the ELASPIC database."
     description = help + """
 """
@@ -439,9 +433,6 @@ def elaspic_train(args):
 
 
 def configure_train_parser(sub_parsers):
-    description = """
-    Run the ELASPIC pipeline.
-    """
     help = "Train the ELASPIC classifiers."
     description = help + """
 """

@@ -6,77 +6,64 @@ services:
   - mysql
 env:
   global:
-    - CONDA_ENV="_traivs"
-    - TEST_DIR="${HOME}/_testing"
+    - PKG_NAME="elaspic"
+    - SRC_DIR="${TRAVIS_BUILD_DIR}"
+    - SCRIPTS_DIR="${TRAVIS_BUILD_DIR}/devtools/travis-ci"
+    - TEST_DIR="${HOME}/_test"
   matrix:
-    - TEST_SUITE='local_1'
-    - TEST_SUITE='database_1'
-    - TEST_SUITE='database_2'
+    - TEST_SUITE='test_standalone_pipeline_1'
+    - TEST_SUITE='test_database_pipeline_1'
+    - TEST_SUITE='test_database_pipeline_2'
+    - TEST_SUITE='test_unittests'
 install:
-  # - wget https://repo.continuum.io/anaconda/Anaconda3-latest-Linux-x86_64.sh -O anaconda.sh;
-  - wget --quiet https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O anaconda.sh;
+  # Install Anaconda
+  - wget --no-verbose -O anaconda.sh https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh;
   - bash anaconda.sh -b -p $HOME/anaconda
   - export PATH="$HOME/anaconda/bin:$PATH"
   - hash -r
-  # Add relevant channels and install packages
+  # Add relevant channels
   - conda config --set always_yes yes --set changeps1 no
-  - conda config --add channels omnia
   - conda config --add channels ostrokach
   - conda config --add channels https://conda.binstar.org/t/$ANACONDA_TOKEN/ostrokach
-  - conda config --add channels salilab
-  # - conda config --add channels r
+  - conda config --add channels defaults
+  - conda config --add channels conda-forge
+  - conda config --add channels omnia
   - conda config --add channels bioconda
   - conda info -a
+  # Install packages
   - conda update -q conda
   - conda install -q --yes conda-build
-  - pip install -q coveralls codecov pytest-cov
   # Build elaspic
-  - conda install -q --yes foldx
-  - conda build -q conda/elaspic
+  - conda build -q devtools/conda-recipe/
 before_script:
   # Create a test environment
-  - conda create -n ${CONDA_ENV} elaspic --use-local -y
-  - source activate ${CONDA_ENV}
-  - conda install -q --yes -n ${CONDA_ENV} pytest pytest-cov
-  - conda install -q --yes -n ${CONDA_ENV} fake_provean fake_foldx
-  - $TRAVIS_BUILD_DIR/scripts/configure_test.sh
-  - cd ${TEST_DIR}
-  - ls 
+  - source activate _test
+  - conda install -q --yes fake_provean fake_foldx anaconda-client
 script:
-  # travis_after_all
-  - wget --quiet https://raw.github.com/dmakhno/travis_after_all/master/travis_after_all.py
-  # Run tests
-  - travis_wait 119 $TEST_DIR/scripts/run_test.sh
+  - |
+    if [[ $TEST_SUITE != 'test_unittests' ]] ; then
+        source "${SCRIPTS_DIR}/configure_tests.sh"
+        cd "${TEST_DIR}"
+        ls
+        travis_wait 119 "${SCRIPTS_DIR}/${TEST_SUITE}.sh"
+    else
+        py.test
+        "${SCRIPTS_DIR}/build-docs.sh"
+    fi
 after_success:
-  - coveralls
+  - echo "Success!"
+  - pip install codecov
   - codecov
-  # travis_after_all
-  - python travis_after_all.py https://api.travis-ci.com
-  - export $(cat .to_export_back)
   - |
-      if [ "$BUILD_LEADER" = "YES" ]; then
-        if [ "$BUILD_AGGREGATE_STATUS" = "others_succeeded" ]; then
-          echo "All jobs succeeded! PUBLISHING..."
-          # Upload successful build to Anaconda...
-          anaconda upload -t $ANACONDA_TOKEN ${HOME}/anaconda/conda-bld/linux-64/elaspic*
-        else
-          echo "Some jobs failed"
-        fi
-      fi
+    if [[ $TEST_SUITE == 'test_unittests' && \
+          $TRAVIS_BRANCH = "master" && \
+          $TRAVIS_PULL_REQUEST = false ]] ; then
+        echo "Uploading to binstar..."
+        conda install -q --yes anaconda-client
+        anaconda -t ANACONDA_TOKEN upload /home/travis/anaconda/conda-bld/linux-64/*.tar.bz2
+    fi
 after_failure:
-  # travis_after_all
-  - python travis_after_all.py https://api.travis-ci.com
-  - export $(cat .to_export_back)
-  - |
-      if [ "$BUILD_LEADER" = "YES" ]; then
-        if [ "$BUILD_AGGREGATE_STATUS" = "others_failed" ]; then
-          echo "All jobs failed"
-        else
-          echo "Some jobs failed"
-        fi
-      fi
+  - echo "Failure!"
 after_script:
-  # travis_after_all
-  - echo leader=$BUILD_LEADER status=$BUILD_AGGREGATE_STATUS
-  # Cleanup
-  - $TEST_DIR/scripts/cleanup_test.sh
+  - ${SCRIPTS_DIR}/cleanup_test.sh
+  - echo "X_X"

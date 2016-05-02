@@ -2,57 +2,20 @@
 
 set -ev
 
-# Set ${TEST_DIR}
-if [[ $CONDA_BUILD ]] ; then
-    echo 'CONDA'
-    export TEST_DIR=`pwd`
-elif [[ $TRAVIS ]] ; then
-    echo 'TRAVIS'
-    if [[ -z ${TEST_DIR} ]] ; then
-        echo 'Error! The ${TEST_DIR} environment variable must be set when using travis-ci!'
-        exit 1
-    fi
-    mkdir -p "${TEST_DIR}"
-    SRC_DIR="$TRAVIS_BUILD_DIR"
-else 
-    echo 'Unknown environment!'
-    exit
+# Sanity checks
+if [[ -z ${SCRIPTS_DIR} ||
+      -z ${TEST_DIR} ]] ; then
+    echo 'Required environment variables have not been set!'
+    exit 1
 fi
 
-
-# Copy test data
-rsync -av "${SRC_DIR}/scripts" "${TEST_DIR}" --exclude='[._]*'
-rsync -av "${SRC_DIR}/tests" "${TEST_DIR}" --exclude='[._]*'
-rsync -av "${SRC_DIR}/setup.cfg" "${TEST_DIR}"
-
-
-# Common directories
-PDB_DIR="${TEST_DIR}/pdb"
-BLAST_DB_DIR="${TEST_DIR}/blast/db"
-ARCHIVE_DIR="${TEST_DIR}/archive"
-
-mkdir -p "${PDB_DIR}"
-mkdir -p "${BLAST_DB_DIR}"
-mkdir -p "${ARCHIVE_DIR}"
-
-touch "${BLAST_DB_DIR}/nr.pal"
-touch "${BLAST_DB_DIR}/pdbaa.pal"
-
-sed -i "s|^pdb_dir = .*|pdb_dir = $PDB_DIR|" "${TEST_DIR}/tests/travis_config_file.ini"
-sed -i "s|^blast_db_dir = .*|blast_db_dir = $BLAST_DB_DIR|" "${TEST_DIR}/tests/travis_config_file.ini"
-sed -i "s|^archive_dir = .*|archive_dir = $ARCHIVE_DIR|" "${TEST_DIR}/tests/travis_config_file.ini"
-
-
-# ====== Database ======
-if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == database* ]] ; then
-
 # Download external files
-wget --quiet -P "${TEST_DIR}" \
+wget --no-verbose -P "${TEST_DIR}" \
     -r --no-parent --reject "index.html*" --cut-dirs=4  \
     http://elaspic.kimlab.org/static/download/current_release/Homo_sapiens_test/
-wget --quiet -P "${TEST_DIR}/elaspic.kimlab.org" \
+wget --no-verbose -P "${TEST_DIR}/elaspic.kimlab.org" \
     http://elaspic.kimlab.org/static/download/current_release/domain.tsv.gz
-wget --quiet -P "${TEST_DIR}/elaspic.kimlab.org" \
+wget --no-verbose -P "${TEST_DIR}/elaspic.kimlab.org" \
     http://elaspic.kimlab.org/static/download/current_release/domain_contact.tsv.gz
 
 ls "${TEST_DIR}"
@@ -80,10 +43,10 @@ DECLARE mutation_in_domain bool;
 SET domain_start = CONVERT(SUBSTRING_INDEX(domain_def, ':', 1), unsigned integer);
 SET domain_end = CONVERT(SUBSTRING_INDEX(domain_def, ':', -1), unsigned integer);
 SET mutation_pos = CONVERT(SUBSTRING(mutation, 2, LENGTH(mutation) - 2), unsigned integer);
-SET mutation_in_domain = 
-    CASE 
+SET mutation_in_domain =
+    CASE
         WHEN mutation_pos = 0 THEN null
-        WHEN mutation_pos >= domain_start and mutation_pos <= domain_end THEN true 
+        WHEN mutation_pos >= domain_start and mutation_pos <= domain_end THEN true
         ELSE false
     END;
 RETURN mutation_in_domain;
@@ -110,14 +73,14 @@ END$$
 DELIMITER ;
 EOF
 
+
 # Load precalculated data to the database
-elaspic database -c "${TEST_DIR}/tests/travis_config_file.ini" create
-elaspic database -c "${TEST_DIR}/tests/travis_config_file.ini" load_data \
+elaspic database -c "${SCRIPTS_DIR}/database_pipeline.ini" create
+elaspic database -c "${SCRIPTS_DIR}/database_pipeline.ini" load_data \
     --data_folder "${TEST_DIR}/elaspic.kimlab.org"
 
-# Remove some rows from the database, so that we have something to calculate
+
+# Remove some rows from the database, so that we have something to calculate in our tests
 mysql -u root travis_test -e "DELETE FROM provean LIMIT 20";
 mysql -u root travis_test -e "DELETE FROM uniprot_domain_model LIMIT 20";
 mysql -u root travis_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 20";
-
-fi

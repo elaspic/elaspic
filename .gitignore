@@ -1,14 +1,17 @@
-# Folders
-__pycache__
-_build
-elaspic.egg-info
-
-# Hidden things
-.*
-
-# Compiled source code
+# Files
 *.pyc
-*.o
+*.bak
+
+# Folders
+_build
+__pycache__
+*.egg-info
+
+# Hidden
+.*
+!.gitignore
+!.travis.yml
+!.gitlab-ci.yml
 
 # Logs and backups
 *.log
@@ -24,4 +27,3 @@ docs/datasets.rst
 docs/introduction/elaspic_flowchart.pptx
 docs/introduction/elaspic_flowchart_database.pptx
 docs/introduction/elaspic_flowchart_local.pptx
-
