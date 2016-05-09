@@ -60,30 +60,38 @@ def format_mutation_features(feature_df, core_or_interface):
 
     # Drop rows that have missing FoldX information
     # (should not happen when callced from inside the pipeline because we have only one column)
-    feature_df = feature_df.dropna(subset=[foldx_column_name + '_wt', foldx_column_name + '_mut'])
+    # feature_df = feature_df.dropna(subset=[foldx_column_name + '_wt', foldx_column_name + '_mut'])
 
     # FoldX output
     for column_index, column_name in enumerate(foldx_feature_names_wt):
         feature_df[column_name] = feature_df[foldx_column_name + '_wt'].apply(
-            lambda x: float(x.split(',')[column_index]))
+            lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else x)
     del feature_df[foldx_column_name + '_wt']
 
     for column_index, column_name in enumerate(foldx_feature_names_mut):
         feature_df[column_name] = feature_df[foldx_column_name + '_mut'].apply(
-            lambda x: float(x.split(',')[column_index]))
+            lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else x)
     del feature_df[foldx_column_name + '_mut']
 
     # PhysicoChemical properties
     names_phys_chem = ['pcv_salt_equal', 'pcv_salt_opposite', 'pcv_hbond', 'pcv_vdw']
     for column_index, column_name in enumerate(names_phys_chem):
-        feature_df[column_name + '_wt'] = feature_df['physchem_wt'].apply(
-            lambda x: int(x.split(',')[column_index]))
-        feature_df[column_name + '_self_wt'] = feature_df['physchem_wt_ownchain'].apply(
-            lambda x: int(x.split(',')[column_index]))
-        feature_df[column_name + '_mut'] = feature_df['physchem_mut'].apply(
-            lambda x: int(x.split(',')[column_index]))
-        feature_df[column_name + '_self_mut'] = feature_df['physchem_mut_ownchain'].apply(
-            lambda x: int(x.split(',')[column_index]))
+        feature_df[column_name + '_wt'] = (
+            feature_df['physchem_wt']
+            .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
+        )
+        feature_df[column_name + '_self_wt'] = (
+            feature_df['physchem_wt_ownchain']
+            .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
+        )
+        feature_df[column_name + '_mut'] = (
+            feature_df['physchem_mut']
+            .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
+        )
+        feature_df[column_name + '_self_mut'] = (
+            feature_df['physchem_mut_ownchain']
+            .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
+        )
     del feature_df['physchem_wt']
     del feature_df['physchem_wt_ownchain']
     del feature_df['physchem_mut']
@@ -91,7 +99,10 @@ def format_mutation_features(feature_df, core_or_interface):
 
     for col in feature_df.columns:
         if 'secondary_structure' in col:
-            feature_df[col] = feature_df[col].apply(lambda x: secondary_structure_to_int[x])
+            feature_df[col] = (
+                feature_df[col]
+                .apply(lambda x: secondary_structure_to_int[x] if pd.notnull(x) else x)
+            )
     return feature_df
 
 
