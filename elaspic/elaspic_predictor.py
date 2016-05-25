@@ -26,8 +26,66 @@ secondary_structure_to_int = {
 }
 
 
-def format_mutation_features(feature_df, core_or_interface):
+def _get_foldx_features(core_or_interface):
     """
+    """
+    feature_columns = []
+    # FoldX
+    if core_or_interface in [False, 0, 'core']:
+        feature_columns += call_foldx.names_stability_wt
+        feature_columns += [
+            c[:-4] + '_change'
+            for c in call_foldx.names_stability_mut
+            if c.endswith('_mut')
+        ]
+    else:
+        feature_columns += call_foldx.names_stability_complex_wt
+        feature_columns += [
+            c[:-4] + '_change'
+            for c in call_foldx.names_stability_complex_mut
+            if c.endswith('_mut')
+        ]
+    return feature_columns
+
+
+def _get_physicochem_features():
+    # PhysicoChemical properties
+    names_phys_chem = ['pcv_salt_equal', 'pcv_salt_opposite', 'pcv_hbond', 'pcv_vdw']
+    feature_columns = []
+    feature_columns += [(c + '_wt') for c in names_phys_chem]
+    feature_columns += [(c + '_self_wt') for c in names_phys_chem]
+    feature_columns += [(c + '_change') for c in names_phys_chem]
+    feature_columns += [(c + '_self_change') for c in names_phys_chem]
+    return feature_columns
+
+
+def _get_remaining_features():
+    feature_columns = []
+    # Sequence
+    feature_columns += ['provean_score', 'secondary_structure_wt', 'secondary_structure_change']
+    # Alignment
+    feature_columns += [
+        'alignment_identity', 'alignment_coverage', 'alignment_score', 'matrix_score']
+    # Model
+    feature_columns += ['norm_dope']
+    # Structure
+    feature_columns += ['solvent_accessibility_wt', 'solvent_accessibility_change']
+    return feature_columns
+
+
+FEATURE_COLUMNS_CORE = (
+    _get_foldx_features('core') + _get_physicochem_features() + _get_remaining_features()
+)
+
+
+FEATURE_COLUMNS_INTERFACE = (
+    _get_foldx_features('interface') + _get_physicochem_features() + _get_remaining_features()
+)
+
+
+def format_mutation_features(feature_df, core_or_interface):
+    """.
+
     Converts columns containing comma-separated lists of FoldX features and physicochemical
     features into a DataFrame where each feature has its own column.
 
