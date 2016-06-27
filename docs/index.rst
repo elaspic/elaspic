@@ -1,7 +1,8 @@
-.. ELASPIC documentation master file, created by
-   sphinx-quickstart on Fri Jan 16 11:57:52 2015.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+ELASPIC is a metapredictor which combines sequential features (most important being PROVEAN) with structural features (most important being FoldX). It uses the Stochastic Gradient Boosting algorithm for machine learning.
+
+  - ELASPIC is designed to work on the genome-wide scale by using homology models.
+  - It predicts mutation :math:`\Delta \Delta G` for protein folding and protein interactions.
+  - It is open source and can be installed and ran locally.
 
 
 Table of Contents

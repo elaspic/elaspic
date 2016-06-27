@@ -27,3 +27,7 @@ docs/datasets.rst
 docs/introduction/elaspic_flowchart.pptx
 docs/introduction/elaspic_flowchart_database.pptx
 docs/introduction/elaspic_flowchart_local.pptx
+
+# Temporary
+tests/tmp
+
