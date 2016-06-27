@@ -1,4 +1,5 @@
-"""
+""".
+
 TODO: The model object has two serialization steps:
     1. Inside the modeller class to save modeller results.
     2. In the local_pipeline to save all results.
@@ -78,7 +79,12 @@ class StandalonePipeline(Pipeline):
         if not mutations:
             mutations = []
         elif isinstance(mutations, str):
-            mutations = mutations.split(',')
+            if ',' in mutations:
+                mutations = mutations.split(',')
+            elif ':' in mutations:
+                mutations = mutations.split(':')
+            else:
+                mutations = [mutations]
         else:
             mutations = mutations
         logger.debug('mutations: {}'.format(mutations))

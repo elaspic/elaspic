@@ -56,7 +56,12 @@ class DatabasePipeline(Pipeline):
         if mutations is None:
             self.mutations = []
         elif isinstance(mutations, str):
-            self.mutations = mutations.split(',')
+            if ',' in mutations:
+                self.mutations = mutations.split(',')
+            elif ':' in mutations:
+                self.mutations = mutations.split(':')
+            else:
+                self.mutations = [mutations]
         else:
             self.mutations = mutations
 
@@ -704,11 +709,11 @@ class _PrepareMutation:
                 getattr(d.template.model, 'model_filename', 'does not exist!')))
             logger.debug('Skipping because no model...')
             self.skip = True
-        elif d.template.model.model_errors != None:
-            logger.debug(
-                'Skipping because the model has errors: {}!'
-                .format(d.template.model.model_errors))
-            self.skip = True
+        # elif d.template.model.model_errors != None:
+        #     logger.debug(
+        #         'Skipping because the model has errors: {}!'
+        #         .format(d.template.model.model_errors))
+        #     self.skip = True
 
         mutation_prototype = re.compile("^[A-z][0-9]+[A-z]$")
         if not mutation_prototype.match(mutation) or int(mutation[1:-1]) == 0:
