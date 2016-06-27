@@ -7,12 +7,12 @@ if [[ -z ${SRC_DIR} || \
       -z ${SCRIPTS_DIR} || \
       -z ${TEST_DIR} ]] ; then
     echo 'Required environment variable not set!'
-    exit -1
+    exit
 fi
 
 if [[ ${SRC_DIR} = ${TEST_DIR} ]] ; then
     echo "SRC_DIR and TEST_DIR must be different!"
-    exit -1
+    exit
 fi
 
 

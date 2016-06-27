@@ -82,7 +82,7 @@ def make_tarfile(source_dir, output_filename):
 
 # %% Helper functions for sql objects
 def decode_domain_def(domains, merge=True, return_string=False):
-    """ Unlike split_domain(), this function returns a tuple of tuples of strings,
+    """Unlike split_domain(), this function returns a tuple of tuples of strings,
     preserving letter numbering (e.g. 10B)
     """
     if not domains:

@@ -1,7 +1,10 @@
 import os
 import os.path as op
-import time
 import logging
+import time
+import subprocess
+import shlex
+import tempfile
 
 import pandas as pd
 
@@ -10,10 +13,8 @@ from . import errors, helper, structure_tools
 logger = logging.getLogger(__name__)
 
 
-# %% CONSTANTS
-
-# Standard accessibilities for a ALA-X-ALA tripeptide
-# (obtained from NACCESS)
+# CONSTANTS
+#: Standard accessibilities for a ALA-X-ALA tripeptide (obtained from NACCESS)
 STANDARD_DATA = """
 STANDARD ACCESSIBILITES FOR PROBE 1.40 AND RADII vdw.radii
 ATOM S   2  ALA  107.95   0.0  69.41   0.0   0.00   0.0  69.41   0.0  38.54   0.0  71.38   0.0  36.58   0.0
@@ -43,9 +44,9 @@ STANDARD_SASA_ALL = [
 STANDARD_SASA = {x[3]: float(x[4]) for x in STANDARD_SASA_ALL}
 
 
-# %% Init
-class AnalyzeStructure(object):
-    """
+class AnalyzeStructure:
+    """Calculate structural properties for a PDB containing one or more chains.
+
     Runs the program pops to calculate the interface size of the complexes
     This is done by calculating the surface of the complex and the seperated parts.
     The interface is then given by the substracting.
@@ -67,13 +68,10 @@ class AnalyzeStructure(object):
         self.chain_ids = self.sp.chain_ids
 
     def _prepare_temp_folder(self, temp_folder):
-        # ./analyze_structure
         os.makedirs(temp_folder, exist_ok=True)
 
-    # %%
     def __call__(self, chain_id, mutation, chain_id_other=None):
-        """Calculate all properties.
-        """
+        """Calculate all properties."""
         # Solvent accessibility
         (seasa_by_chain_together, seasa_by_chain_separately,
          seasa_by_residue_together, seasa_by_residue_separately) = self.get_seasa()
@@ -134,7 +132,6 @@ class AnalyzeStructure(object):
     def get_structure_file(self, chains, ext='.pdb'):
         return op.join(self.working_dir, self.sp.pdb_id + chains + ext)
 
-    # %%
     def get_physi_chem(self, chain_id, mutation):
         """
         Return the atomic contact vector, that is, counting how many interactions
@@ -153,18 +150,6 @@ class AnalyzeStructure(object):
         mutated_chain = model[chain_id]
         opposite_chains = [chain for chain in model.child_list if chain.id != chain_id]
         main_chain_atoms = ['CA', 'C', 'N', 'O']
-
-        # Find the mutated residue (assuming mutation is in index coordinates)
-#        mutation_pos = int(mutation[1:-1])
-#        residue_counter = 0
-#        for residue in mutated_chain:
-#            if residue.resname in structure_tools.AMINO_ACIDS and not residue.id[0].strip():
-#                residue_counter += 1
-#                if residue_counter == mutation_pos:
-#                    self._validate_mutation(residue.resname, mutation)
-#                    mutated_residue = residue
-#                    break
-#        mutated_atoms = [atom for atom in mutated_residue if atom.name not in main_chain_atoms]
 
         # Find the mutated residue (assuming mutation is in resnum)
         for residue in mutated_chain:
@@ -272,8 +257,7 @@ class AnalyzeStructure(object):
                                 tuple(mutated_atom.coord))
 
     def _get_atom_type(self, residue, atom):
-        """
-        Checks what type of atom it is (i.e. charged, polar, carbon)
+        """Get the type of atom we are dealing with (i.e. charged, polar, carbon).
 
         In order to see what "interaction" type two atoms are forming, check the
         individual label which every atom in every residue has (see pdb file
@@ -329,7 +313,9 @@ class AnalyzeStructure(object):
             return [None, seasa_by_chain, None, seasa_by_residue]
 
     def _run_msms(self, filename):
-        """ In the future, could add an option to measure residue depth
+        """.
+
+        In the future, could add an option to measure residue depth
         using Bio.PDB.ResidueDepth().residue_depth()...
         """
         base_filename = op.splitext(filename)[0]
@@ -339,56 +325,47 @@ class AnalyzeStructure(object):
 
         system_command = 'pdb_to_xyzrn {0}.pdb'.format(op.join(self.working_dir, base_filename))
         logger.debug('msms system command 1: %s' % system_command)
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.working_dir, system_command)
-        )
-        if return_code != 0:
-            logger.debug('msms result 1:')
-            logger.debug(result)
-            logger.debug('msms error message 1:')
-            logger.debug(error_message)
-            logger.debug('naccess rc 1:')
-            logger.debug(return_code)
-            raise errors.MSMSError(error_message)
+        p = subprocess.run(
+            shlex.split(system_command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=self.working_dir, universal_newlines=True)
+        if p.returncode != 0:
+            logger.debug('msms 1 stdout:\n{}'.format(p.stdout))
+            logger.debug('msms 1 stderr:\n{}'.format(p.stderr))
+            logger.debug('msms 1 returncode:\n{}'.format(p.returncode))
+            raise errors.MSMSError(p.stderr)
         else:
-            with open(op.join(self.working_dir, base_filename + '.xyzrn'), 'w') as ofh:
-                ofh.writelines(result)
+            tempfile_xyzrn = tempfile.NamedTemporaryFile('wt', delete=False)
+            tempfile_xyzrn.write(p.stdout)
+            tempfile_xyzrn.close()
 
         # Calculate SASA and SESA (excluded)
         probe_radius = 1.4
-        system_command_string = (
-            'msms '
-            '-probe_radius {1:.1f} '
-            '-surface ases '
-            '-if {0}.xyzrn '
-            '-af {0}.area')
-        system_command = (
-            system_command_string.format(op.join(self.working_dir, base_filename), probe_radius)
-        )
+        system_command_template = """\
+msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{area_file}' \
+"""
+        system_command = system_command_template.format(
+            probe_radius=probe_radius,
+            input_file=tempfile_xyzrn.name,
+            area_file=op.join(self.working_dir, base_filename + '.area'))
         logger.debug('msms system command 2: %s' % system_command)
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.working_dir, system_command)
-        )
+        p = subprocess.run(
+            shlex.split(system_command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True)
         number_of_tries = 0
-        while return_code != 0 and number_of_tries < 5:
+        while p.returncode != 0 and number_of_tries < 5:
             logger.warning('MSMS exited with an error!')
             probe_radius -= 0.1
             logger.debug('Reducing probe radius to {}'.format(probe_radius))
-            system_command = system_command_string.format(
-                op.join(self.working_dir, base_filename), probe_radius
-            )
-            result, error_message, return_code = (
-                helper.subprocess_check_output_locally(self.working_dir, system_command)
-            )
+            p = subprocess.run(
+                shlex.split(system_command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                universal_newlines=True)
             number_of_tries += 1
-        if return_code != 0:
-            logger.debug('msms result 2:')
-            logger.debug(result)
-            logger.debug('msms error message 2:')
-            logger.debug(error_message)
-            logger.debug('naccess rc 2:')
-            logger.debug(return_code)
-            raise errors.MSMSError(error_message)
+        if p.returncode != 0:
+            logger.debug('msms stdout 2:\n{}'.format(p.stdout))
+            logger.debug('msms stderr 2:\n{}'.format(p.stderr))
+            logger.debug('msms returncode 2:\n{}'.format(p.returncode))
+            raise errors.MSMSError(p.stderr)
+        os.remove(tempfile_xyzrn.name)
 
         # Read and parse the output
         with open(op.join(self.working_dir, base_filename + '.area'), 'r') as fh:
@@ -427,133 +404,9 @@ class AnalyzeStructure(object):
 
         return seasa_by_chain, seasa_by_residue
 
-    # %% SASA Old
-    def get_sasa(self, program_to_use='pops'):
-        """Get Solvent Accessible Surface Area scores.
-
-        .. note:: deprecated
-
-            Use python:fn:`get_seasa` instead.
-
-        """
-        if program_to_use == 'naccess':
-            run_sasa_atom = self._run_naccess_atom
-        elif program_to_use == 'pops':
-            run_sasa_atom = self._run_pops_atom
-        else:
-            raise Exception('Unknown program specified!')
-        sasa_score_splitchains = {}
-        for chain_id in self.chain_ids:
-            sasa_score_splitchains.update(run_sasa_atom(chain_id + '.pdb'))
-        sasa_score_allchains = run_sasa_atom(''.join(self.chain_ids) + '.pdb')
-        return [sasa_score_splitchains, sasa_score_allchains]
-
-    def _run_naccess_atom(self, filename):
-        """
-        NACESS is not used anymore.
-        It is not reliable enough on a PDB-wide scale.
-        """
-        # run naccess
-        system_command = ('naccess ' + filename)
-        logger.debug('naccess system command: %s' % system_command)
-        assert(os.path.isfile(self.working_dir + filename))
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.working_dir, system_command)
-        )
-        logger.debug('naccess result: {}'.format(result))
-        logger.debug('naccess error: {}'.format(error_message))
-        logger.debug('naccess rc: {}'.format(return_code))
-        # Collect results
-        sasa_scores = {}
-        with open(self.working_dir + filename.split('.')[0] + '.rsa') as fh:
-            for line in fh:
-                row = line.split()
-                if row[0] != 'RES':
-                    continue
-                try:
-                    (line_id, res, chain, num, all_abs, all_rel,
-                     sidechain_abs, sidechain_rel, mainchain_abs, mainchain_rel,
-                     nonpolar_abs, nonpolar_rel, polar_abs, polar_rel) = row
-                except ValueError as e:
-                    print(e)
-                    print(line)
-                    print(row)
-                # percent sasa on sidechain
-                sasa_scores.setdefault(chain, []).append(sidechain_rel)
-        return sasa_scores
-
-    def _run_pops_atom(self, chain_id):
-        # Use pops to calculate sasa score for the given chain
-        termination, rc, e = self.__run_pops_atom(chain_id)
-        if termination != 'Clean termination':
-            logger.warning(
-                'Pops error for pdb: %s, chains: %s: ' %
-                (self.pdb_file, ' '.join(self.chain_ids))
-            )
-            logger.warning(e)
-            raise errors.PopsError(e, self.pdb_file, self.chain_ids)
-        else:
-            logger.warning(
-                'Pops error for pdb: %s, chains: %s: ' %
-                (self.pdb_file, ' '.join(self.chain_ids),)
-            )
-            logger.warning(e)
-
-        # Read the sasa scores from a text file
-        sasa_scores = self.__read_pops_atom(chain_id)
-        return sasa_scores
-
-    def __run_pops_atom(self, chain_id):
-        system_command = (
-            'pops --noHeaderOut --noTotalOut --atomOut --pdb {0}.pdb --popsOut {0}.out'
-            .format(chain_id))
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.working_dir, system_command)
-        )
-        # The returncode can be non zero even if pops calculated the surface
-        # area. In that case it is indicated by "clean termination" written
-        # to the output. Hence this check:
-        # if output[-1] == 'Clean termination' the run should be OK
-        logger.debug('result: %s' % result)
-        output = [line for line in result.split('\n') if line != '']
-        return output[-1], return_code, error_message
-
-    def __read_pops_atom(self, chain_id):
-        """
-        Read pops sasa results atom by atom, ignoring all main chain atoms except for Ca
-        """
-        # The new way
-        ignore = ['N', 'C', 'O']
-        per_residue_sasa_scores = []
-        current_residue_number = None
-        total_sasa, total_sa = None, None  # so pylint stops complaining
-        with open(self.working_dir + chain_id + '.out', 'r') as fh:
-            for line in fh:
-                row = line.split()
-                if len(row) != 11:
-                    continue
-                (atom_number, atom_name, residue_name, chain, residue_number, sasa,
-                 __, __, __, __, sa) = line.split()
-                atom_number, residue_number, sasa, sa = (
-                    int(atom_number), int(residue_number), float(sasa), float(sa))
-                if atom_name in ignore:
-                    continue
-                if current_residue_number != residue_number:
-                    if current_residue_number:
-                        per_residue_sasa_scores.append(total_sasa / float(total_sa))
-                    current_residue_number = residue_number
-                    total_sasa = 0
-                    total_sa = 0
-                total_sasa += sasa
-                total_sa += sa
-            per_residue_sasa_scores.append(total_sasa / float(total_sa))
-        return per_residue_sasa_scores
-
-    # %% Secondary Structure
+    # === Secondary Structure ===
     def get_secondary_structure(self):
-        return self.get_stride()
-
-    def get_stride(self):
+        """Run `stride` to calculate protein secondary structure."""
         structure_file = self.get_structure_file(''.join(self.chain_ids))
         stride_results_file = op.join(
             op.dirname(structure_file),
@@ -576,77 +429,8 @@ class AnalyzeStructure(object):
                 columns=['amino_acid', 'chain', 'resnum', 'idx', 'ss_code'])
         return file_data_df
 
-    def get_dssp(self):
-        """Not used because crashes on server.
-        """
-        n_tries = 0
-        return_code = -1
-        while return_code != 0 and n_tries < 5:
-            if n_tries > 0:
-                logger.debug('Waiting for 1 minute before trying again...')
-                time.sleep(60)
-            system_command = (
-                'dssp -v -i ' + ''.join(self.chain_ids) + '.pdb' + ' -o ' + 'dssp_results.txt')
-            logger.debug('dssp system command: %s' % system_command)
-            result, error_message, return_code = (
-                helper.subprocess_check_output_locally(self.working_dir, system_command)
-            )
-            logger.debug('dssp return code: %i' % return_code)
-            logger.debug('dssp result: %s' % result)
-            logger.debug('dssp error: %s' % error_message)
-            n_tries += 1
-        if return_code != 0:
-            if 'boost::thread_resource_error' in error_message:
-                system_command = "rsync {0}{1}.pdb /home/kimlab1/strokach/tmp/elaspic_bad_pdbs/"
-                helper.subprocess_check_output_locally(self.working_dir, system_command)
-                raise errors.ResourceError(error_message)
-        # collect results
-        dssp_ss = {}
-        dssp_acc = {}
-        start = False
-        with open(op.join(self.working_dir, 'dssp_results.txt')) as fh:
-            for l in fh:
-                row = l.split()
-                if not row or len(row) < 2:
-                    continue
-                if row[1] == "RESIDUE":
-                    start = True  # Start parsing from here
-                    continue
-                if not start:
-                    continue
-                if l[9] == ' ':
-                    continue  # Skip -- missing residue
-                # resseq, icode, chainid, aa, ss = int(l[5:10]), l[10], l[11], l[13], l[16]
-                chainid, ss = l[11], l[16]
-                if ss == ' ':
-                    ss = '-'
-                try:
-                    acc = int(l[34:38])
-                    # phi = float(l[103:109])
-                    # psi = float(l[109:115])
-                except ValueError as e:
-                    # DSSP output breaks its own format when there are >9999
-                    # residues, since only 4 digits are allocated to the seq num
-                    # field.  See 3kic chain T res 321, 1vsy chain T res 6077.
-                    # Here, look for whitespace to figure out the number of extra
-                    # digits, and shift parsing the rest of the line by that amount.
-                    if l[34] != ' ':
-                        shift = l[34:].find(' ')
-                        acc = int((l[34 + shift:38 + shift]))
-                        # phi = float(l[103+shift:109+shift])
-                        # psi = float(l[109+shift:115+shift])
-                    else:
-                        raise e
-                dssp_ss.setdefault(chainid, []).append(ss)  # percent sasa on sidechain
-                dssp_acc.setdefault(chainid, []).append(acc)
-        for key in list(dssp_ss.keys()):
-            dssp_ss[key] = ''.join(dssp_ss[key])
-        return dssp_ss, dssp_acc
-
-    # %%
     def get_interchain_distances(self, pdb_chain=None, pdb_mutation=None, cutoff=None):
-        """
-        """
+        """Calculate distance between two chains."""
         model = self.sp.structure[0]
         shortest_interchain_distances = {}
         # Chain 1
@@ -730,7 +514,6 @@ class AnalyzeStructure(object):
 
         return shortest_interchain_distances
 
-    # %%
     def get_interface_area(self, chain_ids):
         """
         """
@@ -824,7 +607,8 @@ class AnalyzeStructure(object):
         return output[-1], return_code, error_message
 
     def __read_pops_area(self, filename):
-        """
+        """.
+
         This function parses POPS output that looks like this::
 
             === MOLECULE SASAs ===
@@ -847,7 +631,8 @@ class AnalyzeStructure(object):
         return result
 
     def __read_pops_area_new(self, filename):
-        """
+        """.
+
         This function parses POPS output that looks like this::
 
             === MOLECULE SASAs ===

@@ -10,7 +10,6 @@ from sklearn import metrics
 from . import helper
 
 
-# %%
 def write_row_to_file(results, output_filename):
     """
     TODO: Add a datetime column to each written row.
@@ -65,8 +64,7 @@ def cross_validate_predictor(data, features, clf_options, output_filename=None):
 
 
 def get_final_predictor(data, features, options):
-    """Train a predictor using the entire dataset.
-    """
+    """Train a predictor using the entire dataset."""
     # Keep only recognized options
     import inspect
     accepted_options = inspect.getargspec(ensemble.GradientBoostingRegressor)[0]
