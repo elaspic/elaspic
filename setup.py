@@ -1,5 +1,5 @@
 import os.path as op
-from setuptools import setup, find_packages, Command
+from setuptools import setup, Command
 import yaml
 
 
@@ -37,7 +37,7 @@ setup(
     url=META.get('about', {}).get('home', ''),
     author='kimlab',
     author_email='alex.strokach@utoronto.ca',
-    packages=find_packages('elaspic'),
+    packages=['elaspic'],
     package_data={'elaspic': ['data/*']},
     long_description=read("README.md"),
     entry_points={'console_scripts': META.get('build', {}).get('entry_points', '')},

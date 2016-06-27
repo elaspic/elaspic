@@ -23,5 +23,5 @@ sed -i "s|^archive_dir = .*|archive_dir = ${ARCHIVE_DIR}|" "${CONFIG_FILE}"
 sed -i "s|^archive_type = .*|archive_type = 7zip|" "${CONFIG_FILE}"
 
 # Run tests
-py.test "${TEST_DIR}/tests/test_database_pipeline.py" -vsx --cache-clear --cov=elaspic \
+py.test "${TEST_DIR}/test_database_pipeline.py" -vsx --cache-clear --cov=elaspic \
     --config-file="${CONFIG_FILE}"

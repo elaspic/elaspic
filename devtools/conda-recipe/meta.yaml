@@ -16,12 +16,22 @@ requirements:
     - python
     - pyyaml
     - requests
+    - psutil
+    - retrying
+    - fastcache
     # Scientific python
     - numpy
     - scipy
     - pandas
     - scikit-learn
     - biopython
+    - libfaketime
+    - modeller
+    # Database access
+    - sqlalchemy
+    - sqlite
+    - mysqlclient
+    - psycopg2
   run:
     # Basic python
     - python
@@ -36,6 +46,8 @@ requirements:
     - pandas
     - scikit-learn
     - biopython
+    - libfaketime
+    - modeller
     # Database access
     - sqlalchemy
     - sqlite
@@ -49,11 +61,9 @@ requirements:
     - pops
     - msms
     - t_coffee
-    - modeller
     - cd-hit
     # - provean  # can't install fake_provean for tests if this is installed...
     # - foldx  # private only and breaks readthedocs
-    - libfaketime
 
 test:
   requires:

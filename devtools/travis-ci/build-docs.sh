@@ -11,11 +11,9 @@ cd "${TRAVIS_BUILD_DIR}/docs"
 GITHUB_USERNAME=$(dirname $TRAVIS_REPO_SLUG)
 GITHUB_REPONAME=$(basename $TRAVIS_REPO_SLUG)
 
-# Install sphinx requirements
-pip install -U pip
-# Work around missing dependency in conda.
+conda install sphinx
 pip install auxlib
-pip install -r requirements.txt
+pip install sphinxcontrib-programoutput
 
 # Build the documentation
 mkdir -p _build_gh_pages

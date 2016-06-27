@@ -29,6 +29,7 @@ install:
   - conda config --add channels conda-forge
   - conda config --add channels omnia
   - conda config --add channels bioconda
+  - conda config --add channels salilab
   - conda info -a
   # Install packages
   - conda update -q conda
@@ -40,16 +41,8 @@ before_script:
   - source activate _test
   - conda install -q --yes fake_provean fake_foldx anaconda-client
 script:
-  - |
-    if [[ $TEST_SUITE != 'test_unittests' ]] ; then
-        source "${SCRIPTS_DIR}/configure_tests.sh"
-        cd "${TEST_DIR}"
-        ls
-        travis_wait 119 "${SCRIPTS_DIR}/${TEST_SUITE}.sh"
-    else
-        py.test
-        "${SCRIPTS_DIR}/build-docs.sh"
-    fi
+  # Run tests
+  - travis_wait 119 "${SCRIPTS_DIR}/travis-ci.sh"
 after_success:
   - echo "Success!"
   - pip install codecov

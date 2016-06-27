@@ -8,7 +8,6 @@ try:
     TESTS_BASE_DIR = op.dirname(__file__)
 except NameError:
     TESTS_BASE_DIR = os.getcwd()
-assert op.split(TESTS_BASE_DIR)[-1] == 'tests'
 
 TESTS_DATA_DIR = op.join(TESTS_BASE_DIR, 'data')
 

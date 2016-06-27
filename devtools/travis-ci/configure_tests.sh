@@ -18,7 +18,8 @@ fi
 
 # Copy package data
 mkdir -p "${TEST_DIR}"
-rsync -av "${SRC_DIR}" "${TEST_DIR}" --exclude='[._]*'
+rsync -av "${SRC_DIR}/tests/" "${TEST_DIR}" --exclude='[._]*'
+ls ${TEST_DIR}
 
 
 # Common directories
@@ -33,5 +34,5 @@ touch "${BLAST_DB_DIR}/pdbaa.pal"
 
 # ====== Database ======
 if [[ -z ${TEST_SUITE} || ${TEST_SUITE} == database* ]] ; then
-    ${SCRIPTS_DIR}/configure_database.sh
+    source ${SCRIPTS_DIR}/configure_database.sh
 fi
