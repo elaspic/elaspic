@@ -1221,23 +1221,25 @@ class MyDatabase(object):
             logger.debug('Committed changes\n\n\n')
 
 
-# %% Elaspic-specific helper functions
-def get_uniprot_base_path(d):
-    """ The uniprot id is cut into several chunks to create folders that will
-    hold a manageable number of pdbs.
+def get_uniprot_base_path(d=None, uniprot_name=None, uniprot_id=None):
+    """Return the name of the subfolder for storing protein information.
+
+    Parameters
+    ----------
+    d : UniprotDomain | UniprotDomainPair | None
+    uniprot_name : str
+    uniprot_id : str
     """
     if isinstance(d, UniprotDomain):
-        uniprot_id = d.uniprot_id
         uniprot_name = d.uniprot_sequence.uniprot_name
+        uniprot_id = d.uniprot_id
     elif isinstance(d, UniprotDomainPair):
-        uniprot_id = d.uniprot_domain_1.uniprot_id
         uniprot_name = d.uniprot_domain_1.uniprot_sequence.uniprot_name
-    elif isinstance(d, dict):
-        uniprot_id = d['uniprot_id']
-        uniprot_name = d['uniprot_name']
+        uniprot_id = d.uniprot_domain_1.uniprot_id
     else:
-        raise Exception('Input parameter type is not supported!')
+        assert uniprot_name is not None and uniprot_id is not None
 
+    # TODO: Screw the splitting of uniprot ids!
     uniprot_base_path = (
         '{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/'
         .format(
@@ -1248,26 +1250,55 @@ def get_uniprot_base_path(d):
     return uniprot_base_path
 
 
-def get_uniprot_domain_path(d):
-    """ Return the path to individual domains or domain pairs.
+def get_uniprot_domain_path(d=None, **vargs):
+    """Return the name of the subfolder for storing protein *domain* information.
+
+    Parameters
+    ----------
+    ### Domain
+    d : UniprotDomain | None
+    pfam_clan : str
+    alignment_def : str
+
+    #### Domain pair
+    d : UniprotDomainPair | None
+    pfam_clan_1 : str
+    alignment_def_1 : str
+    pfam_clan_2 : str
+    alignment_def_2 : str
+    uniprot_id_2 : str
     """
-    if isinstance(d, UniprotDomain):
+    if d is not None:
+        if isinstance(d, UniprotDomain):
+            vargs['pfam_clan'] = d.pfam_clan
+            vargs['alignment_def'] = d.alignment_def
+        elif isinstance(d, UniprotDomainPair):
+            vargs['pfam_clan_1'] = d.uniprot_domain_1.pfam_clan
+            vargs['alignment_def_1'] = d.uniprot_domain_1.alignment_def
+            vargs['pfam_clan_2'] = d.uniprot_domain_2.pfam_clan
+            vargs['alignment_def_2'] = d.uniprot_domain_2.alignment_def
+            vargs['uniprot_id_2'] = d.uniprot_domain_2.uniprot_id
+        else:
+            raise Exception
+
+    if 'pfam_clan' in vargs:
+        vargs['alignment_def'] = vargs['alignment_def'].replace(':', '-')
         uniprot_domain_path = (
             '{pfam_clan:.36}.{alignment_def}/'
-            .format(
-                pfam_clan=d.pfam_clan,
-                alignment_def=d.alignment_def.replace(':', '-')))
-    elif isinstance(d, UniprotDomainPair):
+            .format(**vargs)
+        )
+    elif 'pfam_clan_1' in vargs:
+        vargs['alignment_def_1'] = vargs['alignment_def_1'].replace(':', '-')
+        vargs['alignment_def_2'] = vargs['alignment_def_2'].replace(':', '-')
         uniprot_domain_path = (
             '{pfam_clan_1:.36}.{alignment_def_1}/'
             '{pfam_clan_2:.36}.{alignment_def_2}/'
             '{uniprot_id_2}/'
-            .format(
-                pfam_clan_1=d.uniprot_domain_1.pfam_clan,
-                alignment_def_1=d.uniprot_domain_1.alignment_def.replace(':', '-'),
-                pfam_clan_2=d.uniprot_domain_2.pfam_clan,
-                alignment_def_2=d.uniprot_domain_2.alignment_def.replace(':', '-'),
-                uniprot_id_2=d.uniprot_domain_2.uniprot_id,))
+            .format(**vargs)
+        )
+    else:
+        raise Exception
+
     return uniprot_domain_path
 
 
