@@ -11,13 +11,13 @@ from the command line using the ``elaspic`` command::
   usage: elaspic [-h] {run,database,train} ...
 
   optional arguments:
-    -h, --help            show this help message and exit
+    -h, --help            show this help message and exit.
 
   command:
     {run,database,train}
-      run                 Run ELASPIC.
-      database            Perform maintenance tasks on the ELASPIC database.
-      train               Train the ELASPIC classifiers.
+      run                 run ELASPIC
+      database            perform database maintenance tasks
+      train               train the ELASPIC classifiers
 
 Type ``--help`` to see the options available for each subcommand:
 

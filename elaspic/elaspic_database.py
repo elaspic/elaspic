@@ -1,12 +1,8 @@
 import os
 import os.path as op
 import re
-import stat
 import subprocess
-import json
 import datetime
-import time
-import pickle
 import six
 import logging
 import shutil
@@ -16,25 +12,17 @@ from contextlib import contextmanager
 import pandas as pd
 import sqlalchemy as sa
 
-from Bio import SeqIO
-from Bio import AlignIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-
-from . import helper, errors, conf, elaspic_sequence
+from . import helper, errors, conf
 from .elaspic_database_tables import (
     Base,
-    Domain, DomainContact, UniprotSequence,
-    UniprotDomain, UniprotDomainTemplate, UniprotDomainModel, UniprotDomainMutation,
-    UniprotDomainPair, UniprotDomainPairTemplate, UniprotDomainPairModel,
+    UniprotDomain, UniprotDomainModel, UniprotDomainMutation,
+    UniprotDomainPair, UniprotDomainPairModel,
     UniprotDomainPairMutation,
 )
 
 logger = logging.getLogger(__name__)
-configs = conf.Configs()
 
 
-# %%
 def enable_sqlite_foreign_key_checks(engine):
     from sqlalchemy import event
 
@@ -54,83 +42,43 @@ def enable_sqlite_foreign_key_checks(engine):
     event.listen(engine, 'connect', _fk_pragma_on_connect)
 
 
-# %%
 # Get the session that will be used for all future queries.
 # `expire_on_commit` so that you keep all the table objects even after the session closes.
 Session = sa.orm.sessionmaker(expire_on_commit=False)
 # Session = sa.orm.scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
 
 
-# %%
 class MyDatabase(object):
     """
     """
 
     def __init__(self, echo=False):
-        """
-        Parameters
-        ----------
-        configs : dict
-            ELASPIC configuration options specified in :py:data:`elaspic.configs`
-        """
         self.engine = self.get_engine(echo=echo)
         self.configure_session()
 
         logger.info(
             "Using precalculated data from the following folder: '{archive_dir}'"
-            .format(**configs)
+            .format(**conf.CONFIGS)
         )
 
-    # %%
     def get_engine(self, echo=False):
-        """
-        Get an SQLAlchemy engine that can be used to connect to the database.
-        """
-        if configs['db_type'] == 'sqlite':
-            info_message = (
-                "Connected to a {db_type} database in the following location: {sqlite_db_path}"
-                .format(**configs)
-            )
-            # set `isolation_level` to 'READ UNCOMMITTED' so that reads are non-blocking
-            # (required for SCINET)
-            engine = sa.create_engine(
-                '{db_type}:///{sqlite_db_path}'.format(**configs),
-                isolation_level='READ UNCOMMITTED',
-                echo=echo,
-                pool_size=1,
-            )
-            enable_sqlite_foreign_key_checks(engine)
-        elif configs['db_type'] == 'postgresql':
-            info_message = (
-                "Connected to a {db_type} database: "
-                "{db_url}:{db_port}/{db_database}{db_socket}"
-                .format(**configs)
-            )
-            engine = sa.create_engine(
-                "{db_type}://{db_username}:{db_password}@"
-                "{db_url}:{db_port}/{db_database}{db_socket}"
-                .format(**configs),
-                pool_recycle=3600,
-                echo=echo,
-                pool_size=1,
-            )
-        elif configs['db_type'] == 'mysql':
-            info_message = (
-                "Connected to a {db_type} database: "
-                "{db_url}:{db_port}/{db_database}{db_socket}"
-                .format(**configs)
-            )
-            engine = sa.create_engine(
-                "{db_type}://{db_username}:{db_password}@"
-                "{db_url}:{db_port}/{db_database}{db_socket}"
-                .format(**configs),
-                pool_recycle=3600,
-                echo=echo,
-                pool_size=1,
-            )
+        """Get an SQLAlchemy engine that can be used to connect to the database."""
+        sa_opts = {
+            'echo': echo,
+            'pool_size': 1,
+        }
+        if conf.CONFIGS['db_type'] == 'sqlite':
+            sa_opts['isolation_level'] = 'READ UNCOMMITTED'
+        elif conf.CONFIGS['db_type'] == 'mysql':
+            sa_opts['pool_recycle'] = 3600
+        elif conf.CONFIGS['db_type'] == 'postgresql':
+            sa_opts['pool_recycle'] = 3600
         else:
-            raise Exception("Unsupported `db_type`: '{}'".format(configs['db_type']))
-        logger.info(info_message)
+            raise Exception("Unsupported 'db_type': '{}'!".format(conf.CONFIGS['db_type']))
+        engine = sa.create_engine(conf.CONFIGS['connection_string'], **sa_opts)
+        if conf.CONFIGS['db_type'] == 'sqlite':
+            enable_sqlite_foreign_key_checks(engine)
+        logger.info("Opened database connection using engine: '{}'".format(engine))
         return engine
 
     def configure_session(self):
@@ -142,49 +90,38 @@ class MyDatabase(object):
 
         """
         global Session
-        if configs['db_type'] == 'sqlite':
+        if conf.CONFIGS['db_type'] == 'sqlite':
             autocommit = False  # True
             autoflush = True  # True
             # retry_on_failure = True
-        elif configs['db_type'] in ['postgresql', 'mysql']:
+        elif conf.CONFIGS['db_type'] in ['postgresql', 'mysql']:
             autocommit = False
             autoflush = True
             # retry_on_failure = True
         Session.configure(bind=self.engine, autocommit=autocommit, autoflush=autoflush)
-        # Good idea, but does not work for some reason...
-#        if retry_on_failure:
-#            decorator = (
-#                decorate_all_methods(
-#                    retry(retry_on_exception=lambda exc: isinstance(exc, sa.exc.OperationalError),
-#                          wait_exponential_multiplier=1000,  # start with one second delay
-#                          wait_exponential_max=600000)  # go up to 10 minutes
-#                )
-#            )
-#            Session = decorator(Session)
 
     @contextmanager
     def session_scope(self):
-        """
-        Provide a transactional scope around a series of operations.
+        """Provide a transactional scope around a series of operations.
+
         Enables the following construct: ``with self.session_scope() as session:``.
         """
         session = Session()
         try:
             yield session
-            if not configs['db_is_immutable']:
+            if not conf.CONFIGS['db_is_immutable']:
                 session.commit()
         except:
-            if not configs['db_is_immutable']:
+            if not conf.CONFIGS['db_is_immutable']:
                 session.rollback()
             raise
         finally:
             session.expunge_all()
             session.close()
 
-    # %%
     def create_database_tables(self, clear_schema=False, keep_uniprot_sequence=True):
-        """
-        Create a new database in the schema specified by the ``schema_version`` global variable.
+        """Create a new database in the schema specified by the ``schema_version`` global variable.
+
         If ``clear_schema == True``, remove all the tables in the schema first.
 
         .. warning::
@@ -228,7 +165,8 @@ class MyDatabase(object):
         logger.debug('Database tables were created successfully.')
 
     def delete_database_tables(self, drop_schema=False, keep_uniprot_sequence=True):
-        """
+        """.
+
         Parameters
         ----------
         drop_schema : bool
@@ -236,35 +174,30 @@ class MyDatabase(object):
         keep_uniprot_sequence : bool
             Wheter or not to keep the table (and schema) containing uniprot sequences.
         """
-        if configs['db_type'] == 'sqlite':
-            os.remove(configs['sqlite_db_path'])
+        if conf.CONFIGS['db_type'] == 'sqlite':
+            os.remove(conf.CONFIGS['db_schema'])
             logger.info(
-                "Successfully removed the sqlite database file: {sqlite_db_path}"
-                .format(**configs))
+                "Successfully removed the sqlite database file: {db_schema}"
+                .format(**conf.CONFIGS))
             return
 
         # Remove tables one by one
         for table in reversed(Base.metadata.sorted_tables):
             if table.name != 'uniprot_sequence':
-                configs['table_name'] = table.name
-                self.engine.execute('drop table {db_schema}.{table_name};'.format(**configs))
+                conf.CONFIGS['table_name'] = table.name
+                self.engine.execute('drop table {db_schema}.{table_name};'.format(**conf.CONFIGS))
             elif not keep_uniprot_sequence:
-                configs['table_name'] = table.name
+                conf.CONFIGS['table_name'] = table.name
                 self.engine.execute(
-                    'drop table {db_schema_uniprot}.{table_name};'.format(**configs))
+                    'drop table {db_schema}.{table_name};'.format(**conf.CONFIGS))
 
         # Remove the database schema
-        uniprot_on_diff_schema = configs['db_schema'] != configs['db_schema_uniprot']
-        if drop_schema and uniprot_on_diff_schema:
-            self.engine.execute('drop schema {db_schema};'.format(**configs))
-        if drop_schema and uniprot_on_diff_schema and not keep_uniprot_sequence:
-            self.engine.execute('drop schema {db_schema_uniprot};'.format(**configs))
-        if drop_schema and not uniprot_on_diff_schema and not keep_uniprot_sequence:
-            self.engine.execute('drop schema {db_schema};'.format(**configs))
+        if drop_schema and not keep_uniprot_sequence:
+            self.engine.execute('drop schema {db_schema};'.format(**conf.CONFIGS))
 
         logger.info(
             "Successfully removed the {db_type} database schema: {db_schema}"
-            .format(**configs))
+            .format(**conf.CONFIGS))
 
     # %%
     mysql_load_table_template = (
@@ -301,7 +234,7 @@ class MyDatabase(object):
         table_df.to_sql(configs['table_name'], self.engine, index=False, if_exists='append')
 
     def _run_create_table_system_command(self, system_command):
-        if configs['debug']:
+        if conf.CONFIGS['debug']:
             logger.debug(system_command)
         result, error_message, return_code = helper.subprocess_check_output(system_command)
         if return_code != 0:
@@ -309,18 +242,13 @@ class MyDatabase(object):
             raise Exception(error_message)
 
     def copy_table_to_db(self, table_name, table_folder):
-        """
-        Copy data from a ``.tsv`` file to a table in the database.
-        """
-        cmd_options = configs.copy()
+        """Copy data from a ``.tsv`` file to a table in the database."""
+        cmd_options = conf.CONFIGS.copy()
         cmd_options['table_name'] = table_name
         cmd_options['table_folder'] = table_folder
 
         def _format_configs():
-            if table_name == 'uniprot_sequence':
-                cmd_options['table_db_schema'] = cmd_options['db_schema_uniprot']
-            else:
-                cmd_options['table_db_schema'] = cmd_options['db_schema']
+            cmd_options['table_db_schema'] = cmd_options['db_schema']
 
         logger.info("Copying '{table_name}' to '{db_type}' database...".format(**cmd_options))
         if cmd_options['db_type'] == 'sqlite':
@@ -338,12 +266,9 @@ class MyDatabase(object):
         else:
             raise Exception("Unsupported database type: '{}'".format(cmd_options['db_type']))
 
-    # %% Get objects from the database
     @helper.retry_database
     def get_rows_by_ids(self, row_object, row_object_identifiers, row_object_identifier_values):
-        """ Get the rows from the table *row_object* identified by keys
-        *row_object_identifiers* with values *row_object_identifier_values*
-        """
+        """Get the rows from the table `row_object` identified by keys `row_object_identifiers`."""
         with self.session_scope() as session:
             if len(row_object_identifiers) != len(row_object_identifier_values):
                 raise Exception(
@@ -374,105 +299,6 @@ class MyDatabase(object):
             return row_instances
 
     @helper.retry_database
-    def get_domain(self, pfam_names, subdomains=False):
-        """
-        Returns pdbfam-based definitions of all pfam domains in the pdb.
-        """
-        with self.session_scope() as session:
-            domain_set = set()
-            for pfam_name in pfam_names:
-                if not subdomains:
-                    domain = (
-                        session.query(Domain)
-                        .filter(Domain.pfam_name == pfam_name)
-                        .distinct().all()
-                    )
-                else:
-                    domain = (
-                        session.query(Domain).filter(
-                            (Domain.pfam_name.like(pfam_name)) |
-                            (Domain.pfam_name.like(pfam_name + '+%')) |
-                            # need an escape character because _ matches any single character
-                            (Domain.pfam_name.like(pfam_name + '\_%')) |
-                            (Domain.pfam_name.like('%+' + pfam_name)) |
-                            (Domain.pfam_name.like('%+' + pfam_name + '+%')) |
-                            # need an escape character because _ matches any single character
-                            (Domain.pfam_name.like('%+' + pfam_name + '\_%'))
-                        )
-                        .distinct().all()
-                    )
-                domain_set.update(domain)
-        if not domain_set:
-            logger.debug('No domain definitions found for pfam: %s' % str(pfam_names))
-        return list(domain_set)
-
-    @helper.retry_database
-    def get_domain_contact(self, pfam_names_1, pfam_names_2, subdomains=False):
-        """
-        Returns domain-domain interaction information from pdbfam.
-        Note that the produced dataframe may not have the same order as the keys.
-        """
-        with self.session_scope() as session:
-            domain_contact_1 = self._get_domain_contact(
-                pfam_names_1, pfam_names_2, session, subdomains)
-            domain_contact_2 = self._get_domain_contact(
-                pfam_names_2, pfam_names_1, session, subdomains)
-
-        if not len(domain_contact_1) and not len(domain_contact_2):
-            logger.debug(
-                'No domain contact template found for domains %s, %s' %
-                (str(pfam_names_1), str(pfam_names_2),))
-
-        return [domain_contact_1, domain_contact_2]
-
-    def _get_domain_contact(self, pfam_names_1, pfam_names_2, session, subdomains):
-        """
-        """
-        domain_1 = sa.orm.aliased(Domain)
-        domain_2 = sa.orm.aliased(Domain)
-        domain_contact_set = set()
-        for pfam_name_1 in pfam_names_1:
-            for pfam_name_2 in pfam_names_2:
-                if not subdomains:
-                    domain_contact = (
-                        session.query(DomainContact)
-                        # .join(domain_1, DomainContact.cath_id_1==domain_1.cath_id)
-                        .filter(domain_1.pfam_name == pfam_name_1)
-                        # .join(domain_2, DomainContact.cath_id_2==domain_2.cath_id)
-                        .filter(domain_2.pfam_name == pfam_name_2)
-                        .distinct().all()
-                    )
-                else:
-                    domain_contact = (
-                        session.query(DomainContact)
-                        # .join(domain_1, DomainContact.cath_id_1==domain_1.cath_id)
-                        .filter(
-                            (domain_1.pfam_name.like(pfam_name_1)) |
-                            (domain_1.pfam_name.like(pfam_name_1 + '+%')) |
-                            # need an escape character because _ matches any single character
-                            (domain_1.pfam_name.like(pfam_name_1 + '\_%')) |
-                            (domain_1.pfam_name.like('%+' + pfam_name_1)) |
-                            (domain_1.pfam_name.like('%+' + pfam_name_1 + '+%')) |
-                            # need an escape character because _ matches any single character
-                            (domain_1.pfam_name.like('%+' + pfam_name_1 + '\_%'))
-                        )
-                        # .join(domain_2, DomainContact.cath_id_2==domain_2.cath_id)
-                        .filter(
-                            (domain_2.pfam_name.like(pfam_name_2)) |
-                            (domain_2.pfam_name.like(pfam_name_2 + '+%')) |
-                            # need an escape character because _ matches any single character
-                            (domain_2.pfam_name.like(pfam_name_2 + '\_%')) |
-                            (domain_2.pfam_name.like('%+' + pfam_name_2)) |
-                            (domain_2.pfam_name.like('%+' + pfam_name_2 + '+%')) |
-                            # need an escape character because _ matches any single character
-                            (domain_2.pfam_name.like('%+' + pfam_name_2 + '\_%'))
-                        )
-                        .distinct().all()
-                    )
-                domain_contact_set.update(domain_contact)
-        return list(domain_contact_set)
-
-    @helper.retry_database
     def get_uniprot_domain(self, uniprot_id, copy_data=False):
         """
         """
@@ -487,8 +313,8 @@ class MyDatabase(object):
                 .all()
             )
 
-        archive_dir = configs['archive_dir']
-        archive_type = configs['archive_type']
+        archive_dir = conf.CONFIGS['archive_dir']
+        archive_type = conf.CONFIGS['archive_type']
         d_idx = 0
         while d_idx < len(uniprot_domains):
             d = uniprot_domains[d_idx]
@@ -546,8 +372,8 @@ class MyDatabase(object):
                 .all()
             )
 
-        archive_dir = configs['archive_dir']
-        archive_type = configs['archive_type']
+        archive_dir = conf.CONFIGS['archive_dir']
+        archive_type = conf.CONFIGS['archive_type']
         d_idx = 0
         while d_idx < len(uniprot_domain_pairs):
             d = uniprot_domain_pairs[d_idx]
@@ -594,7 +420,7 @@ class MyDatabase(object):
                 d.template.model.alignment_filename and
                 d.template.model.model_filename):
             try:
-                tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
+                tmp_save_path = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 args = [tmp_save_path] + d.template.model.alignment_filename.split('/')[:-1]
                 path_to_alignment = op.join(*args)
@@ -634,7 +460,7 @@ class MyDatabase(object):
                 d.template.model.alignment_filename_2 and
                 d.template.model.model_filename):
             try:
-                tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
+                tmp_save_path = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 path_to_alignment_1 = op.join(
                     tmp_save_path,
@@ -691,27 +517,17 @@ class MyDatabase(object):
             subprocess.check_call(
                 "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
                     op.dirname(op.join(
-                        configs['archive_temp_dir'],
+                        conf.CONFIGS['archive_temp_dir'],
                         get_uniprot_base_path(ud),
                         ud.uniprot_sequence.provean.provean_supset_filename))),
                 shell=True)
-    #            subprocess.check_call("cp -f '{}' '{}'".format(
-    #                archive_dir + get_uniprot_base_path(ud) +
-    #                ud.uniprot_sequence.provean.provean_supset_filename,
-    #                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-    #                ud.uniprot_sequence.provean.provean_supset_filename), shell=True)
-    #            subprocess.check_call("cp -f '{}' '{}'".format(
-    #                archive_dir + get_uniprot_base_path(ud) +
-    #                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta',
-    #                configs['archive_temp_dir'] + get_uniprot_base_path(ud) +
-    #                ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'), shell=True)
             shutil.copyfile(
                 op.join(
                     archive_dir,
                     get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename),
                 op.join(
-                    configs['archive_temp_dir'],
+                    conf.CONFIGS['archive_temp_dir'],
                     get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename))
             shutil.copyfile(
@@ -720,7 +536,7 @@ class MyDatabase(object):
                     get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
                 op.join(
-                    configs['archive_temp_dir'],
+                    conf.CONFIGS['archive_temp_dir'],
                     get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'))
         except FileNotFoundError:
@@ -753,12 +569,11 @@ class MyDatabase(object):
 
     @helper.retry_archive
     def _extract_files_from_7zip(self, path_to_7zip, filenames_in):
-        """Extract files to `config['archive_temp_dir']`
-        """
+        """Extract files to `config['archive_temp_dir']`."""
         logger.debug("Extracting the following files: {}".format(filenames_in))
         filenames = [
             f for f in filenames_in
-            if not op.isfile(op.join(configs['archive_temp_dir'], f))
+            if not op.isfile(op.join(conf.CONFIGS['archive_temp_dir'], f))
         ]
         if not filenames:
             logger.debug("All files already been extracted. Done!")
@@ -768,15 +583,11 @@ class MyDatabase(object):
             files="' '".join(filenames)
         )
         logger.debug('System command:\n{}'.format(system_command))
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally(configs['archive_temp_dir'], system_command)
-        )
-
-        if 'No files to process' in result:
-            raise errors.Archive7zipFileNotFoundError(result, error_message, return_code)
-
-        if return_code:
-            raise errors.Archive7zipError(result, error_message, return_code)
+        p = helper.run(system_command, cwd=conf.CONFIGS['archive_temp_dir'])
+        if 'No files to process' in p.stdout:
+            raise errors.Archive7zipFileNotFoundError(p.stdout, p.stderr, p.returncode)
+        if p.returncode != 0:
+            raise errors.Archive7zipError(p.stdout, p.stderr, p.returncode)
 
     @helper.retry_database
     def get_uniprot_mutation(self, d, mutation, uniprot_id=None, copy_data=False):
@@ -806,7 +617,8 @@ class MyDatabase(object):
 
         if copy_data:
             try:
-                self._copy_mutation_data(uniprot_mutation, d.path_to_data, configs['archive_dir'])
+                self._copy_mutation_data(
+                    uniprot_mutation, d.path_to_data, conf.CONFIGS['archive_dir'])
             except (subprocess.CalledProcessError,
                     errors.Archive7zipError,
                     errors.Archive7zipFileNotFoundError) as e:
@@ -824,7 +636,7 @@ class MyDatabase(object):
                 ]
                 self._extract_files_from_7zip(archive_dir, filenames)
             else:
-                tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
+                tmp_save_path = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 path_to_mutation = op.dirname(op.join(tmp_save_path, mutation.model_filename_wt))
                 subprocess.check_call(
@@ -853,20 +665,19 @@ class MyDatabase(object):
             if isinstance(d, UniprotDomain):
                 session.execute(
                     'delete from {0}.uniprot_domain_model where uniprot_domain_id = {1}'
-                    .format(configs['db_schema'], d.uniprot_domain_id))
+                    .format(conf.CONFIGS['db_schema'], d.uniprot_domain_id))
             elif isinstance(d, UniprotDomainPair):
                 session.execute(
                     'delete from {0}.uniprot_domain_pair_model where uniprot_domain_pair_id = {1}'
-                    .format(configs['db_schema'], d.uniprot_domain_pair_id))
+                    .format(conf.CONFIGS['db_schema'], d.uniprot_domain_pair_id))
             else:
                 raise Exception("'d' is of incorrect type!")
 
     # %% Add objects to the database
     @helper.retry_database
     def merge_row(self, row_instance):
-        """Adds a list of rows (`row_instances`) to the database.
-        """
-        if not configs['db_is_immutable']:
+        """Add a list of rows (`row_instances`) to the database."""
+        if not conf.CONFIGS['db_is_immutable']:
             with self.session_scope() as session:
                 if not isinstance(row_instance, (tuple, list)):
                     session.merge(row_instance)
@@ -875,12 +686,11 @@ class MyDatabase(object):
                         session.merge(instance)
 
     def merge_provean(self, provean, provean_supset_file, path_to_data):
-        """Adds provean score to the database.
-        """
+        """Add provean score to the database."""
         assert op.isfile(provean_supset_file)
         assert op.isfile(provean_supset_file + '.fasta')
 
-        archive_dir = configs['archive_dir']
+        archive_dir = conf.CONFIGS['archive_dir']
         logger.debug(
             'Moving provean supset to the output folder: {}'
             .format(op.join(archive_dir, path_to_data)))
@@ -895,11 +705,10 @@ class MyDatabase(object):
         self.merge_row(provean)
 
     def merge_model(self, d, files_dict={}):
-        """Adds MODELLER models to the database.
-        """
+        """Add MODELLER models to the database."""
         # Save a copy of the alignment to the export folder
         if files_dict:
-            archive_dir = configs['archive_dir']
+            archive_dir = conf.CONFIGS['archive_dir']
             archive_save_path = op.join(archive_dir, d.path_to_data)
             # tmp_save_path = configs['archive_temp_dir'] + d.path_to_data
             subprocess.check_call(
@@ -942,8 +751,8 @@ class MyDatabase(object):
         """
         mut.mut_date_modified = datetime.datetime.utcnow()
         if path_to_data and (mut.model_filename_wt is not None):
-            archive_temp_save_dir = op.join(configs['archive_temp_dir'], path_to_data)
-            archive_save_dir = op.join(configs['archive_dir'], path_to_data)
+            archive_temp_save_dir = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
+            archive_save_dir = op.join(conf.CONFIGS['archive_dir'], path_to_data)
             # Save Foldx structures
             if mut.model_filename_wt and mut.model_filename_mut:
                 # os.makedirs(op.dirname(op.join(archive_save_dir, mut.model_filename_wt)))
@@ -961,264 +770,6 @@ class MyDatabase(object):
                     op.join(archive_save_dir, mut.model_filename_mut)
                 )
         self.merge_row(mut)
-
-    # %%
-    @helper.retry_database
-    def get_uniprot_sequence(self, uniprot_id, check_external=True):
-        """
-        Parameters
-        ----------
-        uniprot_id : str
-            Uniprot ID of the protein
-        check_external : bool
-            Whether or not to look online if the protein sequence is not found in the local
-            database.
-
-        Returns
-        -------
-        SeqRecord :
-            Contains the sequence of the specified uniprot
-        """
-        with self.session_scope() as session:
-            uniprot_sequence = (
-                session
-                .query(UniprotSequence)
-                .filter(UniprotSequence.uniprot_id == uniprot_id)
-                .all()
-            )
-
-        if len(uniprot_sequence) == 1:
-            uniprot_sequence = uniprot_sequence[0]
-
-        elif len(uniprot_sequence) > 1:
-            logger.error('Type(uniprot_sequence): {}'.format(type(uniprot_sequence)))
-            logger.error('uniprot_sequence: {}'.format(type(uniprot_sequence)))
-            raise Exception('Several uniprot sequences returned!? This should never happen!')
-
-        elif len(uniprot_sequence) == 0:
-            if not check_external:
-                print(
-                    "Couldn't find a sequence for uniprot {}, "
-                    "and not bothering to look for it online"
-                    .format(uniprot_id))
-                return None
-            else:
-                sequence_file = elaspic_sequence.download_uniport_sequence(
-                    uniprot_id, configs['unique_temp_dir'])
-                with open(sequence_file) as ifh:
-                    seqrecord = SeqIO.read(ifh, 'fasta')
-                uniprot_sequence = UniprotSequence()
-                uniprot_sequence.uniprot_id = uniprot_id
-                sp_or_trembl, uniprot_id_2, uniprot_name = seqrecord.name.split('|')
-                if uniprot_id != uniprot_id_2:
-                    print(
-                        'Uniprot id of the fasta file ({}) does not match the '
-                        'uniprot id of the query ({}). Skipping...'
-                        .format(uniprot_id_2, uniprot_id))
-                    return None
-                uniprot_sequence.db = sp_or_trembl
-                uniprot_sequence.uniprot_name = uniprot_name
-                uniprot_sequence.uniprot_description = seqrecord.description
-                uniprot_sequence.uniprot_sequence = str(seqrecord.seq)
-                self.add_uniprot_sequence(uniprot_sequence)
-
-        uniprot_seqrecord = SeqRecord(
-            seq=Seq(str(uniprot_sequence.uniprot_sequence)),
-            id=uniprot_sequence.uniprot_id,
-            name=uniprot_sequence.uniprot_name)
-
-        return uniprot_seqrecord
-
-    @helper.retry_database
-    def add_uniprot_sequence(self, uniprot_sequence):
-        """ Add new sequences to the database.
-        :param uniprot_sequence: UniprotSequence object
-        :rtype: None
-        """
-        with self.session_scope() as session:
-            session.add(uniprot_sequence)
-
-    # %% Domain and domain contact
-    @helper.retry_database
-    def add_domain(self, d):
-        with self.session_scope() as session:
-            if isinstance(d, Domain):
-                (
-                    session
-                    .query(Domain)
-                    .filter(Domain.cath_id == d.cath_id)
-                    .update({Domain.domain_errors: d.domain_errors})
-                )
-            elif isinstance(d, DomainContact):
-                (
-                    session
-                    .query(DomainContact)
-                    .filter(DomainContact.domain_contact_id == d.domain_contact_id)
-                    .update({DomainContact.domain_contact_errors: d.domain_contact_errors})
-                )
-
-    @helper.retry_database
-    def add_domain_errors(self, t, error_string):
-        with self.session_scope() as session:
-            if isinstance(t, UniprotDomain):
-                domain = (
-                    session
-                    .query(Domain)
-                    .filter(Domain.cath_id == t.cath_id)
-                    .as_scalar()
-                )
-                domain.domain_errors = error_string
-                session.merge(domain)
-            elif isinstance(t, UniprotDomainPair):
-                domain_contact = (
-                    session
-                    .query(DomainContact)
-                    .filter(DomainContact.cath_id_1 == t.cath_id_1)
-                    .filter(DomainContact.cath_id_2 == t.cath_id_2)
-                    .all()[0]
-                )
-                domain_contact.domain_contact_errors = error_string
-                session.merge(domain_contact)
-            else:
-                raise Exception('Wrong type for template!!!')
-
-    # %%
-    def _split_domain(self, domain):
-        """
-        Converts a string of domain boundaries to integers.
-        The separator is '-', and it can happen that both or one boundary is negative,
-        making this tricky::
-
-            -150-200,   meaning from -150 to 200
-            -150--100,  meaning from -150 to -100
-
-        Parameters
-        ----------
-        domain : str
-            A string of domain boundaries
-
-        Returns
-        -------
-        list
-            Domain boundaries converted to integers
-        """
-        # split the domain boundaries, keep eventual minus signs
-        if domain[0] == '-' and len(domain[1:].split('-')) == 2:
-            domain = ['-' + domain[1:].split('-')[0], domain[1:].split('-')[1]]
-        elif domain[0] == '-' and len(domain[1:].split('-')) > 2:
-            domain = ['-' + domain[1:].split('-')[0], '-' + domain[1:].split('-')[-1]]
-        else:
-            domain = [domain.split('-')[0], domain.split('-')[1]]
-        # strip the letters
-        if domain[0][-1] in helper.uppercase:
-            domain[0] = domain[0][:-1]
-        if domain[1][-1] in helper.uppercase:
-            domain[1] = domain[1][:-1]
-        domain = [int(domain[0]), int(domain[1])]
-        return domain
-
-    def _split_domain_semicolon(self, domains):
-        """
-        Unlike `split_domain()`, this function returns a tuple of tuples of strings,
-        preserving letter numbering (e.g. 10B).
-        """
-        x = domains
-        return tuple([tuple([r.strip() for r in ro.split(':')]) for ro in x.split(',')])
-
-    def _split_interface_aa(self, interface_aa):
-        """
-        """
-        if interface_aa and (interface_aa != '') and (interface_aa != 'NULL'):
-            if interface_aa[-1] == ',':
-                interface_aa = interface_aa[:-1]
-
-            x = interface_aa
-            return_tuple = tuple([int(r.strip()) for r in x.split(',')])
-
-        else:
-            return_tuple = []
-
-        return return_tuple
-
-    # %%
-    def get_alignment(self, model, path_to_data):
-        """
-        """
-
-        tmp_save_path = op.join(configs['archive_temp_dir'], path_to_data)
-        archive_save_path = op.join(configs['archive_dir'], path_to_data)
-
-        if isinstance(model, UniprotDomainModel):
-
-            # Load previously-calculated alignments
-            if os.path.isfile(op.join(tmp_save_path, model.alignment_filename)):
-                alignment = AlignIO.read(
-                    op.join(tmp_save_path, model.alignment_filename),
-                    'clustal')
-            elif os.path.isfile(op.join(archive_save_path, model.alignment_filename)):
-                alignment = AlignIO.read(
-                    op.join(archive_save_path, model.alignment_filename),
-                    'clustal')
-            else:
-                raise errors.NoPrecalculatedAlignmentFound(
-                    archive_save_path, model.alignment_filename)
-
-            return [alignment, None]
-
-        elif isinstance(model, UniprotDomainPairModel):
-
-            # Read alignment from the temporary folder
-            if (os.path.isfile(op.join(tmp_save_path, model.alignment_filename_1)) and
-                    os.path.isfile(op.join(tmp_save_path, model.alignment_filename_2))):
-                alignment_1 = AlignIO.read(
-                    op.join(tmp_save_path, model.alignment_filename_1), 'clustal')
-                alignment_2 = AlignIO.read(
-                    op.join(tmp_save_path, model.alignment_filename_2), 'clustal')
-            # Read alignment from the export database
-            elif (os.path.isfile(op.join(archive_save_path, model.alignment_filename_1)) and
-                    os.path.isfile(op.join(archive_save_path, model.alignment_filename_2))):
-                alignment_1 = AlignIO.read(
-                    op.join(archive_save_path, model.alignment_filename_1), 'clustal')
-                alignment_2 = AlignIO.read(
-                    op.join(archive_save_path, model.alignment_filename_2), 'clustal')
-            else:
-                raise errors.NoPrecalculatedAlignmentFound(
-                    archive_save_path, model.alignment_filename_1)
-
-            return [alignment_1, alignment_2]
-
-    def load_db_from_archive(self):
-        """
-        TODO: In the future I should move back to using json...
-        """
-        data = [
-            ['human/*/*/*/*/template.json', UniprotDomainTemplate],
-            ['human/*/*/*/*/model.json', UniprotDomainModel],
-            ['human/*/*/*/*/*/mutation.json', UniprotDomainMutation],
-            ['human/*/*/*/*/*/*/template.json', UniprotDomainPairTemplate],
-            ['human/*/*/*/*/*/*/model.json', UniprotDomainPairModel],
-            ['human/*/*/*/*/*/*/*/mutation.json', UniprotDomainPairMutation],
-        ]
-
-        for d in data:
-            result, __, __ = (
-                helper.subprocess_check_output('ls ' + op.join(configs['archive_dir'], d[0]))
-            )
-            filenames = [fname for fname in result.split('\n') if fname != '']
-            for filename in filenames:
-                with open(filename, 'r') as fh:
-                    row = json.load(fh)
-                try:
-                    self.session.merge(d[1](**row))
-                except TypeError as e:
-                    logger.debug(
-                        'Error merging {}.\n'
-                        'Probably from an older version of the database.\n'
-                        'Skipping...'.format(filename))
-                    logger.debug('\t', e)
-                logger.debug('Merged %s' % filename)
-            self.session.commit()
-            logger.debug('Committed changes\n\n\n')
 
 
 def get_uniprot_base_path(d=None, uniprot_name=None, uniprot_id=None):
@@ -1300,35 +851,3 @@ def get_uniprot_domain_path(d=None, **vargs):
         raise Exception
 
     return uniprot_domain_path
-
-
-def scinet_cleanup(folder, destination, name=None):
-    """
-    zip and copy the results from the ramdisk to /scratch
-    """
-    print('saving the result in', folder)
-    os.chdir(folder)
-    if name is None:
-        output_name = 'result_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
-    else:
-        output_name = name + '_' + time.strftime("%Y_%m_%d_at_%Hh_%Mm") + '.tar.bz2'
-    copy = 'cp ' + output_name + ' ' + op.join(destination, output_name)
-#    copy = 'cp ' + output_name + ' $SCRATCH/niklas-pipeline/' + output_name
-#    copy = 'cp ' + output_name + ' /home/niklas/tmp/' + output_name
-    system_command = 'tar -acf ' + output_name + ' * && ' + copy
-
-    result, error_message, return_code = helper.subprocess_check_output(system_command)
-    if return_code != 0:
-        print('error_message:', error_message)
-    return
-
-
-def pickle_dump(obj, filename):
-    mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH
-    umask_original = os.umask(0)
-    try:
-        handle = os.fdopen(os.open(filename, os.O_WRONLY | os.O_CREAT, mode), 'wb')
-    finally:
-        os.umask(umask_original)
-    pickle.dump(obj, handle, pickle.HIGHEST_PROTOCOL)
-    handle.close()

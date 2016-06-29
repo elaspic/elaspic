@@ -1,25 +1,14 @@
-"""
-Homology modeling by the automodel class
-"""
-from __future__ import absolute_import
-from __future__ import unicode_literals
-from builtins import range
-from builtins import object
-
+"""Homology modeling by the automodel class."""
 import logging
-
-from modeller import *  # Load standard Modeller classes, analysis:ignore
-from modeller.automodel import *	# Load the automodel class, analysis:ignore
-
+from modeller import ModellerError, log, environ, physical
+from modeller.automodel import automodel, dope_loopmodel, assess, refine, autosched
 from . import conf, errors, helper
-configs = conf.Configs()
 
 logger = logging.getLogger(__name__)
 
 
 class Modeller(object):
-    """
-    Runs MODELLER in order to make a homology model of the given protein.
+    """Run MODELLER in order to make a homology model of the given protein.
 
     Parameters
     ----------
@@ -36,6 +25,7 @@ class Modeller(object):
     loopRefinement : boolean
         If True, calculate loop refinemnts
     """
+
     def __init__(self, alignment, seqID, templateID, filePath, loopRefinement=True):
 
         if not isinstance(alignment, list):
@@ -45,23 +35,21 @@ class Modeller(object):
         self.seqID = seqID
         self.templateID = templateID
         self.loopRefinement = loopRefinement
-        self.start = 1                # start model
-        self.end = configs['modeller_runs']      # end model
-        self.loopStart = 1            # start loop refinement model
-        self.loopEnd = 4              # end loop refinement model
+        self.start = 1  # start model
+        self.end = conf.CONFIGS['modeller_runs']  # end model
+        self.loopStart = 1  # start loop refinement model
+        self.loopEnd = 4  # end loop refinement model
 
         # Some environment settings
         self.filePath = filePath
 
     def run(self):
-        """
-        """
         # key: assessment score
         # values: alignment, pdb filename, whether or not using loop refinement
         ranking = dict()
         ranking_knotted = dict()
         counter = 0
-        max_counter = 3 if not configs['testing'] else 1
+        max_counter = 3 if not conf.CONFIGS['testing'] else 1
         while not ranking and counter < max_counter:
             logger.debug(
                 "counter: {}, ranking: '{}', ranking_knotted: '{}'"
@@ -100,7 +88,8 @@ class Modeller(object):
             return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], True
 
     def __run_modeller(self, alignFile, loopRefinement):
-        """
+        """.
+
         Parameters
         ----------
         alignFile : string
@@ -115,7 +104,6 @@ class Modeller(object):
         list
             Successfully calculated models
         """
-
         log.none()  # instructs Modeller to display no log output.
         env = environ()  # create a new MODELLER environment to build this model in
 
@@ -160,14 +148,14 @@ class Modeller(object):
             # index of the first loop model
             a.loop.starting_model = self.loopStart
             # index of the last loop model
-            a.loop.ending_model = self.loopEnd if not configs['testing'] else self.loopStart
+            a.loop.ending_model = self.loopEnd if not conf.CONFIGS['testing'] else self.loopStart
             # loop refinement method; this yields
-            a.loop.md_level = refine.slow if not configs['testing'] else None
+            a.loop.md_level = refine.slow if not conf.CONFIGS['testing'] else None
 
         a.starting_model = self.start  # index of the first model
         a.ending_model = self.end  # index of the last model
 
-        if configs['testing']:
+        if conf.CONFIGS['testing']:
             logger.debug("Creating a quick-and-dirty model because testing...")
             a.very_fast()
         else:
@@ -232,8 +220,8 @@ class Modeller(object):
         return result, loop, failures
 
     def __call_knot(self, pdbFile):
-        """
-        Check a PDB structure for knots using the program KNOTS by Willi Taylor
+        """.Check a PDB structure for knots using the program KNOTS by Willi Taylor.
+
         Make sure to set the command and PDB path!
 
         N.B.
@@ -250,15 +238,13 @@ class Modeller(object):
             0: no knot; 1: knot
         """
         system_command = 'knot ' + pdbFile
-        logger.debug('Knot system command: {}'.format(system_command))
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally('./', system_command)
-        )
-        if not return_code:
-            logger.error('Knot result: {}'.format(result))
-            logger.error('Knot error message: {}'.format(error_message))
+        logger.debug("Knot system command: '{}'".format(system_command))
+        p = helper.run(system_command)
+        if p.returncode == 0:
+            logger.error('Knot result:\n{}'.format(p.stdout))
+            logger.error('Knot error message:\n{}'.format(p.stderr))
 
-        line = [x for x in result.split('\n')]
+        line = [x for x in p.stdout.split('\n')]
 
         # I found two different forms in which the output appears,
         # hence two if statements to catch them
@@ -275,6 +261,6 @@ class Modeller(object):
         else:
             # in case the output can't be read, the model is classified as
             # knotted and thus disregarded. This could be improved.
-            logger.error("'knot' failed with some strange output:\n{}".format(result))
+            logger.error("'knot' failed with some strange output:\n{}".format(p.stdout))
             logger.error('Assuming knotted...')
             return True

@@ -13,9 +13,14 @@ fi
 if [[ ${TEST_SUITE} = 'test_unittests' ]] ; then
     py.test
     "${SCRIPTS_DIR}/build-docs.sh"
-else
+elif [[ ${TEST_SUITE} = 'test_standalone*' ]] ; then
     source "${SCRIPTS_DIR}/configure_tests.sh"
-    cd "${TEST_DIR}"
-    ls
     "${SCRIPTS_DIR}/${TEST_SUITE}.sh"
+elif [[ ${TEST_SUITE} = 'test_database*' ]] ; then
+    source "${SCRIPTS_DIR}/configure_tests.sh"
+    source "${SCRIPTS_DIR}/configure_database.sh"
+    "${SCRIPTS_DIR}/${TEST_SUITE}.sh"
+else
+    echo "Wrong TEST_SUITE: '$TEST_SUITE'"
+    exit -1
 fi

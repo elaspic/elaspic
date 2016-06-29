@@ -3,10 +3,7 @@ import sqlalchemy as sa
 import sqlalchemy.ext.declarative as sa_ext_declarative
 
 from . import conf
-configs = conf.Configs()
 
-
-# %% Constants
 
 # Default sizes for creating varchar fields
 SHORT = 15
@@ -21,56 +18,28 @@ naming_convention = {
     "pk": "pk_%(table_name)s"
 }
 
-
 # Some database-specific parameters that SQLAlchemy can't figure out
-DB_TYPE = configs.get('db_type', None)
-DB_DATABASE = configs.get('db_database', 'elaspic')
-DB_SCHEMA = configs.get('db_schema', 'elaspic')
-DB_SCHEMA_UNIPROT = configs.get('db_schema_uniprot', 'elaspic')
-
 db_specific_properties = {
     'mysql': {
         'BINARY_COLLATION': 'utf8_bin',
         'STRING_COLLATION': 'utf8_unicode_ci',
-        'schema_version_tuple': {'schema': DB_SCHEMA},
-        'uniprot_kb_schema_tuple': {'schema': DB_SCHEMA_UNIPROT},
     },
     'postgresql': {
         'BINARY_COLLATION': 'en_US.utf8',
         'STRING_COLLATION': 'en_US.utf8',
-        'schema_version_tuple': {'schema': DB_SCHEMA},
-        'uniprot_kb_schema_tuple': {'schema': DB_SCHEMA_UNIPROT},
     },
     'sqlite': {
         'BINARY_COLLATION': 'RTRIM',
         'STRING_COLLATION': 'NOCASE',
-        'schema_version_tuple': {'sqlite_autoincrement': True},
-        'uniprot_kb_schema_tuple': {'sqlite_autoincrement': True},
     },
 }
 
-if DB_TYPE is None:
+if conf.CONFIGS.get('db_type') is None:
     print('The `DB_TYPE` has not been set. Do not know what database is being used!')
 
 
-# %% Functions
-def get_db_specific_param(key):
-    if DB_TYPE is None:
-        return
-    if (DB_TYPE in ['mysql', 'postgresql'] and
-            (DB_DATABASE is None or DB_SCHEMA is None or DB_SCHEMA_UNIPROT is None)):
-        error_message = (
-            'Both the `DB_SCHEMA` and `DB_SCHEMA_UNIPROT` have to be specified when using '
-            'a MySQL or PostgreSQL database!'
-        )
-        raise Exception(error_message)
-    return db_specific_properties[DB_TYPE][key]
-
-
 def get_table_args(table_name, index_columns=[], db_specific_params=[]):
-    """
-    Returns a tuple of additional table arguments.
-    """
+    """Return a tuple of additional table arguments."""
     table_args = []
     # Create indexes over several columns
     for columns in index_columns:
@@ -90,19 +59,16 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
         table_args.append(sa.Index(index_name, *column_names, **kwargs))
     # Other table parameters, such as schemas, etc.
     for db_specific_param in db_specific_params:
-        table_args.append(get_db_specific_param(db_specific_param))
+        table_args.append(db_specific_properties[conf.CONFIGS['db_type']][db_specific_param])
     return tuple(table_args)
 
 
-# %%
 Base = sa_ext_declarative.declarative_base()
 Base.metadata.naming_conventions = naming_convention
 
 
-# %%
 class Domain(Base):
-    """
-    Profs domain definitions for all proteins in the PDB.
+    """Profs domain definitions for all proteins in the PDB.
 
     Columns:
       cath_id
@@ -130,25 +96,30 @@ class Domain(Base):
         List of errors that occurred when annotating this domain, or when using this domain
         to make structural homology models.
     """
+
     __tablename__ = 'domain'
-    if DB_TYPE != 'mysql':
+    if conf.CONFIGS.get('db_type') != 'mysql':
         # MySQL can't handle long indexes
-        _indexes = [
-            (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], {'unique': True}),
-            (['pdb_pdbfam_name'], {'mysql_length': 255})
-        ]
-    else:
         _indexes = [
             ['pdb_id', 'pdb_chain'],
             (['pdb_pdbfam_name'], {'mysql_length': 255}),
         ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
+    else:
+        _indexes = [
+            (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], {'unique': True}),
+            (['pdb_pdbfam_name'], {'mysql_length': 255})
+        ]
+    __table_args__ = get_table_args(__tablename__, _indexes, [])
     cath_id = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')),
+        sa.String(
+            SHORT,
+            collation=db_specific_properties[conf.CONFIGS['db_type']]['BINARY_COLLATION']),
         primary_key=True)
     pdb_id = sa.Column(sa.String(SHORT), nullable=False)
     pdb_chain = sa.Column(
-        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')),
+        sa.String(
+            SHORT,
+            collation=db_specific_properties[conf.CONFIGS['db_type']]['BINARY_COLLATION']),
         nullable=False)
     pdb_domain_def = sa.Column(sa.String(MEDIUM), nullable=False)
     pdb_pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
@@ -157,9 +128,10 @@ class Domain(Base):
 
 
 class DomainContact(Base):
-    u"""
-    Interactions between Profs domains in the PDB. Only interactions that were predicted to be
-    biologically relevant by `NOXclass`_ are included in this table.
+    r"""Interactions between Profs domains in the PDB.
+
+    Only interactions that were predicted to be biologically relevant by `NOXclass`_
+    are included in this table.
 
     Columns:
       domain_contact_id
@@ -210,12 +182,13 @@ class DomainContact(Base):
 
     .. _NOXclass: http://noxclass.bioinf.mpi-inf.mpg.de/
     """
+
     __tablename__ = 'domain_contact'
     _indexes = [
         (['cath_id_1', 'cath_id_2'], {'unique': True}),
         (['cath_id_2', 'cath_id_1'], {'unique': True}),
     ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     domain_contact_id = sa.Column(sa.Integer, primary_key=True)
     cath_id_1 = sa.Column(
@@ -249,10 +222,10 @@ class DomainContact(Base):
 
 
 class UniprotSequence(Base):
-    """
-    Protein sequences from the Uniprot KB, obtained by parsing `uniprot_sprot_fasta.gz`,
-    `uniprot_trembl_fasta.gz`, and `homo_sapiens_variation.txt` files from the
-    `Uniprot ftp site`_.
+    """Protein sequences from the Uniprot KB.
+
+    Obtained by parsing `uniprot_sprot_fasta.gz`, `uniprot_trembl_fasta.gz`, and
+    `homo_sapiens_variation.txt` files from the `Uniprot ftp site`_.
 
     Columns:
       db
@@ -293,8 +266,9 @@ class UniprotSequence(Base):
        ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/
 
     """
+
     __tablename__ = 'uniprot_sequence'
-    __table_args__ = get_table_args(__tablename__, [], ['uniprot_kb_schema_tuple'])
+    __table_args__ = get_table_args(__tablename__, [], [])
 
     db = sa.Column(sa.String(SHORT), nullable=False)
     uniprot_id = sa.Column(sa.String(SHORT), primary_key=True)
@@ -308,8 +282,8 @@ class UniprotSequence(Base):
 
 
 class Provean(Base):
-    """
-    Description of the `Provean`_ supporting set calculated for a protein sequence.
+    """Description of the `Provean`_ supporting set calculated for a protein sequence.
+
     The construction of a supporting set is the most lengthy step in running Provean.
     Therefore, the supporting set is precalculated and stored for every protein sequence.
 
@@ -333,8 +307,9 @@ class Provean(Base):
 
     .. _provean: http://provean.jcvi.org/downloads.php
     """
+
     __tablename__ = 'provean'
-    __table_args__ = get_table_args(__tablename__, [], ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, [], [])
 
     uniprot_id = sa.Column(
         None, sa.ForeignKey(
@@ -355,11 +330,11 @@ class Provean(Base):
 
 
 class UniprotDomain(Base):
-    """
-    Pfam domain definitions for proteins in the :ref:`uniprot_sequence` table. This table was
-    obtained by downloading Pfam domain definitions for all known proteins
-    from the `SIMAP`_ website, and mapping the protein sequence to uniprot
-    using the MD5 hash of each sequence.
+    """Pfam domain definitions for proteins in the :ref:`uniprot_sequence` table.
+
+    This table was obtained by downloading Pfam domain definitions for all known proteins
+    from the `SIMAP`_ website, and mapping the protein sequence to uniprot using the MD5 hash
+    of each sequence.
 
     Columns:
       uniprot_domain_id
@@ -397,9 +372,10 @@ class UniprotDomain(Base):
 
     .. _SIMAP: http://liferay.csb.univie.ac.at/portal/web/simap
     """
+
     __tablename__ = 'uniprot_domain'
 
-    IS_TRAINING_SCHEMA = 'training' in DB_SCHEMA
+    IS_TRAINING_SCHEMA = 'training' in conf.CONFIGS.get('db_schema', '')
 
     uniprot_domain_id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = sa.Column(
@@ -432,7 +408,7 @@ class UniprotDomain(Base):
             (['uniprot_id', 'uniprot_domain_id'],
              {'unique': True, 'index_name': 'ix_uniprot_id_uniprot_domain_id'}),
         ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     # Relationships
     uniprot_sequence = sa.orm.relationship(
@@ -441,9 +417,9 @@ class UniprotDomain(Base):
 
 
 class UniprotDomainPair(Base):
-    """
-    Potentially-interacting pairs of domains for proteins that are known to interact, according to
-    `Hippie`_, `IRefIndex`_, and `Rolland et al. 2014`_.
+    """Potentially-interacting pairs of domains for proteins that are known to interact.
+
+    According to `Hippie`_, `IRefIndex`_, and `Rolland et al. 2014`_.
 
     Columns:
       uniprot_domain_pair_id
@@ -472,14 +448,15 @@ class UniprotDomainPair(Base):
     .. _IRefIndex: http://irefindex.org
     .. _Rolland et al. 2014: http://dx.doi.org/10.1016/j.cell.2014.10.050
     """
+
     __tablename__ = 'uniprot_domain_pair'
     _indexes = [
-            (['uniprot_id_1', 'uniprot_id_2']),
-            (['uniprot_id_2', 'uniprot_id_1']),
-            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {'unique': True}),
-            (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {'unique': True}),
+        (['uniprot_id_1', 'uniprot_id_2']),
+        (['uniprot_id_2', 'uniprot_id_1']),
+        (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {'unique': True}),
+        (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {'unique': True}),
     ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     uniprot_domain_pair_id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
     uniprot_domain_id_1 = sa.Column(
@@ -511,13 +488,14 @@ class UniprotDomainPair(Base):
 
 
 class UniprotDomainTemplate(Base):
-    """
-    Structural templates for domains in the :ref:`uniprot_domain` table.
+    r"""Structural templates for domains in the :ref:`uniprot_domain` table.
+
     Lists PDB crystal structures that will be used for making homology models.
 
     Columns:
       uniprot_domain_id
-        An integer which uniquely identifies each uniprot domain in the :ref:`uniprot_domain` table.
+        An integer which uniquely identifies each uniprot domain in the
+        :ref:`uniprot_domain` table.
 
       template_errors
         List of errors that occurred during the process for finding the template.
@@ -534,8 +512,8 @@ class UniprotDomainTemplate(Base):
       domain_def
         Profs domain definitions for domains with structural templates. Domain definitions in this
         column are different from domain definitions in the ``alignment_def`` column of the
-        :ref:`uniprot_domain` table in that they have been expanded to match domain boundaries of the
-        Profs structural template, identified by the ``cath_id``.
+        :ref:`uniprot_domain` table in that they have been expanded to match domain boundaries
+        of the Profs structural template, identified by the ``cath_id``.
 
       alignment_identity
         Percent identity of the domain to its structural template.
@@ -544,21 +522,24 @@ class UniprotDomainTemplate(Base):
         Percent coverage of the domain to its structural template.
 
       alignment_score
-        A score obtained by combining ``alignment_identity`` (:math:`SeqId`) and ``alignment_coverage``
-        (:math:`Cov`) using the following equation, as described by `Mosca et al.`_:
+        A score obtained by combining ``alignment_identity`` (:math:`SeqId`) and
+        ``alignment_coverage`` (:math:`Cov`) using the following equation, as described by
+        `Mosca et al.`_:
 
         .. math::
            :label: score_function
 
-           Score = 0.95 \\cdot \\frac{SeqId}{100} \\cdot \\frac{Cov}{100} + 0.05 \\cdot \\frac{Cov}{100}
+           Score = 0.95 \\cdot \\frac{SeqId}{100} \\cdot \\frac{Cov}{100} + \
+                   0.05 \\cdot \\frac{Cov}{100}
 
       t_date_modified
         The date and time when this row was last modified.
 
     .. _Mosca et al.: http://doi.org/10.1038/nmeth.2289
     """
+
     __tablename__ = 'uniprot_domain_template'
-    __table_args__ = get_table_args(__tablename__, [], ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, [], [])
 
     uniprot_domain_id = sa.Column(
         None, sa.ForeignKey(
@@ -591,14 +572,13 @@ class UniprotDomainTemplate(Base):
         backref=sa.orm.backref('uniprot_domain', cascade='expunge'))
 
 
-
 class UniprotDomainModel(Base):
-    """
-    Homology models for templates in the :ref:`uniprot_domain_template` table.
+    """Homology models for templates in the :ref:`uniprot_domain_template` table.
 
     Columns:
       uniprot_domain_id
-        An integer which uniquely identifies each uniprot domain in the :ref:`uniprot_domain` table.
+        An integer which uniquely identifies each uniprot domain in the :ref:`uniprot_domain`
+        table.
 
       model_errors
         List of errors that occurred when making the homology model.
@@ -629,13 +609,13 @@ class UniprotDomainModel(Base):
         :ref:`uniprot_domain_template` table. However, it sometimes happens that the best
         Profs structural template only covers a fraction of the Pfam domain. In that case, the
         ``alignment_def`` column in the :ref:`uniprot_domain` table, and the ``domain_def`` column
-        in the :ref:`uniprot_domain_template` table, will contain the original Pfam domain definitions,
-        and the ``model_domain_def`` column will contain domain definitions for only the region that
-        is covered by the structural template.
-
+        in the :ref:`uniprot_domain_template` table, will contain the original Pfam domain
+        definitions, and the ``model_domain_def`` column will contain domain definitions for only
+        the region that is covered by the structural template.
     """
+
     __tablename__ = 'uniprot_domain_model'
-    __table_args__ = get_table_args(__tablename__, [], ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, [], [])
 
     uniprot_domain_id = sa.Column(
         None, sa.ForeignKey(
@@ -648,27 +628,30 @@ class UniprotDomainModel(Base):
     chain = sa.Column(sa.String(SHORT))
     norm_dope = sa.Column(sa.Float)
     sasa_score = sa.Column(sa.Text)
-    m_date_modified = sa.Column(sa.DateTime, default=datetime.datetime.utcnow,
-                             onupdate=datetime.datetime.utcnow, nullable=False)
+    m_date_modified = sa.Column(
+        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
+        nullable=False)
     model_domain_def = sa.Column(sa.String(MEDIUM))
 
     # Relationships
+    # one to one
     template = sa.orm.relationship(
         UniprotDomainTemplate, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('model', uselist=False, cascade='expunge', lazy='joined')) # one to one
-
+        backref=sa.orm.backref('model', uselist=False, cascade='expunge', lazy='joined'))
 
 
 class UniprotDomainMutation(Base):
-    """
-    Characterization of mutations introduced into structures in the :ref:`uniprot_domain_model` table.
+    """Characterization of mutations introduced into structures.
+
+    References the :ref:`uniprot_domain_model` table.
 
     Columns:
       uniprot_id
         Uniprot ID of the protein that was mutated.
 
       uniprot_domain_id
-        Unique id which identifies the Profs domain that was mutated in the :ref:`uniprot_domain` table.
+        Unique id which identifies the Profs domain that was mutated in the :ref:`uniprot_domain`
+        table.
 
       mutation
         Mutation that was introduced into the protein, in Uniprot coordinates.
@@ -777,11 +760,12 @@ class UniprotDomainMutation(Base):
     .. _stride: http://webclu.bio.wzw.tum.de/stride/
     .. _msms: http://mgltools.scripps.edu/
     """
+
     __tablename__ = 'uniprot_domain_mutation'
     _indexes = [
         ['uniprot_id', 'mutation'],
     ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     uniprot_id = sa.Column(
         None, sa.ForeignKey(
@@ -823,8 +807,7 @@ class UniprotDomainMutation(Base):
 
 
 class UniprotDomainPairTemplate(Base):
-    """
-    Structural templates for pairs of domains in the :ref:`uniprot_domain_pair` table.
+    r"""Structural templates for pairs of domains in the :ref:`uniprot_domain_pair` table.
 
     Columns:
       uniprot_domain_pair_id
@@ -920,12 +903,13 @@ class UniprotDomainPairTemplate(Base):
     .. [#f1] Interface residues are defined as residues that are within 5 \u212B
               of the partner domain.
     """
+
     __tablename__ = 'uniprot_domain_pair_template'
     _indexes = [
         ['cath_id_1', 'cath_id_2'],
         ['cath_id_2', 'cath_id_1'],
     ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     uniprot_domain_pair_id = sa.Column(
         None, sa.ForeignKey(
@@ -995,9 +979,9 @@ class UniprotDomainPairTemplate(Base):
 
 
 class UniprotDomainPairModel(Base):
-    """
-    Structural models of interactions between pairs of domains in the :ref:`uniprot_domain_pair`
-    table.
+    r"""Structural models of interactions between pairs of domains.
+
+    References the :ref:`uniprot_domain_pair` table.
 
     Columns:
       uniprot_domain_pair_id
@@ -1057,12 +1041,12 @@ class UniprotDomainPairModel(Base):
       model_domain_def_2
         Domain boundaries of the second domain that are covered by the Profs structural template.
 
-
     .. _POPS: http://mathbio.nimr.mrc.ac.uk/wiki/POPS
     .. _FoldX: http://foldx.crg.es/
     """
+
     __tablename__ = 'uniprot_domain_pair_model'
-    __table_args__ = get_table_args(__tablename__, [], ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, [], [])
 
     uniprot_domain_pair_id = sa.Column(
         None, sa.ForeignKey(
@@ -1096,9 +1080,9 @@ class UniprotDomainPairModel(Base):
 
 
 class UniprotDomainPairMutation(Base):
-    u"""
-    Characterization of interface mutations introduced into structures
-    in the :ref:`uniprot_domain_pair_model` table.
+    r"""Characterization of interface mutations introduced into structures.
+
+    References the :ref:`uniprot_domain_pair_model` table.
 
     Columns:
       uniprot_id
@@ -1190,11 +1174,12 @@ class UniprotDomainPairMutation(Base):
       mut_date_modified
         Date and time when this row was last modified.
     """
+
     __tablename__ = 'uniprot_domain_pair_mutation'
     _indexes = [
         ['uniprot_id', 'mutation'],
     ]
-    __table_args__ = get_table_args(__tablename__, _indexes, ['schema_version_tuple'])
+    __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     uniprot_id = sa.Column(None, sa.ForeignKey(
         UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),

@@ -10,12 +10,10 @@ import shutil
 import pandas as pd
 
 from elaspic import (
-    conf, helper,
-    elaspic_sequence, structure_tools, standalone_pipeline, database_pipeline
+    conf, helper, elaspic_sequence, structure_tools, standalone_pipeline
 )
 
 logger = logging.getLogger(__name__)
-configs = conf.Configs()
 
 
 # %% Functions
@@ -23,8 +21,7 @@ PDB_URL = 'http://www.rcsb.org/pdb/files/{}.pdb'
 
 
 def get_structure(pdb_id, input_folder, output_folder, use_remote=True):
-    """Move PDB structure to the local working directory.
-    """
+    """Move PDB structure to the local working directory."""
     input_file = op.join(input_folder, pdb_id + '.pdb')
     output_file = op.join(output_folder, pdb_id + '.pdb')
 
@@ -46,8 +43,7 @@ def get_structure(pdb_id, input_folder, output_folder, use_remote=True):
 
 
 def get_sequence(uniprot_id, input_dir, output_dir, use_remote=True):
-    """Move PDB structure to the local working directory.
-    """
+    """Move PDB structure to the local working directory."""
     input_file = op.join(input_dir, uniprot_id + '.fasta')
     output_file = op.join(output_dir, uniprot_id + '.fasta')
 
@@ -71,13 +67,14 @@ def get_sequence(uniprot_id, input_dir, output_dir, use_remote=True):
 # %% Local tests
 def run_pdb_mutation_pipeline(
         pdb_id, pdb_mutatations, working_dir=None):
-    """
+    """.
+
     Parameters
     ----------
     working_dir : str
         Can set to something if don't want to rerun entire pipeline
     """
-    pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
+    pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['unique_temp_dir'])
     for chain_id in pdb_mutatations[pdb_id]:
         for mutation in pdb_mutatations[pdb_id][chain_id]:
             mutation_pdb = '{}_{}'.format(chain_id, mutation)
@@ -101,9 +98,9 @@ def run_sequence_mutation_pipeline(
         (Useful if you want to resume a previous job).
     """
     pdb_id, sequence_id = pdb_id_sequence
-    pdb_file = structure_tools.download_pdb_file(pdb_id, configs['unique_temp_dir'])
+    pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['unique_temp_dir'])
     sequence_file = (
-        elaspic_sequence.download_uniport_sequence(sequence_id, configs['unique_temp_dir'])
+        elaspic_sequence.download_uniport_sequence(sequence_id, conf.CONFIGS['unique_temp_dir'])
     )
     for chain_pos in sequence_mutations[pdb_id_sequence]:
         for mutation in sequence_mutations[pdb_id_sequence][chain_pos]:
@@ -127,9 +124,9 @@ select 1
 from {db_schema}.provean
 where uniprot_id = '{uniprot_id}' and
 provean_supset_filename is not null;
-""".format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
+""".format(uniprot_id=uniprot_id, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
-    df1 = pd.read_sql_query(sql_query, configs['engine'])
+    df1 = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
     logger.debug(df1.head(2))
     #
     logger.debug(helper.underline('And that we have at least one domain with a template...'))
@@ -138,9 +135,9 @@ select 1
 from {db_schema}.uniprot_domain
 join {db_schema}.uniprot_domain_template using (uniprot_domain_id)
 where uniprot_id = '{uniprot_id}';
-""".format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
+""".format(uniprot_id=uniprot_id, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
-    df2 = pd.read_sql_query(sql_query, configs['engine'])
+    df2 = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
     logger.debug(df2.head(2))
     assert len(df1) >= 1 or len(df2) == 0
 
@@ -158,9 +155,9 @@ left join {db_schema}.uniprot_domain_model using (uniprot_domain_id)
 where uniprot_id = '{uniprot_id}' and
 model_filename is null and
 model_errors is null;
-""".format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
+""".format(uniprot_id=uniprot_id, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
-    df = pd.read_sql_query(sql_query, configs['engine'])
+    df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
     assert len(df) == 0
 
 
@@ -178,9 +175,9 @@ join {db_schema}.uniprot_domain_pair_template udpt using (uniprot_domain_pair_id
 left join {db_schema}.uniprot_domain_pair_model udpm using (uniprot_domain_pair_id)
 where (ud1.uniprot_id = '{uniprot_id}' or ud2.uniprot_id = '{uniprot_id}') and
 model_filename is null and model_errors is null;
-""".format(uniprot_id=uniprot_id, db_schema=configs['db_schema'])
+""".format(uniprot_id=uniprot_id, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
-    df = pd.read_sql_query(sql_query, configs['engine'])
+    df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
     assert len(df) == 0
 
 
@@ -201,9 +198,9 @@ ud.uniprot_id = '{uniprot_id}' AND
 {db_schema}.mutation_in_domain('{mutation}', model_domain_def) AND
 udm.model_errors is null AND  -- we allow for some model errors
 model_filename_wt is null;
-""".format(uniprot_id=uniprot_id, mutation=mutation, db_schema=configs['db_schema'])
+""".format(uniprot_id=uniprot_id, mutation=mutation, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
-    df = pd.read_sql_query(sql_query, configs['engine'])
+    df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
     assert len(df) == 0
 
 
@@ -229,14 +226,15 @@ OR (ud2.uniprot_id = '{uniprot_id}' AND
     {db_schema}.mutation_in_interface('{mutation}', udpm.interacting_aa_2))) AND
 udpm.model_errors IS NULL AND  -- we allow for some model errors
 model_filename_wt IS NULL;
-""".format(uniprot_id=uniprot_id, mutation=mutation, db_schema=configs['db_schema'])
+""".format(uniprot_id=uniprot_id, mutation=mutation, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
-    df = pd.read_sql_query(sql_query, configs['engine'])
+    df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
     assert len(df) == 0
 
 
 def run_database_pipeline(uniprot_id_mutation):
-    if 'engine' not in configs:
+    from elaspic import database_pipeline
+    if 'engine' not in conf.CONFIGS:
         raise Exception('You must add an `engine` to the configs to use this function!')
     if len(uniprot_id_mutation) == 2:
         uniprot_id, mutation = uniprot_id_mutation

@@ -1,3 +1,9 @@
+"""
+
+.. todo::
+
+    - Test that the standalone pipeline folder is relocatable.
+"""
 import os.path as op
 import logging
 import pytest
@@ -7,7 +13,7 @@ import helper_fns
 logger = logging.getLogger(__name__)
 
 # Constants
-CONFIG_FILE = op.join(op.dirname(__file__), 'standalone_pipeline.ini')
+CONFIG_FILE = op.join(op.dirname(__file__), 'standalone_pipeline_local.ini')
 
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
@@ -15,7 +21,7 @@ if hasattr(pytest, "config"):
 else:
     QUICK = False
 
-conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=None)
+conf.read_configuration_file(CONFIG_FILE)
 
 logger.debug('Running quick: {}'.format(QUICK))
 logger.debug('Config file: {}'.format(CONFIG_FILE))

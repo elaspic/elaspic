@@ -1,9 +1,6 @@
 import os
 import os.path as op
 import logging
-import time
-import subprocess
-import shlex
 import tempfile
 
 import pandas as pd
@@ -133,11 +130,11 @@ class AnalyzeStructure:
         return op.join(self.working_dir, self.sp.pdb_id + chains + ext)
 
     def get_physi_chem(self, chain_id, mutation):
-        """
-        Return the atomic contact vector, that is, counting how many interactions
-        between charged, polar or "carbon" residues there are. The "carbon"
-        interactions give you information about the Van der Waals packing of
-        the residues. Comparing the wildtype vs. the mutant values is used in
+        """Return the atomic contact vector.
+
+        Count how many interactions there are between charged, polar or "carbon" residues.
+        The "carbon" interactions give you information about the Van der Waals packing
+        of the residues. Comparing the wildtype vs. the mutant values is used in
         the machine learning algorithm.
 
         'mutation' is of the form: 'A16' where A is the chain identifier and 16
@@ -325,9 +322,7 @@ class AnalyzeStructure:
 
         system_command = 'pdb_to_xyzrn {0}.pdb'.format(op.join(self.working_dir, base_filename))
         logger.debug('msms system command 1: %s' % system_command)
-        p = subprocess.run(
-            shlex.split(system_command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            cwd=self.working_dir, universal_newlines=True)
+        p = helper.run(system_command, cwd=self.working_dir)
         if p.returncode != 0:
             logger.debug('msms 1 stdout:\n{}'.format(p.stdout))
             logger.debug('msms 1 stderr:\n{}'.format(p.stderr))
@@ -348,17 +343,13 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
             input_file=tempfile_xyzrn.name,
             area_file=op.join(self.working_dir, base_filename + '.area'))
         logger.debug('msms system command 2: %s' % system_command)
-        p = subprocess.run(
-            shlex.split(system_command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            universal_newlines=True)
+        p = helper.run(system_command, cwd=self.working_dir)
         number_of_tries = 0
         while p.returncode != 0 and number_of_tries < 5:
             logger.warning('MSMS exited with an error!')
             probe_radius -= 0.1
             logger.debug('Reducing probe radius to {}'.format(probe_radius))
-            p = subprocess.run(
-                shlex.split(system_command), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                universal_newlines=True)
+            p = helper.run(system_command, cwd=self.working_dir)
             number_of_tries += 1
         if p.returncode != 0:
             logger.debug('msms stdout 2:\n{}'.format(p.stdout))
@@ -414,12 +405,10 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         )
         system_command = 'stride {} -f{}'.format(structure_file, stride_results_file)
         logger.debug('stride system command: %s' % system_command)
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.working_dir, system_command)
-        )
-        logger.debug('stride return code: %i' % return_code)
-        logger.debug('stride result: %s' % result)
-        logger.debug('stride error: %s' % error_message)
+        p = helper.run(system_command, cwd=self.working_dir)
+        logger.debug('stride return code: %i' % p.returncode)
+        logger.debug('stride result: %s' % p.stdout)
+        logger.debug('stride error: %s' % p.stderr)
         # collect results
         with open(stride_results_file) as fh:
             file_data_df = pd.DataFrame(
@@ -589,22 +578,20 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
             'pops --chainOut'
             ' --pdb ' + full_filename +
             ' --popsOut ' + full_filename + '.out')
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.working_dir, system_command)
-        )
+        p = helper.run(system_command, cwd=self.working_dir)
         # The returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written
         # to the output. Hence this check:
         # if output[-1] == 'Clean termination' the run should be OK
-        output = [line for line in result.split('\n') if line != '']
+        output = [line for line in p.stdout.split('\n') if line != '']
         logger.debug(system_command)
 #        logger.debug('pops result: %s' % result) # Prints the entire POPs output
 #        logger.debug('pops error: %s' % e)
         error_message_1 = 'Warning: Atom distance too short! Probably incorrect POPS results!'
-        if error_message_1 in error_message:
+        if error_message_1 in p.stderr:
             logger.warning(error_message_1)
-        logger.debug('pops rc: %s' % return_code)
-        return output[-1], return_code, error_message
+        logger.debug('pops rc: %s' % p.returncode)
+        return output[-1], p.returncode, p.stderr
 
     def __read_pops_area(self, filename):
         """.

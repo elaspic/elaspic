@@ -4,7 +4,7 @@ import string
 import logging
 import urllib.request
 import re
-
+import string
 from functools import wraps
 from tempfile import NamedTemporaryFile
 from collections import defaultdict, OrderedDict
@@ -949,10 +949,10 @@ class StructureParser:
         return True
 
     def _remove_distant_hatatms(self, new_model, hetatm_chain):
-        """Detach hetatms that are more than ``self.r_cutoff`` away from the main chain(s)
-        """
+        """Detach hetatms that are more than ``self.r_cutoff`` away from the main chain(s)."""
         ns = NeighborSearch(list(new_model.get_atoms()))
-        hetatm_chain.id = [c for c in reversed(helper.uppercase) if c not in self.chain_ids][0]
+        hetatm_chain.id = [
+            c for c in reversed(string.ascii_uppercase) if c not in self.chain_ids][0]
         res_idx = 0
         while res_idx < len(hetatm_chain):
             res_1 = hetatm_chain.child_list[res_idx]
@@ -971,6 +971,7 @@ class StructureParser:
 
     def _unset_disordered_flags(self):
         """Change atom and residue ``disordered`` flag to `False`.
+
         Otherwise, Biopython may crash when saving the PDB structure.
         """
         logger.debug('Setting all residues and atoms marked as disorded to non-disorded')

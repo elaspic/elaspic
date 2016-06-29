@@ -15,25 +15,24 @@ from . import (
     conf, helper, errors, structure_tools, structure_analysis,
     call_modeller, call_tcoffee, call_foldx
 )
-configs = conf.Configs()
 
 logger = logging.getLogger(__name__)
 
 
-# %%
 class Model:
+    """Structural homology model.
+
+    Parameters
+    ----------
+    sequence_file
+        fasta file containing the sequence of the protein that should be mutated.
+    structure_file
+        pdb file containing the structure to be used as a template for homology modelling.
+    modeller_results_file
+        Precalculated data from a previous modeller run.
+    """
 
     def __init__(self, sequence_file, structure_file, modeller_results_file=None):
-        """
-        Parameters
-        ----------
-        sequence_file
-            fasta file containing the sequence of the protein that should be mutated.
-        structure_file
-            pdb file containing the structure to be used as a template for homology modelling.
-        modeller_results_file
-            Precalculated data from a previous modeller run.
-        """
         logger.debug('Initialising a Model instance with parameters:')
         logger.debug('sequence_file: {}:'.format(sequence_file))
         logger.debug('structure_file: {}:'.format(structure_file))
@@ -66,7 +65,7 @@ class Model:
         self.model_id = '{}-{}'.format(self.sequence_id, self.structure_id)
 
         # Check for precalculated data
-        self.modeller_results_file = op.join(configs['model_dir'], self.model_id + '.json')
+        self.modeller_results_file = op.join(conf.CONFIGS['model_dir'], self.model_id + '.json')
         if (modeller_results_file is not None and
                 modeller_results_file != self.modeller_results_file):
             logger.debug(
@@ -120,7 +119,7 @@ class Model:
 
     def _align_with_tcoffee(self, sequence_seqrec, structure_seqrec):
         alignment_fasta_file = op.join(
-            configs['tcoffee_dir'],
+            conf.CONFIGS['tcoffee_dir'],
             '{}-{}.fasta'.format(sequence_seqrec.id, structure_seqrec.id)
         )
         with open(alignment_fasta_file, 'w') as ofh:
@@ -131,7 +130,7 @@ class Model:
         return alignment_output_file
 
     def _create_pir_alignment(self):
-        pir_alignment_file = op.join(configs['model_dir'], self.model_id + '.pir')
+        pir_alignment_file = op.join(conf.CONFIGS['model_dir'], self.model_id + '.pir')
         with open(pir_alignment_file, 'w') as ofh:
             write_to_pir_alignment(
                 ofh, 'sequence', self.sequence_id,
@@ -195,7 +194,7 @@ class Model:
                 alignment_stats.append((1.0, 1.0, 1.0,))
                 alignment_output_file = (
                     op.join(
-                        configs['model_dir'],
+                        conf.CONFIGS['model_dir'],
                         '{}-{}.aln'.format(sequence_seqrec.id, structure_seqrec.id))
                 )
                 with open(alignment_output_file, 'w') as ofh:
@@ -237,7 +236,7 @@ class Model:
         # Run the homology model through msms and get dataframes with all the
         # per atom and per residue SASA values
         analyze_structure = structure_analysis.AnalyzeStructure(
-            self.modeller_results['model_file'], configs['modeller_dir']
+            self.modeller_results['model_file'], conf.CONFIGS['modeller_dir']
         )
         __, seasa_by_chain_separately, __, seasa_by_residue_separately = (
             analyze_structure.get_seasa()
@@ -274,7 +273,6 @@ class Model:
                 raise errors.MSMSError()
 
     def _analyse_interface(self):
-
         # Get a dictionary of interacting residues
         interacting_residues = (
             structure_tools.get_interacting_residues(self.modeller_structure[0])
@@ -339,7 +337,7 @@ class Model:
 
         # Interface area
         analyze_structure = structure_analysis.AnalyzeStructure(
-            self.modeller_results['model_file'], configs['modeller_dir']
+            self.modeller_results['model_file'], conf.CONFIGS['modeller_dir']
         )
         (self.interface_area_hydrophobic,
          self.interface_area_hydrophilic,
@@ -348,7 +346,8 @@ class Model:
         )
 
     def mutate(self, sequence_idx, mutation):
-        """
+        """Introduce mutation into model.
+
         Parameters
         ----------
 
@@ -436,10 +435,10 @@ class Model:
 
         #######################################################################
         # Create a folder for all mutation data.
-        mutation_dir = op.join(configs['model_dir'], 'mutations', mutation_id)
+        mutation_dir = op.join(conf.CONFIGS['model_dir'], 'mutations', mutation_id)
         os.makedirs(mutation_dir, exist_ok=True)
         os.makedirs(mutation_dir, exist_ok=True)
-        shutil.copy(op.join(configs['data_dir'], 'rotabase.txt'), mutation_dir)
+        shutil.copy(op.join(conf.CONFIGS['data_dir'], 'rotabase.txt'), mutation_dir)
 
         #######################################################################
         # Copy the homology model to the mutation folder
@@ -487,22 +486,26 @@ class Model:
 
         #######################################################################
         # 5th: Calculate energies
-        stability_values_wt = helper.encode_list_as_text(
-            [foldx('Stability') for foldx in fX_wt_list]
+        assert len(fX_wt_list) == 1
+        stability_values_wt = ','.join(
+            '{}'.format(f) for f in fX_wt_list[0]('Stability')
         )
-        stability_values_mut = helper.encode_list_as_text(
-            [foldx('Stability') for foldx in fX_mut_list]
+        assert len(fX_wt_list) == 1
+        stability_values_mut = ','.join(
+            '{}'.format(f) for f in fX_mut_list[0]('Stability')
         )
 
         if len(self.sequence_seqrecords) == 1:
             complex_stability_values_wt = None
             complex_stability_values_mut = None
         else:
-            complex_stability_values_wt = helper.encode_list_as_text(
-                [foldx('AnalyseComplex') for foldx in fX_wt_list]
+            assert len(fX_wt_list) == 1
+            complex_stability_values_wt = ','.join(
+                '{}'.format(f) for f in fX_wt_list[0]('AnalyseComplex')
             )
-            complex_stability_values_mut = helper.encode_list_as_text(
-                [foldx('AnalyseComplex') for foldx in fX_mut_list]
+            assert len(fX_mut_list) == 1
+            complex_stability_values_mut = ','.join(
+                '{}'.format(f) for f in fX_mut_list[0]('AnalyseComplex')
             )
 
         #######################################################################
@@ -557,13 +560,14 @@ class Model:
     def result(self):
         result = dict(
             model_id=self.model_id,
-            structure_file=self.structure_file,
+            structure_file=op.relpath(self.structure_file, conf.CONFIGS['unique_temp_dir']),
             structure_id=self.structure_id,
-            sequence_file=self.sequence_file,
+            sequence_file=op.relpath(self.sequence_file, conf.CONFIGS['unique_temp_dir']),
             sequence_id=self.sequence_id,
             chain_ids=tuple(self.chain_ids),
             mutations=self.mutations,
-            modeller_results_file=self.modeller_results_file,
+            modeller_results_file=op.relpath(
+                self.modeller_results_file, conf.CONFIGS['unique_temp_dir']),
             modeller_chain_ids=tuple(self.modeller_chain_ids),
             relative_sasa_scores=self.relative_sasa_scores,
             core_or_interface=self.core_or_interface,
@@ -584,7 +588,6 @@ class Model:
         return result
 
 
-# %%
 def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data):
     """
     """
@@ -665,13 +668,13 @@ def analyze_alignment(alignment, pdb_contact_idxs=[]):
 
 
 def score_alignment(identity, coverage, alpha=0.95):
-    """ T-score from the interactome3d paper
-    """
+    """T-score from the interactome3d paper."""
     return alpha * (identity) * (coverage) + (1.0 - alpha) * (coverage)
 
 
 def get_alignment_overhangs(alignment):
-    """ Remove gap overhangs from the alignments.
+    """Remove gap overhangs from the alignments.
+
     There are cases where no template sequence is availible for a big chunk
     of the protein. Return the number of amino acids that should be removed
     from the start and end of the query sequence in order to match the template.
@@ -720,12 +723,12 @@ def run_modeller(
         'template_id: {}\n'.format(template_id)
     )
     modeller = call_modeller.Modeller(
-        [pir_alignment_file], target_id, template_id, configs['unique_temp_dir'])
+        [pir_alignment_file], target_id, template_id, conf.CONFIGS['unique_temp_dir'])
 
-    with helper.switch_paths(configs['modeller_dir']):
-        norm_dope, pdb_filename, knotted = modeller.run()
+    with helper.switch_paths(conf.CONFIGS['modeller_dir']):
+        norm_dope, pdb_filename = modeller.run()
 
-    raw_model_file = op.join(configs['modeller_dir'], pdb_filename)
+    raw_model_file = op.join(conf.CONFIGS['modeller_dir'], pdb_filename)
 
     # If there is only one chain in the pdb, label that chain 'A'
     io = PDBIO()
@@ -743,7 +746,6 @@ def run_modeller(
         'model_file': model_file,
         'raw_model_file': raw_model_file,
         'norm_dope': norm_dope,
-        'knotted': knotted,
         'pir_alignment_file': pir_alignment_file,
     }
     return results

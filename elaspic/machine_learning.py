@@ -11,8 +11,9 @@ from . import helper
 
 
 def write_row_to_file(results, output_filename):
-    """
-    TODO: Add a datetime column to each written row.
+    """.
+
+    .. todo:: Add a datetime column to each written row.
     """
     print('Saving results to "{}"...'.format(output_filename))
     results_df = pd.DataFrame(results, index=[1])

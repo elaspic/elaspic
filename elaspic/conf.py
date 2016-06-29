@@ -1,185 +1,207 @@
 import os
 import os.path as op
-import subprocess
 import tempfile
 import logging
 import logging.config
 import re
-
-from configparser import SafeConfigParser, NoOptionError
-from collections import UserDict
-from Bio.SubsMat import MatrixInfo
-
-from . import DATA_DIR, helper
+import configparser
+from elaspic import DATA_DIR, helper
 
 logger = logging.getLogger(__name__)
 
+CONFIGS = {}
+DEFAULT = {
+    'debug': 'False',
+    'look_for_interactions': 'True',
+    'remake_provean_supset': 'False',
+    'n_cores': '1',
+    'copy_data': 'True',
+    'allow_internet': 'False',
+    'testing': 'False',
+}
 
-# %% Class to store all configurations
-class Configs(UserDict):
-    """All instances keep data in the same `Configs._data` dictionary.
-    """
-    _data = {}
 
-    def __init__(self):
-        self.data = Configs._data
+def read_configuration_file(config_file=None, **vargs):
+    """."""
+    if 'DEFAULT' in vargs:
+        DEFAULT.update(vargs['DEFAULT'])
+    config = configparser.ConfigParser(defaults=DEFAULT)
+    for category in ['DATABASE', 'EXTERNAL_DIRS', 'MODEL', 'LOGGER']:
+        config[category] = {}
+    if config_file is not None:
+        config.read(config_file)
+    for key, value in vargs.items():
+        config[key].update(value)
 
-configs = Configs()
+    # [DEFAULTS]
+    read_default_configs(config['DEFAULT'])
 
-
-# %% Process a configuration file
-def read_configuration_file(config_file, unique_temp_dir=None):
-    if not os.path.isfile(config_file):
-        raise Exception("The configuration file '{}' does not exist!".format(config_file))
-
-    configParser = SafeConfigParser(
-        defaults={
-            'global_temp_dir': '/tmp',
-            'elaspic_foldername': 'elaspic',
-            'archive_foldername': 'archive',
-            'debug': 'False',
-            'look_for_interactions': 'True',
-            'remake_provean_supset': 'False',
-            'n_cores': '1',
-            'web_server': 'False',
-            'copy_data': 'True',
-            'allow_internet': 'False',
-            'testing': 'False',
-        })
-    configParser.read(config_file)
-
-    # [DEFAULT]
-    # These settings won't change most of the time.
-    configs['global_temp_dir'] = configParser.get('DEFAULT', 'global_temp_dir')
-    configs['elaspic_foldername'] = configParser.get('DEFAULT', 'elaspic_foldername')
-    configs['debug'] = configParser.getboolean('DEFAULT', 'debug')
-    configs['look_for_interactions'] = _parse_look_for_interactions(
-        configParser.get('DEFAULT', 'look_for_interactions'))
-    configs['remake_provean_supset'] = configParser.getboolean('DEFAULT', 'remake_provean_supset')
-    configs['n_cores'] = configParser.getint('DEFAULT', 'n_cores')
-    configs['web_server'] = configParser.get('DEFAULT', 'web_server')
-    configs['copy_data'] = configParser.getboolean('DEFAULT', 'copy_data')
-    configs['allow_internet'] = configParser.getboolean(
-        'DEFAULT', 'allow_internet')
-    configs['testing'] = configParser.getboolean('DEFAULT', 'testing')
-
-    # Temporary directories
-    configs['temp_dir'] = get_temp_dir(configs['global_temp_dir'], 'elaspic')
-    os.makedirs(configs['temp_dir'], exist_ok=True)
-    if unique_temp_dir is not None:
-        configs['unique_temp_dir'] = unique_temp_dir
-    else:
-        configs['unique_temp_dir'] = configParser.get(
-            'SETTINGS', 'unique_temp_dir',
-            fallback=tempfile.mkdtemp(prefix='', dir=configs['temp_dir'])
-        )
-    configs['unique'] = op.basename(configs['unique_temp_dir'])
-    configs['data_dir'] = configParser.get('SETTINGS', 'data_dir', fallback=DATA_DIR)
+    # [EXTERNAL_DIRS]
+    read_sequence_configs(config['EXTERNAL_DIRS'])
 
     # [DATABASE]
-    if configParser.has_section('DATABASE'):
-        read_database_configs(configParser)
-
-    # [SEQUENCE]
-    if configParser.has_section('SEQUENCE'):
-        read_sequence_configs(configParser)
+    read_database_configs(config['DATABASE'])
 
     # [MODEL]
-    if configParser.has_section('MODEL'):
-        read_model_configs(configParser)
+    read_model_configs(config['MODEL'])
 
     # [LOGGER]
-    read_logger_configs(configParser)
+    read_logger_configs(config['LOGGER'])
 
     # TODO: Update `unique_temp_dir` and dependencies.
-    _prepare_temp_folders(configs)
+    _prepare_temp_folders(CONFIGS)
 
 
-# %% Section parsers
-def read_database_configs(configParser):
-    """[DATABASE]
-    """
-    # Database
-    configs['db_type'] = configParser.get('DATABASE', 'db_type')
-    configs['db_is_immutable'] = configParser.get('DATABASE', 'db_is_immutable', fallback=False)
-    if configs['db_type'] == 'sqlite':
-        configs['sqlite_db_path'] = configParser.get('DATABASE', 'sqlite_db_path')
-    elif configs['db_type'] in ['mysql', 'postgresql']:
-        configs['db_schema'] = configParser.get('DATABASE', 'db_schema')
-        configs['db_schema_uniprot'] = (
-            configParser.get('DATABASE', 'db_schema_uniprot', fallback=configs['db_schema']))
-        configs['db_database'] = configParser.get('DATABASE', 'db_database', fallback='')
-        configs['db_username'] = configParser.get('DATABASE', 'db_username')
-        configs['db_password'] = configParser.get('DATABASE', 'db_password')
-        configs['db_url'] = configParser.get('DATABASE', 'db_url')
-        configs['db_port'] = configParser.get('DATABASE', 'db_port')
-        configs['db_socket'] = _get_db_socket(configParser, configs)
+def read_default_configs(config):
+    """[DEFAULT]."""
+    # These settings won't change most of the time.
+    for key in DEFAULT.keys():
+        CONFIGS[key] = config.get(key)
+    CONFIGS['look_for_interactions'] = (
+        _parse_look_for_interactions(CONFIGS['look_for_interactions'])
+    )
+    CONFIGS['temp_dir'] = get_temp_dir('elaspic')
+
+    # Temporary directories
+    CONFIGS['unique_temp_dir'] = config.get(
+        'unique_temp_dir',
+        fallback=tempfile.mkdtemp(prefix='', dir=CONFIGS['temp_dir'])
+    )
+    CONFIGS['unique'] = op.basename(CONFIGS['unique_temp_dir'])
+    CONFIGS['data_dir'] = config.get('data_dir', fallback=DATA_DIR)
+
+
+def read_sequence_configs(config):
+    """[EXTERNAL_DIRS]."""
+    CONFIGS['sequence_dir'] = config.get(
+        'sequence_dir',
+        fallback=op.join(CONFIGS['unique_temp_dir'], 'sequence')
+    )
+    CONFIGS['provean_temp_dir'] = op.join(CONFIGS['sequence_dir'], 'provean_temp')
+    _validate_provean_temp_dir(config, CONFIGS)
+
+    CONFIGS['pdb_dir'] = config.get('pdb_dir')
+    CONFIGS['blast_db_dir'] = config.get('blast_db_dir')
+    CONFIGS['blast_db_dir_fallback'] = (
+        config.get('blast_db_dir_fallback', fallback=''))
+    _validate_blast_db_dir(CONFIGS)
+
+    CONFIGS['archive_dir'] = config.get('archive_dir')
+    # Supported archive types are 'directory' and '7zip'
+    if CONFIGS['archive_dir'] is None:
+        CONFIGS['archive_type'] = None
+    elif op.splitext(CONFIGS['archive_dir'])[-1] in ['.7z', '.7zip']:
+        assert op.isfile(CONFIGS['archive_dir'])
+        CONFIGS['archive_type'] = '7zip'
     else:
-        raise Exception("Only `MySQL`, `PostgreSQL`, and `SQLite` databases are supported!")
-
-    # Archive folder
-    configs['archive_type'] = configParser.get('DATABASE', 'archive_type', fallback='directory')
-    configs['archive_dir'] = configParser.get('DATABASE', 'archive_dir')
-    # supported archive types are 'directory' and 'archive'
-    configs['archive_temp_dir'] = op.join(configs['temp_dir'], 'archive')
+        assert op.isdir(CONFIGS['archive_dir'])
+        CONFIGS['archive_type'] = 'directory'
+    CONFIGS['archive_temp_dir'] = op.join(CONFIGS['temp_dir'], 'archive')
 
 
-def read_sequence_configs(configParser):
-    """[SEQUENCE]
+def _validate_provean_temp_dir(config, configs):
+    """Some nodes on the cluster have a very limited amount of memory for temp storage.
+
+    When working on those nodes, you sould use a remote location for temp storage. This is slow,
+    but at least it ensures that you don't crush the nodes by filling up the hard drive.
+    However, the most serious problem should be fixed with an up-to-date version of cd-hit.
+    (Older versions could go into an infinite loop and generate huge temp files).
     """
-    configs['sequence_dir'] = configParser.get(
-        'SEQUENCE', 'sequence_dir',
-        fallback=op.join(configs['unique_temp_dir'], 'sequence')
-    )
-    configs['provean_temp_dir'] = op.join(configs['sequence_dir'], 'provean_temp')
-    _validate_provean_temp_dir(configParser, configs)
+    hostname = helper.get_hostname()
+    if (('node' in hostname) or ('grendel' in hostname) or ('behemoth' in hostname)):
+        try:
+            configs['provean_temp_dir'] = config.get('provean_temp_dir')
+        except config.NoOptionError:
+            message = (
+                "The 'provean_temp_dir' option is required "
+                "if you are running on one of hte bc nodes!"
+            )
+            logger.error(message)
+            raise
 
-    configs['pdb_dir'] = configParser.get('SEQUENCE', 'pdb_dir')
-    configs['blast_db_dir'] = configParser.get('SEQUENCE', 'blast_db_dir')
-    configs['blast_db_dir_fallback'] = (
-        configParser.get('SEQUENCE', 'blast_db_dir_fallback', fallback=''))
-    _validate_blast_db_dir(configs)
+
+def read_database_configs(config):
+    """[DATABASE]."""
+    if config.get('connection_string'):
+        CONFIGS['connection_string'] = config.get('connection_string')
+        CONFIGS.update(helper.parse_connection_string(CONFIGS['connection_string']))
+    elif config.get('db_type'):
+        CONFIGS['db_type'] = config.get('db_type')
+        CONFIGS['db_schema'] = config.get('db_schema')
+        CONFIGS['db_database'] = config.get('db_database', fallback='')
+        CONFIGS['db_username'] = config.get('db_username')
+        CONFIGS['db_password'] = config.get('db_password')
+        CONFIGS['db_url'] = config.get('db_url')
+        CONFIGS['db_port'] = config.get('db_port')
+        CONFIGS['db_socket'] = _get_db_socket(
+            config, CONFIGS['db_type'], CONFIGS['db_url'])
+        CONFIGS['connection_string'] = helper.make_connection_string(**CONFIGS)
+    CONFIGS['db_is_immutable'] = config.get('db_is_immutable', fallback=False)
 
 
-def read_model_configs(configParser):
-    """[MODEL]
+def _get_db_socket(config, db_type, db_url):
+    """.
+
+    MySQL: ?unix_socket=/usr/local/mysql5/mysqld.sock
+    PostgreSQL: ?host=/var/lib/postgresql
     """
-    configs['model_dir'] = configParser.get(
-        'MODEL', 'model_dir',
-        fallback=op.join(configs['unique_temp_dir'], 'model')
+    socket_prefix = {
+        'mysql': '?unix_socket=',
+        'postgresql': '?host=',
+    }
+
+    if db_url == 'localhost':
+        try:
+            socket_file = config.get('db_socket')
+        except configparser.NoOptionError:
+            db_socket = ''
+        else:
+            db_socket = socket_prefix[db_type] + socket_file
+    else:
+        db_socket = ''
+    return db_socket
+
+
+def read_model_configs(config):
+    """[MODEL]."""
+    CONFIGS['model_dir'] = config.get(
+        'model_dir',
+        fallback=op.join(CONFIGS['unique_temp_dir'], 'model')
     )
-    configs['tcoffee_dir'] = op.join(configs['model_dir'], 'tcoffee')
+    CONFIGS['tcoffee_dir'] = op.join(CONFIGS['model_dir'], 'tcoffee')
 
     # Modeller
-    configs['modeller_dir'] = op.join(configs['model_dir'], 'modeller')
-    configs['modeller_runs'] = configParser.getint('MODEL', 'modeller_runs')
+    CONFIGS['modeller_dir'] = op.join(CONFIGS['model_dir'], 'modeller')
+    CONFIGS['modeller_runs'] = config.getint('modeller_runs', 1)
 
     # FoldX
-    configs['foldx_water'] = configParser.get('MODEL', 'foldx_water')
-    configs['foldx_num_of_runs'] = configParser.getint('MODEL', 'foldx_num_of_runs')
-    configs['matrix_type'] = configParser.get('MODEL', 'matrix_type')
-    configs['gap_start'] = configParser.getint('MODEL', 'gap_start')
-    configs['gap_extend'] = configParser.getint('MODEL', 'gap_extend')
-    configs['matrix'] = getattr(MatrixInfo, configs['matrix_type'])
+    CONFIGS['foldx_water'] = config.get('foldx_water', '-IGNORE')
+    CONFIGS['foldx_num_of_runs'] = config.getint('foldx_num_of_runs', 1)
+    CONFIGS['matrix_type'] = config.get('matrix_type', 'blosum80')
+    CONFIGS['gap_start'] = config.getint('gap_start', -16)
+    CONFIGS['gap_extend'] = config.getint('gap_extend', -4)
 
 
-def read_logger_configs(configParser):
+def read_logger_configs(config):
     """Standard logger configuration, with optional tee to a file.
+
+    .. todo:: This needs a cleanup.
     """
     default_level = 'DEBUG'
-    default_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    # default_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    default_format = '%(message)s'
     LOGGING_CONFIGS = {
         'version': 1,
         'disable_existing_loggers': False,
         'formatters': {
             'default': {
                 'format':
-                    configParser.get('LOGGER', 'format', fallback=default_format)
+                    config.get('format', fallback=default_format)
             },
         },
         'handlers': {
             'default': {
-                'level': configParser.get('LOGGER', 'level', fallback=default_level),
+                'level': config.get('level', fallback=default_level),
                 'class': 'logging.StreamHandler',
                 'formatter': 'default',
             },
@@ -195,43 +217,25 @@ def read_logger_configs(configParser):
     logging.config.dictConfig(LOGGING_CONFIGS)
 
 
-# %% Helpers
-def _validate_provean_temp_dir(configParser, configs):
-    """
-    Some nodes on the cluster have a very limited amount of memory for temp storage.
-    When working on those nodes, you sould use a remote location for temp storage. This is slow,
-    but at least it ensures that you don't crush the nodes by filling up the hard drive.
-    However, the most serious problem should be fixed with an up-to-date version of cd-hit.
-    (Older versions could go into an infinite loop and generate huge temp files).
-    """
-    hostname = helper.get_hostname()
-    if (('node' in hostname) or ('grendel' in hostname) or ('behemoth' in hostname)):
-        try:
-            configs['provean_temp_dir'] = configParser.get('SETTINGS', 'provean_temp_dir')
-        except configParser.NoOptionError:
-            message = (
-                "The 'provean_temp_dir' option is required "
-                "if you are running on one of hte bc nodes!"
-            )
-            logger.error(message)
-            raise
-
-
 def _prepare_temp_folders(configs):
     for key, value in configs.items():
+        if value is None:
+            logger.warning("No value provided for key: '{}'".format(key))
+            continue
         if key.endswith('_dir') and not re.match('{.*}', value):
             logger.debug("Creating '{}' folder: {}...".format(key, value))
             os.makedirs(value, exist_ok=True)
 
 
 def _validate_blast_db_dir(configs):
-    """
-    Make sure that configs['blast_db_path'] exists and contains a blast database.
+    """Make sure that configs['blast_db_path'] exists and contains a blast database.
+
+    .. todo:: Get rid of 'blast_db_dir_fallback'; it just complicates things.
     """
     def blast_db_dir_isvalid(blast_db_dir):
         return op.isdir(blast_db_dir) and op.isfile(op.join(blast_db_dir, 'nr.pal'))
 
-    if blast_db_dir_isvalid(configs['blast_db_dir']):
+    if configs['blast_db_dir'] is None or blast_db_dir_isvalid(configs['blast_db_dir']):
         pass
     elif blast_db_dir_isvalid(configs['blast_db_dir_fallback']):
         message = (
@@ -261,34 +265,9 @@ def _parse_look_for_interactions(look_for_interactions):
         raise Exception()
 
 
-def _get_db_socket(configParser, configs):
-    """
-    # MySQL: ?unix_socket=/usr/local/mysql5/mysqld.sock
-    # PostgreSQL: ?host=/var/lib/postgresql
-    """
-    socket_prefix = {
-        'mysql': '?unix_socket=',
-        'postgresql': '?host=',
-    }
-
-    if configs['db_url'] == 'localhost':
-        try:
-            socket_file = configParser.get('DATABASE', 'db_socket')
-        except NoOptionError:
-            db_socket = ''
-        else:
-            db_socket = socket_prefix[configs['db_type']] + socket_file
-    else:
-        db_socket = ''
-    return db_socket
-
-
-def get_temp_dir(global_temp_dir='/tmp', elaspic_foldername=''):
-    """ If a :envvar:`TMPDIR` is given as an environment variable, the tmp directory
-    is created relative to that. This is useful when running on banting
-    (the cluster in the ccbr) and also on Scinet. Make sure that it
-    points to '/dev/shm/' on Scinet.
-    """
-    temp_dir = os.path.join(os.environ.get('TMPDIR', global_temp_dir), elaspic_foldername)
-    subprocess.check_call("mkdir -p '{}'".format(temp_dir), shell=True)
-    return temp_dir
+def get_temp_dir(elaspic_temp_dir='elaspic'):
+    tempdir = tempfile.gettempdir()
+    tempdir = op.join(tempdir, elaspic_temp_dir)
+    os.makedirs(tempdir, exist_ok=True)
+    tempfile.tempdir = tempdir
+    return tempdir

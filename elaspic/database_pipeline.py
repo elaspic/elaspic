@@ -5,7 +5,6 @@ import json
 import shutil
 import logging
 import random
-
 import six
 import pandas as pd
 from Bio import SeqIO
@@ -19,10 +18,8 @@ from . import (
 from .pipeline import Pipeline, execute_and_remember
 
 logger = logging.getLogger(__name__)
-configs = conf.Configs()
 
 
-# %%
 class DatabasePipeline(Pipeline):
 
     def __init__(
@@ -70,13 +67,12 @@ class DatabasePipeline(Pipeline):
         logger.info('mutations: {}'.format(mutations))
         logger.info('run_type: {}'.format(run_type))
         logger.info('uniprot_domain_pair_ids: {}'.format(uniprot_domain_pair_ids))
-        logger.info('unique_temp_dir: {}'.format(configs['unique_temp_dir']))
-        logger.info('db_schema: {}'.format(conf.configs.get('db_schema')))
-        logger.info('global_temp_dir: {global_temp_dir}'.format(**conf.configs))
-        logger.info('temp_dir: {temp_dir}'.format(**conf.configs))
+        logger.info('unique_temp_dir: {}'.format(conf.CONFIGS['unique_temp_dir']))
+        logger.info('db_schema: {}'.format(conf.CONFIGS.get('db_schema')))
+        logger.info('temp_dir: {temp_dir}'.format(**conf.CONFIGS))
 
         # Switch to the root of the unique tmp directory
-        os.chdir(configs['unique_temp_dir'])
+        os.chdir(conf.CONFIGS['unique_temp_dir'])
 
         # Initialise the sql database for accessing all information
         self.db = elaspic_database.MyDatabase()
@@ -101,7 +97,7 @@ class DatabasePipeline(Pipeline):
                 )
                 logger.debug("to '{}'...".format(d.path_to_data))
                 self.db.merge_row(d)
-            os.makedirs(op.join(configs['archive_temp_dir'], d.path_to_data), exist_ok=True)
+            os.makedirs(op.join(conf.CONFIGS['archive_temp_dir'], d.path_to_data), exist_ok=True)
 
     def run(self):
         if not self.uniprot_domains:
@@ -114,7 +110,7 @@ class DatabasePipeline(Pipeline):
             self.get_sequence(self.uniprot_domains[0])
 
         # Get interactions
-        if configs['look_for_interactions']:
+        if conf.CONFIGS['look_for_interactions']:
             logger.info('Obtaining protein domain pair information...')
             self.uniprot_domain_pairs = self.db.get_uniprot_domain_pair(
                 self.uniprot_id, True, self.uniprot_domain_pair_ids)
@@ -147,10 +143,7 @@ class DatabasePipeline(Pipeline):
         return PrepareSequence(d, self.db)
 
     def get_model(self, d):
-        """
-        Use modeller to make a homology model for each uniprot domain that
-        has a template in pdbfam
-        """
+        """Make a homology model for each uniprot domain that has a template in pdbfam."""
         logger.debug('-' * 80)
         logger.debug('get_model({})'.format(d))
         return PrepareModel(d, self.db)
@@ -173,34 +166,6 @@ class DatabasePipeline(Pipeline):
         return PrepareMutation(d, mutation, self.uniprot_id, sequence, model, self.db)
 
 
-# %%
-@execute_and_remember
-class Foo:
-    def __init__(self):
-        self.info = ['init {}'.format(random.randint(0, 1000))]
-        print(self.info)
-
-    def __bool__(self):
-        self.info.append('__bool__')
-        print(self.info)
-        return True
-
-    def __enter__(self):
-        self.info.append('__bool__')
-        print(self.info)
-
-    def run(self):
-        self.info.append('__bool__')
-        print(self.info)
-
-    def __exit__(self, *exc):
-        self.info.append('__bool__')
-        print(self.info)
-        print(exc)
-        return False
-
-
-# %%
 class _PrepareSequence:
 
     def __init__(self, d, db):
@@ -215,7 +180,7 @@ class _PrepareSequence:
                 d.uniprot_sequence.provean.provean_supset_filename):
             # Provean supset has already been calculated
             self.provean_supset_file = op.join(
-                configs['archive_temp_dir'],
+                conf.CONFIGS['archive_temp_dir'],
                 elaspic_database.get_uniprot_base_path(d),
                 d.uniprot_sequence.provean.provean_supset_filename
             )
@@ -227,7 +192,7 @@ class _PrepareSequence:
 
     def __enter__(self):
         d = self.d
-        self.sequence_file = op.join(configs['sequence_dir'], d.uniprot_id + '.fasta')
+        self.sequence_file = op.join(conf.CONFIGS['sequence_dir'], d.uniprot_id + '.fasta')
         self.seqrecord = SeqRecord(
             id=d.uniprot_id,
             seq=Seq(d.uniprot_sequence.uniprot_sequence)
@@ -262,7 +227,7 @@ class _PrepareSequence:
             self.db.merge_provean(
                 provean,
                 self.sequence.provean_supset_file,
-                configs['copy_data'] and elaspic_database.get_uniprot_base_path(d)
+                conf.CONFIGS['copy_data'] and elaspic_database.get_uniprot_base_path(d)
             )
 
     @property
@@ -330,13 +295,13 @@ class _PrepareModel:
         if isinstance(d, elaspic_database.UniprotDomain):
             unique_id = d.uniprot_domain_id
             modeller_results['model_file'] = op.join(
-                configs['archive_temp_dir'],
+                conf.CONFIGS['archive_temp_dir'],
                 d.path_to_data,
                 d.template.model.model_filename
             )
             modeller_results['alignment_files'] = [
                 op.join(
-                    configs['archive_temp_dir'],
+                    conf.CONFIGS['archive_temp_dir'],
                     d.path_to_data,
                     d.template.model.alignment_filename,
                 )
@@ -346,18 +311,18 @@ class _PrepareModel:
         elif isinstance(d, elaspic_database.UniprotDomainPair):
             unique_id = d.uniprot_domain_pair_id
             modeller_results['model_file'] = op.join(
-                configs['archive_temp_dir'],
+                conf.CONFIGS['archive_temp_dir'],
                 d.path_to_data,
                 d.template.model.model_filename
             )
             modeller_results['alignment_files'] = [
                 op.join(
-                    configs['archive_temp_dir'],
+                    conf.CONFIGS['archive_temp_dir'],
                     d.path_to_data,
                     d.template.model.alignment_filename_1,
                 ),
                 op.join(
-                    configs['archive_temp_dir'],
+                    conf.CONFIGS['archive_temp_dir'],
                     d.path_to_data,
                     d.template.model.alignment_filename_2,
                 ),
@@ -366,7 +331,7 @@ class _PrepareModel:
             modeller_results['domain_def_offsets'] = [(0, 0), (0, 0)]
 
         modeller_results_file = op.join(
-            configs['model_dir'],
+            conf.CONFIGS['model_dir'],
             '{}_modeller_results.json'.format(unique_id)
         )
         with open(modeller_results_file, 'w') as ofh:
@@ -447,13 +412,13 @@ class _PrepareModel:
             return True
         elif (exc_type is not None and
                 ((exc_type in self.handled_errors) or
-                 (exc_type in self.bad_errors and not configs['testing']))):
+                 (exc_type in self.bad_errors and not conf.CONFIGS['testing']))):
             # Find domains that were used as a template and eventually led to
             # the error in the model, and add the error to their `domain_errors`
             # or `domain_contact_errors` fields.
             logger.error(exc_value)
             if isinstance(d, elaspic_database.UniprotDomain):
-                if d.template.model == None:  # analysis:ignore
+                if d.template.model == None:  # noqa
                     d.template.model = elaspic_database_tables.UniprotDomainModel()
                     d.template.model.uniprot_domain_id = d.uniprot_domain_id
                 bad_domains = self.db.get_rows_by_ids(
@@ -468,7 +433,7 @@ class _PrepareModel:
                     "Adding error '{0}' to the domain with cath_id {1}..."
                     .format(bad_domain.domain_errors, d.template.cath_id))
             else:  # UniprotDomainPair
-                if d.template.model == None:   # analysis:ignore
+                if d.template.model == None:  # noqa
                     d.template.model = elaspic_database_tables.UniprotDomainPairModel()
                     d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
                 bad_domains = self.db.get_rows_by_ids(
@@ -516,7 +481,7 @@ class _PrepareModel:
 
         # Domains
         if isinstance(d, elaspic_database.UniprotDomain):
-            if d.template.model == None:   # analysis:ignore
+            if d.template.model == None:  # noqa
                 d.template.model = elaspic_database_tables.UniprotDomainModel()
                 d.template.model.uniprot_domain_id = d.uniprot_domain_id
 
@@ -539,7 +504,7 @@ class _PrepareModel:
 
         # Domain pairs
         elif isinstance(d, elaspic_database.UniprotDomainPair):
-            if d.template.model == None:   # analysis:ignore
+            if d.template.model == None:  # noqa
                 d.template.model = elaspic_database.UniprotDomainPairModel()
                 d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
             d.template.model.model_filename = op.basename(
@@ -610,8 +575,7 @@ class _PrepareModel:
         return domain_def_new
 
     def _write_domain_sequence_file(self, protein_ids, protein_domain_defs, protein_sequences):
-        """Write a fasta file containing target domain sequences.
-        """
+        """Write a fasta file containing target domain sequences."""
         sequence_seqrecords = []
         for protein_id, protein_domain_def, protein_sequence in zip(
                 protein_ids, protein_domain_defs, protein_sequences):
@@ -627,25 +591,24 @@ class _PrepareModel:
             sequence_seqrecords.append(seqrecord)
 
         sequence_filename = '_'.join(seqrec.id for seqrec in sequence_seqrecords)
-        sequence_file = op.join(configs['unique_temp_dir'], sequence_filename + '.fasta')
+        sequence_file = op.join(conf.CONFIGS['unique_temp_dir'], sequence_filename + '.fasta')
         with open(sequence_file, 'w') as ofh:
             SeqIO.write(sequence_seqrecords, ofh, 'fasta')
 
         return sequence_file, sequence_seqrecords
 
     def _write_domain_structure_file(self, pdb_id, pdb_chains, pdb_domain_defs):
-        """Write a pdb file containing template domain chains (cut to domain bounaries).
-        """
-        pdb_file = structure_tools.get_pdb_file(pdb_id, configs['pdb_dir'], 'ent')
-        if not op.isfile(pdb_file) and configs['allow_internet']:
-            pdb_file = structure_tools.download_pdb_file(pdb_id, configs['pdb_dir'])
+        """Write a pdb file containing template domain chains (cut to domain bounaries)."""
+        pdb_file = structure_tools.get_pdb_file(pdb_id, conf.CONFIGS['pdb_dir'], 'ent')
+        if not op.isfile(pdb_file) and conf.CONFIGS['allow_internet']:
+            pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['pdb_dir'])
         sp = structure_tools.StructureParser(pdb_file, pdb_chains, pdb_domain_defs)
         sp.extract()
-        sp.save_structure(configs['unique_temp_dir'])
-        sp.save_sequences(configs['unique_temp_dir'])
+        sp.save_structure(conf.CONFIGS['unique_temp_dir'])
+        sp.save_sequences(conf.CONFIGS['unique_temp_dir'])
 
         structure_file = op.join(
-            configs['unique_temp_dir'], sp.pdb_id + ''.join(sp.chain_ids) + '.pdb'
+            conf.CONFIGS['unique_temp_dir'], sp.pdb_id + ''.join(sp.chain_ids) + '.pdb'
         )
 
         structure_seqrecords = []
@@ -702,18 +665,13 @@ class _PrepareMutation:
                (d.template.domain_1 and d.template.domain_2))):
             logger.debug('Skipping because no structural template is availible...')
             self.skip = True
-        elif (d.template.model == None or
+        elif (d.template.model == None or  # noqa
                 d.template.model.model_filename == None):
             logger.debug('d.template.model: {}'.format(d.template.model))
             logger.debug('d.template.model.model_filename: {}'.format(
                 getattr(d.template.model, 'model_filename', 'does not exist!')))
             logger.debug('Skipping because no model...')
             self.skip = True
-        # elif d.template.model.model_errors != None:
-        #     logger.debug(
-        #         'Skipping because the model has errors: {}!'
-        #         .format(d.template.model.model_errors))
-        #     self.skip = True
 
         mutation_prototype = re.compile("^[A-z][0-9]+[A-z]$")
         if not mutation_prototype.match(mutation) or int(mutation[1:-1]) == 0:
@@ -729,7 +687,7 @@ class _PrepareMutation:
         if (precalculated_mutation and
                 precalculated_mutation.provean_score and
                 precalculated_mutation.stability_energy_wt and
-                precalculated_mutation.ddg != None):   # analysis:ignore
+                precalculated_mutation.ddg != None):  # noqa
             logger.info('Mutation has already been completely evaluated. Skipping...')
             self.mut = precalculated_mutation
             self.skip = True
@@ -782,13 +740,13 @@ class _PrepareMutation:
         # find them.
         archive_model_file_wt = (
             op.join(
-                configs['archive_temp_dir'],
+                conf.CONFIGS['archive_temp_dir'],
                 d.path_to_data,
                 self.mut.model_filename_wt)
         )
         archive_model_file_mut = (
             op.join(
-                configs['archive_temp_dir'],
+                conf.CONFIGS['archive_temp_dir'],
                 d.path_to_data,
                 self.mut.model_filename_mut)
         )
@@ -1017,20 +975,13 @@ class _PrepareMutation:
                 continue
             attr_field = getattr(self.mut, attr)
             attr_type = type(attr_field)
-            if (six.PY2 and
-                (isinstance(attr_field, six.binary_type) or
-                 isinstance(attr_field, six.text_type))):
-                    logger.debug(
-                        'Changing attribute {} from {} to {}...'
-                        .format(attr, attr_type, str(attr_field)))
-                    setattr(self.mut, attr, str(attr_field))
-            if six.PY3 and isinstance(attr_field, six.binary_type):
+            if isinstance(attr_field, six.binary_type):
                 logger.debug(
                     'Changing attribute {} from {} to {}...'
                     .format(attr, attr_type, type(attr_field.decode())))
                 setattr(self.mut, attr, attr_field.decode())
         logger.debug('Mergin mutation data with the database...')
-        self.db.merge_mutation(self.mut, configs['copy_data'] and d.path_to_data)
+        self.db.merge_mutation(self.mut, conf.CONFIGS['copy_data'] and d.path_to_data)
         logger.debug('Done merging mutation data!')
 
     @property

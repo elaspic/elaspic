@@ -5,13 +5,10 @@ import json
 
 import pandas as pd
 
-from . import conf, call_foldx
+from . import conf, call_foldx, DATA_DIR
 
 logger = logging.getLogger(__name__)
-configs = conf.Configs()
 
-
-# %%
 secondary_structure_to_int = {
     '-': 0,  # Coil (none of the below)
     'C': 0,  # Coil (none of the below)
@@ -107,6 +104,7 @@ def format_mutation_features(feature_df, core_or_interface):
         of features converted to columns containing a single feature each.
 
     """
+    feature_df = feature_df.copy()
     if core_or_interface in [False, 0, 'core']:
         foldx_column_name = 'stability_energy'
         foldx_feature_names_wt = call_foldx.names_stability_wt
@@ -201,10 +199,10 @@ class Predictor:
 
         def _load_data(filename):
             if op.splitext(filename)[-1] in ['.pkl', '.pickle']:
-                with open(op.join(configs['data_dir'], filename), 'rb') as ifh:
+                with open(op.join(DATA_DIR, filename), 'rb') as ifh:
                     return pickle.load(ifh)
             elif op.splitext(filename)[-1] in ['.jsn', '.json']:
-                with open(op.join(configs['data_dir'], filename), 'r') as ifh:
+                with open(op.join(DATA_DIR, filename), 'r') as ifh:
                     return json.load(ifh)
 
         self.clf_domain = _load_data('ml_clf_core_p1.pickle')
@@ -218,7 +216,8 @@ class Predictor:
         self.clf_interface_features_p1 = _load_data('ml_features_interface_p1.json')
 
     def score(self, df, core_or_interface):
-        """
+        """Predict ddG score.
+
         Parameters
         ----------
         df : DataFrame

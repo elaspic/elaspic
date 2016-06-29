@@ -3,7 +3,7 @@ import os.path as op
 import shutil
 import logging
 
-from faketime import config
+import faketime.config
 from . import conf, errors, helper
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ class FoldX(object):
         self.pdb_filename = op.basename(pdb_file)
         self.chain_id = chain_id
         if foldx_dir is None:
-            self.foldx_dir = conf.configs['foldx_dir']
+            self.foldx_dir = conf.CONFIGS['foldx_dir']
         else:
             self.foldx_dir = foldx_dir
         self.foldx_runfile = op.join(self.foldx_dir, 'runfile_FoldX.txt')
@@ -93,20 +93,20 @@ class FoldX(object):
             return op.join(self.foldx_dir, 'RepairPDB_' + self.pdb_filename)
         elif whatToRun == 'BuildModel':
             # see the FoldX manual for the naming of the generated structures
-            if conf.configs['foldx_num_of_runs'] == 1:
+            if conf.CONFIGS['foldx_num_of_runs'] == 1:
                 mutants = [op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1.pdb'), ]
                 wiltype = [op.join(self.foldx_dir, 'WT_' + self.pdb_filename[:-4] + '_1.pdb'), ]
                 results = [wiltype, mutants]
             else:
                 mutants = [
                     op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
-                    for x in range(0, conf.configs['foldx_num_of_runs'])
+                    for x in range(0, conf.CONFIGS['foldx_num_of_runs'])
                 ]
                 wiltype = [
                     op.join(
                         self.foldx_dir,
                         'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
-                    for x in range(0, conf.configs['foldx_num_of_runs'])
+                    for x in range(0, conf.CONFIGS['foldx_num_of_runs'])
                 ]
                 results = [wiltype, mutants]
             return results
@@ -160,8 +160,8 @@ class FoldX(object):
             '<ENDFILE>#;\n').replace(' ', '').format(
                 pdbFile=pdbFile,
                 command_line=command_line,
-                buildModel_runs=conf.configs['foldx_num_of_runs'],
-                water=conf.configs['foldx_water'],
+                buildModel_runs=conf.CONFIGS['foldx_num_of_runs'],
+                water=conf.CONFIGS['foldx_water'],
                 output_pdb=output_pdb)
 
         # This just makes copies of the runfiles for debugging...
@@ -170,26 +170,25 @@ class FoldX(object):
         shutil.copy(self.foldx_runfile, op.join(self.foldx_dir, copy_filename))
 
     def __run_runfile(self):
+        """.
+
+        .. todo:: Add a fallback plan using libfaketime.
         """
-        TODO: Add a fallback plan using libfaketime.
-        """
-#        system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
-        system_command = "foldx -runfile {}".format(self.foldx_runfile)
-        logger.debug('FoldX system command: {}'.format(system_command))
+        # system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
+        system_command = "foldx -runfile '{}'".format(self.foldx_runfile)
+        logger.debug("FoldX system command: '{}'".format(system_command))
         env = os.environ.copy()
-        env['LD_PRELOAD'] = config.libfaketime_so_file
+        env['LD_PRELOAD'] = faketime.config.libfaketime_so_file
         env['FAKETIME'] = '2015-12-26 00:00:00'
-        result, error_message, return_code = (
-            helper.subprocess_check_output_locally(self.foldx_dir, system_command, env=env)
-        )
-        if error_message:
-            logger.debug('foldx result: {}'.format(result))
-            logger.error('foldx error message: {}'.format(error_message))
-            if 'Cannot allocate memory' in error_message:
-                raise errors.ResourceError(error_message)
-        if 'There was a problem' in result:
-            logger.error('foldx result: {}'.format(result))
-            if 'Specified residue not found.' in result:
+        p = helper.run(system_command, cwd=self.foldx_dir, env=env)
+        if p.stderr.strip():
+            logger.debug('foldx result:\n{}'.format(p.stdout.strip()))
+            logger.error('foldx error message:\n{}'.format(p.stderr.strip()))
+            if 'Cannot allocate memory' in p.stderr:
+                raise errors.ResourceError(p.stderr)
+        if 'There was a problem' in p.stdout:
+            logger.error('foldx result:\n{}'.format(p.stdout.strip()))
+            if 'Specified residue not found.' in p.stdout:
                 raise errors.MutationMismatchError()
 
     def __read_result(self, outFile, whatToRead):

@@ -1,104 +1,58 @@
-"""
-In order to run this script from a Spyder console, you first need to import modeller using the
-``import modeller`` command. If your paths are set up to use modeller from python 3.4, but
-you're actually using python 2.7, you also need to update your ``sys.path`` variable (which is
-equivalent to the ``$PYTHONPATH`` variable in bash):
-
-.. code-block: python
-
-    import sys
-    sys.path = [
-        c if "lib/x86_64-intel8/python3" not in c
-        else '/'.join(c.split('/')[:-1]) + "/python2.5"
-        for c in sys.path
-    ]
-    import modeller
-"""
-# %%
-from __future__ import unicode_literals
-
 import os
 import os.path as op
 import json
 import argparse
-import subprocess
 import pickle
-from contextlib import contextmanager
 import logging
 import logging.config
 
-from elaspic import conf
+from elaspic import conf, helper
 
 logger = logging.getLogger(__name__)
-configs = conf.Configs()
 
 
-# %% ELASPIC RUN
+# #################################################################################################
+# ELASPIC RUN
 def validate_args(args):
-    if not os.path.isfile(args.config_file):
+    if args.config_file and not os.path.isfile(args.config_file):
         raise Exception('The configuration file {} does not exist!'.format(args.config_file))
 
-    if args.input_file and not os.path.isfile(args.input_file):
-        raise Exception('The input file {} does not exist!'.format(args.input_file))
+    if ((args.uniprot_id is None and args.structure_file is None) or
+            (args.uniprot_id is not None and args.structure_file is not None)):
+        raise Exception("""\
+One of '-u' ('--uniprot_id') or '-p' ('--structure_file') must be specified!""")
 
-    choose_one = [
-        args.uniprot_id is not None, args.input_file is not None, args.structure_file is not None,
-    ]
-    if sum(choose_one) != 1:
-        raise Exception(
-            "One of '--uniprot_id', '--input_file', or '--structure_file' must be specified!"
-        )
+    if (args.uniprot_id and (
+            (args.config_file is None) and
+            (args.pdb_dir is None or args.blast_db_dir is None or
+             args.archive_dir is None))):
+        raise Exception("""\
+When using the database pipeline, \
+you must either provide a configuration file ('-c', '--config_file') or \
+'--pdb_dir', '--blast_db_dir', and '--archive_dir'.""")
 
     if args.sequence_file and not args.structure_file:
-        raise Exception(
-            "A template PDB file must be specified using the '--structure_file' option, "
-            "when you specify a target sequence using the '--sequence_file' option!"
-        )
-
-
-def parse_input_file(input_file):
-    """
-    Does not work! Do not use!
-    """
-    uniprot_ids = []
-    mutations = []
-    uniprot_domain_pair_ids = []
-    with open(input_file, 'r') as fh:
-        for line in fh:
-            # Can skip lines by adding spaces or tabs before them
-            if line[0][0] == ' ' or line[0][0] == '\t':
-                print('Skipping line: {}'.format(line))
-                continue
-            row = [l.strip() for l in line.split('\t')]
-            # Specifying the mutation is optional
-            if len(row) == 2:
-                uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], row[2]
-            elif len(row) == 1:
-                uniprot_id, mutation, uniprot_domain_pair_id = row[0], row[1], ''
-            elif len(row) == 1:
-                uniprot_id, mutation, uniprot_domain_pair_id = row[0], '', ''
-            uniprot_ids.append(uniprot_id)
-            mutations.append(mutation)
-            uniprot_domain_pair_ids.append(uniprot_domain_pair_id)
-    return uniprot_ids, mutations, uniprot_domain_pair_ids
+        raise Exception("""\
+A template PDB file must be specified using the '--structure_file' option, \
+when you specify a target sequence using the '--sequence_file' option!""")
 
 
 def elaspic(args):
     validate_args(args)
 
-    if args.input_file:
-        conf.read_configuration_file(args.config_file)
-        # Run database pipeline for each row in file
-        from elaspic import database_pipeline
-        for uniprot_id, mutations, uniprot_domain_pair_id in \
-                zip(*parse_input_file(args.input_file)):
-            pipeline = database_pipeline.DatabasePipeline(
-                uniprot_id, mutations,
-                run_type=args.run_type,
-            )
-            pipeline.run()
-    elif args.uniprot_id:
-        conf.read_configuration_file(args.config_file)
+    if args.uniprot_id:
+        if args.config_file is not None:
+            conf.read_configuration_file(args.config_file)
+        else:
+            conf.read_configuration_file(
+                DATABASE={
+                    'connection_string': args.connection_string
+                },
+                EXTERNAL_DIRS={
+                    'pdb_dir': args.pdb_dir,
+                    'blast_db_dir': args.blast_db_dir,
+                    'archive_dir': args.archive_dir,
+                })
         # Run database pipeline
         if args.uniprot_domain_pair_ids:
             logger.debug('uniprot_domain_pair_ids: {}'.format(args.uniprot_domain_pair_ids))
@@ -116,7 +70,17 @@ def elaspic(args):
         )
         pipeline.run()
     elif args.structure_file:
-        conf.read_configuration_file(args.config_file, unique_temp_dir=os.getcwd())
+        unique_temp_dir = op.abspath(op.join(os.getcwd(), '.elaspic'))
+        os.makedirs(unique_temp_dir, exist_ok=True)
+        conf.read_configuration_file(
+            DEFAULT={
+                'unique_temp_dir': unique_temp_dir
+            },
+            EXTERNAL_DIRS={
+                'pdb_dir': args.pdb_dir,
+                'blast_db_dir': args.blast_db_dir,
+                'archive_dir': args.archive_dir,
+            })
         # Run local pipeline
         from elaspic import standalone_pipeline
         pipeline = standalone_pipeline.StandalonePipeline(
@@ -136,25 +100,46 @@ def elaspic(args):
 
 
 def configure_run_parser(sub_parsers):
-    help = "Run ELASPIC."
-    description = help + """
-"""
-    example = """
-Examples:
+    help = "Run ELASPIC"
+    description = help + ""
+    example = r"""
 
-    elaspic run -u P00044 -m M1A -c config_file.ini
+Examples
+--------
+$ elaspic run -p 4DKL.pdb -m A_M6A -n 1
 
+$ elaspic run -u P00044 -m M1A -c config_file.ini
+
+$ elaspic run -u P00044 -m M1A \
+    --connection_string=mysql://user:pass@localhost/elaspic \
+    --pdb_dir=/home/pdb/data/data/structures/divided/pdb \
+    --blast_db_dir=/home/ncbi/blast/db \
+    --archive_dir=/home/elaspic
 """
     parser = sub_parsers.add_parser(
         'run',
         help=help,
         description=description,
         epilog=example,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
-        '-c', '--config_file', required=True,
+        '-c', '--config_file', nargs='?', type=str,
         help='ELASPIC configuration file.')
+    parser.add_argument(
+        '--connection_string', nargs='?', type=str,
+        help=('SQLAlchemy formatted string describing the connection to the database.'))
+    parser.add_argument(
+        '--pdb_dir', nargs='?', type=str,
+        help=("Folder containing PDB files in split format (e.g. 'ab/pdb1ab2.ent.gz')."))
+    parser.add_argument(
+        '--blast_db_dir', nargs='?', type=str,
+        help=("Folder containing NCBI `nr` and `pdbaa` databases."))
+    parser.add_argument(
+        '--archive_dir', nargs='?', type=str,
+        help=('Folder containing precalculated ELASPIC data.'))
+
     parser.add_argument(
         '-u', '--uniprot_id',
         help="The Uniprot ID of the protein that you want to mutate (e.g. 'P28223')."
@@ -193,12 +178,6 @@ Examples:
         help="List of uniprot_domain_pair_ids to analyse "
              "(useful if you want to restrict your analysis to only a handful of domains).")
     parser.add_argument(
-        '-f', '--input_file',
-        help="A tab separated file of uniprot_ids, mutations, "
-             "and uniprot_domain_pair_ids (optional).\n"
-             "This option can be used instead of `--uniprot_id` and `--mutations` "
-             "to input a list of proteins and mutations")
-    parser.add_argument(
         '-t', '--run_type', nargs='?', type=str, default='5',
         choices=['1', '2', '3', '4', '5', 'sequence', 'model', 'mutations'],
         help=('Type of analysis to perform: \n'
@@ -207,10 +186,13 @@ Examples:
               '  3 / mutations: Evaluate mutations only \n'
               '  4: Create homology models and evaluate mutations \n'
               '  5: Calculate Provean, create homology models, and evaluate mutations \n'))
+
     parser.set_defaults(func=elaspic)
 
 
-# %% ELASPIC DATABASE
+# #################################################################################################
+# ELASPIC DATABASE
+
 def elaspic_database(args):
     conf.read_configuration_file(args.config_file)
     print("Running function '{}'...".format(args.func.__name__))
@@ -222,25 +204,6 @@ def create_database(args):
     db = elaspic_database.MyDatabase()
     db.create_database_tables(args.clear_schema, args.keep_uniprot_sequence)
     logger.info('Done!')
-
-
-@contextmanager
-def open_gzip(filename):
-    """
-    Temporarly unzip a file so that it can be processed with tools that do not work with
-    compressed archives.
-    """
-    try:
-        print("Gunzipping file '{}'...".format(filename))
-        subprocess.check_call("gunzip '{}'".format(filename), shell=True)
-    except Exception as e:
-        print('Unzipping the file failed with an error: {}'.format(e))
-        raise e
-    else:
-        yield
-    finally:
-        print("Gzipping the file back again...")
-        subprocess.check_call("gzip '{}'".format(filename.rstrip('.gz')), shell=True)
 
 
 def load_data_to_database(args):
@@ -260,7 +223,7 @@ def load_data_to_database(args):
             print("Successfully loaded data from file '{}' to table '{}'"
                   .format('{}.tsv'.format(table.name), table.name))
         elif '{}.tsv.gz'.format(table.name) in filenames:
-            with open_gzip(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
+            with helper.decompress(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
                 db.copy_table_to_db(table.name, args.data_folder.rstrip('/'))
             print("Successfully loaded data from file '{}' to table '{}'"
                   .format('{}.tsv.gz'.format(table.name), table.name))
@@ -279,7 +242,7 @@ def delete_database(args):
 
 
 def configure_database_parser(sub_parsers):
-    help = "Perform maintenance tasks on the ELASPIC database."
+    help = "Perform database maintenance tasks"
     description = help + """
 """
     example = """
@@ -370,7 +333,6 @@ Examples:
     parser_delete.set_defaults(func=delete_database)
 
 
-# %%
 def elaspic_train(args):
     import pandas as pd
     from elaspic import DATA_DIR, machine_learning
@@ -433,7 +395,7 @@ def elaspic_train(args):
 
 
 def configure_train_parser(sub_parsers):
-    help = "Train the ELASPIC classifiers."
+    help = "Train the ELASPIC classifiers"
     description = help + """
 """
     example = """
@@ -451,11 +413,10 @@ Examples:
     parser.set_defaults(func=elaspic_train)
 
 
-# %%
 def main():
     parser = argparse.ArgumentParser(
         prog='elaspic',
-
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     sub_parsers = parser.add_subparsers(
         title='command',
@@ -470,6 +431,6 @@ def main():
     args.func(args)
 
 
-# %%
 if __name__ == '__main__':
-    main()
+    import sys
+    sys.exit(main())

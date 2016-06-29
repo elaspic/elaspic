@@ -1,45 +1,174 @@
-"""
-.. note::
-
-    Wrap package dependencies inside functions.
-"""
 import os
-import os.path as op
 import sys
 import shlex
 import subprocess
-import signal
-import datetime
 import logging
-import time
 import json
 import string
+import re
 import fcntl
-import inspect
-
-from functools import wraps
+import functools
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
 
-# %%
-canonical_amino_acids = 'ARNDCEQGHILKMFPSTWYV'
-uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+@contextmanager
+def decompress(file):
+    """Temporarly decompress a file."""
+    try:
+        print("Gunzipping file '{}'...".format(file))
+        subprocess.check_call("gunzip '{}'".format(file), shell=True)
+    except Exception as e:
+        print('Unzipping the file failed with an error: {}'.format(e))
+        raise e
+    else:
+        yield
+    finally:
+        print("Gzipping the file back again...")
+        subprocess.check_call("gzip '{}'".format(file.rstrip('.gz')), shell=True)
 
 
-# %%
-def slugify(filename_string):
-    valid_chars = "-_.()%s%s" % (string.ascii_letters, string.digits)
-    return ''.join(c if c in valid_chars else '_' for c in filename_string)
-
-
-# %%
-class WritableObject(object):
+@contextmanager
+def switch_paths(working_path):
     """
-    A class for collecting all the print statements from modeller in order
-    to redirect them to the logger later on.
     """
+    current_path = os.getcwd()
+    try:
+        os.chdir(working_path)
+        yield
+    except:
+        raise
+    finally:
+        os.chdir(current_path)
+
+
+def decode_domain_def(domains, merge=True, return_string=False):
+    """Return a tuple of tuples of strings, preserving letter numbering (e.g. 10B)."""
+    if not domains:
+        return None, None
+
+    if domains[-1] == ',':
+        domains = domains[:-1]
+    x = domains
+    if return_string:
+        domain_fragments = [[r.strip() for r in ro.split(':')] for ro in x.split(',')]
+    else:
+        domain_fragments = [[int(r.strip()) for r in ro.split(':')] for ro in x.split(',')]
+    domain_merged = [domain_fragments[0][0], domain_fragments[-1][-1]]
+    if merge:
+        return domain_merged
+    else:
+        return domain_fragments
+
+
+# Database
+def parse_connection_string(connection_string):
+    """Split `connection_string` into a dictionary of connection properties.
+
+    Examples
+    --------
+    >>> from pprint import pprint
+    >>> pprint(parse_connection_string('mysql://user:@localhost'))
+    {'db_password': '',
+     'db_port': '',
+     'db_schema': '',
+     'db_socket': '',
+     'db_type': 'mysql',
+     'db_url': 'localhost',
+     'db_username': 'user'}
+    >>> pprint(parse_connection_string('mysql://user:pass@192.168.0.1:3306/test'))
+    {'db_password': 'pass',
+     'db_port': '3306',
+     'db_schema': 'test',
+     'db_socket': '',
+     'db_type': 'mysql',
+     'db_url': '192.168.0.1',
+     'db_username': 'user'}
+    >>> pprint(parse_connection_string('sqlite:////absolute/path/to/foo.db'))
+    {'db_password': '',
+     'db_port': '',
+     'db_schema': '/absolute/path/to/foo.db',
+     'db_socket': '',
+     'db_type': 'sqlite',
+     'db_url': '',
+     'db_username': ''}
+    """
+    db_params = {}
+    (db_params['db_type'], db_params['db_username'], db_params['db_password'],
+     db_params['db_url'], db_params['db_port'], db_params['db_schema'],
+     db_params['db_socket']) = (
+        re.match(
+            '^(\w*)://(|\w*:)(|\w*)(|@localhost|@[0-9\.]*)(|:[0-9]*)(|\/.*)(|\?unix_socket=.*)$',
+            connection_string)
+        .groups()
+    )
+    db_params['db_username'] = db_params['db_username'].rstrip(':')
+    db_params['db_url'] = db_params['db_url'].lstrip('@')
+    db_params['db_port'] = db_params['db_port'].lstrip(':')
+    db_params['db_schema'] = (
+        db_params['db_schema'][1:]
+        if db_params['db_schema'].startswith('/')
+        else db_params['db_schema'])
+    db_params['db_socket'] = db_params['db_socket'].partition('?unix_socket=')[-1]
+    return db_params
+
+
+def make_connection_string(**vargs):
+    """Join a dictionary of connection properties (`vargs`) into a connection string.
+
+    Examples
+    --------
+    >>> make_connection_string(**{ \
+        'db_password': '', \
+        'db_port': '', \
+        'db_schema': '', \
+        'db_socket': '', \
+        'db_type': 'mysql', \
+        'db_url': 'localhost', \
+        'db_username': 'user'})
+    'mysql://user:@localhost'
+    >>> make_connection_string(**{ \
+        'db_password': 'pass', \
+        'db_port': '3306', \
+        'db_schema': 'test', \
+        'db_socket': '', \
+        'db_type': 'mysql', \
+        'db_url': '192.168.0.1', \
+        'db_username': 'user'})
+    'mysql://user:pass@192.168.0.1:3306/test'
+    >>> make_connection_string(**{ \
+        'db_password': '', \
+        'db_port': '', \
+        'db_schema': '/absolute/path/to/foo.db', \
+        'db_socket': '', \
+        'db_type': 'sqlite', \
+        'db_url': '', \
+        'db_username': ''})
+    'sqlite:////absolute/path/to/foo.db'
+    """
+    if vargs['db_username']:
+        vargs['db_username'] = vargs['db_username'] + ':'
+    if vargs['db_url']:
+        vargs['db_url'] = '@' + vargs['db_url']
+    if vargs['db_port']:
+        assert vargs['db_url']
+        vargs['db_port'] = ':' + vargs['db_port']
+    if vargs['db_schema']:
+        vargs['db_schema'] = '/' + vargs['db_schema']
+    if vargs['db_socket']:
+        vargs['db_socket'] = '?unix_socket=' + vargs['db_socket']
+    connection_string = (
+        '{db_type}://{db_username}{db_password}{db_url}{db_port}{db_schema}{db_socket}'
+        .format(**vargs)
+    )
+    return connection_string
+
+
+# Logging
+class WritableObject:
+    """A writable object which writes everything to the logger."""
+
     def __init__(self, logger):
         self.logger = logger
 
@@ -47,12 +176,16 @@ class WritableObject(object):
         self.logger.debug(string.strip())
 
 
+def slugify(filename_string):
+    valid_chars = "-_.()" + string.ascii_letters + string.digits
+    return ''.join(c if c in valid_chars else '_' for c in filename_string)
+
+
 @contextmanager
 def log_print_statements(logger):
     """Channel print statements to the debug logger.
 
-    Useful for modules that default to printing things
-    instead of using a logger (Modeller...).
+    Useful for modules that default to printing things instead of using a logger (Modeller...).
     """
     original_stdout = sys.stdout
     original_formatters = []
@@ -71,127 +204,39 @@ def log_print_statements(logger):
             logger.handlers[i].formatter = original_formatters[i]
 
 
-# %%
-def make_tarfile(source_dir, output_filename):
-    """Compress folder into a `*.tar.gz` file.
+# Subprocess
+def _set_process_group(parent_process_group_id):
+    """Set group_id of the child process to the group_id of the parent process.
+
+    This way when you delete the parent process you also delete all the children.
     """
-    import tarfile
-    with tarfile.open(output_filename, "w:gz") as tar:
-        tar.add(source_dir, arcname=op.basename(source_dir))
+    child_process_id = os.getpid()
+    os.setpgid(child_process_id, parent_process_group_id)
 
 
-# %% Helper functions for sql objects
-def decode_domain_def(domains, merge=True, return_string=False):
-    """Unlike split_domain(), this function returns a tuple of tuples of strings,
-    preserving letter numbering (e.g. 10B)
-    """
-    if not domains:
-        return None, None
-
-    if domains[-1] == ',':
-        domains = domains[:-1]
-    x = domains
-    if return_string:
-        domain_fragments = [[r.strip() for r in ro.split(':')] for ro in x.split(',')]
-    else:
-        domain_fragments = [[int(r.strip()) for r in ro.split(':')] for ro in x.split(',')]
-    domain_merged = [domain_fragments[0][0], domain_fragments[-1][-1]]
-    if merge:
-        return domain_merged
-    else:
-        return domain_fragments
-
-
-def encode_domain(domains, merged=True):
-    x = domains
-    if merged:
-        return ':'.join([str(r) for r in x])
-    else:
-        return ','.join([':'.join([str(r) for r in ro]) for ro in x])
-
-
-def decode_aa_list(interface_aa):
-    """
-    """
-    if interface_aa and (interface_aa != '') and (interface_aa != 'NULL'):
-        if interface_aa[-1] == ',':
-            interface_aa = interface_aa[:-1]
-        x = interface_aa
-        return_tuple = tuple([int(r.strip()) for r in x.split(',')])
-    else:
-        return_tuple = []
-    return return_tuple
-
-
-def row2dict(row):
-    d = {}
-    for column in row.__table__.columns:
-        d[column.name] = getattr(row, column.name)
-        if type(d[column.name]) == datetime.datetime:
-            d[column.name] = d[column.name].strftime('%Y-%m-%d %H-%M-%S-%f')
-    return d
-
-
-# %% Helper functions for different subprocess commands
-def get_username():
-    username, __, __ = subprocess_check_output('whoami')
-    return username.strip()
+@functools.wraps(subprocess.run)
+def run(system_command, **vargs):
+    if not isinstance(system_command, (list, tuple)):
+        system_command = shlex.split(system_command)
+    p = subprocess.run(
+        system_command, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        preexec_fn=lambda: _set_process_group(os.getpgrp()),
+        **vargs)
+    p.stdout = p.stdout.strip()
+    p.stderr = p.stderr.strip()
+    return p
 
 
 def get_hostname():
-    hostname, __, __ = subprocess_check_output('hostname | cut -d. -f1')
-    return hostname.strip()
-
-
-def get_echo(system_constant):
-    system_constant_value, __, __ = subprocess_check_output('echo ' + system_constant)
-    return system_constant_value.strip()
+    return run('hostname | cut -d. -f1').stdout
 
 
 def get_which(bin_name):
-    bin_filename, __, __ = subprocess_check_output('which ' + bin_name)
-    return bin_filename.strip()
+    return run('which ' + bin_name).stdout
 
 
-# %%
-@contextmanager
-def switch_paths(working_path):
-    """
-    """
-    current_path = os.getcwd()
-    try:
-        os.chdir(working_path)
-        yield
-    except:
-        raise
-    finally:
-        os.chdir(current_path)
-
-
-def kill_child_process(child_process):
-    if child_process.poll() is not None:
-        print('Child process with pid {} already terminated with return code {}'
-              .format(child_process.pid, child_process.returncode))
-        return
-    try:
-        print('Trying to terminate gracefully child process with pid: {}'.child_process.pid)
-        os.killpg(child_process.pid, signal.SIGTERM)
-#        child_process.terminate()
-    except Exception as e:
-        print("Didn't work because of error: {}".format(e.__str__()))
-        try:
-            print('Trying to kill child process...')
-            os.killpg(child_process.pid, signal.SIGKILL)
-#            child_process.kill()
-        except:
-            print("Didn't work because of error: {}".format(e.__str__()))
-            print("Letting it go...")
-            pass
-    print('OK')
-
-
-# %% Retrying
-def check_exception(exc, valid_exc):
+# Retry
+def _check_exception(exc, valid_exc):
     logger.error('The following exception occured:\n{}'.format(exc))
     to_retry = isinstance(exc, valid_exc)
     if to_retry:
@@ -200,13 +245,12 @@ def check_exception(exc, valid_exc):
 
 
 def retry_database(fn):
-    """Decorator to keep probing the database untill you succeed.
-    """
+    """Decorator to keep probing the database untill you succeed."""
     from retrying import retry
     import sqlalchemy as sa
     r = retry(
         retry_on_exception=lambda exc:
-            check_exception(exc, valid_exc=sa.exc.OperationalError),
+            _check_exception(exc, valid_exc=sa.exc.OperationalError),
         wait_exponential_multiplier=1000,
         wait_exponential_max=60000,
         stop_max_attempt_number=7)
@@ -214,145 +258,36 @@ def retry_database(fn):
 
 
 def retry_archive(fn):
-    """Decorator to keep probing the database untill you succeed.
-    """
+    """Decorator to keep probing the database untill you succeed."""
     from retrying import retry
     from elaspic import errors
     r = retry(
         retry_on_exception=lambda exc:
-            check_exception(exc, valid_exc=errors.Archive7zipError),
+            _check_exception(exc, valid_exc=errors.Archive7zipError),
         wait_fixed=2000,
         stop_max_attempt_number=2)
     return r(fn)
 
 
-def decorate_all_methods(decorator):
-    """Decorate all methods of a class with `decorator`.
-    """
-    def apply_decorator(cls):
-        for k, f in cls.__dict__.items():
-            if inspect.isfunction(f):
-                setattr(cls, k, decorator(f))
-        return cls
-    return apply_decorator
-
-
-# %% Subprocess
-# The two functions below can be used to set the subproces group id to the same
-# value as the parent process group id. This is a simple way of ensuring that
-# all the child processes are terminated when the parent quits, but it makes
-# it impossible to terminate the child process group while keeping the parent
-# running....
-def _set_process_group(parent_process_group_id):
-    """This function is used to set the group id of the child process to be
-    the same as the group id of the parent process. This way when you delete the
-    parent process you also delete all the children.
-    """
-    child_process_id = os.getpid()
-    os.setpgid(child_process_id, parent_process_group_id)
-
-
-def _try_decoding_bytes_string(bytes_string):
-    try:
-        return bytes_string.decode('utf-8')
-    except AttributeError:
-        return bytes_string
-    except UnicodeDecodeError:
-        logger.debug("Could not decode bytes string using utf-8 encoding. Trying iso-8859-1...")
-        return bytes_string.decode('iso-8859-1')
-
-
-def run_subprocess(system_command, **popen_argvars):
-    args = shlex.split(system_command)
-    child_process = subprocess.Popen(
-        args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        preexec_fn=lambda: _set_process_group(os.getpgrp()),
-        **popen_argvars)
-    return child_process
-
-
-def run_subprocess_locally(working_path, system_command, **popen_argvars):
-    with switch_paths(working_path):
-        child_process = run_subprocess(system_command, **popen_argvars)
-    return child_process
-
-
-def subprocess_communicate(child_process):
-    # with print_heartbeats():  # use long_wait in .travis.yml instead
-    result, error_message = child_process.communicate()
-    result = _try_decoding_bytes_string(result)
-    error_message = _try_decoding_bytes_string(error_message)
-    return_code = child_process.returncode
-    return result, error_message, return_code
-
-
-def subprocess_check_output(system_command, **popen_argvars):
-    child_process = run_subprocess(system_command, **popen_argvars)
-    return subprocess_communicate(child_process)
-
-
-def subprocess_check_output_locally(working_path, system_command, **popen_argvars):
-    child_process = run_subprocess_locally(working_path, system_command, **popen_argvars)
-    return subprocess_communicate(child_process)
-
-
+# Lock
 @contextmanager
-def print_heartbeats():
-    """
-    Spawn a fork that prints a message every minute.
-    (This is required for travis-ci).
-    """
-    from elaspic import conf
-    configs = conf.Configs()
-    # Don't print random stuff if not testing
-    if not configs['testing']:
-        yield
-        return
-    # Print a heartbeat to keep travis happy.
-    pid = os.fork()
-    if pid == 0:
-        while True:
-            time.sleep(60)
-            logger.info("Subprocess is still running...")
-        os._exit()
+def open_exclusively(filename, mode='a'):
+    fd = os.open(filename, os.O_CREAT | os.O_RDWR)
+    fcntl.lockf(fd, fcntl.LOCK_EX)
     try:
-        yield
+        f = os.fdopen(fd, mode)
+        yield f
+    except:
+        raise
     finally:
-        os.kill(pid, 15)
-        os.waitpid(pid, 0)
-
-
-# %% Function-level locking.
-@contextmanager
-def get_lock(name):
-    lock = None
-
-    def close_lock(lock):
-        if lock is not None:
-            lock.close()
-            os.remove(lock.name)
-
-    while True:
-        try:
-            lock = open(name + '.lock', 'x')
-            yield lock
-            close_lock(lock)
-            break
-        except FileExistsError:
-            time.sleep(60)
-        except:
-            close_lock(lock)
-            raise
+        f.close()
 
 
 def lock(fn):
-    """
-    Allow only a single instance of function `fn`,
-    and save results to a lock file.
-    """
-    @wraps(fn)
+    """Allow only a single instance of function `fn`, and save results to a lock file."""
+    @functools.wraps(fn)
     def locked_fn(self, *args, **kwargs):
-        """
+        """.
 
         Returns
         -------
@@ -401,64 +336,4 @@ def lock(fn):
             lock.close()
             os.remove(lock.name)
             raise
-
     return locked_fn
-
-
-@contextmanager
-def open_exclusively(filename, mode='a'):
-    fd = os.open(filename, os.O_CREAT | os.O_RDWR)
-    fcntl.lockf(fd, fcntl.LOCK_EX)
-    try:
-        f = os.fdopen(fd, mode)
-        yield f
-    except:
-        raise
-    finally:
-        f.close()
-
-
-# %% From Mutation
-def encode_list_as_text(list_of_lists):
-    """
-    Uses the database convention to encode a list of lists, describing domain boundaries of
-    multiple domains, as a string.
-    """
-    return ','.join([':'.join([str(x) for x in xx]) for xx in zip(*list_of_lists)])
-
-
-def decode_text_as_list(list_string):
-    """
-    Uses the database convention to decode a string, describing domain boundaries of
-    multiple domains, as a list of lists.
-    """
-    def str2num(x):
-        return float(x) if '.' in x else int(x)
-
-    decoded = list(
-        zip(*[[str2num(x) for x in sublist.split(':')] for sublist in list_string.split(',')])
-    )
-    return decoded
-
-
-# %% Text formatting
-class color:
-    PURPLE = '\033[95m'
-    CYAN = '\033[96m'
-    DARKCYAN = '\033[36m'
-    BLUE = '\033[94m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    END = '\033[0m'
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-
-
-def underline(print_string):
-    return color.UNDERLINE + print_string + color.END

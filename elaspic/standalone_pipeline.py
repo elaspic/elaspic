@@ -20,7 +20,6 @@ from . import (
 from .pipeline import Pipeline, execute_and_remember
 
 logger = logging.getLogger(__name__)
-configs = conf.Configs()
 
 sql_db = None
 domain_alignment = None
@@ -28,32 +27,32 @@ domain_model = None
 domain_mutation = None
 
 
-# %%
 class StandalonePipeline(Pipeline):
+    """Run elaspic locally without a database.
+
+    Parameters
+    ----------
+    structure_file : str
+        Full path to the structure *pdb* file.
+    sequence_file : str
+        Full path to the sequence *fasta* file.
+    mutations : str
+        Comma-separated list of mutations.
+    configurations : str
+        Full path to the configurations *ini* file.
+    mutation_format : int, default None
+        1. {pdb_chain}_{pdb_mutation},...
+        2. {pdb_chain}_{sequence_mutation},...
+        3. {sequence_pos}_{sequence_mutation}...
+
+        If `sequence_file` is None, this does not matter (always {pdb_chain}_{pdb_mutation}).
+
+    .. todo:: Add an option to store provean results based on sequence hash.
+    """
 
     def __init__(
             self, structure_file, sequence_file=None, mutations=None, configurations=None,
             mutation_format=None):
-        """
-        Parameters
-        ----------
-        structure_file : str
-            Full path to the structure *pdb* file.
-        sequence_file : str
-            Full path to the sequence *fasta* file.
-        mutations : str
-            Comma-separated list of mutations.
-        configurations : str
-            Full path to the configurations *ini* file.
-        mutation_format : int, default None
-            1. {pdb_chain}_{pdb_mutation},...
-            2. {pdb_chain}_{sequence_mutation},...
-            3. {sequence_pos}_{sequence_mutation}...
-
-            If `sequence_file` is None, this does not matter (always {pdb_chain}_{pdb_mutation}).
-
-        TODO: Add an option to store provean results based on sequence hash.
-        """
         super().__init__(configurations)
 
         # Input parameters
@@ -67,8 +66,8 @@ class StandalonePipeline(Pipeline):
         # fix_pdb(self.pdb_file, self.pdb_file)
         self.sp = structure_tools.StructureParser(self.pdb_file)
         self.sp.extract()
-        self.sp.save_structure(configs['unique_temp_dir'])
-        self.sp.save_sequences(configs['unique_temp_dir'])
+        self.sp.save_structure(conf.CONFIGS['unique_temp_dir'])
+        self.sp.save_sequences(conf.CONFIGS['unique_temp_dir'])
 
         if sequence_file in ['', 'None', None]:
             self.sequence_file = ''
@@ -157,7 +156,11 @@ class StandalonePipeline(Pipeline):
 
             if mutation_format in ['1']:
                 # Converting mutation from PDB to sequence coordinates
-                mutation_id = (' ', int(mutation_residue[1:-1]), ' ',)
+                resnum = int(''.join(n for n in mutation_residue[1:-1] if n.isdigit()))
+                resnum_suffix = (
+                    ''.join(n for n in mutation_residue[1:-1] if not n.isdigit()).upper()
+                )
+                mutation_id = (' ', resnum, resnum_suffix if resnum_suffix else ' ')
                 chain_aa_residues = (
                     structure_tools.get_aa_residues(self.sp.structure[0][mutation_chain])
                 )
@@ -193,7 +196,7 @@ class StandalonePipeline(Pipeline):
 
     def run_all_sequences(self):
         sequence_results = []
-        sequence_results_file = op.join(configs['unique_temp_dir'], 'sequence.json')
+        sequence_results_file = op.join(conf.CONFIGS['unique_temp_dir'], 'sequence.json')
         if op.isfile(sequence_results_file):
             logger.debug('Results file for sequence already exists: {}'
                          .format(sequence_results_file))
@@ -211,7 +214,7 @@ class StandalonePipeline(Pipeline):
 
     def run_all_models(self):
         model_results = []
-        model_results_file = op.join(configs['unique_temp_dir'], 'model.json')
+        model_results_file = op.join(conf.CONFIGS['unique_temp_dir'], 'model.json')
         if op.isfile(model_results_file):
             logger.debug('Results file for model already exists: {}'.format(model_results_file))
             return
@@ -249,7 +252,7 @@ class StandalonePipeline(Pipeline):
         for (mutation_idx, mutation), mutation_in in self.mutations.items():
             mutation_results = []
             mutation_results_file = op.join(
-                configs['unique_temp_dir'], 'mutation_{}.json'.format(mutation_in)
+                conf.CONFIGS['unique_temp_dir'], 'mutation_{}.json'.format(mutation_in)
             )
             if op.isfile(mutation_results_file):
                 logger.debug(
@@ -294,10 +297,7 @@ class StandalonePipeline(Pipeline):
         return PrepareSequence(self.seqrecords, idx, None)
 
     def get_model(self, idxs):
-        """
-        Use modeller to make a homology model for each uniprot domain that
-        has a template in pdbfam
-        """
+        """Make a homology model for each uniprot domain with a template in pdbfam."""
         logger.debug('-' * 80)
         logger.debug('get_model({})'.format(idxs))
         idxs = self._sort_chain_idxs(idxs)
@@ -314,8 +314,7 @@ class StandalonePipeline(Pipeline):
     # === Helper functions ===
 
     def _get_chain_idx(self, chain_id):
-        """chain_id -> chain_idx
-        """
+        """chain_id -> chain_idx."""
         chain_idx = [
             i for (i, chain)
             in enumerate(self.sp.structure[0].child_list)
@@ -330,8 +329,7 @@ class StandalonePipeline(Pipeline):
         return chain_idx[0]
 
     def _sort_chain_idxs(self, idxs):
-        """Sort positions and return as as tuple.
-        """
+        """Sort positions and return as as tuple."""
         if not hasattr(idxs, '__getitem__'):
             idxs = (idxs,)
         else:
@@ -339,15 +337,16 @@ class StandalonePipeline(Pipeline):
         return idxs
 
 
-# %%
 @execute_and_remember
 class PrepareSequence:
-    """
+    """.
+
     Raises
     -------
     errors.ProveanError
     errors.ProveanResourceError
     """
+
     def __init__(self, seqrecords, position, provean_supset_file):
         self.seqrecord = seqrecords[position]
         self.provean_supset_file = provean_supset_file
@@ -359,7 +358,7 @@ class PrepareSequence:
 
     def __enter__(self):
         sequence_file = op.join(
-            configs['sequence_dir'],
+            conf.CONFIGS['sequence_dir'],
             helper.slugify(self.seqrecord.id + '.fasta'))
         with open(sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecord, ofh, 'fasta')
@@ -376,10 +375,10 @@ class PrepareSequence:
         return self.sequence
 
 
-# %%
 @execute_and_remember
 class PrepareModel:
-    """
+    """.
+
     Returns
     -------
     model_dict : dict
@@ -407,7 +406,7 @@ class PrepareModel:
     def __enter__(self):
         # Target sequence file
         self.sequence_file = op.join(
-            configs['model_dir'],
+            conf.CONFIGS['model_dir'],
             helper.slugify('_'.join(seqrec.id for seqrec in self.seqrecords) + '.fasta')
         )
         with open(self.sequence_file, 'w') as ofh:
@@ -417,7 +416,7 @@ class PrepareModel:
         # Template structure file
         chain_string = ''.join(self.sp.structure[0].child_list[pos].id for pos in self.positions)
         self.structure_file = op.join(
-            configs['unique_temp_dir'],
+            conf.CONFIGS['unique_temp_dir'],
             helper.slugify(self.sp.pdb_id + chain_string + '.pdb')
         )
         assert op.isfile(self.structure_file)
@@ -439,10 +438,10 @@ class PrepareModel:
         return self.model
 
 
-# %%
 @execute_and_remember
 class PrepareMutation:
-    """
+    """.
+
     Raises
     ------
     errors.PDBError
@@ -574,9 +573,11 @@ class Unused:
         return structure_sequence
 
     def get_mutation_data(self, pdb_chain, pdb_mutation, provean_results, modeller_results):
-        """
-        Create a MutData class that holds all the information we need
-        about a given mutation.
+        """Create a class holding all information needed about a mutation.
+
+        Returns
+        -------
+        MutData
         """
         protein_id = "{}{}".format(self.pdb_id, pdb_chain)
         logger.info(provean_results)
@@ -621,9 +622,9 @@ class Unused:
         mut_data.provean
 
     def _mutation_to_modeller(self, pdb_chain, pdb_mutation):
-        """
+        """Convert mutations from PDB coordinates to Modeller coordinates.
+
         Modeller numbers all residues from 1 to n_residues, for all chains.
-        Use this function to convert mutations from PDB coordinates to Modeller coordinates.
         """
         mutation_id = pdb_mutation[:-1]
         mutation_idx = 1
