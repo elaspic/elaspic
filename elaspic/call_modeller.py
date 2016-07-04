@@ -47,14 +47,10 @@ class Modeller(object):
         # key: assessment score
         # values: alignment, pdb filename, whether or not using loop refinement
         ranking = dict()
-        ranking_knotted = dict()
         counter = 0
         max_counter = 3 if not conf.CONFIGS['testing'] else 1
         while not ranking and counter < max_counter:
-            logger.debug(
-                "counter: {}, ranking: '{}', ranking_knotted: '{}'"
-                .format(counter, ranking, ranking_knotted)
-            )
+            logger.debug("counter: {}, ranking: '{}'".format(counter, ranking))
             counter += 1
             # NB: You can actually supply many alignments and modeller will give
             # you the alignment with the best model
@@ -78,14 +74,8 @@ class Modeller(object):
 
                 for i in range(len(result)):
                     pdbFile, normDOPE = result[i][0], result[i][1]
-                    if self.__call_knot(pdbFile):  # i.e. knotted
-                        ranking_knotted[normDOPE] = (aln, pdbFile, loop,)
-                    else:
-                        ranking[normDOPE] = (aln, pdbFile, loop,)
-        if ranking:
-            return min(ranking), ranking[min(ranking)][1], False
-        else:
-            return min(ranking_knotted), ranking_knotted[min(ranking_knotted)][1], True
+                    ranking[normDOPE] = (aln, pdbFile, loop,)
+        return min(ranking), ranking[min(ranking)][1]
 
     def __run_modeller(self, alignFile, loopRefinement):
         """.
@@ -218,49 +208,3 @@ class Modeller(object):
         # Return the successfully calculated models and a loop flag indicating
         # whether the returned models are loop refined or not
         return result, loop, failures
-
-    def __call_knot(self, pdbFile):
-        """.Check a PDB structure for knots using the program KNOTS by Willi Taylor.
-
-        Make sure to set the command and PDB path!
-
-        N.B.
-        For multiprocessing the KNOT program needs to be run from a unique execution folder.
-
-        Parameters
-        ----------
-        pdbFile : string
-            Filename of the PDB structure
-
-        Returns
-        -------
-        int
-            0: no knot; 1: knot
-        """
-        system_command = 'knot ' + pdbFile
-        logger.debug("Knot system command: '{}'".format(system_command))
-        p = helper.run(system_command)
-        if p.returncode == 0:
-            logger.error('Knot result:\n{}'.format(p.stdout))
-            logger.error('Knot error message:\n{}'.format(p.stderr))
-
-        line = [x for x in p.stdout.split('\n')]
-
-        # I found two different forms in which the output appears,
-        # hence two if statements to catch them
-        if line[-4].strip().split(' ')[0] == 'len':
-            if int(line[-4].strip().split(' ')[2]) == 2:
-                return False  # i.e. no knot
-            if int(line[-4].strip().split(' ')[2]) > 2:
-                return True  # i.e. knotted
-        elif line[-2].strip().split(' ')[0] == 'len':
-            if int(line[-2].strip().split(' ')[2]) == 2:
-                return False  # i.e. no knot
-            if int(line[-2].strip().split(' ')[2]) > 2:
-                return True  # i.e. knotted
-        else:
-            # in case the output can't be read, the model is classified as
-            # knotted and thus disregarded. This could be improved.
-            logger.error("'knot' failed with some strange output:\n{}".format(p.stdout))
-            logger.error('Assuming knotted...')
-            return True
