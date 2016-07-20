@@ -93,13 +93,29 @@ def parse_connection_string(connection_string):
      'db_type': 'sqlite',
      'db_url': '',
      'db_username': ''}
+    >>> connection_string = 'mysql://user:pass@192.168.0.1:3306/test?unix_socket=/tmp/mysql.sock'
+    >>> pprint(parse_connection_string(connection_string))
+    {'db_password': 'pass',
+     'db_port': '3306',
+     'db_schema': 'test',
+     'db_socket': '/tmp/mysql.sock',
+     'db_type': 'mysql',
+     'db_url': '192.168.0.1',
+     'db_username': 'user'}
     """
     db_params = {}
     (db_params['db_type'], db_params['db_username'], db_params['db_password'],
      db_params['db_url'], db_params['db_port'], db_params['db_schema'],
      db_params['db_socket']) = (
         re.match(
-            '^(\w*)://(|\w*:)(|\w*)(|@localhost|@[0-9\.]*)(|:[0-9]*)(|\/.*)(|\?unix_socket=.*)$',
+            '^(\w*)'  # db_type
+            '://'
+            '(|\w*:)'  # db_username
+            '(|\w*)'  # db_password
+            '(|@localhost|@[0-9\.]*)'  # db_url
+            '(|:[0-9]*)'  # db_port
+            '(|\/[^?]*)'  # db_schema
+            '(|\?unix_socket=.*)$',  # db_socket
             connection_string)
         .groups()
     )
