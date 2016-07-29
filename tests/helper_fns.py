@@ -65,15 +65,7 @@ def get_sequence(uniprot_id, input_dir, output_dir, use_remote=True):
 
 
 # %% Local tests
-def run_pdb_mutation_pipeline(
-        pdb_id, pdb_mutatations, working_dir=None):
-    """.
-
-    Parameters
-    ----------
-    working_dir : str
-        Can set to something if don't want to rerun entire pipeline
-    """
+def run_pdb_mutation_pipeline(pdb_id, pdb_mutatations):
     pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['unique_temp_dir'])
     for chain_id in pdb_mutatations[pdb_id]:
         for mutation in pdb_mutatations[pdb_id][chain_id]:
@@ -86,16 +78,12 @@ def run_pdb_mutation_pipeline(
     logger.info('Pass')
 
 
-def run_sequence_mutation_pipeline(
-        pdb_id_sequence, sequence_mutations, working_dir=None):
+def run_sequence_mutation_pipeline(pdb_id_sequence, sequence_mutations):
     """
     Parameters
     ----------
     pdb_id_sequence : tuple
         (pdb_id, uniprot_id)
-    working_dir : str, optional
-        `unique_temp_dir` to use for this run.
-        (Useful if you want to resume a previous job).
     """
     pdb_id, sequence_id = pdb_id_sequence
     pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['unique_temp_dir'])

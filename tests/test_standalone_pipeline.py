@@ -4,8 +4,10 @@
 
     - Test that the standalone pipeline folder is relocatable.
 """
+import os
 import os.path as op
 import logging
+import shutil
 import pytest
 from elaspic import conf
 import helper_fns
@@ -21,14 +23,22 @@ if hasattr(pytest, "config"):
 else:
     QUICK = False
 
-conf.read_configuration_file(CONFIG_FILE)
-
 logger.debug('Running quick: {}'.format(QUICK))
 logger.debug('Config file: {}'.format(CONFIG_FILE))
 
 
 # Source of good PDB stuctures: http://www.rcsb.org/pdb/101/motm_archive.do
 pdb_mutatations = {
+    # This one was giving me trouble
+    '1S1Q': {
+        'A': [
+            'V43A',
+            'F44A',
+            'N45A',
+            'D46A',
+            'F88A',
+        ],
+    },
     # test_1; only one chain
     '3M7R': {
         'A': [
@@ -134,7 +144,6 @@ sequence_mutations = {
 }
 
 
-# %%
 if QUICK:
     # pdb_mutatations
     for pdb_id in pdb_mutatations:
@@ -152,7 +161,7 @@ if QUICK:
     sequence_mutations = {key: {chain_id: [mutations[0]]}}
 
 
-# %% Fixtures
+# Fixtures
 @pytest.fixture(scope='session', params=list(pdb_mutatations.keys()))
 def pdb_id(request):
     return request.param
@@ -164,14 +173,66 @@ def pdb_id_sequence(request):
 
 
 def test_pdb_mutation_pipeline(pdb_id):
-    return helper_fns.run_pdb_mutation_pipeline(pdb_id, pdb_mutatations)
+    # Canonical folder
+    unique_temp_dir = op.join(op.splitext(__file__)[0], pdb_id, '.elaspic')
+    os.makedirs(unique_temp_dir, exist_ok=True)
+    conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+    os.chdir(unique_temp_dir)
+    helper_fns.run_pdb_mutation_pipeline(pdb_id, pdb_mutatations)
+
+    # Make sure it works even if we copy folder
+    unique_temp_dir_old = unique_temp_dir
+
+    # Precalculated sequence
+    logger.debug('\n\n' + '*' * 80 + 'Precalculated sequence\n')
+    working_dir = op.join(op.splitext(__file__)[0], pdb_id + '_precalc_sequence')
+    unique_temp_dir = op.join(working_dir, '.elaspic')
+    os.makedirs(unique_temp_dir, exist_ok=True)
+    try:
+        shutil.copy2(
+            op.join(unique_temp_dir_old, 'sequence.json'),
+            op.join(unique_temp_dir, 'sequence.json'))
+        shutil.copytree(
+            op.join(unique_temp_dir_old, 'sequence'),
+            op.join(unique_temp_dir, 'sequence'))
+        conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+        os.chdir(unique_temp_dir)
+        helper_fns.run_pdb_mutation_pipeline(pdb_id, pdb_mutatations)
+    except:
+        raise
+    finally:
+        shutil.rmtree(unique_temp_dir)
+
+    # Precalculated model
+    logger.debug('\n\n' + '*' * 80 + 'Precalculated model\n')
+    working_dir = op.join(op.splitext(__file__)[0], pdb_id + '_precalc_model')
+    unique_temp_dir = op.join(working_dir, '.elaspic')
+    os.makedirs(unique_temp_dir, exist_ok=True)
+    try:
+        shutil.copy2(
+            op.join(unique_temp_dir_old, 'sequence.json'),
+            op.join(unique_temp_dir, 'sequence.json'))
+        shutil.copytree(
+            op.join(unique_temp_dir_old, 'sequence'),
+            op.join(unique_temp_dir, 'sequence'))
+        shutil.copy2(
+            op.join(unique_temp_dir_old, 'model.json'),
+            op.join(unique_temp_dir, 'model.json'))
+        shutil.copytree(
+            op.join(unique_temp_dir_old, 'model'),
+            op.join(unique_temp_dir, 'model'))
+        conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+        os.chdir(unique_temp_dir)
+        helper_fns.run_pdb_mutation_pipeline(pdb_id, pdb_mutatations)
+    except:
+        raise
+    finally:
+        shutil.rmtree(unique_temp_dir)
 
 
 def test_sequence_mutation_pipeline(pdb_id_sequence):
+    unique_temp_dir = op.join(op.splitext(__file__)[0], '.'.join(pdb_id_sequence), '.elaspic')
+    os.makedirs(unique_temp_dir, exist_ok=True)
+    conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+    os.chdir(unique_temp_dir)
     return helper_fns.run_sequence_mutation_pipeline(pdb_id_sequence, sequence_mutations,)
-
-
-# %%
-if __name__ == '__main__':
-    import pytest
-    pytest.main([__file__, '-svx', '--quick'])

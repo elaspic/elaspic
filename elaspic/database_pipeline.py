@@ -4,18 +4,17 @@ import re
 import json
 import shutil
 import logging
-import random
 import six
 import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from . import (
-    conf, errors, helper, structure_tools, elaspic_sequence, elaspic_model, elaspic_predictor,
-    elaspic_database, elaspic_database_tables
+from elaspic import (
+    CACHE_DIR, conf, errors, structure_tools, elaspic_sequence, elaspic_model,
+    elaspic_predictor, elaspic_database, elaspic_database_tables
 )
-from .pipeline import Pipeline, execute_and_remember
+from elaspic.pipeline import Pipeline, execute_and_remember
 
 logger = logging.getLogger(__name__)
 
@@ -289,8 +288,7 @@ class _PrepareModel:
             self.skip = True
 
     def _get_modeller_results_file(self, d):
-        """Save relevant precalculated data to a json file.
-        """
+        """Save relevant precalculated data to a json file."""
         modeller_results = dict()
         if isinstance(d, elaspic_database.UniprotDomain):
             unique_id = d.uniprot_domain_id
@@ -581,7 +579,7 @@ class _PrepareModel:
                 protein_ids, protein_domain_defs, protein_sequences):
             #
             sequence_id = '{}.{}'.format(protein_id, protein_domain_def)
-            domain_def = helper.decode_domain_def(
+            domain_def = structure_tools.decode_domain_def(
                 protein_domain_def, merge=True, return_string=False)
             seqrecord = SeqRecord(
                 id=sequence_id,
@@ -713,6 +711,12 @@ class _PrepareMutation:
 
     def run(self):
         d = self.d
+        _domain_tables = (
+            elaspic_database_tables.UniprotDomain,
+            elaspic_database_tables.UniprotDomainPair
+        )
+        assert isinstance(d, _domain_tables)
+
         mut_data = self.get_mutation_data()
 
         # Sequence features
@@ -783,10 +787,14 @@ class _PrepareMutation:
             self.mut.contact_distance_mut = results['contact_distance_mut']
 
         # Machine learning
-        pred = elaspic_predictor.Predictor()
+        if isinstance(d, elaspic_database_tables.UniprotDomain):
+            pred = elaspic_predictor.CorePredictor()
+        else:
+            pred = elaspic_predictor.InterfacePredictor()
+        pred.load(CACHE_DIR)
         row_idx = 0
         df = self.get_mutation_features(d, self.mut, row_idx=row_idx)
-        self.mut.ddg = pred.score(df, mut_data.core_or_interface)
+        self.mut.ddg = pred.score(df)[0]
         logger.debug('Predicted ddg: {}'.format(self.mut.ddg))
         df.loc[row_idx, 'ddg'] = self.mut.ddg
         # df.to_json()  # this seems to cause segfaults!?
@@ -802,7 +810,7 @@ class _PrepareMutation:
             logger.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
             logger.debug('model_domain_def: {}'.format(d.template.model.model_domain_def))
             domain_start, domain_end = (
-                helper.decode_domain_def(d.template.model.model_domain_def)
+                structure_tools.decode_domain_def(d.template.model.model_domain_def)
             )
             mutation_idx = 0
             core_or_interface = 'core'
@@ -826,7 +834,7 @@ class _PrepareMutation:
                     mutation_pos in interacting_aa_1):
                 logger.debug('Mutation is inside the first domain.')
                 logger.debug('model_domain_def: {}'.format(d.template.model.model_domain_def_1))
-                domain_start, domain_end = helper.decode_domain_def(
+                domain_start, domain_end = structure_tools.decode_domain_def(
                     d.template.model.model_domain_def_1)
                 if domain_start is None:
                     domain_start = 1
@@ -839,7 +847,7 @@ class _PrepareMutation:
                     mutation_pos in interacting_aa_2):
                 logger.debug('Mutation is inside the second domain.')
                 logger.debug('model_domain_def: {}'.format(d.template.model.model_domain_def_2))
-                domain_start, domain_end = helper.decode_domain_def(
+                domain_start, domain_end = structure_tools.decode_domain_def(
                     d.template.model.model_domain_def_2)
                 mutation_idx = 1
                 core_or_interface = 'interface'
@@ -888,9 +896,7 @@ class _PrepareMutation:
         )
 
     def get_mutation_features(self, d, mut, row_idx=0):
-        """
-        Returns a dataframe that contains all features for the given mutation that are relevant
-        for machine learning.
+        """Return a DataFrame containing features relevant for machine learning.
 
         Parameters
         ----------
@@ -938,13 +944,13 @@ class _PrepareMutation:
                 'clan_name_1': d.uniprot_domain_1.pfam_clan,
                 'clan_name_2': d.uniprot_domain_2.pfam_clan,
                 # Feature columns
-                'alignment_identity': d.template.identical_1 + d.template.identical_2,
-                'identical_1': d.template.identical_1,
-                'identical_2': d.template.identical_2,
+                'alignment_identity': (d.template.identical_1 + d.template.identical_2) / 2,
+                'alignment_coverage': (d.template.coverage_1 + d.template.coverage_2) / 2,
+                'alignment_score': (d.template.score_1 + d.template.score_2) / 2,
+                #
                 'interface_area_hydrophobic': d.template.model.interface_area_hydrophobic,
                 'interface_area_hydrophilic': d.template.model.interface_area_hydrophilic,
                 'interface_area_total': d.template.model.interface_area_total,
-                'score_total': d.template.score_total,
             })
 
         logger.debug('feature_dict: {}'.format(feature_dict))
@@ -992,7 +998,6 @@ class _PrepareMutation:
 PrepareMutation = execute_and_remember(_PrepareMutation)
 
 
-# %%
 def get_unique_id(d):
     if isinstance(d, elaspic_database_tables.UniprotDomain):
         return ('uniprot_domain_id', d.uniprot_domain_id)

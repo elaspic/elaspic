@@ -129,9 +129,10 @@ class Sequence:
         result = dict(
             protein_id=self.protein_id,
             sequence=self.sequence,
-            sequence_file=self.sequence_file,
+            sequence_file=op.relpath(self.sequence_file, conf.CONFIGS['unique_temp_dir']),
             provean_supset_exists=self.provean_supset_exists,
-            provean_supset_file=self.provean_supset_file,
+            provean_supset_file=op.relpath(
+                self.provean_supset_file, conf.CONFIGS['unique_temp_dir']),
             provean_supset_length=self.provean_supset_length,
             mutations=self.mutations,
         )

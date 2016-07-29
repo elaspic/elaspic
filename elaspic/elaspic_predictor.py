@@ -4,8 +4,9 @@ import logging
 import json
 
 import pandas as pd
+import sklearn.ensemble
 
-from . import conf, call_foldx, DATA_DIR
+from . import call_foldx
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ FEATURE_COLUMNS_INTERFACE = (
 )
 
 
-def format_mutation_features(feature_df, core_or_interface):
+def format_mutation_features(df):
     """.
 
     Converts columns containing comma-separated lists of FoldX features and physicochemical
@@ -91,11 +92,6 @@ def format_mutation_features(feature_df, core_or_interface):
     feature_df : DataFrame
         A pandas DataFrame containing a subset of rows from the :ref:`uniprot_domain_mutation`
         or the :ref:`uniprot_domain_pair_mutation` tables.
-    core_or_interface : int or str
-        If 0 or 'core', the `feature_df` DataFrame contains columns from the
-        :ref:`uniprot_domain_mutation` table.
-        If 1 or 'interface, the feature_df DataFrame contains columns from the
-        :ref:`uniprot_domain_pair_mutation` table.
 
     Returns
     -------
@@ -104,67 +100,69 @@ def format_mutation_features(feature_df, core_or_interface):
         of features converted to columns containing a single feature each.
 
     """
-    feature_df = feature_df.copy()
-    if core_or_interface in [False, 0, 'core']:
-        foldx_column_name = 'stability_energy'
-        foldx_feature_names_wt = call_foldx.names_stability_wt
-        foldx_feature_names_mut = call_foldx.names_stability_mut
-    elif core_or_interface in [True, 1, 'interface']:
+    df = df.copy()
+    if 'analyse_complex_energy_wt' in df.columns:
         foldx_column_name = 'analyse_complex_energy'
         foldx_feature_names_wt = call_foldx.names_stability_complex_wt
         foldx_feature_names_mut = call_foldx.names_stability_complex_mut
+    else:
+        foldx_column_name = 'stability_energy'
+        foldx_feature_names_wt = call_foldx.names_stability_wt
+        foldx_feature_names_mut = call_foldx.names_stability_mut
 
     # Drop rows that have missing FoldX information
     # (should not happen when callced from inside the pipeline because we have only one column)
-    # feature_df = feature_df.dropna(subset=[foldx_column_name + '_wt', foldx_column_name + '_mut'])
+    # feature_df = feature_df.dropna(
+    #   subset=[foldx_column_name + '_wt', foldx_column_name + '_mut'])
 
     # FoldX output
     for column_index, column_name in enumerate(foldx_feature_names_wt):
-        feature_df[column_name] = feature_df[foldx_column_name + '_wt'].apply(
+        df[column_name] = df[foldx_column_name + '_wt'].apply(
             lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else x)
-    del feature_df[foldx_column_name + '_wt']
+    del df[foldx_column_name + '_wt']
 
     for column_index, column_name in enumerate(foldx_feature_names_mut):
-        feature_df[column_name] = feature_df[foldx_column_name + '_mut'].apply(
+        df[column_name] = df[foldx_column_name + '_mut'].apply(
             lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else x)
-    del feature_df[foldx_column_name + '_mut']
+    del df[foldx_column_name + '_mut']
 
     # PhysicoChemical properties
     names_phys_chem = ['pcv_salt_equal', 'pcv_salt_opposite', 'pcv_hbond', 'pcv_vdw']
     for column_index, column_name in enumerate(names_phys_chem):
-        feature_df[column_name + '_wt'] = (
-            feature_df['physchem_wt']
+        df[column_name + '_wt'] = (
+            df['physchem_wt']
             .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
         )
-        feature_df[column_name + '_self_wt'] = (
-            feature_df['physchem_wt_ownchain']
+        df[column_name + '_self_wt'] = (
+            df['physchem_wt_ownchain']
             .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
         )
-        feature_df[column_name + '_mut'] = (
-            feature_df['physchem_mut']
+        df[column_name + '_mut'] = (
+            df['physchem_mut']
             .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
         )
-        feature_df[column_name + '_self_mut'] = (
-            feature_df['physchem_mut_ownchain']
+        df[column_name + '_self_mut'] = (
+            df['physchem_mut_ownchain']
             .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
         )
-    del feature_df['physchem_wt']
-    del feature_df['physchem_wt_ownchain']
-    del feature_df['physchem_mut']
-    del feature_df['physchem_mut_ownchain']
+    del df['physchem_wt']
+    del df['physchem_wt_ownchain']
+    del df['physchem_mut']
+    del df['physchem_mut_ownchain']
 
-    for col in feature_df.columns:
+    for col in df.columns:
         if 'secondary_structure' in col:
-            feature_df[col] = (
-                feature_df[col]
+            df[col] = (
+                df[col]
                 .apply(lambda x: secondary_structure_to_int[x] if pd.notnull(x) else x)
             )
-    return feature_df
+    return df
 
 
 def convert_features_to_differences(df, keep_mut=False):
-    """
-    Creates a new set of features (ending in `_change`) that describe the difference between values
+    """Convert `_wt` and `_mut` columns into `_wt` and `_change` columns.
+
+    Create a new set of features (ending in `_change`) that describe the difference between values
     of the wildtype (features ending in `_wt`) and mutant (features ending in `_mut`) features.
     If `keep_mut` is `False`, removes all mutant features (features ending in `_mut`).
     """
@@ -182,46 +180,80 @@ def convert_features_to_differences(df, keep_mut=False):
             column_list.append(new_column)
         else:
             column_list.append(column)
-#    new_df = pd.DataFrame(column_list).T
     new_df = pd.concat(column_list, axis=1)
     return new_df
 
 
-# %%
-class Predictor:
+def get_final_predictor(data, features, options):
+    """Train a predictor using the entire dataset."""
+    CLF = sklearn.ensemble.GradientBoostingRegressor
 
-    feature_name_conversion = {
-        'normDOPE': 'norm_dope',
-        'seq_id_avg': 'alignment_identity'
-    }
+    # Keep only recognized options
+    import inspect
+    accepted_options = inspect.getargspec(CLF)[0]
+    clf_options = {k: v for (k, v) in options.items() if k in accepted_options}
+    if clf_options != options:
+        extra_options = {k: v for (k, v) in options.items() if k not in accepted_options}
+        print("Warning, unknown options provided:\n{}".format(extra_options))
 
-    def __init__(self):
+    # Remove rows with NULLs
+    data_usable = data[features + ['ddg_exp']].dropna()
+    if len(data) != len(data_usable):
+        print('Warning, {} rows in the provided data contained null!'
+              .format(len(data) - len(data_usable)))
+    data = data_usable
 
-        def _load_data(filename):
-            if op.splitext(filename)[-1] in ['.pkl', '.pickle']:
-                with open(op.join(DATA_DIR, filename), 'rb') as ifh:
-                    return pickle.load(ifh)
-            elif op.splitext(filename)[-1] in ['.jsn', '.json']:
-                with open(op.join(DATA_DIR, filename), 'r') as ifh:
-                    return json.load(ifh)
+    # Train predictor
+    data_x = data[features].values
+    data_y = data['ddg_exp'].values
+    clf = CLF(**clf_options)
+    clf.fit(data_x, data_y)
+    return clf
 
-        self.clf_domain = _load_data('ml_clf_core_p1.pickle')
-        self.clf_domain_features = _load_data('ml_features_core_p1.json')
-        self.clf_interface = _load_data('ml_clf_interface_p1.pickle')
-        self.clf_interface_features = _load_data('ml_features_interface_p1.json')
 
-        self.clf_domain_p1 = _load_data('ml_clf_core_p1.pickle')
-        self.clf_domain_features_p1 = _load_data('ml_features_core_p1.json')
-        self.clf_interface_p1 = _load_data('ml_clf_interface_p1.pickle')
-        self.clf_interface_features_p1 = _load_data('ml_features_interface_p1.json')
+class _Predictor:
 
-    def score(self, df, core_or_interface):
-        """Predict ddG score.
+    def __init__(self, data_dir=None):
+        self.clf = None
+        self.features = None
+
+    def _assert_trained(self):
+        if self.clf is None:
+            raise Exception(
+                "You must either load or train a classifier before you can score mutations!")
+
+    def load(self, data_dir):
+        """Load predictor data from files in `data_dir`."""
+        with open(op.join(data_dir, self.clf_filename), 'rb') as ifh:
+            self.clf = pickle.load(ifh)
+        with open(op.join(data_dir, self.features_filename), 'rt') as ifh:
+            self.features = json.load(ifh)
+
+    def save(self, data_dir):
+        """Save predictor data to files in `data_dir`."""
+        self._assert_trained()
+        with open(op.join(data_dir, self.clf_filename), 'wb') as ofh:
+            pickle.dump(self.clf, ofh)
+        with open(op.join(data_dir, self.features_filename), 'wt') as ofh:
+            json.dump(self.features, ofh)
+
+    def train(self, df, options):
+        features = options['features']
+        if ',' in features:
+            features = features.split(',')
+        elif '.' in features:
+            features = features.split('.')
+
+        self.clf = get_final_predictor(df, features, options)
+        self.features = features
+
+    def score(self, df):
+        """Predict ΔΔG score.
 
         Parameters
         ----------
         df : DataFrame
-            One or more rows with all data required to predict $\Delta \Delta G$ score.
+            One or more rows with all data required to predict ΔΔG score.
             Like something that you would get when you join the appropriate rows in the database.
 
         Returns
@@ -229,23 +261,20 @@ class Predictor:
         df : Dataframe
             Same as the input dataframe, except with one additional column: `ddg`.
         """
-        if core_or_interface in ['core', 0]:
-            clf = self.clf_domain
-            clf_features = self.clf_domain_features
-        elif core_or_interface in ['interface', 1]:
-            clf = self.clf_interface
-            clf_features = self.clf_interface_features
-
-        feature_name_conversion = {
-            'normDOPE': 'norm_dope',
-            'seq_id_avg': 'alignment_identity'}
-        clf_features = [feature_name_conversion.get(x, x) for x in clf_features]
-
-        df_features = format_mutation_features(df, core_or_interface)
-        # keep mut, remove it in next step
-        df_features_asdifferences = convert_features_to_differences(df_features, True)
-        df_features_asdifferences = df_features_asdifferences[clf_features]
-
-        ddg = clf.predict(df_features_asdifferences)[0]
-
+        self._assert_trained()
+        df = format_mutation_features(df)
+        df = convert_features_to_differences(df, True)  # keep mut, remove it in next step
+        ddg = self.clf.predict(df[self.features])
         return ddg
+
+
+class CorePredictor(_Predictor):
+
+    clf_filename = 'ml_clf_core.pickle'
+    features_filename = 'ml_features_core.json'
+
+
+class InterfacePredictor(_Predictor):
+
+    clf_filename = 'ml_clf_interface.pickle'
+    features_filename = 'ml_features_interface.json'

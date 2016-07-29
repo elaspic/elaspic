@@ -2,13 +2,22 @@ import os
 import os.path as op
 import json
 import argparse
-import pickle
 import logging
 import logging.config
+import pandas as pd
 
-from elaspic import conf, helper
+from kmtools.system_tools import decompress
+from elaspic import DATA_DIR, CACHE_DIR, conf, elaspic_predictor
 
 logger = logging.getLogger(__name__)
+
+LOGGING_LEVELS = {
+    None: 'ERROR',
+    0: 'ERROR',
+    1: 'WARNING',    # -v
+    2: 'INFO',       # -vv
+    3: 'DEBUG',      # -vvv
+}
 
 
 # #################################################################################################
@@ -52,6 +61,9 @@ def elaspic(args):
                     'pdb_dir': args.pdb_dir,
                     'blast_db_dir': args.blast_db_dir,
                     'archive_dir': args.archive_dir,
+                },
+                LOGGER={
+                    'level': LOGGING_LEVELS[args.verbose],
                 })
         # Run database pipeline
         if args.uniprot_domain_pair_ids:
@@ -141,6 +153,10 @@ $ elaspic run -u P00044 -m M1A \
         help=('Folder containing precalculated ELASPIC data.'))
 
     parser.add_argument(
+        '-v', '--verbose', action='count',
+        help=('Specify verbosity level.'))
+
+    parser.add_argument(
         '-u', '--uniprot_id',
         help="The Uniprot ID of the protein that you want to mutate (e.g. 'P28223')."
              "This option relies on a local elaspic database, which has to be specified "
@@ -194,20 +210,35 @@ $ elaspic run -u P00044 -m M1A \
 # ELASPIC DATABASE
 
 def elaspic_database(args):
-    conf.read_configuration_file(args.config_file)
+    if args.config_file:
+        conf.read_configuration_file(args.config_file)
+    elif args.connection_string:
+        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+    else:
+        raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     print("Running function '{}'...".format(args.func.__name__))
 
 
 def create_database(args):
-    conf.read_configuration_file(args.config_file)
+    if args.config_file:
+        conf.read_configuration_file(args.config_file)
+    elif args.connection_string:
+        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+    else:
+        raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     from elaspic import elaspic_database
     db = elaspic_database.MyDatabase()
-    db.create_database_tables(args.clear_schema, args.keep_uniprot_sequence)
+    db.create_database_tables(args.drop_schema)
     logger.info('Done!')
 
 
 def load_data_to_database(args):
-    conf.read_configuration_file(args.config_file)
+    if args.config_file:
+        conf.read_configuration_file(args.config_file)
+    elif args.connection_string:
+        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+    else:
+        raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     from elaspic import elaspic_database
     db = elaspic_database.MyDatabase()
     args.data_folder = args.data_folder.rstrip('/')
@@ -223,7 +254,7 @@ def load_data_to_database(args):
             print("Successfully loaded data from file '{}' to table '{}'"
                   .format('{}.tsv'.format(table.name), table.name))
         elif '{}.tsv.gz'.format(table.name) in filenames:
-            with helper.decompress(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
+            with decompress(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
                 db.copy_table_to_db(table.name, args.data_folder.rstrip('/'))
             print("Successfully loaded data from file '{}' to table '{}'"
                   .format('{}.tsv.gz'.format(table.name), table.name))
@@ -234,10 +265,15 @@ def test_database(args):
 
 
 def delete_database(args):
-    conf.read_configuration_file(args.config_file)
+    if args.config_file:
+        conf.read_configuration_file(args.config_file)
+    elif args.connection_string:
+        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+    else:
+        raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     from elaspic import elaspic_database
     db = elaspic_database.MyDatabase()
-    db.delete_database_tables(args.drop_schema, args.keep_uniprot_sequence)
+    db.delete_database_tables(args.drop_schema, args.drop_uniprot_sequence)
     logger.info('Done!')
 
 
@@ -259,8 +295,11 @@ Examples:
     )
 
     parser.add_argument(
-        '-c', '--config_file', required=True,
-        help='ELASPIC configuration file')
+        '-c', '--config_file', nargs='?', type=str,
+        help='ELASPIC configuration file.')
+    parser.add_argument(
+        '--connection_string', nargs='?', type=str,
+        help=('SQLAlchemy formatted string describing the connection to the database.'))
     subparsers = parser.add_subparsers(
         title='tasks',
         help='Maintenance tasks to perform')
@@ -271,14 +310,10 @@ Examples:
         name='create',
         description='Create an empty database')
     parser_create.add_argument(
-        '--clear_schema', type=bool, default=False,
+        '--drop_schema', action='store_true', default=False,
         help=('Whether or not to first drop all existing tables from the database schema. \n'
               'WARNING: Choosing `True` will remove all existing data from the schema specified '
               'in your configuration file!!!'))
-    parser_create.add_argument(
-        '--keep_uniprot_sequence', type=bool, default=True,
-        help="Whether or not to leave the 'uniprot_sequence' table untouched when clearing "
-             "the schema. Only applicable if '--clear_schema' is set to 'True'.")
     parser_create.set_defaults(func=create_database)
 
     # Load data to the database
@@ -321,77 +356,37 @@ Examples:
         name='delete',
         description='Delete the database specified in the configuration file.')
     parser_delete.add_argument(
-        '--drop_schema', type=bool, default=False,
-        help=('Whether or not to drop the schema that contains the relevant tables. \n'
-              'WARNING: Choosing ``True`` will remove all existing data from the schema specified '
+        '--drop_schema', action='store_true', default=False,
+        help=('Whether or not to first drop all existing tables from the database schema. \n'
+              'WARNING: Choosing `True` will remove all existing data from the schema specified '
               'in your configuration file!!!'))
     parser_delete.add_argument(
-        '--keep_uniprot_sequence', type=bool, default=True,
-        help="Whether or not to leave the ``uniprot_sequence`` table untouched "
-             "when clearing the schema.\n"
-             "Only applicable if ``--drop_schema`` is set to ``True``.")
+        '--drop_uniprot_sequence', action='store_true', default=False,
+        help="Whether or not to leave the 'uniprot_sequence' table untouched when clearing "
+             "the schema. Only applicable if '--clear_schema' is set to 'True'.")
     parser_delete.set_defaults(func=delete_database)
 
 
 def elaspic_train(args):
-    import pandas as pd
-    from elaspic import DATA_DIR, machine_learning
+    # Core predictor
+    core_training_set = pd.read_csv(op.join(DATA_DIR, 'core_training_set.tsv.gz'), sep='\t')
+    with open(op.join(DATA_DIR, 'core_options.json'), 'rt') as ifh:
+        core_options = json.load(ifh)
 
-    # Load data
-    with open(op.join(DATA_DIR, 'core_options_p0.json')) as ifh:
-        core_options_p0 = json.load(ifh)
-    with open(op.join(DATA_DIR, 'core_options_p1.json')) as ifh:
-        core_options_p1 = json.load(ifh)
-    with open(op.join(DATA_DIR, 'interface_options_p0.json')) as ifh:
-        interface_options_p0 = json.load(ifh)
-    with open(op.join(DATA_DIR, 'interface_options_p1.json')) as ifh:
-        interface_options_p1 = json.load(ifh)
+    core_predictor = elaspic_predictor.CorePredictor()
+    core_predictor.train(df=core_training_set, options=core_options)
+    core_predictor.save(data_dir=CACHE_DIR)
 
-    core_training_set = (
-        pd.read_csv(
-            op.join(DATA_DIR, 'core_training_set.tsv.gz'), sep='\t')
-    )
-    interface_training_set = (
-        pd.read_csv(
-            op.join(DATA_DIR, 'interface_training_set.tsv.gz'), sep='\t')
-    )
+    # Interface predictor
 
-    # Train predictors
-    core_clf_p0 = (
-        machine_learning.get_final_predictor(
-            core_training_set, core_options_p0['features'], core_options_p0)
-    )
-    core_clf_p1 = (
-        machine_learning.get_final_predictor(
-            core_training_set, core_options_p1['features'], core_options_p1)
-    )
-    interface_clf_p0 = (
-        machine_learning.get_final_predictor(
-            interface_training_set, interface_options_p0['features'], interface_options_p0)
-    )
-    interface_clf_p1 = (
-        machine_learning.get_final_predictor(
-            interface_training_set, interface_options_p1['features'], interface_options_p1)
-    )
+    interface_training_set = pd.read_csv(
+        op.join(DATA_DIR, 'interface_training_set.tsv.gz'), sep='\t')
+    with open(op.join(DATA_DIR, 'interface_options.json')) as ifh:
+        interface_options = json.load(ifh)
 
-    # Save predictors and features
-    with open(op.join(DATA_DIR, 'ml_features_core_p0.json'), 'w') as ofh:
-        json.dump(core_options_p0['features'], ofh)
-    with open(op.join(DATA_DIR, 'ml_features_core_p1.json'), 'w') as ofh:
-        json.dump(core_options_p1['features'], ofh)
-    with open(op.join(DATA_DIR, 'ml_features_interface_p0.json'), 'w') as ofh:
-        json.dump(interface_options_p0['features'], ofh)
-    with open(op.join(DATA_DIR, 'ml_features_interface_p1.json'), 'w') as ofh:
-        json.dump(interface_options_p1['features'], ofh)
-
-    with open(op.join(DATA_DIR, 'ml_clf_core_p0.pickle'), 'wb') as ofh:
-        pickle.dump(core_clf_p0, ofh)
-    with open(op.join(DATA_DIR, 'ml_clf_core_p1.pickle'), 'wb') as ofh:
-        pickle.dump(core_clf_p1, ofh)
-    with open(op.join(DATA_DIR, 'ml_clf_interface_p0.pickle'), 'wb') as ofh:
-        pickle.dump(interface_clf_p0, ofh)
-    with open(op.join(DATA_DIR, 'ml_clf_interface_p1.pickle'), 'wb') as ofh:
-        pickle.dump(interface_clf_p1, ofh)
+    interface_predictor = elaspic_predictor.InterfacePredictor()
+    interface_predictor.train(df=interface_training_set, options=interface_options)
+    interface_predictor.save(data_dir=CACHE_DIR)
 
 
 def configure_train_parser(sub_parsers):

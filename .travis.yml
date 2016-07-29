@@ -25,11 +25,12 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda config --add channels ostrokach
   - conda config --add channels https://conda.binstar.org/t/$ANACONDA_TOKEN/ostrokach
+  - conda config --add channels kimlab
   - conda config --add channels defaults
   - conda config --add channels conda-forge
-  - conda config --add channels omnia
   - conda config --add channels bioconda
   - conda config --add channels salilab
+  - conda config --add channels omnia
   - conda info -a
   # Install packages
   - conda update -q conda

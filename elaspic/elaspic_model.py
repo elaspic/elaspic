@@ -3,16 +3,14 @@ import os.path as op
 import logging
 import shutil
 import json
-
 import subprocess
-
 from Bio import SeqIO, AlignIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.PDB import PDBIO
-
+from kmtools.system_tools import switch_paths
 from . import (
-    conf, helper, errors, structure_tools, structure_analysis,
+    conf, errors, structure_tools, structure_analysis,
     call_modeller, call_tcoffee, call_foldx
 )
 
@@ -227,7 +225,9 @@ class Model:
         )
 
         # Save additional alignment info
-        self.modeller_results['alignment_files'] = alignment_files
+        self.modeller_results['alignment_files'] = [
+            op.relpath(f, conf.CONFIGS['unique_temp_dir'])
+            for f in alignment_files]
         self.modeller_results['domain_def_offsets'] = domain_def_offsets
         self.modeller_results['model_domain_defs'] = model_domain_defs
         self.modeller_results['alignment_stats'] = alignment_stats
@@ -725,7 +725,7 @@ def run_modeller(
     modeller = call_modeller.Modeller(
         [pir_alignment_file], target_id, template_id, conf.CONFIGS['unique_temp_dir'])
 
-    with helper.switch_paths(conf.CONFIGS['modeller_dir']):
+    with switch_paths(conf.CONFIGS['modeller_dir']):
         norm_dope, pdb_filename = modeller.run()
 
     raw_model_file = op.join(conf.CONFIGS['modeller_dir'], pdb_filename)
@@ -743,9 +743,9 @@ def run_modeller(
     io.save(model_file)
 
     results = {
-        'model_file': model_file,
-        'raw_model_file': raw_model_file,
+        'model_file': op.relpath(model_file, conf.CONFIGS['unique_temp_dir']),
+        'raw_model_file': op.relpath(raw_model_file, conf.CONFIGS['unique_temp_dir']),
         'norm_dope': norm_dope,
-        'pir_alignment_file': pir_alignment_file,
+        'pir_alignment_file': op.relpath(pir_alignment_file, conf.CONFIGS['unique_temp_dir']),
     }
     return results

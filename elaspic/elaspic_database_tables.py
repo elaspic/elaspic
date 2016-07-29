@@ -8,7 +8,7 @@ from . import conf
 # Default sizes for creating varchar fields
 SHORT = 15
 MEDIUM = 255
-LONG = 5461
+LONG = 8192
 
 naming_convention = {
     "ix": 'ix_%(column_0_label)s',
@@ -98,7 +98,7 @@ class Domain(Base):
     """
 
     __tablename__ = 'domain'
-    if conf.CONFIGS.get('db_type') != 'mysql':
+    if conf.CONFIGS.get('db_type') == 'mysql':
         # MySQL can't handle long indexes
         _indexes = [
             ['pdb_id', 'pdb_chain'],
@@ -375,8 +375,6 @@ class UniprotDomain(Base):
 
     __tablename__ = 'uniprot_domain'
 
-    IS_TRAINING_SCHEMA = 'training' in conf.CONFIGS.get('db_schema', '')
-
     uniprot_domain_id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = sa.Column(
         None, sa.ForeignKey(
@@ -391,7 +389,7 @@ class UniprotDomain(Base):
     alignment_subdefs = sa.Column(sa.Text)
     path_to_data = sa.Column(sa.Text)
 
-    if IS_TRAINING_SCHEMA:
+    if 'training' in conf.CONFIGS.get('db_schema', ''):
         # The database used for storing training data has an extra column `max_seq_identity`,
         # because we want to make homology models at different sequence identities.
         max_seq_identity = sa.Column(sa.Integer, index=True)
@@ -419,8 +417,6 @@ class UniprotDomain(Base):
 class UniprotDomainPair(Base):
     """Potentially-interacting pairs of domains for proteins that are known to interact.
 
-    According to `Hippie`_, `IRefIndex`_, and `Rolland et al. 2014`_.
-
     Columns:
       uniprot_domain_pair_id
         Unique id identifying each domain-domain interaction.
@@ -443,20 +439,9 @@ class UniprotDomainPair(Base):
       path_to_data
         Location for storing homology models, mutation results, and all other data that is relevant
         to this domain pair. This path is prefixed by :term:`archive_dir`.
-
-    .. _Hippie: http://cbdm.mdc-berlin.de/tools/hippie/
-    .. _IRefIndex: http://irefindex.org
-    .. _Rolland et al. 2014: http://dx.doi.org/10.1016/j.cell.2014.10.050
     """
 
     __tablename__ = 'uniprot_domain_pair'
-    _indexes = [
-        (['uniprot_id_1', 'uniprot_id_2']),
-        (['uniprot_id_2', 'uniprot_id_1']),
-        (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {'unique': True}),
-        (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {'unique': True}),
-    ]
-    __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     uniprot_domain_pair_id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
     uniprot_domain_id_1 = sa.Column(
@@ -475,6 +460,25 @@ class UniprotDomainPair(Base):
     # TODO: Move these columns higher up the next time creating a database
     uniprot_id_1 = sa.Column(sa.String(MEDIUM))
     uniprot_id_2 = sa.Column(sa.String(MEDIUM))
+
+    if 'training' in conf.CONFIGS.get('db_schema', ''):
+        # The database used for storing training data has an extra column `max_seq_identity`,
+        # because we want to make homology models at different sequence identities.
+        max_seq_identity = sa.Column(sa.Integer, index=True)
+        _indexes = [
+            (['uniprot_id_1', 'uniprot_id_2', 'max_seq_identity']),
+            (['uniprot_id_2', 'uniprot_id_1', 'max_seq_identity']),
+            (['uniprot_domain_id_1', 'uniprot_domain_id_2', 'max_seq_identity'], {'unique': True}),
+            (['uniprot_domain_id_2', 'uniprot_domain_id_1', 'max_seq_identity'], {'unique': True}),
+        ]
+    else:
+        _indexes = [
+            (['uniprot_id_1', 'uniprot_id_2']),
+            (['uniprot_id_2', 'uniprot_id_1']),
+            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {'unique': True}),
+            (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {'unique': True}),
+        ]
+    __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     # Relationships
     uniprot_domain_1 = sa.orm.relationship(

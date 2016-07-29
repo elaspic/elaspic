@@ -1,6 +1,6 @@
 # ELASPIC
 
-[![anaconda](https://anaconda.org/ostrokach/elaspic/badges/version.svg)](https://anaconda.org/ostrokach/elaspic)
+[![anaconda](https://anaconda.org/ostrokach/elaspic/badges/version.svg?style=flat-square)](https://anaconda.org/ostrokach/elaspic)
 [![docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square&?version=latest)](http://ostrokach.github.io/elaspic)
 [![travis](https://img.shields.io/travis/ostrokach/elaspic.svg?style=flat-square)](https://travis-ci.org/ostrokach/elaspic)
 [![codecov](https://img.shields.io/codecov/c/github/ostrokach/elaspic.svg?style=flat-square)](https://codecov.io/gh/ostrokach/elaspic)

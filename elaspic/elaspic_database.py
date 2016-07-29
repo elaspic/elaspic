@@ -1,17 +1,14 @@
 import os
 import os.path as op
-import re
 import subprocess
 import datetime
 import six
 import logging
 import shutil
-
 from contextlib import contextmanager
-
 import pandas as pd
 import sqlalchemy as sa
-
+from kmtools.db_tools import parse_connection_string, make_connection_string
 from . import helper, errors, conf
 from .elaspic_database_tables import (
     Base,
@@ -119,7 +116,31 @@ class MyDatabase(object):
             session.expunge_all()
             session.close()
 
-    def create_database_tables(self, clear_schema=False, keep_uniprot_sequence=True):
+    def create_database_schema(self, db_schema):
+        """Create ELASPIC database schema."""
+        # Create engine without a default schema
+        engine = sa.create_engine(
+            make_connection_string(**{
+                **parse_connection_string(conf.CONFIGS['connection_string']),
+                'db_schema': '',
+            }))
+        sql_command = "CREATE SCHEMA IF NOT EXISTS `{}`;".format(db_schema)
+        logger.debug("sql_command: '{}'".format(sql_command))
+        engine.execute(sql_command)
+
+    def drop_database_schema(self, db_schema):
+        """Drop ELASPIC database schema."""
+        # Create engine without a default schema
+        engine = sa.create_engine(
+            make_connection_string(**{
+                **parse_connection_string(conf.CONFIGS['connection_string']),
+                'db_schema': '',
+            }))
+        sql_command = "DROP SCHEMA IF EXISTS {};".format(db_schema)
+        logger.debug("sql_command: '{}'".format(sql_command))
+        engine.execute(sql_command)
+
+    def create_database_tables(self, drop_schema=False):
         """Create a new database in the schema specified by the ``schema_version`` global variable.
 
         If ``clear_schema == True``, remove all the tables in the schema first.
@@ -137,34 +158,17 @@ class MyDatabase(object):
             Whether or not to keep the `uniprot_sequence` table.
             Only relevant if `clear_schema` is `True`.
         """
-        #
-        if clear_schema:
-            self.delete_database_tables(
-                drop_schema=False, keep_uniprot_sequence=keep_uniprot_sequence)
-            logger.debug('Database schema was cleared successfully.')
+        if drop_schema:
+            self.drop_database_schema(conf.CONFIGS['db_schema'])
+
+        self.create_database_schema(conf.CONFIGS['db_schema'])
 
         # Create all tables, creating schema as neccessary
         for table in Base.metadata.sorted_tables:
-            try:
-                table.create(self.engine, checkfirst=True)
-            except (sa.exc.OperationalError, sa.exc.ProgrammingError) as e:
-                logger.error(str(e))
-                if re.search('schema .* does not exist', str(e)):
-                    missing_schema = str(e)[
-                        str(e).find('schema "') + 8:str(e).find('" does not exist')]
-                elif 'Unknown database ' in str(e):
-                    missing_schema = str(e)[
-                        str(e).find("Unknown database '") + 18:str(e).find("'\")")]
-                else:
-                    raise e
-                sql_command = 'create schema {};'.format(missing_schema)
-                logger.warning(
-                    "Creating missing schema with system command: '{}'".format(sql_command))
-                self.engine.execute(sql_command)
-                table.create(self.engine, checkfirst=True)
+            table.create(self.engine, checkfirst=True)
         logger.debug('Database tables were created successfully.')
 
-    def delete_database_tables(self, drop_schema=False, keep_uniprot_sequence=True):
+    def delete_database_tables(self, drop_schema=False, drop_uniprot_sequence=False):
         """.
 
         Parameters
@@ -174,30 +178,24 @@ class MyDatabase(object):
         keep_uniprot_sequence : bool
             Wheter or not to keep the table (and schema) containing uniprot sequences.
         """
-        if conf.CONFIGS['db_type'] == 'sqlite':
-            os.remove(conf.CONFIGS['db_schema'])
+        if drop_schema:
+            if conf.CONFIGS['db_type'] == 'sqlite':
+                os.remove(conf.CONFIGS['db_schema'])
+            else:
+                self.engine.execute('drop schema {db_schema};'.format(**conf.CONFIGS))
             logger.info(
-                "Successfully removed the sqlite database file: {db_schema}"
+                "Successfully removed database schema: {db_schema}"
                 .format(**conf.CONFIGS))
             return
 
         # Remove tables one by one
         for table in reversed(Base.metadata.sorted_tables):
-            if table.name != 'uniprot_sequence':
-                conf.CONFIGS['table_name'] = table.name
-                self.engine.execute('drop table {db_schema}.{table_name};'.format(**conf.CONFIGS))
-            elif not keep_uniprot_sequence:
+            if table.name != 'uniprot_sequence' or drop_uniprot_sequence:
                 conf.CONFIGS['table_name'] = table.name
                 self.engine.execute(
-                    'drop table {db_schema}.{table_name};'.format(**conf.CONFIGS))
-
-        # Remove the database schema
-        if drop_schema and not keep_uniprot_sequence:
-            self.engine.execute('drop schema {db_schema};'.format(**conf.CONFIGS))
-
-        logger.info(
-            "Successfully removed the {db_type} database schema: {db_schema}"
-            .format(**conf.CONFIGS))
+                    'drop table if exists {db_schema}.{table_name};'.format(**conf.CONFIGS))
+                self.engine.execute(
+                    'drop table if exists {db_schema}.{table_name};'.format(**conf.CONFIGS))
 
     # %%
     mysql_load_table_template = (
@@ -468,10 +466,8 @@ class MyDatabase(object):
                 path_to_alignment_2 = op.join(
                     tmp_save_path,
                     *d.template.model.alignment_filename_2.split('/')[:-1])
-                subprocess.check_call(
-                    "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_1), shell=True)
-                subprocess.check_call(
-                    "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment_2), shell=True)
+                os.makedirs(path_to_alignment_1, exist_ok=True)
+                os.makedirs(path_to_alignment_2, exist_ok=True)
                 shutil.copyfile(
                     op.join(archive_save_path, d.template.model.alignment_filename_1),
                     op.join(tmp_save_path, d.template.model.alignment_filename_1))
@@ -514,13 +510,13 @@ class MyDatabase(object):
 
         try:
             # archive_type != '7zip' or extraction failed
-            subprocess.check_call(
-                "umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-                    op.dirname(op.join(
-                        conf.CONFIGS['archive_temp_dir'],
-                        get_uniprot_base_path(ud),
-                        ud.uniprot_sequence.provean.provean_supset_filename))),
-                shell=True)
+            os.makedirs(
+                op.dirname(op.join(
+                    conf.CONFIGS['archive_temp_dir'],
+                    get_uniprot_base_path(ud),
+                    ud.uniprot_sequence.provean.provean_supset_filename)),
+                exist_ok=True
+            )
             shutil.copyfile(
                 op.join(
                     archive_dir,
@@ -694,14 +690,15 @@ class MyDatabase(object):
         logger.debug(
             'Moving provean supset to the output folder: {}'
             .format(op.join(archive_dir, path_to_data)))
-        subprocess.check_call("umask ugo=rwx; mkdir -m 777 -p '{}'".format(
-            op.join(archive_dir, path_to_data)), shell=True)
-        shutil.copyfile(
+        helper.makedirs(op.join(archive_dir, path_to_data), mode=0o777)
+        helper.copyfile(
             provean_supset_file,
-            op.join(archive_dir, path_to_data, provean.provean_supset_filename))
-        shutil.copyfile(
+            op.join(archive_dir, path_to_data, provean.provean_supset_filename),
+            mode=0o666)
+        helper.copyfile(
             provean_supset_file + '.fasta',
-            op.join(archive_dir, path_to_data, provean.provean_supset_filename + '.fasta'))
+            op.join(archive_dir, path_to_data, provean.provean_supset_filename + '.fasta'),
+            mode=0o666)
         self.merge_row(provean)
 
     def merge_model(self, d, files_dict={}):
@@ -710,39 +707,31 @@ class MyDatabase(object):
         if files_dict:
             archive_dir = conf.CONFIGS['archive_dir']
             archive_save_path = op.join(archive_dir, d.path_to_data)
-            # tmp_save_path = configs['archive_temp_dir'] + d.path_to_data
-            subprocess.check_call(
-                "umask ugo=rwx; mkdir -m 777 -p '{}'".format(archive_save_path),
-                shell=True)
-            # Don't need to dump template. Templates are precalculated
-            # pickle_dump(
-            #   sa_ext_serializer.dumps(d.template), archive_save_path + 'template.pickle')
-            # pickle_dump(sa_ext_serializer.dumps(
-            #   d.template.model), archive_save_path + 'model.pickle')
-            # Save the modelled structure
+            helper.makedirs(archive_save_path, mode=0o777)
             if d.template.model.model_filename is not None:
                 # Save alignments
                 if isinstance(d.template.model, UniprotDomainModel):
-                    shutil.copyfile(
+                    helper.copyfile(
                         files_dict['alignment_files'][0],
-                        op.join(archive_save_path, d.template.model.alignment_filename)
+                        op.join(archive_save_path, d.template.model.alignment_filename),
+                        mode=0o666
                     )
                 elif isinstance(d.template.model, UniprotDomainPairModel):
-                    shutil.copyfile(
+                    helper.copyfile(
                         files_dict['alignment_files'][0],
-                        op.join(archive_save_path, d.template.model.alignment_filename_1)
+                        op.join(archive_save_path, d.template.model.alignment_filename_1),
+                        mode=0o666
                     )
-                    shutil.copyfile(
+                    helper.copyfile(
                         files_dict['alignment_files'][1],
-                        op.join(archive_save_path, d.template.model.alignment_filename_2)
+                        op.join(archive_save_path, d.template.model.alignment_filename_2),
+                        mode=0o666
                     )
-                # Save the model
-                subprocess.check_call(
-                    "umask ugo=rwx; mkdir -m 777 -p '{}'"
-                    .format(archive_save_path), shell=True)
-                shutil.copyfile(
+                # Save the modelled structure
+                helper.copyfile(
                     files_dict['model_file'],
-                    op.join(archive_save_path, d.template.model.model_filename)
+                    op.join(archive_save_path, d.template.model.model_filename),
+                    mode=0o666
                 )
         self.merge_row(d.template.model)
 
@@ -755,19 +744,18 @@ class MyDatabase(object):
             archive_save_dir = op.join(conf.CONFIGS['archive_dir'], path_to_data)
             # Save Foldx structures
             if mut.model_filename_wt and mut.model_filename_mut:
-                # os.makedirs(op.dirname(op.join(archive_save_dir, mut.model_filename_wt)))
-                subprocess.check_call(
-                    "umask ugo=rwx; mkdir -m 777 -p '{}'"
-                    .format(op.dirname(op.join(archive_save_dir, mut.model_filename_wt))),
-                    shell=True
-                )
-                shutil.copyfile(
+                helper.makedirs(
+                    op.dirname(op.join(archive_save_dir, mut.model_filename_wt)),
+                    mode=0o777)
+                helper.copyfile(
                     op.join(archive_temp_save_dir, mut.model_filename_wt),
-                    op.join(archive_save_dir, mut.model_filename_wt)
+                    op.join(archive_save_dir, mut.model_filename_wt),
+                    mode=0o666
                 )
-                shutil.copyfile(
+                helper.copyfile(
                     op.join(archive_temp_save_dir, mut.model_filename_mut),
-                    op.join(archive_save_dir, mut.model_filename_mut)
+                    op.join(archive_save_dir, mut.model_filename_mut),
+                    mode=0o666
                 )
         self.merge_row(mut)
 

@@ -14,7 +14,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 from . import (
-    conf, helper, errors, structure_tools, structure_analysis, elaspic_sequence,
+    CACHE_DIR, conf, helper, errors, structure_tools, structure_analysis, elaspic_sequence,
     elaspic_model, elaspic_predictor
 )
 from .pipeline import Pipeline, execute_and_remember
@@ -128,6 +128,7 @@ class StandalonePipeline(Pipeline):
                     continue
             if not self.mutations:
                 raise errors.MutationMismatchError()
+        logger.debug('parsed mutations: {}'.format(self.mutations))
 
         if len(self.sp.chain_ids) != len(self.seqrecords):
             logger.warning(
@@ -160,7 +161,7 @@ class StandalonePipeline(Pipeline):
                 resnum_suffix = (
                     ''.join(n for n in mutation_residue[1:-1] if not n.isdigit()).upper()
                 )
-                mutation_id = (' ', resnum, resnum_suffix if resnum_suffix else ' ')
+                mutation_id = (' ', resnum, resnum_suffix or ' ')
                 chain_aa_residues = (
                     structure_tools.get_aa_residues(self.sp.structure[0][mutation_chain])
                 )
@@ -487,7 +488,9 @@ class PrepareMutation:
              self.model.modeller_results['alignment_stats'][self.mutation_idx]
         )
         features['alignment_identity'] = features['alignment_identity'] * 100
+        assert features['alignment_identity'] > 1 and features['alignment_identity'] < 101
         features['alignment_coverage'] = features['alignment_coverage'] * 100
+        assert features['alignment_coverage'] > 1 and features['alignment_coverage'] < 101
 
         features['model_file_wt'] = results['model_file_wt']
         features['model_file_mut'] = results['model_file_mut']
@@ -531,8 +534,12 @@ class PrepareMutation:
         logger.debug('feature_dict: {}'.format(features))
         feature_df = pd.DataFrame(features, index=[0])
 
-        pred = elaspic_predictor.Predictor()
-        features['ddg'] = pred.score(feature_df, len(self.model.sequence_seqrecords) > 1)
+        if len(self.model.sequence_seqrecords) == 1:
+            pred = elaspic_predictor.CorePredictor()
+        else:
+            pred = elaspic_predictor.InterfacePredictor()
+        pred.load(CACHE_DIR)
+        features['ddg'] = pred.score(feature_df)[0]
         logger.debug('Predicted ddG: {}'.format(features['ddg']))
 
         self.mutation_features = features

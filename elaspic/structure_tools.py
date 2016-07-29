@@ -4,16 +4,11 @@ import string
 import logging
 import urllib.request
 import re
-import string
 from functools import wraps
 from tempfile import NamedTemporaryFile
 from collections import defaultdict, OrderedDict
-
 import six
-from fastcache import clru_cache
-
 import numpy as np
-
 import Bio
 from Bio.PDB import PDBIO, Select, NeighborSearch
 from Bio.PDB.PDBParser import PDBParser
@@ -59,9 +54,7 @@ class MMCIFParserMod(MMCIFParser):
         self.temp_dir = temp_dir
 
     def get_structure(self, structure_id, gzip_fh):
-        """
-        Altered `get_structure` method which accepts gzip file handles as input.
-        """
+        """Altered `get_structure` method which accepts gzip file handles as input."""
         with NamedTemporaryFile(mode='w', dir=self.temp_dir) as temp_fh:
             temp_fh.writelines(gzip_fh.readlines())
             temp_fh.flush()
@@ -73,13 +66,14 @@ def get_pdb_id(pdb_file):
     pdb_id = op.basename(pdb_file)
     for ext in ['\.gz$', '\.pdb$', '\.ent$', '\.cif$', '^pdb']:
         pdb_id = re.sub(ext, '', pdb_id)
+    if pdb_id.startswith('ent') and len(pdb_id) > 4:
+        pdb_id = pdb_id[3:]
     pdb_id = pdb_id.upper()
     return pdb_id.upper()
 
 
 def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
-    """Get PDB file from a local mirror of the PDB database.
-    """
+    """Get PDB file from a local mirror of the PDB database."""
     if pdb_type == 'ent':
         # Original PDB structure.
         prefix = 'pdb'
@@ -114,8 +108,7 @@ def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
 
 
 def download_pdb_file(pdb_id, output_dir):
-    """Move PDB structure to the local working directory.
-    """
+    """Move PDB structure to the local working directory."""
     PDB_URL = 'http://www.rcsb.org/pdb/files/{}.pdb'
     PDB_EURO_URL = 'http://www.ebi.ac.uk/pdbe/entry-files/download/pdb{}.ent'
 
@@ -144,66 +137,13 @@ def download_pdb_file(pdb_id, output_dir):
     return output_pdb_filename
 
 
-def get_pdb_parser(pdb_type, temp_dir='/tmp'):
-    """Get PDB parser that can work with structures of the specified type.
-    """
-    if pdb_type in {'ent', 'pdb', 'raw'}:
-        parser = PDBParser(QUIET=True)
-    elif pdb_type in {'cif'}:
-        parser = MMCIFParserMod(temp_dir=temp_dir)
-    else:
-        raise Exception('Unsupported ``pdb_type`` {}'.format(pdb_type))
-    return parser
-
-
-@clru_cache(maxsize=128, typed=False)
-def get_pdb(pdb_id, pdb_path, temp_dir='/tmp', pdb_type='ent', use_external=True):
-    """
-    Parse a pdb file with biopythons PDBParser() and return the structure.
-
-    Parameters
-    ----------
-    pdb_code : str
-        Four letter code of the PDB file
-    pdb_path : str
-        Biopython pdb structure
-    temp_dir : str, optional, default='/tmp/'
-        Path to the folder for storing temporary files
-    pdb_type : 'ent'/'pdb'/'cif', optional, default='ent'
-        The extension of the pdb to use
-
-    Raises
-    ------
-    PDBNotFoundError
-        If the pdb file could not be retrieved from the local (and remote) databases
-    """
-    pdb_file = get_pdb_file(pdb_id, pdb_path, pdb_type)
-    pdb_parser = get_pdb_parser(pdb_type, temp_dir)
-
-    try:
-        structure = pdb_parser.get_structure(pdb_id, gzip.open(pdb_file, 'rt'))
-    except IOError:
-        error_message = (
-            'PDB not found! (pdb_id: {}, pdb_path: {}, pdb_type: {})'
-            .format(pdb_id, pdb_path, pdb_type)
-        )
-        if not use_external:
-            raise errors.PDBNotFoundError(error_message)
-        print('Retrieving pdb from the wwpdb ftp server...')
-        temp_filename = download_pdb_file(pdb_id, temp_dir)
-        structure = pdb_parser.get_structure(pdb_id, gzip.open(temp_filename, 'rt'))
-
-    return structure
-
-
-def get_pdb_structure(pdb_file, pdb_id=None):
-    """Set QUIET to False to output warnings like incomplete chains etc.
-    """
+def get_pdb_structure(pdb_file, pdb_id=None, quiet=True):
+    """Set QUIET to False to output warnings like incomplete chains etc."""
     logger.debug('pdb_file: {}'.format(pdb_file))
     logger.debug('pdb_id: {}'.format(pdb_id))
     if pdb_id is None:
         pdb_id = get_pdb_id(pdb_file)
-    parser = PDBParser(get_header=True, QUIET=True)
+    parser = PDBParser(get_header=True, QUIET=quiet)
     if pdb_file.endswith('.gz'):
         with gzip.open(pdb_file, 'rt') as ifh:
             structure = parser.get_structure(pdb_id, ifh)
@@ -214,8 +154,7 @@ def get_pdb_structure(pdb_file, pdb_id=None):
 
 # %%
 def euclidean_distance(a, b):
-    """Calculate the Euclidean distance between two lists or tuples of arbitrary length.
-    """
+    """Calculate the Euclidean distance between two lists or tuples of arbitrary length."""
     return np.sqrt(sum((a - b)**2 for a, b in zip(a, b)))
 
 
@@ -227,7 +166,6 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
     cutoff : float, optional
         The maximum distance allowable between two points.
     """
-
     if ((type(atom_1) == type(atom_2) == list) or
             (type(atom_1) == type(atom_2) == tuple)):
         a = atom_1
@@ -243,7 +181,7 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
         return euclidean_distance(a, b)
 
 
-# %%
+#
 def get_chain_seqres_sequence(chain, aa_only=False):
     """Get the amino acid sequence for the construct coding for the given chain.
 
@@ -298,6 +236,7 @@ def get_chain_sequence_and_numbering(chain, domain_def_tuple=None, include_hetat
 
 def convert_position_to_resid(chain, positions, domain_def_tuple=None):
     """Convert mutation_domain to mutation_modeller.
+
     In mutation_modeller, the first amino acid in a chain may start
     with something other than 1.
     """
@@ -309,9 +248,12 @@ def convert_position_to_resid(chain, positions, domain_def_tuple=None):
 
 
 def get_structure_sequences(file_or_structure, seqres_sequence=False):
-    """
-    Convenience function returining a dictionary of sequences for a given file
-    or a Biopython Structure, Model or Chain.
+    """Return a dictionary of sequences for a given file or Structure.
+
+    Parameters
+    ----------
+    file_or_structure : str | biopython.Structure | biopython.Model | biopython.Chain
+        PDB filename or biopython object from which to extract the sequence.
     """
     if isinstance(file_or_structure, six.string_types):
         structure = get_pdb_structure(file_or_structure)
@@ -337,7 +279,6 @@ def get_structure_sequences(file_or_structure, seqres_sequence=False):
     return chain_sequences
 
 
-# %%
 def suppress_logger(fn):
     @wraps(fn)
     def fn_quiet(*args, **kwargs):
@@ -351,7 +292,7 @@ def suppress_logger(fn):
 
 
 def convert_aa(aa, quiet=False):
-    """Convert amino acids from three letter code to one letter code or vice versa
+    """Convert amino acids from three letter code to one letter code or vice versa.
 
     .. note:: Deprecated!
 
@@ -378,24 +319,7 @@ def convert_aa(aa, quiet=False):
         logger.debug('Not a valid amino acid: {}'.format(aa))
 
 
-def convert_resnum_alphanumeric_to_numeric(resnum):
-    """
-    Convert residue numbering that has letters (i.e. 1A, 1B, 1C...) to
-    residue numbering without letters (i.e. 1, 2, 3...).
-
-    .. note:: Deprecated!
-
-        Use ``get_chain_sequence_and_numbering()``.
-    """
-    idx_increment = 0
-    while string.ascii_letters.find(resnum[-1]) != -1:
-        idx_increment += string.ascii_letters.find(resnum[-1])
-        resnum = resnum[:-1]
-    resnum = int(resnum) + idx_increment
-    return resnum
-
-
-# %% STANDALONE FUNCTIONS
+# STANDALONE FUNCTIONS
 def get_interactions(model, chain_id, r_cutoff=6):
     """
     """
@@ -410,10 +334,10 @@ def get_interactions(model, chain_id, r_cutoff=6):
 
 
 def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
-    """
-    Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
-    interaction is defines as a pair of residues where at least one pair of atom
-    is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
+    """Calculate interactions between the residues of the two chains.
+
+    An interaction is defines as a pair of residues where at least one pair of atom
+    is closer than r_cutoff.
 
     .. deprecated:: 1.0
         Use python:fn:`get_interacting_residues` instead.
@@ -430,8 +354,8 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
     try:
         from Bio.PDB import NeighborSearch
     except ImportError as e:
-        print('Importing Biopython NeighborSearch returned an error: {}'.format(e))
-        print('Using the the slow version of the neighbour-finding algorithm...')
+        logger.warning('Importing Biopython NeighborSearch returned an error: {}'.format(e))
+        logger.warning('Using the the slow version of the neighbour-finding algorithm...')
         return get_interactions_between_chains_slow(model, chain_id_1, chain_id_2, r_cutoff)
 
     # Extract the chains of interest from the model
@@ -468,9 +392,9 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
 
 
 def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cutoff=5):
-    """
-    Calculate interactions between residues in pdb_chain_1 and pdb_chain_2. An
-    interaction is defines as a pair of residues where at least one pair of atom
+    """Calculate interactions between residues in pdb_chain_1 and pdb_chain_2.
+
+    An interaction is defines as a pair of residues where at least one pair of atom
     is closer than r_cutoff. The default value for r_cutoff is 5 Angstroms.
 
     .. deprecated:: 1.0
@@ -516,10 +440,8 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
     return interactions_between_chains
 
 
-# %%
 def chain_is_hetatm(chain):
-    """Return True if the chain is made up entirely of HETATMs.
-    """
+    """Return True if the chain is made up entirely of HETATMs."""
     hetatms = [None] * len(chain)
     for i in range(len(chain.child_list)):
         res = chain.child_list[i]
@@ -541,15 +463,17 @@ def chain_is_hetatm(chain):
 
 
 def get_aa_residues(chain):
-    aa_residues = [
-        residue.id for residue in chain
-        if residue.resname in AAA_DICT and not residue.id[0].split()
-    ]
+    aa_residues = [residue.id for residue in chain if residue.resname in AAA_DICT]
     return aa_residues
 
 
 def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
-    """Returns all interactions between residues on different chains in `model`.
+    """Return residue-residue interactions between all chains in `model`.
+
+    Parameters
+    ----------
+    model : biopython.Model
+        Model to analyse.
 
     Returns
     -------
@@ -559,7 +483,8 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
         (e.g. (0, 'A', 0, '0', 'M'), (0, 1, '2', 'K'), ...)
         Values are a list of tuples having the same format as the keys.
 
-
+    Examples
+    --------
     You can reverse the order of keys and values like this::
 
         complement = dict()
@@ -573,7 +498,6 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
         {(key[0], value[0])
          for (key, values) in get_interacting_chains(model).items()
          for value in values}
-
 
     """
     from Bio.PDB import NeighborSearch
@@ -640,10 +564,29 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
     return interactions_between_chains
 
 
-# %% Additions for `pipeline_structure`
+def decode_domain_def(domains, merge=True, return_string=False):
+    """Return a tuple of tuples of strings, preserving letter numbering (e.g. 10B)."""
+    if not domains:
+        return None, None
+
+    if domains[-1] == ',':
+        domains = domains[:-1]
+    x = domains
+    if return_string:
+        domain_fragments = [[r.strip() for r in ro.split(':')] for ro in x.split(',')]
+    else:
+        domain_fragments = [[int(r.strip()) for r in ro.split(':')] for ro in x.split(',')]
+    domain_merged = [domain_fragments[0][0], domain_fragments[-1][-1]]
+    if merge:
+        return domain_merged
+    else:
+        return domain_fragments
+
+
+# Additions for `pipeline_structure`
 class SelectChains(Select):
-    """Only accept the specified chains when saving.
-    """
+    """Only accept the specified chains when saving."""
+
     def __init__(self, chain_letters, ns_chain_letters=None, ns=None, r_cutoff=None):
         self.chain_letters = chain_letters
         self.ns_chain_letters = ns_chain_letters
@@ -662,7 +605,8 @@ class SelectChains(Select):
 
 
 class StructureParser:
-    """
+    """.
+
     Attributes
     ----------
     pdb_id : ___
@@ -675,8 +619,10 @@ class StructureParser:
         domain_boundaries [[[1,10],[20,45]]].
 
     """
+
     def __init__(self, pdb_file, chain_ids=None, domain_defs=[]):
-        """
+        """.
+
         Parameters
         ----------
         pdb_file : str
@@ -704,15 +650,16 @@ class StructureParser:
         self.domain_boundaries = []
         for domain_def in domain_defs:
             self.domain_boundaries.append(
-                helper.decode_domain_def(domain_def, merge=False, return_string=True)
+                decode_domain_def(domain_def, merge=False, return_string=True)
             )
 
         self.unique_id = ('pdb_id: {}, chain_ids: {}'.format(self.pdb_id, self.chain_ids))
 
     def extract(self):
-        """Extract the wanted chains out of the PDB file. Removes water atoms
-        and selects the domain regions (i.e. selects only those parts of the
-        domain that are within the domain boundaries specified).
+        """Extract the wanted chains out of the PDB file.
+
+        Remove water atoms and selects the domain regions (i.e. selects only those parts
+        of the domain that are within the domain boundaries specified).
         """
         logger.debug('Extracting {}...'.format(self.unique_id))
 
@@ -821,14 +768,12 @@ class StructureParser:
         }
 
     def get_chain_sequence_and_numbering(self, chain_id, *args, **varargs):
-        """Call ``get_chain_sequence_and_numbering`` using chain with id ``chain_id``
-        """
+        """Call ``get_chain_sequence_and_numbering`` using chain with id ``chain_id``."""
         chain = self.structure[0][chain_id]
         return get_chain_sequence_and_numbering(chain, *args, **varargs)
 
     def get_chain_seqres_sequence(self, chain_id, *args, **varargs):
-        """Call ``get_chain_seqres_sequence`` using chain with id ``chain_id``
-        """
+        """Call ``get_chain_seqres_sequence`` using chain with id ``chain_id``."""
         chain = self.structure[0][chain_id]
         return get_chain_seqres_sequence(chain, *args, **varargs)
 
@@ -928,13 +873,12 @@ class StructureParser:
         #     .format(res.resname, res.id))
         chain.detach_child(res.id)
         hetatm_res = res
-        hetatm_res.id = (hetatm_res.id[0], len(hetatm_chain)+1, hetatm_res.id[2],)
+        hetatm_res.id = (hetatm_res.id[0], len(hetatm_chain) + 1, hetatm_res.id[2], )
         hetatm_chain.add(hetatm_res)
 
     def _residue_outside_domain(
             self, chain, chain_numbering, domain_start_idxs, domain_end_idxs, res):
-        """Returns `True` if residue ``res`` is outside the domain.
-        """
+        """Return `True` if residue ``res`` is outside the domain."""
         if domain_start_idxs is None or domain_end_idxs is None:
             return False
 

@@ -1,13 +1,10 @@
 import os
 import tempfile
-
 import pandas as pd
-
 from sklearn import ensemble
 from sklearn import cross_validation
 from sklearn import metrics
-
-from . import helper
+from kmtools.system_tools import open_exclusively
 
 
 def write_row_to_file(results, output_filename):
@@ -20,7 +17,7 @@ def write_row_to_file(results, output_filename):
     results_df = results_df.reindex_axis(sorted(results_df.columns), axis=1)
     print('Results:\n{}'.format(results_df))
     try:
-        with helper.open_exclusively(output_filename) as ofh:
+        with open_exclusively(output_filename) as ofh:
             results_df.to_csv(ofh, sep='\t', mode='a', index=False, header=False)
     except Exception as e:
         print('Counld not append result to file: {}'.format(output_filename))
@@ -62,28 +59,3 @@ def cross_validate_predictor(data, features, clf_options, output_filename=None):
     if output_filename is not None:
         write_row_to_file(results, output_filename)
     return results, y_true_all, y_pred_all
-
-
-def get_final_predictor(data, features, options):
-    """Train a predictor using the entire dataset."""
-    # Keep only recognized options
-    import inspect
-    accepted_options = inspect.getargspec(ensemble.GradientBoostingRegressor)[0]
-    clf_options = {k: v for (k, v) in options.items() if k in accepted_options}
-    if clf_options != options:
-        extra_options = {k: v for (k, v) in options.items() if k not in accepted_options}
-        print("Warning, unknown options provided:\n{}".format(extra_options))
-
-    # Remove rows with NULLs
-    data_usable = data[features + ['ddg_exp']].dropna()
-    if len(data) != len(data_usable):
-        print('Warning, {} rows in the provided data contained null!'
-              .format(len(data) - len(data_usable)))
-    data = data_usable
-
-    # Train predictor
-    data_x = data[features].values
-    data_y = data['ddg_exp'].values
-    clf = ensemble.GradientBoostingRegressor(**clf_options)
-    clf.fit(data_x, data_y)
-    return clf

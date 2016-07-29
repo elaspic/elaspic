@@ -44,7 +44,7 @@ STANDARD_SASA = {x[3]: float(x[4]) for x in STANDARD_SASA_ALL}
 class AnalyzeStructure:
     """Calculate structural properties for a PDB containing one or more chains.
 
-    Runs the program pops to calculate the interface size of the complexes
+    Runs the program POPS to calculate the interface size of the complexes
     This is done by calculating the surface of the complex and the seperated parts.
     The interface is then given by the substracting.
     """

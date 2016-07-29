@@ -32,6 +32,8 @@ requirements:
     - sqlite
     - mysqlclient
     - psycopg2
+    # Kimlab
+    - kmtools
   run:
     # Basic python
     - python
@@ -63,6 +65,8 @@ requirements:
     - cd-hit
     # - provean  # can't install fake_provean for tests if this is installed...
     # - foldx  # private only and breaks readthedocs
+    # Kimlab
+    - kmtools
 
 test:
   requires:

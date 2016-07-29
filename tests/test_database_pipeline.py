@@ -8,15 +8,15 @@ from elaspic import conf
 logger = logging.getLogger(__name__)
 
 # Constants
+QUICK = False
 CONFIG_FILE = op.join(op.dirname(__file__), 'database_pipeline.ini')
 
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
     CONFIG_FILE = pytest.config.getoption('--config-file') or CONFIG_FILE
-else:
-    QUICK = False
 
 conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=None)
+assert conf.CONFIGS['db_type']
 
 logger.debug('Running quick: {}'.format(QUICK))
 logger.debug('Config file: {}'.format(CONFIG_FILE))
@@ -26,19 +26,17 @@ logger.debug('Config file: {}'.format(CONFIG_FILE))
 import helper_fns  # noqa
 from elaspic import elaspic_database  # noqa
 
-configs = conf.Configs()
-
 db = elaspic_database.MyDatabase()
-configs['engine'] = db.get_engine()
-configs['engine'].execute("SET sql_mode = ''")
+conf.CONFIGS['engine'] = db.get_engine()
+conf.CONFIGS['engine'].execute("SET sql_mode = ''")
 
 
-#
 test_cases = []
 
 
 def append_test_cases(df, num=3, num_mutations=3):
-    """
+    """.
+
     Parameters
     ----------
     df : DataFrame
@@ -58,17 +56,17 @@ def append_test_cases(df, num=3, num_mutations=3):
         uniprot_sequence = row['uniprot_sequence']
         logger.debug('Protein ID: {}'.format(uniprot_id))
         for i in range(num_mutations):
-            if 'interacting_aa_1' in row and row['interacting_aa_1'] != None:
+            if 'interacting_aa_1' in row and pd.notnull(row['interacting_aa_1']):
                 mutation_pos = random.choice([int(x) for x in row['interacting_aa_1'].split(',')])
                 logger.debug('Selected interface AA: {}'.format(mutation_pos))
-            elif 'model_domain_def' in row and row['model_domain_def'] != None:
+            elif 'model_domain_def' in row and pd.notnull(row['model_domain_def']):
                 domain_start, domain_end = (int(x) for x in row['model_domain_def'].split(':'))
                 mutation_pos = random.randint(domain_start, domain_end)
                 logger.debug(
                     'Selected AA: {} falling inside model domain: {}'
                     .format(mutation_pos, row['model_domain_def'])
                 )
-            elif 'domain_def' in row and ['domain_def'] != None:
+            elif 'domain_def' in row and pd.notnull(row['domain_def']):
                 domain_start, domain_end = (int(x) for x in row['domain_def'].split(':'))
                 mutation_pos = random.randint(domain_start, domain_end)
                 logger.debug(
@@ -100,8 +98,10 @@ and uniprot_domain_pair_id not in
 and CHAR_LENGTH(us.uniprot_sequence) < 1000
 and db = 'sp'
 limit 1000;
-""".format(db_schema=configs['db_schema'], db_schema_uniprot=configs['db_schema_uniprot'])
-df = pd.read_sql_query(sql_query, configs['engine'])
+""".format(
+    db_schema=conf.CONFIGS['db_schema'],
+    db_schema_uniprot=conf.CONFIGS['db_schema_uniprot'])
+df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
 
 logger.debug("Everything is missing: {}".format(len(df)))
 if df.empty:
@@ -125,8 +125,10 @@ where uniprot_domain_pair_id not in
 and CHAR_LENGTH(us.uniprot_sequence) < 1000
 and db = 'sp'
 limit 1000;
-""".format(db_schema=configs['db_schema'], db_schema_uniprot=configs['db_schema_uniprot'])
-df = pd.read_sql_query(sql_query, configs['engine'])
+""".format(
+    db_schema=conf.CONFIGS['db_schema'],
+    db_schema_uniprot=conf.CONFIGS['db_schema_uniprot'])
+df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
 
 logger.debug("Have provean and domain model but not interface model: {}".format(len(df)))
 if df.empty:
@@ -151,8 +153,10 @@ and db = 'sp'
 and udpm.model_filename is not null
 and udpm.model_errors is null
 limit 1000;
-""".format(db_schema=configs['db_schema'], db_schema_uniprot=configs['db_schema_uniprot'])
-df = pd.read_sql_query(sql_query, configs['engine'])
+""".format(
+    db_schema=conf.CONFIGS['db_schema'],
+    db_schema_uniprot=conf.CONFIGS['db_schema_uniprot'])
+df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
 
 logger.debug("Have provean and all models: {}".format(len(df)))
 if df.empty:
