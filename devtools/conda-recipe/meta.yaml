@@ -6,7 +6,7 @@ source:
   path: ../../
 
 build:
-  number: 0
+  number: 3
   entry_points:
     - elaspic = elaspic.__main__:main
 
