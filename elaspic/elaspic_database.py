@@ -370,6 +370,15 @@ class MyDatabase(object):
                 .all()
             )
 
+        # The above SQL query may result in duplicates if we have homodimers.
+        # So we need to remove possible dimers.
+        _seen = set()
+        uniprot_domain_pairs = [
+            d for d in uniprot_domain_pairs
+            if d.uniprot_domain_pair_id not in _seen and
+            not _seen.add(d.uniprot_domain_pair_id)
+        ]
+        #
         archive_dir = conf.CONFIGS['archive_dir']
         archive_type = conf.CONFIGS['archive_type']
         d_idx = 0
@@ -498,14 +507,6 @@ class MyDatabase(object):
                 ud.uniprot_sequence.provean and
                 ud.uniprot_sequence.provean.provean_supset_filename):
             logger.warning('Provean supset is missing for domain: {}'.format(ud.uniprot_domain_id))
-            if ud.uniprot_sequence:
-                logger.warning('uniprot_sequence: {}'.format(ud.uniprot_sequence))
-                if ud.uniprot_sequence.provean:
-                    logger.warning('ud.uniprot_sequence.provean: {}'.format(
-                        ud.uniprot_sequence.provean))
-                    if ud.uniprot_sequence.provean.provean_supset_filename:
-                        logger.warning('uniprot_sequence: {}'.format(
-                            ud.uniprot_sequence.provean.provean_supset_filename))
             return
 
         try:
