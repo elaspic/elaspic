@@ -17,7 +17,7 @@ from Bio.PDB.Polypeptide import PPBuilder
 from Bio.Alphabet import IUPAC
 from Bio.Seq import Seq
 
-from . import errors, helper
+from . import errors
 
 logger = logging.getLogger(__name__)
 

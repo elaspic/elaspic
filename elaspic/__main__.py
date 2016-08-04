@@ -195,7 +195,7 @@ $ elaspic run -u P00044 -m M1A \
              "(useful if you want to restrict your analysis to only a handful of domains).")
     parser.add_argument(
         '-t', '--run_type', nargs='?', type=str, default='5',
-        choices=['1', '2', '3', '4', '5', 'sequence', 'model', 'mutations'],
+        choices=['1', '2', '3', '4', '5', '6', 'sequence', 'model', 'mutations'],
         help=('Type of analysis to perform: \n'
               '  1 / sequence: Calculate Provean only \n'
               '  2 / model: Create homololgy models only \n'

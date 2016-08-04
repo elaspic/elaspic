@@ -61,7 +61,8 @@ class DatabasePipeline(Pipeline):
         else:
             self.mutations = mutations
 
-        logger.info('Input parameters:')
+        logger.info('=' * 80)
+        logger.info('## Input parameters')
         logger.info('uniprot_id: {}'.format(uniprot_id))
         logger.info('mutations: {}'.format(mutations))
         logger.info('run_type: {}'.format(run_type))
@@ -69,6 +70,8 @@ class DatabasePipeline(Pipeline):
         logger.info('unique_temp_dir: {}'.format(conf.CONFIGS['unique_temp_dir']))
         logger.info('db_schema: {}'.format(conf.CONFIGS.get('db_schema')))
         logger.info('temp_dir: {temp_dir}'.format(**conf.CONFIGS))
+        logger.info('=' * 80)
+        logger.info('')
 
         # Switch to the root of the unique tmp directory
         os.chdir(conf.CONFIGS['unique_temp_dir'])
@@ -80,6 +83,7 @@ class DatabasePipeline(Pipeline):
         logger.info('Obtaining protein domain information...')
         self.uniprot_domains = self.db.get_uniprot_domain(self.uniprot_id, True)
         self._update_path_to_data(self.uniprot_domains)
+        logger.info("Found {} domains.".format(len(self.uniprot_domains)))
 
         # Mutations results
         self.uniprot_mutations = []
@@ -103,20 +107,22 @@ class DatabasePipeline(Pipeline):
             logger.info('Warning! Uniprot {} has no pfam domains!'.format(self.uniprot_id))
 
         # Find provean
-        if self.run_type in ['1', '5', 'sequence'] and self.uniprot_domains:
+        if self.run_type in ['1', '5', '6', 'sequence'] and self.uniprot_domains:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Computing provean...")
             self.get_sequence(self.uniprot_domains[0])
 
         # Get interactions
         if conf.CONFIGS['look_for_interactions']:
+            logger.info('\n\n\n' + '*' * 110)
             logger.info('Obtaining protein domain pair information...')
             self.uniprot_domain_pairs = self.db.get_uniprot_domain_pair(
                 self.uniprot_id, True, self.uniprot_domain_pair_ids)
             self._update_path_to_data(self.uniprot_domain_pairs)
+            logger.info("Found {} interfaces.".format(len(self.uniprot_domain_pairs)))
 
         # Make models
-        if self.run_type in ['2', '4', '5', 'model']:
+        if self.run_type in ['2', '4', '5', '6', 'model']:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Building models...")
             for d in self.uniprot_domains + self.uniprot_domain_pairs:
@@ -408,9 +414,7 @@ class _PrepareModel:
             self.d.template.model.model_filename = None
             self.model = PrepareModel(self.d, self.db, new_model=True)
             return True
-        elif (exc_type is not None and
-                ((exc_type in self.handled_errors) or
-                 (exc_type in self.bad_errors and not conf.CONFIGS['testing']))):
+        elif (exc_type is not None and exc_type in self.handled_errors):
             # Find domains that were used as a template and eventually led to
             # the error in the model, and add the error to their `domain_errors`
             # or `domain_contact_errors` fields.
@@ -445,17 +449,21 @@ class _PrepareModel:
                         [elaspic_database_tables.DomainContact.cath_id_1,
                          elaspic_database_tables.DomainContact.cath_id_2],
                         [d.template.cath_id_2, d.template.cath_id_1])
-                assert len(bad_domains) == 1
-                bad_domain = bad_domains[0]
-                bad_domain.domain_contact_errors = (
-                    str(d.uniprot_domain_pair_id) + ': ' + str(exc_type)
-                )
-                logger.error(
-                    "Making a homology model failed!!!\n"
-                    "Adding error '{0}' to the domain pair with cath_id_1 {1} "
-                    "and cath_id_2 {2}..."
-                    .format(bad_domain.domain_contact_errors, d.template.cath_id_1,
-                            d.template.cath_id_2))
+                if len(bad_domains) == 1:
+                    bad_domain = bad_domains[0]
+                    bad_domain.domain_contact_errors = (
+                        str(d.uniprot_domain_pair_id) + ': ' + str(exc_type)
+                    )
+                    logger.error(
+                        "Making a homology model failed!!!\n"
+                        "Adding error '{0}' to the domain pair with cath_id_1 {1} "
+                        "and cath_id_2 {2}..."
+                        .format(bad_domain.domain_contact_errors, d.template.cath_id_1,
+                                d.template.cath_id_2))
+                else:
+                    logger.error("Found 0 or too many templates in the `domain_contact` table!")
+                    logger.error("bad_domains: {}".format(bad_domains))
+                    return True
 
             # Add the error type to the model_errors column
             d.template.model.model_errors = (

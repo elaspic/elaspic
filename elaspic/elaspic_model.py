@@ -275,7 +275,7 @@ class Model:
     def _analyse_interface(self):
         # Get a dictionary of interacting residues
         interacting_residues = (
-            structure_tools.get_interacting_residues(self.modeller_structure[0])
+            structure_tools.get_interacting_residues(self.modeller_structure[0], r_cutoff=6.0)
         )
         _interacting_residues_complement = dict()
         for key, values in interacting_residues.items():
@@ -300,8 +300,9 @@ class Model:
 
         if not a2b_contacts or not b2a_contacts:
             logger.error('Chains are not interacting!')
-            logger.error('a2b_contacts: {}\n'.format(a2b_contacts))
-            logger.error('b2a_contacts: {}\n'.format(b2a_contacts))
+            logger.error("interacting_residues: {}".format(interacting_residues))
+            logger.error('a2b_contacts: {}'.format(a2b_contacts))
+            logger.error('b2a_contacts: {}'.format(b2a_contacts))
             raise errors.ChainsNotInteractingError()
 
         def _validate_a2b_contacts(a2b_contacts, chain_idx):

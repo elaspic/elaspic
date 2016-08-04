@@ -920,11 +920,14 @@ class UniprotDomainPairTemplate(Base):
             UniprotDomainPair.uniprot_domain_pair_id,
             onupdate='cascade', ondelete='cascade'),
         index=True, nullable=False, primary_key=True)
-    domain_contact_id = sa.Column(
-        None, sa.ForeignKey(
-            DomainContact.domain_contact_id,
-            onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+    # domain_contact_id = sa.Column(
+    #     None, sa.ForeignKey(
+    #         DomainContact.domain_contact_id,
+    #         onupdate='cascade', ondelete='cascade'),
+    #     index=True, nullable=False)
+    # Had to comment out code above because in case of training
+    # we may not have correct `domain_contact_id`
+    domain_contact_id = sa.Column(sa.Integer, nullable=True)
     cath_id_1 = sa.Column(
         None, sa.ForeignKey(
             Domain.cath_id,
@@ -971,9 +974,9 @@ class UniprotDomainPairTemplate(Base):
         UniprotDomainPair, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
         backref=sa.orm.backref(
             'template', uselist=False, cascade='expunge', lazy='joined', innerjoin=True))
-    domain_contact = sa.orm.relationship(
-        DomainContact, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
-        backref=sa.orm.backref('uniprot', cascade='expunge'))  # one to one
+    # domain_contact = sa.orm.relationship(
+    #     DomainContact, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
+    #     backref=sa.orm.backref('uniprot', cascade='expunge'))  # one to one
     domain_1 = sa.orm.relationship(
         Domain, uselist=False, cascade='expunge', lazy='joined',
         primaryjoin=(cath_id_1 == Domain.cath_id))  # many to one
