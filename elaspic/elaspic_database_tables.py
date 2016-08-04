@@ -40,7 +40,7 @@ if conf.CONFIGS.get('db_type') is None:
 
 def get_table_args(table_name, index_columns=[], db_specific_params=[]):
     """Return a tuple of additional table arguments."""
-    table_args = []
+    table_args = [{'mysql_engine': 'InnoDB'}]
     # Create indexes over several columns
     for columns in index_columns:
         if type(columns) == tuple:

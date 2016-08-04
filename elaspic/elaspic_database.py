@@ -67,6 +67,7 @@ class MyDatabase(object):
         if conf.CONFIGS['db_type'] == 'sqlite':
             sa_opts['isolation_level'] = 'READ UNCOMMITTED'
         elif conf.CONFIGS['db_type'] == 'mysql':
+            sa_opts['isolation_level'] = 'READ UNCOMMITTED'
             sa_opts['pool_recycle'] = 3600
         elif conf.CONFIGS['db_type'] == 'postgresql':
             sa_opts['pool_recycle'] = 3600
