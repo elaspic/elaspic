@@ -9,6 +9,8 @@ import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
+import numpy as np
+
 
 from elaspic import (
     CACHE_DIR, conf, errors, structure_tools, elaspic_sequence, elaspic_model,
@@ -312,6 +314,9 @@ class _PrepareModel:
             ]
             modeller_results['norm_dope'] = d.template.model.norm_dope
             modeller_results['domain_def_offsets'] = [(0, 0)]
+            # modeller_results['model_domain_defs'] = [
+            #     (int(i) for i in d.template.model.model_domain_def.split(':')),
+            # ]
         elif isinstance(d, elaspic_database.UniprotDomainPair):
             unique_id = d.uniprot_domain_pair_id
             modeller_results['model_file'] = op.join(
@@ -333,6 +338,10 @@ class _PrepareModel:
             ]
             modeller_results['norm_dope'] = d.template.model.norm_dope
             modeller_results['domain_def_offsets'] = [(0, 0), (0, 0)]
+            # modeller_results['model_domain_defs'] = [
+            #     (int(i) for i in d.template.model.model_domain_def_1.split(':')),
+            #     (int(i) for i in d.template.model.model_domain_def_2.split(':')),
+            # ]
 
         modeller_results_file = op.join(
             conf.CONFIGS['model_dir'],
@@ -567,17 +576,16 @@ class _PrepareModel:
         self.db.merge_model(d, self.model.modeller_results)
 
     def _truncate_domain_defs(self, domain_def, domain_def_offset):
-        if (domain_def_offset is None or
-                domain_def_offset[0] is None or
-                domain_def_offset[1] is None):
-            return domain_def
         n_gaps_start, n_gaps_end = domain_def_offset
+        if n_gaps_start is None:
+            n_gaps_start = 0
+        if n_gaps_end is None:
+            n_gaps_end = 0
         domain_def_new = (
-            [str(int(domain_def.split(':')[0]) + n_gaps_start)] +
-            domain_def.split(':')[1:-1] +
-            [str(int(domain_def.split(':')[-1]) - n_gaps_end)]
+            str(int(domain_def.split(':')[0]) + n_gaps_start) +
+            ':' +
+            str(int(domain_def.split(':')[-1]) - n_gaps_end)
         )
-        domain_def_new = ':'.join(domain_def_new)
         return domain_def_new
 
     def _write_domain_sequence_file(self, protein_ids, protein_domain_defs, protein_sequences):
@@ -952,9 +960,9 @@ class _PrepareMutation:
                 'clan_name_1': d.uniprot_domain_1.pfam_clan,
                 'clan_name_2': d.uniprot_domain_2.pfam_clan,
                 # Feature columns
-                'alignment_identity': (d.template.identical_1 + d.template.identical_2) / 2,
-                'alignment_coverage': (d.template.coverage_1 + d.template.coverage_2) / 2,
-                'alignment_score': (d.template.score_1 + d.template.score_2) / 2,
+                'alignment_identity': np.sqrt(d.template.identical_1 * d.template.identical_2),
+                'alignment_coverage': np.sqrt(d.template.coverage_1 * d.template.coverage_2),
+                'alignment_score': np.sqrt(d.template.score_1 * d.template.score_2),
                 #
                 'interface_area_hydrophobic': d.template.model.interface_area_hydrophobic,
                 'interface_area_hydrophilic': d.template.model.interface_area_hydrophilic,
