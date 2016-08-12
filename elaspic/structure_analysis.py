@@ -504,7 +504,11 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         return shortest_interchain_distances
 
     def get_interface_area(self, chain_ids):
-        """
+        """.
+
+        .. note::
+
+            Crashes all the time. Needs to be replaced (mdtraj?)
         """
         assert len(chain_ids) == 2
 
