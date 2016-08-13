@@ -1,5 +1,16 @@
 # Alignments
 
+## Improved sequence alignments
+
+- Use only SwissProt canonical sequences.
+- Map mutations to SwissProt using gene-level identifiers and sequence alignments.
+
+Advantages of using `hhpred`:
+: - Conservation score from MSAs should we useful for predictions.
+  - Protein-drug homology models would be useful for tieing together ELASPIC and drug synergy projects.
+  - Interlinking human proteome and PDB can be useful for other projects.
+
+
 1. Extract.
 
 2. Create an `hhblits` PDB database with *all* PDB sequences.
