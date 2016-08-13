@@ -1,7 +1,6 @@
 # INDEX
 
 - [background](background.md)
-- [todo](todo.md)
 - [alignments](alignments.md)
 
 .
