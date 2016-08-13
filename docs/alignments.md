@@ -34,3 +34,15 @@ Advantages of using `hhpred`:
 [hhblits documentation](https://toolkit.tuebingen.mpg.de/hhblits/help_params)
 
 [hhpred documentation](https://toolkit.tuebingen.mpg.de/hhpred/help_params)
+
+
+
+
+<p align="center">
+<img src="todo/current_setup_crop.png" width="600px" >
+</p>
+<br>
+<p align="center">
+<img src="todo/proposed_setup_crop.png" width="800px" >
+</p>
+
