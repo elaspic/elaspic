@@ -1,4 +1,4 @@
 # INDEX
 
-[INFO](INFO.md)
-[TODO](TODO.md)
+- [INFO](INFO.md)
+- [TODO](TODO.md)
