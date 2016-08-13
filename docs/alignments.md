@@ -1,5 +1,18 @@
 # Alignments
 
+1. Extract.
+
+2. Create an `hhblits` PDB database with *all* PDB sequences.
+  - Extract PDB sequences from UniParc.
+  - Query using Gene3D MSAs?
+
+3. Use `hhblits` to create global alignments against the PDB for all Gene3D domains.
+  - Save alignments in the database using the `a2b` and `b2a` format.
+
+4. `hhblits` uses UniProt20 to create an MSA for the query sequence.
+
+[hh-suite](https://github.com/soedinglab/hh-suite)
+
 [hh-suite](https://github.com/soedinglab/hh-suite)
 
 [hhpred](http://doi.org/10.1038/nmeth.1818)
