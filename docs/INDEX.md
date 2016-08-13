@@ -1,3 +1,4 @@
 # INDEX
 
-[Background](background)
+[INFO](INFO.md)
+[TODO](TODO.md)
