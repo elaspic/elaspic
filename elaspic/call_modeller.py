@@ -48,7 +48,7 @@ class Modeller(object):
         # values: alignment, pdb filename, whether or not using loop refinement
         ranking = dict()
         counter = 0
-        max_counter = 3 if not conf.CONFIGS['testing'] else 1
+        max_counter = 3
         while not ranking and counter < max_counter:
             logger.debug("counter: {}, ranking: '{}'".format(counter, ranking))
             counter += 1
@@ -138,29 +138,25 @@ class Modeller(object):
             # index of the first loop model
             a.loop.starting_model = self.loopStart
             # index of the last loop model
-            a.loop.ending_model = self.loopEnd if not conf.CONFIGS['testing'] else self.loopStart
+            a.loop.ending_model = self.loopEnd
             # loop refinement method; this yields
-            a.loop.md_level = refine.slow if not conf.CONFIGS['testing'] else None
+            a.loop.md_level = refine.slow
 
         a.starting_model = self.start  # index of the first model
         a.ending_model = self.end  # index of the last model
 
-        if conf.CONFIGS['testing']:
-            logger.debug("Creating a quick-and-dirty model because testing...")
-            a.very_fast()
-        else:
-            # Very thorough VTFM optimization:
-            a.library_schedule = autosched.slow
-            a.max_var_iterations = 300
+        # Very thorough VTFM optimization:
+        a.library_schedule = autosched.slow
+        a.max_var_iterations = 300
 
-            # Thorough MD optimization:
-    #        a.md_level = refine.slow
-            a.md_level = None
+        # Thorough MD optimization:
+        # a.md_level = refine.slow
+        a.md_level = None
 
-            # Repeat the whole cycle 2 times and do not stop unless obj.func. > 1E6
-    #        a.repeat_optimization = 2
+        # Repeat the whole cycle 2 times and do not stop unless obj.func. > 1E6
+        # a.repeat_optimization = 2
 
-            a.max_molpdf = 2e5
+        a.max_molpdf = 2e5
 
         # with helper.print_heartbeats():  # use 'long_wait' in .travis.yml
         with helper.log_print_statements(logger):
