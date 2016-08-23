@@ -1,5 +1,4 @@
 import os.path as op
-import pandas as pd
 import elaspic.elaspic_predictor
 
 

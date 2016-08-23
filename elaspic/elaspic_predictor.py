@@ -184,6 +184,59 @@ def convert_features_to_differences(df, keep_mut=False):
     return new_df
 
 
+def get_core_mutations(df, engine, schema_name='elaspic'):
+    values = (
+        ("('" + df['uniprot_id'] + "', '" + df['uniprot_mutation'] + "')")
+    )
+    sql_query = """\
+SELECT *
+FROM {schema_name}.uniprot_domain
+JOIN {schema_name}.uniprot_domain_template USING (uniprot_domain_id)
+JOIN {schema_name}.uniprot_domain_model USING (uniprot_domain_id)
+JOIN {schema_name}.uniprot_domain_mutation mut USING (uniprot_domain_id)
+WHERE (mut.uniprot_id, mut.mutation) in ({values})
+""".format(schema_name=schema_name, values=', '.join(values))
+
+    results_df = pd.read_sql_query(sql_query, engine)
+
+    # Format predictor features
+    results_df = format_mutation_features(results_df)
+    # keep `_wt` and `_mut`, remove later:
+    results_df = convert_features_to_differences(results_df, True)
+
+    return results_df
+
+
+def get_interface_mutations(df, engine, schema_name='elaspic'):
+    values = (
+        ("('" + df['uniprot_id'] + "', '" + df['uniprot_mutation'] + "')")
+    )
+    sql_query = """\
+SELECT *
+FROM {schema_name}.uniprot_domain_pair
+JOIN {schema_name}.uniprot_domain_pair_template USING (uniprot_domain_pair_id)
+JOIN {schema_name}.uniprot_domain_pair_model USING (uniprot_domain_pair_id)
+JOIN {schema_name}.uniprot_domain_pair_mutation mut USING (uniprot_domain_pair_id)
+WHERE (mut.uniprot_id, mut.mutation) in ({values})
+""".format(schema_name=schema_name, values=', '.join(values))
+
+    # Format alignment features
+    results_df = pd.read_sql_query(sql_query, engine)
+    results_df['alignment_identity'] = (
+        results_df['identical_1'] + results_df['identical_2']) / 2 / 100.0
+    results_df['alignment_coverage'] = (
+        results_df['coverage_1'] + results_df['coverage_2']) / 2 / 100.0
+    results_df['alignment_score'] = (
+        results_df['score_1'] + results_df['score_2']) / 2
+
+    # Format predictor features
+    results_df = format_mutation_features(results_df)
+    # keep `_wt` and `_mut`, remove later:
+    results_df = convert_features_to_differences(results_df, True)
+
+    return results_df
+
+
 def get_final_predictor(data, features, options):
     """Train a predictor using the entire dataset."""
     CLF = sklearn.ensemble.GradientBoostingRegressor
@@ -213,7 +266,7 @@ def get_final_predictor(data, features, options):
 
 class _Predictor:
 
-    def __init__(self, data_dir=None):
+    def __init__(self):
         self.clf = None
         self.features = None
 
