@@ -40,7 +40,7 @@ if conf.CONFIGS.get('db_type') is None:
 
 def get_table_args(table_name, index_columns=[], db_specific_params=[]):
     """Return a tuple of additional table arguments."""
-    table_args = [{'mysql_engine': 'InnoDB'}]
+    table_args = []
     # Create indexes over several columns
     for columns in index_columns:
         if type(columns) == tuple:
@@ -60,6 +60,7 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
     # Other table parameters, such as schemas, etc.
     for db_specific_param in db_specific_params:
         table_args.append(db_specific_properties[conf.CONFIGS['db_type']][db_specific_param])
+    table_args.append({'mysql_engine': 'InnoDB'})  # this has to be last
     return tuple(table_args)
 
 
@@ -468,8 +469,8 @@ class UniprotDomainPair(Base):
         _indexes = [
             (['uniprot_id_1', 'uniprot_id_2', 'max_seq_identity']),
             (['uniprot_id_2', 'uniprot_id_1', 'max_seq_identity']),
-            (['uniprot_domain_id_1', 'uniprot_domain_id_2', 'max_seq_identity'], {'unique': True}),
-            (['uniprot_domain_id_2', 'uniprot_domain_id_1', 'max_seq_identity'], {'unique': True}),
+            (['uniprot_domain_id_1', 'uniprot_domain_id_2', 'max_seq_identity']),
+            (['uniprot_domain_id_2', 'uniprot_domain_id_1', 'max_seq_identity']),
         ]
     else:
         _indexes = [
