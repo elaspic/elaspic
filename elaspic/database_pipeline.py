@@ -46,22 +46,11 @@ class DatabasePipeline(Pipeline):
         if isinstance(run_type, (int, float)):
             run_type = str(int(run_type))
         self.uniprot_id = uniprot_id
+        self.mutations = self.split_mutations(mutations)
         self.calculated_mutations = []
-        self.run_type = run_type
+        self.run_type = self.validate_run_type(run_type)
         self.number_of_tries = number_of_tries
         self.uniprot_domain_pair_ids = uniprot_domain_pair_ids
-
-        if mutations is None:
-            self.mutations = []
-        elif isinstance(mutations, str):
-            if ',' in mutations:
-                self.mutations = mutations.split(',')
-            elif ':' in mutations:
-                self.mutations = mutations.split(':')
-            else:
-                self.mutations = [mutations]
-        else:
-            self.mutations = mutations
 
         logger.info('=' * 80)
         logger.info('## Input parameters')

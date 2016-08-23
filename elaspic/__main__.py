@@ -7,7 +7,7 @@ import logging.config
 import pandas as pd
 
 from kmtools.system_tools import decompress
-from elaspic import DATA_DIR, CACHE_DIR, conf, elaspic_predictor
+from elaspic import DATA_DIR, CACHE_DIR, conf, pipeline, elaspic_predictor
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,7 @@ def elaspic(args):
     elif args.structure_file:
         unique_temp_dir = op.abspath(op.join(os.getcwd(), '.elaspic'))
         os.makedirs(unique_temp_dir, exist_ok=True)
+        print(LOGGING_LEVELS[args.verbose])
         conf.read_configuration_file(
             DEFAULT={
                 'unique_temp_dir': unique_temp_dir
@@ -91,24 +92,18 @@ def elaspic(args):
             EXTERNAL_DIRS={
                 'pdb_dir': args.pdb_dir,
                 'blast_db_dir': args.blast_db_dir,
-                'archive_dir': args.archive_dir,
+                'archive_dir': args.archive_dir
+            },
+            LOGGER={
+                'level': LOGGING_LEVELS[args.verbose],
             })
         # Run local pipeline
         from elaspic import standalone_pipeline
         pipeline = standalone_pipeline.StandalonePipeline(
             args.structure_file, args.sequence_file, args.mutations,
             mutation_format=args.mutation_format,
+            run_type=args.run_type,
         )
-        if args.run_type in ['1', 'sequence']:
-            pipeline.run_all_sequences()
-        elif args.run_type in ['2', 'model']:
-            pipeline.run_all_models()
-        elif args.run_type in ['3', 'mutations']:
-            pipeline.run_all_mutations()
-        elif args.run_type in ['5']:
-            pipeline.run()
-        else:
-            raise RuntimeError("Incorrect value for run_type: '{}'".format(args.run_type))
 
 
 def configure_run_parser(sub_parsers):
@@ -194,14 +189,9 @@ $ elaspic run -u P00044 -m M1A \
         help="List of uniprot_domain_pair_ids to analyse "
              "(useful if you want to restrict your analysis to only a handful of domains).")
     parser.add_argument(
-        '-t', '--run_type', nargs='?', type=str, default='5',
-        choices=['1', '2', '3', '4', '5', '6', 'sequence', 'model', 'mutations'],
-        help=('Type of analysis to perform: \n'
-              '  1 / sequence: Calculate Provean only \n'
-              '  2 / model: Create homololgy models only \n'
-              '  3 / mutations: Evaluate mutations only \n'
-              '  4: Create homology models and evaluate mutations \n'
-              '  5: Calculate Provean, create homology models, and evaluate mutations \n'))
+        '-t', '--run_type', nargs='?', type=str, default='all',
+        choices=sorted(pipeline.Pipeline._valid_run_types),
+        help='Type of analysis to perform.')
 
     parser.set_defaults(func=elaspic)
 

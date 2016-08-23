@@ -52,12 +52,13 @@ class StandalonePipeline(Pipeline):
 
     def __init__(
             self, structure_file, sequence_file=None, mutations=None, configurations=None,
-            mutation_format=None):
+            mutation_format=None, run_type='5'):
         super().__init__(configurations)
 
         # Input parameters
         self.pdb_id = op.splitext(op.basename(structure_file))[0]
         self.pdb_file = structure_file
+        self.run_type = self.validate_run_type(run_type)
 
         logger.info('pdb_file: {}'.format(self.pdb_file))
         logger.info('pwd: {}'.format(self.PWD))
@@ -75,17 +76,7 @@ class StandalonePipeline(Pipeline):
             self.sequence_file = sequence_file
         logger.debug('self.sequence_file: {}'.format(self.sequence_file))
 
-        if not mutations:
-            mutations = []
-        elif isinstance(mutations, str):
-            if ',' in mutations:
-                mutations = mutations.split(',')
-            elif ':' in mutations:
-                mutations = mutations.split(':')
-            else:
-                mutations = [mutations]
-        else:
-            mutations = mutations
+        mutations = self.split_mutations(mutations)
         logger.debug('mutations: {}'.format(mutations))
 
         # Use the PDB chain to index mutations both with and without the index file
@@ -191,9 +182,12 @@ class StandalonePipeline(Pipeline):
     # === Run methods ===
 
     def run(self):
-        self.run_all_sequences()
-        self.run_all_models()
-        self.run_all_mutations()
+        if 'sequence' in self.run_type:
+            self.run_all_sequences()
+        if 'model' in self.run_type:
+            self.run_all_models()
+        if 'mutation' in self.run_type:
+            self.run_all_mutations()
 
     def run_all_sequences(self):
         sequence_results = []

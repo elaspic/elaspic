@@ -1,3 +1,8 @@
+# __main__
+class ParameterError(Exception):
+    pass
+
+
 # T-Coffee
 class TcoffeeError(Exception):
 
