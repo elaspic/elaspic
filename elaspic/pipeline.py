@@ -75,8 +75,11 @@ class Pipeline:
         self.models = {}
         self.predictions = {}
 
+    def run(self, *args, **kwargs):
+        raise NotImplementedError
+
     @staticmethod
-    def split_mutations(mutations):
+    def _split_mutations(mutations):
         if mutations is None:
             return []
         elif not isinstance(mutations, str):
@@ -87,11 +90,12 @@ class Pipeline:
         return [mutations]
 
     @classmethod
-    def validate_run_type(cls, run_type):
+    def _validate_run_type(cls, run_type):
         try:
             return cls._valid_run_types[run_type]
         except KeyError:
             raise errors.ParameterError("Wrong run_type: '{}'".format(run_type))
+
 
 # Make Bio objects hashable (hack!)
 # TODO: Think more closely about which fields should be used to construct the hash.

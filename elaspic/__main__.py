@@ -104,6 +104,7 @@ def elaspic(args):
             mutation_format=args.mutation_format,
             run_type=args.run_type,
         )
+        pipeline.run()
 
 
 def configure_run_parser(sub_parsers):

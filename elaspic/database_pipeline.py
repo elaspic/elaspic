@@ -46,9 +46,9 @@ class DatabasePipeline(Pipeline):
         if isinstance(run_type, (int, float)):
             run_type = str(int(run_type))
         self.uniprot_id = uniprot_id
-        self.mutations = self.split_mutations(mutations)
+        self.mutations = self._split_mutations(mutations)
         self.calculated_mutations = []
-        self.run_type = self.validate_run_type(run_type)
+        self.run_type = self._validate_run_type(run_type)
         self.number_of_tries = number_of_tries
         self.uniprot_domain_pair_ids = uniprot_domain_pair_ids
 

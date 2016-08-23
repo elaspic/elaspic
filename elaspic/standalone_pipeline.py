@@ -58,7 +58,7 @@ class StandalonePipeline(Pipeline):
         # Input parameters
         self.pdb_id = op.splitext(op.basename(structure_file))[0]
         self.pdb_file = structure_file
-        self.run_type = self.validate_run_type(run_type)
+        self.run_type = self._validate_run_type(run_type)
 
         logger.info('pdb_file: {}'.format(self.pdb_file))
         logger.info('pwd: {}'.format(self.PWD))
@@ -76,11 +76,12 @@ class StandalonePipeline(Pipeline):
             self.sequence_file = sequence_file
         logger.debug('self.sequence_file: {}'.format(self.sequence_file))
 
-        mutations = self.split_mutations(mutations)
-        logger.debug('mutations: {}'.format(mutations))
+        self.mutations = self._split_mutations(mutations)
+        if 'mutation' in self.run_type:
+            self.mutations = self.parse_mutations(self.mutations, mutation_format)
+        logger.debug('mutations: {}'.format(self.mutations))
 
         # Use the PDB chain to index mutations both with and without the index file
-        self.mutations = dict()
         if not self.sequence_file:
             # Read template sequences from the PDB
             self.seqrecords = tuple([
@@ -89,20 +90,29 @@ class StandalonePipeline(Pipeline):
                     seq=Seq(self.sp.chain_sequence_dict[chain_id]))
                 for (i, chain_id) in enumerate(self.sp.chain_ids)
             ])
-            possible_mutation_formats = ['1', '2', '3']
-            # Parse mutations
-            # Mutations are specified in the {chain_id}_{mutation},... format for sure.
-            # self.mutations = self._parse_mutations(mutations, '1')
         else:
             # Read template sequences from the sequence file
             self.seqrecords = tuple(SeqIO.parse(self.sequence_file, 'fasta'))
             for i, seqrec in enumerate(self.seqrecords):
                 seqrec.id = helper.slugify('{}_{}'.format(seqrec.id, str(i)))
-            possible_mutation_formats = ['3', '2', '1']
 
+        if len(self.sp.chain_ids) != len(self.seqrecords):
+            logger.warning(
+                'The number of chain ids ({}) does not match the number of sequences ({})!'
+                .format(len(self.sp.chain_ids), len(self.seqrecords))
+            )
+
+    def parse_mutations(self, mutations, mutation_format):
         # Parse mutations
         # There are many ways mutations can be specified here...
         # try one at at a time until something succeeds
+        mutations = dict()
+
+        if self.sequence_file:
+            possible_mutation_formats = ['3', '2', '1']
+        else:
+            possible_mutation_formats = ['1', '2', '3']
+
         if mutation_format is not None:
             self.mutations = self._parse_mutations(mutations, mutation_format)
         else:
@@ -121,17 +131,11 @@ class StandalonePipeline(Pipeline):
                 raise errors.MutationMismatchError()
         logger.debug('parsed mutations: {}'.format(self.mutations))
 
-        if len(self.sp.chain_ids) != len(self.seqrecords):
-            logger.warning(
-                'The number of chain ids ({}) does not match the number of sequences ({})!'
-                .format(len(self.sp.chain_ids), len(self.seqrecords))
-            )
-
     def _parse_mutations(self, mutations, mutation_format='1'):
         """Parse mutations.
 
         Parse mutations provided using the {pdb_chain}_{mutation} naming scheme (default)
-        or the {mutation_pos}_{mutation} naming scheme (fallback for when the`pdb_chain`
+        or the {mutation_pos}_{mutation} naming scheme (fallback for when `pdb_chain`
         is not found in the structure).
         """
         logger.debug("Parsing mutations using mutation_format: '{}'".format(mutation_format))
