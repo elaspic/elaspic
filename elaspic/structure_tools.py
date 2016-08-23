@@ -139,8 +139,6 @@ def download_pdb_file(pdb_id, output_dir):
 
 def get_pdb_structure(pdb_file, pdb_id=None, quiet=True):
     """Set QUIET to False to output warnings like incomplete chains etc."""
-    logger.debug('pdb_file: {}'.format(pdb_file))
-    logger.debug('pdb_id: {}'.format(pdb_id))
     if pdb_id is None:
         pdb_id = get_pdb_id(pdb_file)
     parser = PDBParser(get_header=True, QUIET=quiet)
@@ -150,6 +148,10 @@ def get_pdb_structure(pdb_file, pdb_id=None, quiet=True):
     else:
         structure = parser.get_structure(pdb_id, pdb_file)
     return structure
+
+
+def load_pdb(pdb_file, **kwargs):
+    return get_pdb_structure(pdb_file, **kwargs)
 
 
 # %%
