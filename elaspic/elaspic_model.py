@@ -87,7 +87,8 @@ class Model:
 
         # Get interacting amino acids and interface area
         self.modeller_structure = (
-            structure_tools.get_pdb_structure(self.modeller_results['model_file'])
+            structure_tools.get_pdb_structure(
+                op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']))
         )
         self.modeller_chain_ids = [
             chain.id for chain in self.modeller_structure[0]
@@ -184,7 +185,6 @@ class Model:
                     (alignment_identity, alignment_coverage, alignment_score)
                 )
                 alignment_files.append(alignment_output_file)
-                domain_def_offsets.append(domain_def_offset)
                 self.sequence_seqrecords_aligned.append(alignment[0])
                 self.structure_seqrecords_aligned.append(alignment[1])
             else:
@@ -204,12 +204,14 @@ class Model:
             # either way
             domain_def_offsets.append(domain_def_offset)
             model_domain_def = (
-                (domain_def_offset[0] + 1, len(sequence_seqrec) - domain_def_offset[1],)
+                (domain_def_offset[0] + 1,
+                 domain_def_offset[0] + 1 + len(sequence_seqrec), )
             )
             model_domain_defs.append(model_domain_def)
 
         # Add the HETATM chain if necesasry.
         assert len(self.sequence_seqrecords_aligned) == len(self.structure_seqrecords_aligned)
+        # TODO: This looks wrong...
         if len(self.structure_seqrecords) == len(self.structure_seqrecords_aligned) + 1:
             self.sequence_seqrecords_aligned.append(self.structure_seqrecords[-1])
             self.structure_seqrecords_aligned.append(self.structure_seqrecords[-1])
@@ -228,7 +230,9 @@ class Model:
         self.modeller_results['alignment_files'] = [
             op.relpath(f, conf.CONFIGS['unique_temp_dir'])
             for f in alignment_files]
+        assert len(domain_def_offsets) <= 2
         self.modeller_results['domain_def_offsets'] = domain_def_offsets
+        assert len(model_domain_defs) <= 2
         self.modeller_results['model_domain_defs'] = model_domain_defs
         self.modeller_results['alignment_stats'] = alignment_stats
 
@@ -236,7 +240,8 @@ class Model:
         # Run the homology model through msms and get dataframes with all the
         # per atom and per residue SASA values
         analyze_structure = structure_analysis.AnalyzeStructure(
-            self.modeller_results['model_file'], conf.CONFIGS['modeller_dir']
+            op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
+            conf.CONFIGS['modeller_dir']
         )
         __, seasa_by_chain_separately, __, seasa_by_residue_separately = (
             analyze_structure.get_seasa()
@@ -312,19 +317,23 @@ class Model:
             ])
             try:
                 interface_aa_b = ''.join([
-                    str(self.sequence_seqrecords[chain_idx].seq)[i[0]] for i in a2b_contacts
+                    str(self.sequence_seqrecords[chain_idx].seq)[i[0]]
+                    for i in a2b_contacts
                 ])
             except IndexError as e:
                 logger.error('{}: {}'.format(type(e), e))
                 interface_aa_b = None
+
+            logger.debug('interface_aa_a: {}'.format(interface_aa_a))
+            logger.debug('interface_aa_b: {}'.format(interface_aa_b))
+            logger.debug('a2b_contacts: {}'.format(a2b_contacts))
+            logger.debug(
+                'self.sequence_seqrecords[chain_idx].seq: {}'
+                .format(self.sequence_seqrecords[chain_idx].seq)
+            )
+            logger.debug(
+                "domain_def_offsets: {}".format(self.modeller_results['domain_def_offsets']))
             if interface_aa_a != interface_aa_b:
-                logger.error('interface_aa_a: {}'.format(interface_aa_a))
-                logger.error('interface_aa_b: {}'.format(interface_aa_b))
-                logger.error('a2b_contacts: {}'.format(a2b_contacts))
-                logger.error(
-                    'self.sequence_seqrecords[chain_idx].seq: {}'
-                    .format(self.sequence_seqrecords[chain_idx].seq)
-                )
                 raise errors.InterfaceMismatchError()
 
         _validate_a2b_contacts(a2b_contacts, 0)
@@ -338,7 +347,8 @@ class Model:
 
         # Interface area
         analyze_structure = structure_analysis.AnalyzeStructure(
-            self.modeller_results['model_file'], conf.CONFIGS['modeller_dir']
+            op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
+            conf.CONFIGS['modeller_dir']
         )
         (self.interface_area_hydrophobic,
          self.interface_area_hydrophilic,
@@ -351,6 +361,9 @@ class Model:
 
         Parameters
         ----------
+        sequence_idx : int
+            Integer describing whether the mutation is on the first domain (`0`)
+            or on the second domain (`1`).
 
         Raises
         ------
@@ -372,13 +385,13 @@ class Model:
             len(self.sequence_seqrecords[sequence_idx].seq) - domain_def_offset[1]
         )
         mutation_pos = int(mutation[1:-1])
-        if mutation_pos < domain_def[0] or mutation_pos > domain_def[1]:
+        if mutation_pos > (domain_def[1] - domain_def[0] + 1):
             raise errors.MutationOutsideDomainError()
 
         position_modeller = (
             structure_tools.convert_position_to_resid(
                 self.modeller_structure[0][chain_id],
-                [int(mutation[1:-1]) - domain_def[0]])[0]
+                [mutation_pos])[0]
         )
         mutation_modeller = (mutation[0] + str(position_modeller) + mutation[-1])
         logger.debug('mutation: {}'.format(mutation))
@@ -444,7 +457,9 @@ class Model:
         #######################################################################
         # Copy the homology model to the mutation folder
         model_file = op.join(mutation_dir, op.basename(self.modeller_results['model_file']))
-        shutil.copy(self.modeller_results['model_file'], model_file)
+        shutil.copy(
+            op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
+            model_file)
 
         #######################################################################
         # 2nd: use the 'Repair' feature of FoldX to optimise the structure
