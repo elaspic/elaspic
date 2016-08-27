@@ -3,6 +3,7 @@ import pickle
 import logging
 import json
 
+import numpy as np
 import pandas as pd
 import sklearn.ensemble
 
@@ -223,11 +224,14 @@ WHERE (mut.uniprot_id, mut.mutation) in ({values})
     # Format alignment features
     results_df = pd.read_sql_query(sql_query, engine)
     results_df['alignment_identity'] = (
-        results_df['identical_1'] + results_df['identical_2']) / 2 / 100.0
+        np.sqrt(results_df['identical_1'] * results_df['identical_2'])
+    )
     results_df['alignment_coverage'] = (
-        results_df['coverage_1'] + results_df['coverage_2']) / 2 / 100.0
+        np.sqrt(results_df['coverage_1'] * results_df['coverage_2'])
+    )
     results_df['alignment_score'] = (
-        results_df['score_1'] + results_df['score_2']) / 2
+        np.sqrt(results_df['score_1'] * results_df['score_2'])
+    )
 
     # Format predictor features
     results_df = format_mutation_features(results_df)
