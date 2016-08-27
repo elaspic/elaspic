@@ -560,9 +560,9 @@ class UniprotDomainTemplate(Base):
     domain_start = sa.Column(sa.Integer, index=True)
     domain_end = sa.Column(sa.Integer, index=True)
     domain_def = sa.Column(sa.String(MEDIUM))
-    alignment_identity = sa.Column(sa.Float)
-    alignment_coverage = sa.Column(sa.Float)
-    alignment_score = sa.Column(sa.Float)
+    alignment_identity = sa.Column(sa.Float, sa.CheckConstraint('alignment_identity <= 1'))
+    alignment_coverage = sa.Column(sa.Float, sa.CheckConstraint('alignment_coverage <= 1'))
+    alignment_score = sa.Column(sa.Float, sa.CheckConstraint('alignment_score <= 1'))
     t_date_modified = sa.Column(
         sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
         nullable=False)
@@ -940,29 +940,29 @@ class UniprotDomainPairTemplate(Base):
             onupdate='cascade', ondelete='cascade'),
         nullable=False)
 
-    identical_1 = sa.Column(sa.Float)
-    conserved_1 = sa.Column(sa.Float)
-    coverage_1 = sa.Column(sa.Float)
-    score_1 = sa.Column(sa.Float)
+    identical_1 = sa.Column(sa.Float, sa.CheckConstraint('identical_1 <= 1'))
+    conserved_1 = sa.Column(sa.Float, sa.CheckConstraint('conserved_1 <= 1'))
+    coverage_1 = sa.Column(sa.Float, sa.CheckConstraint('coverage_1 <= 1'))
+    score_1 = sa.Column(sa.Float, sa.CheckConstraint('score_1 <= 1'))
 
-    identical_if_1 = sa.Column(sa.Float)
-    conserved_if_1 = sa.Column(sa.Float)
-    coverage_if_1 = sa.Column(sa.Float)
-    score_if_1 = sa.Column(sa.Float)
+    identical_if_1 = sa.Column(sa.Float, sa.CheckConstraint('identical_if_1 <= 1'))
+    conserved_if_1 = sa.Column(sa.Float, sa.CheckConstraint('conserved_if_1 <= 1'))
+    coverage_if_1 = sa.Column(sa.Float, sa.CheckConstraint('coverage_if_1 <= 1'))
+    score_if_1 = sa.Column(sa.Float, sa.CheckConstraint('score_if_1 <= 1'))
 
-    identical_2 = sa.Column(sa.Float)
-    conserved_2 = sa.Column(sa.Float)
-    coverage_2 = sa.Column(sa.Float)
-    score_2 = sa.Column(sa.Float)
+    identical_2 = sa.Column(sa.Float, sa.CheckConstraint('identical_2 <= 1'))
+    conserved_2 = sa.Column(sa.Float, sa.CheckConstraint('conserved_2 <= 1'))
+    coverage_2 = sa.Column(sa.Float, sa.CheckConstraint('coverage_2 <= 1'))
+    score_2 = sa.Column(sa.Float, sa.CheckConstraint('score_2 <= 1'))
 
-    identical_if_2 = sa.Column(sa.Float)
-    conserved_if_2 = sa.Column(sa.Float)
-    coverage_if_2 = sa.Column(sa.Float)
-    score_if_2 = sa.Column(sa.Float)
+    identical_if_2 = sa.Column(sa.Float, sa.CheckConstraint('identical_if_2 <= 1'))
+    conserved_if_2 = sa.Column(sa.Float, sa.CheckConstraint('conserved_if_2 <= 1'))
+    coverage_if_2 = sa.Column(sa.Float, sa.CheckConstraint('coverage_if_2 <= 1'))
+    score_if_2 = sa.Column(sa.Float, sa.CheckConstraint('score_if_2 <= 1'))
 
-    score_total = sa.Column(sa.Float)
-    score_if_total = sa.Column(sa.Float)
-    score_overall = sa.Column(sa.Float)
+    score_total = sa.Column(sa.Float, sa.CheckConstraint('score_total <= 1'))
+    score_if_total = sa.Column(sa.Float, sa.CheckConstraint('score_if_total <= 1'))
+    score_overall = sa.Column(sa.Float, sa.CheckConstraint('score_overall <= 1'))
 
     t_date_modified = sa.Column(
         sa.DateTime, default=datetime.datetime.utcnow,

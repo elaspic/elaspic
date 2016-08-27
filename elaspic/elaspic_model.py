@@ -640,7 +640,18 @@ def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data
 
 
 def analyze_alignment(alignment, pdb_contact_idxs=[]):
-    """
+    """Return scores describing the qualit of the alignment.
+
+    Returns
+    -------
+    identity : float <= 1
+        Core identity.
+    coverage : float <= 1
+        Core coverage.
+    if_identity : float <= 1
+        Interface identity.
+    if_coverage : float <= 1
+        Interface coverage.
     """
     pdb_aa_idx = -1
     sequence_1_length = 0
@@ -680,6 +691,10 @@ def analyze_alignment(alignment, pdb_contact_idxs=[]):
         if_identity = None
         if_coverage = None
 
+    assert identity <= 1
+    assert coverage <= 1
+    assert if_identity <= 1
+    assert if_coverage <= 1
     return identity, coverage, if_identity, if_coverage
 
 

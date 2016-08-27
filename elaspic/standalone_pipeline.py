@@ -106,7 +106,7 @@ class StandalonePipeline(Pipeline):
         # Parse mutations
         # There are many ways mutations can be specified here...
         # try one at at a time until something succeeds
-        mutations = dict()
+        parsed_mutations = dict()
 
         if self.sequence_file:
             possible_mutation_formats = ['3', '2', '1']
@@ -114,11 +114,11 @@ class StandalonePipeline(Pipeline):
             possible_mutation_formats = ['1', '2', '3']
 
         if mutation_format is not None:
-            self.mutations = self._parse_mutations(mutations, mutation_format)
+            parsed_mutations = self._parse_mutations(mutations, mutation_format)
         else:
             for mutation_format in possible_mutation_formats:
                 try:
-                    self.mutations = self._parse_mutations(mutations, mutation_format)
+                    parsed_mutations = self._parse_mutations(mutations, mutation_format)
                     break
                 except (IndexError, ValueError, errors.MutationMismatchError) as e:
                     error_message = (
@@ -127,9 +127,10 @@ class StandalonePipeline(Pipeline):
                     )
                     logger.error(error_message)
                     continue
-            if not self.mutations:
+            if not parsed_mutations:
                 raise errors.MutationMismatchError()
         logger.debug('parsed mutations: {}'.format(self.mutations))
+        return parsed_mutations
 
     def _parse_mutations(self, mutations, mutation_format='1'):
         """Parse mutations.
@@ -485,10 +486,8 @@ class PrepareMutation:
          features['alignment_score']) = (
              self.model.modeller_results['alignment_stats'][self.mutation_idx]
         )
-        features['alignment_identity'] = features['alignment_identity'] * 100
-        assert features['alignment_identity'] > 1 and features['alignment_identity'] < 101
-        features['alignment_coverage'] = features['alignment_coverage'] * 100
-        assert features['alignment_coverage'] > 1 and features['alignment_coverage'] < 101
+        assert features['alignment_identity'] > 0.01 and features['alignment_identity'] <= 1
+        assert features['alignment_coverage'] > 0.01 and features['alignment_coverage'] <= 1
 
         features['model_file_wt'] = results['model_file_wt']
         features['model_file_mut'] = results['model_file_mut']
