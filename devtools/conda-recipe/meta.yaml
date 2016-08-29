@@ -1,12 +1,12 @@
 package:
   name: elaspic
-  version: 1.0.23
+  version: 1.0.24
 
 source:
   path: ../../
 
 build:
-  number: 3
+  number: 1
   entry_points:
     - elaspic = elaspic.__main__:main
 
@@ -18,7 +18,6 @@ requirements:
     - requests
     - psutil
     - retrying
-    - fastcache
     # Scientific python
     - numpy
     - scipy
@@ -33,7 +32,7 @@ requirements:
     - mysqlclient
     - psycopg2
     # Kimlab
-    - kmtools
+    # - kmtools
   run:
     # Basic python
     - python
@@ -41,7 +40,6 @@ requirements:
     - requests
     - psutil
     - retrying
-    - fastcache
     # Scientific python
     - numpy
     - scipy
@@ -66,7 +64,7 @@ requirements:
     # - provean  # can't install fake_provean for tests if this is installed...
     # - foldx  # private only and breaks readthedocs
     # Kimlab
-    - kmtools
+    # - kmtools
 
 test:
   requires:
@@ -88,3 +86,4 @@ about:
   license: MIT
   summary: Ensemble Learning Approach for Stability Prediction of
            Interface and Core mutations (ELASPIC).
+

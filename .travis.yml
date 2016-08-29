@@ -36,7 +36,7 @@ install:
   - conda update -q conda
   - conda install -q --yes conda-build
   # Build elaspic
-  - conda build -q devtools/conda-recipe/
+  - conda build devtools/conda-recipe/
 before_script:
   # Create a test environment
   - source activate _test
