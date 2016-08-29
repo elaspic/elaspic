@@ -147,6 +147,17 @@ def get_pdb_structure(pdb_file, pdb_id=None, quiet=True):
             structure = parser.get_structure(pdb_id, ifh)
     else:
         structure = parser.get_structure(pdb_id, pdb_file)
+
+    # Rename empty chains (i.e. chain.id == ' ')
+    model = structure[0]
+    chain_ids = {chain.id for chain in model.child_list}
+    for chain in model.child_list:
+        if chain.id in [' ', 'Z']:
+            chain_ids.remove(chain.id)
+            chain.id = next(c for c in string.ascii_uppercase if c not in chain_ids)
+            chain_ids.add(chain.id)
+    model.child_dict = {chain.id: chain for chain in model.child_list}
+
     return structure
 
 

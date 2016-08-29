@@ -32,7 +32,7 @@ def read_configuration_file(config_file=None, **vargs):
     if config_file is not None:
         config.read(config_file)
     for key, value in vargs.items():
-        config[key].update(value)
+        config[key].update(str(value))
 
     # [DEFAULTS]
     read_default_configs(config['DEFAULT'])

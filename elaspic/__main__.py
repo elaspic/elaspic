@@ -49,22 +49,39 @@ when you specify a target sequence using the '--sequence_file' option!""")
 def elaspic(args):
     validate_args(args)
 
+    # Read configurations
+    if args.config_file is not None:
+        conf.read_configuration_file(args.config_file)
+    elif args.uniprot_id:
+        conf.read_configuration_file(
+            DATABASE={
+                'connection_string': args.connection_string
+            },
+            EXTERNAL_DIRS={
+                'pdb_dir': args.pdb_dir,
+                'blast_db_dir': args.blast_db_dir,
+                'archive_dir': args.archive_dir,
+            },
+            LOGGER={
+                'level': LOGGING_LEVELS[args.verbose],
+            })
+    elif args.structure_file:
+        unique_temp_dir = op.abspath(op.join(os.getcwd(), '.elaspic'))
+        os.makedirs(unique_temp_dir, exist_ok=True)
+        conf.read_configuration_file(
+            DEFAULT={
+                'unique_temp_dir': unique_temp_dir
+            },
+            EXTERNAL_DIRS={
+                'pdb_dir': args.pdb_dir,
+                'blast_db_dir': args.blast_db_dir,
+                'archive_dir': args.archive_dir
+            },
+            LOGGER={
+                'level': LOGGING_LEVELS[args.verbose],
+            })
+
     if args.uniprot_id:
-        if args.config_file is not None:
-            conf.read_configuration_file(args.config_file)
-        else:
-            conf.read_configuration_file(
-                DATABASE={
-                    'connection_string': args.connection_string
-                },
-                EXTERNAL_DIRS={
-                    'pdb_dir': args.pdb_dir,
-                    'blast_db_dir': args.blast_db_dir,
-                    'archive_dir': args.archive_dir,
-                },
-                LOGGER={
-                    'level': LOGGING_LEVELS[args.verbose],
-                })
         # Run database pipeline
         if args.uniprot_domain_pair_ids:
             logger.debug('uniprot_domain_pair_ids: {}'.format(args.uniprot_domain_pair_ids))
@@ -82,21 +99,7 @@ def elaspic(args):
         )
         pipeline.run()
     elif args.structure_file:
-        unique_temp_dir = op.abspath(op.join(os.getcwd(), '.elaspic'))
-        os.makedirs(unique_temp_dir, exist_ok=True)
         print(LOGGING_LEVELS[args.verbose])
-        conf.read_configuration_file(
-            DEFAULT={
-                'unique_temp_dir': unique_temp_dir
-            },
-            EXTERNAL_DIRS={
-                'pdb_dir': args.pdb_dir,
-                'blast_db_dir': args.blast_db_dir,
-                'archive_dir': args.archive_dir
-            },
-            LOGGER={
-                'level': LOGGING_LEVELS[args.verbose],
-            })
         # Run local pipeline
         from elaspic import standalone_pipeline
         pipeline = standalone_pipeline.StandalonePipeline(
