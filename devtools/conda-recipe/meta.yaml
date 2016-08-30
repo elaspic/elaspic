@@ -32,7 +32,7 @@ requirements:
     - mysqlclient
     - psycopg2
     # Kimlab
-    # - kmtools
+    - kmtools
   run:
     # Basic python
     - python
@@ -53,6 +53,8 @@ requirements:
     - sqlite
     - mysqlclient
     - psycopg2
+    # Kimlab
+    - kmtools
     # Binary files
     - p7zip
     - blast
@@ -63,8 +65,6 @@ requirements:
     - cd-hit
     # - provean  # can't install fake_provean for tests if this is installed...
     # - foldx  # private only and breaks readthedocs
-    # Kimlab
-    # - kmtools
 
 test:
   requires:
@@ -86,4 +86,3 @@ about:
   license: MIT
   summary: Ensemble Learning Approach for Stability Prediction of
            Interface and Core mutations (ELASPIC).
-
