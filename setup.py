@@ -32,7 +32,7 @@ class TrainPredictors(Command):
 
 setup(
     name='elaspic',
-    version='1.0.25',
+    version='1.0.26',
     description=META.get('about', {}).get('summary', ''),
     url=META.get('about', {}).get('home', ''),
     author='kimlab',
