@@ -63,8 +63,8 @@ requirements:
     - msms
     - t_coffee
     - cd-hit
-    # - provean  # can't install fake_provean for tests if this is installed...
-    # - foldx  # private only and breaks readthedocs
+    - provean  # can't install fake_provean for tests if this is installed...
+    - foldx  # private only and breaks readthedocs
 
 test:
   requires:
@@ -73,12 +73,13 @@ test:
     - pytest-cov
     - pep8
     - flake8
-    - fake_provean
-    - fake_foldx
+    - provean ==1.0.3.mock
+    - foldx ==3.0.6.mock
   imports:
     - elaspic
   commands:
     - elaspic --help
+    - elaspic run --help
     - elaspic database --help
 
 about:

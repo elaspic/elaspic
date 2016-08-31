@@ -1,4 +1,4 @@
 #!/bin/bash
 
 mkdir -p $PREFIX/bin
-cp provean $PREFIX/bin/provean
+cp $RECIPE_DIR/provean $PREFIX/bin/provean
