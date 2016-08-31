@@ -124,7 +124,7 @@ class DatabasePipeline(Pipeline):
             )
 
         # Analyse mutations
-        if self.run_type in ['3', '4', '5', 'mutations'] and self.mutations:
+        if self.run_type in ['3', '4', '5', 'mutation'] and self.mutations:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Analyzing mutations...")
             for d in self.uniprot_domains + self.uniprot_domain_pairs:
