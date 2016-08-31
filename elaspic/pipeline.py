@@ -2,7 +2,8 @@ import os
 import six
 import logging
 import functools
-import Bio
+import Bio.Seq
+import Bio.SeqRecord
 
 from . import conf, errors
 
