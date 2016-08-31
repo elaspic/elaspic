@@ -76,11 +76,6 @@ class StandalonePipeline(Pipeline):
             self.sequence_file = sequence_file
         logger.debug('self.sequence_file: {}'.format(self.sequence_file))
 
-        self.mutations = self._split_mutations(mutations)
-        if 'mutation' in self.run_type:
-            self.mutations = self.parse_mutations(self.mutations, mutation_format)
-        logger.debug('mutations: {}'.format(self.mutations))
-
         # Use the PDB chain to index mutations both with and without the index file
         if not self.sequence_file:
             # Read template sequences from the PDB
@@ -95,6 +90,11 @@ class StandalonePipeline(Pipeline):
             self.seqrecords = tuple(SeqIO.parse(self.sequence_file, 'fasta'))
             for i, seqrec in enumerate(self.seqrecords):
                 seqrec.id = helper.slugify('{}_{}'.format(seqrec.id, str(i)))
+
+        self.mutations = self._split_mutations(mutations)
+        if 'mutation' in self.run_type:
+            self.mutations = self.parse_mutations(self.mutations, mutation_format)
+        logger.debug('mutations: {}'.format(self.mutations))
 
         if len(self.sp.chain_ids) != len(self.seqrecords):
             logger.warning(
