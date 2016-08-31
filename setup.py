@@ -1,10 +1,5 @@
 import os.path as op
 from setuptools import setup, Command
-import yaml
-
-
-with open('devtools/conda-recipe/meta.yaml', 'rb') as ifh:
-    META = yaml.load(ifh)
 
 
 def read(fname):
@@ -33,18 +28,21 @@ class TrainPredictors(Command):
 setup(
     name='elaspic',
     version='1.0.29',
-    description=META.get('about', {}).get('summary', ''),
-    url=META.get('about', {}).get('home', ''),
+    description=(
+        "Ensemble Learning Approach for Stability Prediction of "
+        "Interface and Core mutations (ELASPIC)."),
+    url="https://github.com/kimlaborg/elaspic",
     author='kimlab',
     author_email='alex.strokach@utoronto.ca',
     packages=['elaspic'],
     package_data={'elaspic': ['data/*']},
     long_description=read("README.md"),
-    entry_points={'console_scripts': META.get('build', {}).get('entry_points', '')},
+    entry_points={
+        'console_scripts': 'elaspic = elaspic.__main__:main'
+    },
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "Topic :: Structural Biology",
-        "Topic :: Bioinformatics",
+        "Programming Language :: Python :: 3 :: Only",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
     cmdclass={'train': TrainPredictors},
 )

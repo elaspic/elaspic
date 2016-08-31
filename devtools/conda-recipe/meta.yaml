@@ -83,7 +83,7 @@ test:
     - elaspic database --help
 
 about:
-  home: elaspic.kimlab.org
+  home: http://elaspic.kimlab.org
   license: MIT
   summary: Ensemble Learning Approach for Stability Prediction of
            Interface and Core mutations (ELASPIC).
