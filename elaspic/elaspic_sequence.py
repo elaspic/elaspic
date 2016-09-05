@@ -138,7 +138,7 @@ class Sequence:
         )
         return result
 
-    def _build_provean_supset(self):
+    def _build_provean_supset(self, mutation=None):
         """
         """
         logger.debug('Building Provean supporting set. This might take a while...')
@@ -149,28 +149,14 @@ class Sequence:
         while self.sequence[any_position] not in CANONICAL_AMINO_ACIDS:
             any_position += 1
         first_aa = self.sequence[any_position]
-        mutation = '{0}{1}{0}'.format(first_aa, any_position + 1)
+        if mutation is None:
+            mutation = '{0}{1}{0}'.format(first_aa, any_position + 1)
 
         # Run provean
         provean_score = self._run_provean(
             mutation, save_supporting_set=True, check_mem_usage=True
         )
         return provean_score
-#        provean_supset_length = None
-#        for line in result.split('\n'):
-#            if 'Number of supporting sequences used:' in line:
-#                provean_supset_length = int(line.split()[-1])
-#        if provean_supset_length is None:
-#            logger.error('Provean supporting set length could not be estimated.
-#            This is an error!')
-#            logger.error('Provean result: {}'.format(result))
-#            logger.error('Provean error_message: {}'.format(error_message))
-#            logger.error('Provean return_code: {}'.format(return_code))
-#            logger.error('Protein sequence: {}'.format(self.sequence))
-#            logger.error('Protein mutation: {}'.format(mutation))
-#
-#        logger.info('Provean supset length: {}'.format(provean_supset_length))
-#        return provean_supset_length
 
     def _get_provean_supset_length(self):
         provean_supset_length = 0
@@ -182,6 +168,7 @@ class Sequence:
 
     def run_provean(self, mutation, *args, **kwargs):
         n_tries = 0
+        provean_score = None
         while n_tries < 5:
             n_tries += 1
             try:
@@ -200,6 +187,9 @@ class Sequence:
                             provean_supset_data.append(line)
                 with open(self.provean_supset_file, 'wt') as ofh:
                     ofh.writelines(provean_supset_data)
+        if provean_score is None:
+            # Recalculate provean supporting set
+            provean_score = self._build_provean_supset(mutation)
         return provean_score
 
     def _run_provean(self, mutation, save_supporting_set=False, check_mem_usage=False):
