@@ -1,11 +1,18 @@
 import os.path as op
 from setuptools import setup, Command
 
+try:
+    from pypandoc import convert
 
-def read(fname):
-    """Read the contents of a file."""
-    with open(op.join(op.dirname(__file__), fname)) as ifh:
-        return ifh.read()
+    def read_md(file):
+        return convert(file, 'rst')
+
+except ImportError:
+    print("warning: pypandoc module not found, could not convert Markdown to RST")
+
+    def read_md(file):
+        with open(op.join(op.dirname(__file__), file)) as ifh:
+            return ifh.read()
 
 
 class TrainPredictors(Command):
@@ -36,7 +43,7 @@ setup(
     author_email='alex.strokach@utoronto.ca',
     packages=['elaspic'],
     package_data={'elaspic': ['data/*']},
-    long_description=read("README.md"),
+    long_description=read_md("README.md"),
     entry_points={
         'console_scripts': 'elaspic = elaspic.__main__:main'
     },
