@@ -4,7 +4,7 @@
 - [Mycobacterium tuberculosis whole genome sequencing and protein structure modelling provides insights into anti-tuberculosis drug resistance](http://doi.org/10.1186/s12916-016-0575-9)
 - [mCSM-lig: quantifying the effects of mutations on protein-small molecule affinity in genetic disease and emergence of drug resistance](http://www.nature.com/articles/srep29575)
 - [PockeTome](http://pocketome.org/index.cgi?act=browseall) The Pocketome  is an encyclopedia of conformational ensembles of druggable binding sites that can be identified experimentally from co-crystal structures in the Protein Data Bank.
-
+- [TIMBAL](http://mordred.bioc.cam.ac.uk/timbal/all) TIMBAL is a database containing small molecules that modulate protein-protein interactions. It was first created in 2008, by manually curating information extracted from relevant scientific publications.
 
 ## Validation datasets
 
