@@ -3,7 +3,9 @@
 - [Platinum: a database of experimentally measured effects of mutations on structurally defined protein–ligand complexes](http://doi.org/10.1093/nar/gku966)
 - [Mycobacterium tuberculosis whole genome sequencing and protein structure modelling provides insights into anti-tuberculosis drug resistance](http://doi.org/10.1186/s12916-016-0575-9)
 - [mCSM-lig: quantifying the effects of mutations on protein-small molecule affinity in genetic disease and emergence of drug resistance](http://www.nature.com/articles/srep29575)
-- [PockeTome](http://pocketome.org/index.cgi?act=browseall) The Pocketome  is an encyclopedia of conformational ensembles of druggable binding sites that can be identified experimentally from co-crystal structures in the Protein Data Bank. Each Pocketome entry describes a site on a protein surface that is involved in transient interactions with small molecules and peptides. The automatic Pocketome generation procedure includes only proteins that (i) have an entry in the reviewed part of the Uniprot knowledgebase, (ii) have been co-crystallized in complex with at least one drug-like small molecule, and (iii) are represented by at least two PDB entries. As a result of manual curation, the Pocketome also contains some proteins and binding sites that do not satisfy one or more of the above requirements.
+- [PockeTome](http://pocketome.org/index.cgi?act=browseall) The Pocketome  is an encyclopedia of conformational ensembles of druggable binding sites that can be identified experimentally from co-crystal structures in the Protein Data Bank.
+
+
 ## Validation datasets
 
 [Affinity improvement of a therapeutic antibody to methamphetamine and amphetamine through structure-based antibody engineering
