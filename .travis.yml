@@ -1,7 +1,5 @@
 sudo: false
-language: python
-python:
-  - '3.5'
+language: generic
 services:
   - mysql
 env:
@@ -37,13 +35,15 @@ install:
   - conda install -q --yes conda-build
   # Build elaspic
   - conda build devtools/conda-recipe/
-before_script:
-  # Create a test environment
-  - source activate _test
-  - conda install -q --yes fake_provean fake_foldx anaconda-client
 script:
   # Run tests
+  - conda create -n _test $PKG_NAME --use-local
+  - source activate _test
+  - conda install --yes fake_provean fake_foldx anaconda-client
+  - pip install pytest flake8 pytest-runner pytest-cov pytest-logging
+  - py.test -vvv
   - travis_wait 119 "${SCRIPTS_DIR}/travis-ci.sh"
+  - source deactivate
 after_success:
   - echo "Success!"
   - pip install codecov
