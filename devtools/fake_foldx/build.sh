@@ -1,4 +1,4 @@
 #!/bin/bash
 
 mkdir -p $PREFIX/bin
-cp foldx $PREFIX/bin/foldx
+cp $RECIPE_DIR/foldx $PREFIX/bin/foldx

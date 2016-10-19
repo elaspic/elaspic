@@ -1,12 +1,12 @@
 package:
   name: elaspic
-  version: 1.0.24
+  version: 0.1.39
 
 source:
   path: ../../
 
 build:
-  number: 3
+  number: 1
   entry_points:
     - elaspic = elaspic.__main__:main
 
@@ -18,7 +18,6 @@ requirements:
     - requests
     - psutil
     - retrying
-    - fastcache
     # Scientific python
     - numpy
     - scipy
@@ -29,9 +28,7 @@ requirements:
     - modeller
     # Database access
     - sqlalchemy
-    - sqlite
-    - mysqlclient
-    - psycopg2
+    # - mysqlclient  # can use PyMYSQL instead...
     # Kimlab
     - kmtools
   run:
@@ -41,7 +38,6 @@ requirements:
     - requests
     - psutil
     - retrying
-    - fastcache
     # Scientific python
     - numpy
     - scipy
@@ -52,9 +48,9 @@ requirements:
     - modeller
     # Database access
     - sqlalchemy
-    - sqlite
-    - mysqlclient
-    - psycopg2
+    # - mysqlclient  # can use PyMYSQL instead...
+    # Kimlab
+    - kmtools
     # Binary files
     - p7zip
     - blast
@@ -63,10 +59,8 @@ requirements:
     - msms
     - t_coffee
     - cd-hit
-    # - provean  # can't install fake_provean for tests if this is installed...
-    # - foldx  # private only and breaks readthedocs
-    # Kimlab
-    - kmtools
+    - provean  # can't install fake_provean for tests if this is installed...
+    - foldx  # private only and breaks readthedocs
 
 test:
   requires:
@@ -75,16 +69,17 @@ test:
     - pytest-cov
     - pep8
     - flake8
-    - fake_provean
-    - fake_foldx
+    - provean ==1.0.3.mock
+    - foldx ==3.0.6.mock
   imports:
     - elaspic
   commands:
     - elaspic --help
+    - elaspic run --help
     - elaspic database --help
 
 about:
-  home: elaspic.kimlab.org
+  home: http://elaspic.kimlab.org
   license: MIT
   summary: Ensemble Learning Approach for Stability Prediction of
            Interface and Core mutations (ELASPIC).

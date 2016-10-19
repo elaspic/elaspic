@@ -1,10 +1,10 @@
 package:
-  name: fake_provean
-  version: "1.0.3"
+  name: provean
+  version: "1.0.3.mock"
 
 build:
   noarch_python: True
-  number: 1
+  number: 0
 
 requirements:
   run:
@@ -17,4 +17,3 @@ test:
 about:
   license: MIT
   summary: A dummy script that pretends that it's provean when testing ELASPIC.
-

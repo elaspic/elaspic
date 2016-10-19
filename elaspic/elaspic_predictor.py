@@ -82,6 +82,17 @@ FEATURE_COLUMNS_INTERFACE = (
 )
 
 
+def _split_foldx_features(df, foldx_column_name, foldx_feature_names):
+    df = df.copy()
+    for column_index, column_name in enumerate(foldx_feature_names):
+        df[column_name] = [
+            (float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
+            for x in df[foldx_column_name].values
+        ]
+    del df[foldx_column_name]
+    return df
+
+
 def format_mutation_features(df):
     """.
 
@@ -102,62 +113,81 @@ def format_mutation_features(df):
 
     """
     df = df.copy()
-    if 'analyse_complex_energy_wt' in df.columns:
-        foldx_column_name = 'analyse_complex_energy'
-        foldx_feature_names_wt = call_foldx.names_stability_complex_wt
-        foldx_feature_names_mut = call_foldx.names_stability_complex_mut
-    else:
-        foldx_column_name = 'stability_energy'
-        foldx_feature_names_wt = call_foldx.names_stability_wt
-        foldx_feature_names_mut = call_foldx.names_stability_mut
-
-    # Drop rows that have missing FoldX information
-    # (should not happen when callced from inside the pipeline because we have only one column)
-    # feature_df = feature_df.dropna(
-    #   subset=[foldx_column_name + '_wt', foldx_column_name + '_mut'])
-
-    # FoldX output
-    for column_index, column_name in enumerate(foldx_feature_names_wt):
-        df[column_name] = df[foldx_column_name + '_wt'].apply(
-            lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else x)
-    del df[foldx_column_name + '_wt']
-
-    for column_index, column_name in enumerate(foldx_feature_names_mut):
-        df[column_name] = df[foldx_column_name + '_mut'].apply(
-            lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else x)
-    del df[foldx_column_name + '_mut']
 
     # PhysicoChemical properties
     names_phys_chem = ['pcv_salt_equal', 'pcv_salt_opposite', 'pcv_hbond', 'pcv_vdw']
     for column_index, column_name in enumerate(names_phys_chem):
         df[column_name + '_wt'] = (
             df['physchem_wt']
-            .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
+            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
         )
         df[column_name + '_self_wt'] = (
             df['physchem_wt_ownchain']
-            .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
+            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
         )
         df[column_name + '_mut'] = (
             df['physchem_mut']
-            .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
+            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
         )
         df[column_name + '_self_mut'] = (
             df['physchem_mut_ownchain']
-            .apply(lambda x: int(x.split(',')[column_index]) if pd.notnull(x) else x)
+            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
         )
     del df['physchem_wt']
     del df['physchem_wt_ownchain']
     del df['physchem_mut']
     del df['physchem_mut_ownchain']
 
+    # Secondary structure
     for col in df.columns:
         if 'secondary_structure' in col:
             df[col] = (
                 df[col]
-                .apply(lambda x: secondary_structure_to_int[x] if pd.notnull(x) else x)
+                .apply(lambda x: float(secondary_structure_to_int[x]) if pd.notnull(x) else np.nan)
             )
-    return df
+
+    # FoldX
+    result = []
+
+    foldx_core_column_name = 'stability_energy'
+    foldx_interface_column_name = 'analyse_complex_energy'
+
+    # Check to see if we have any interface mutations
+    if ((foldx_interface_column_name + '_wt') in df.columns and
+            df[(foldx_interface_column_name + '_wt')].notnull().any()):
+
+        # Parse FoldX interface features
+        df_interface = df[df[(foldx_interface_column_name + '_wt')].notnull()]
+        df_interface = _split_foldx_features(
+            df_interface,
+            foldx_interface_column_name + '_wt',
+            call_foldx.names_stability_complex_wt)
+        df_interface = _split_foldx_features(
+            df_interface,
+            foldx_interface_column_name + '_mut',
+            call_foldx.names_stability_complex_mut)
+        result.append(df_interface)
+
+        df_core = df[df[(foldx_interface_column_name + '_wt')].isnull()]
+
+    else:
+        df_core = df
+
+    # Parse FoldX core features
+    df_core = _split_foldx_features(
+        df_core,
+        foldx_core_column_name + '_wt',
+        call_foldx.names_stability_wt)
+    df_core = _split_foldx_features(
+        df_core,
+        foldx_core_column_name + '_mut',
+        call_foldx.names_stability_mut)
+    result.append(df_core)
+
+    result_df = pd.concat(result, ignore_index=True)
+    assert result_df.shape[0] == df.shape[0]
+
+    return result_df
 
 
 def convert_features_to_differences(df, keep_mut=False):
@@ -319,8 +349,15 @@ class _Predictor:
             Same as the input dataframe, except with one additional column: `ddg`.
         """
         self._assert_trained()
-        df = format_mutation_features(df)
-        df = convert_features_to_differences(df, True)  # keep mut, remove it in next step
+        try:
+            df = format_mutation_features(df)
+        except KeyError:
+            pass
+        try:
+            # Keep mut, remove it in next step
+            df = convert_features_to_differences(df, True)
+        except KeyError:
+            pass
         ddg = self.clf.predict(df[self.features])
         return ddg
 

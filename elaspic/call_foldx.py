@@ -3,7 +3,6 @@ import os.path as op
 import shutil
 import logging
 
-import faketime.config
 from . import conf, errors, helper
 
 logger = logging.getLogger(__name__)
@@ -174,6 +173,8 @@ class FoldX(object):
 
         .. todo:: Add a fallback plan using libfaketime.
         """
+        import faketime.config
+
         # system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
         system_command = "foldx -runfile '{}'".format(self.foldx_runfile)
         logger.debug("FoldX system command: '{}'".format(system_command))

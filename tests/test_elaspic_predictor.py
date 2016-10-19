@@ -1,5 +1,7 @@
 import os.path as op
-import elaspic.elaspic_predictor
+import pandas as pd
+import elaspic, elaspic.elaspic_predictor
+import pytest
 
 
 _foldx_core_features = [
@@ -91,14 +93,35 @@ def test_feature_columns_interface():
     assert not xor, xor
 
 
+# ==== xxx ====
+
+def test_format_mutation_features():
+    df = pd.read_csv(op.join(op.splitext(__file__)[0], 'df2.tsv'), sep='\t')
+    assert df['stability_energy_wt'].notnull().all()
+    assert df['stability_energy_mut'].notnull().all()
+    df2 = elaspic.elaspic_predictor.format_mutation_features(df)
+    assert df2['dg_wt'].notnull().all()
+    assert df2['dg_wt'].dtype != object
+    assert df2['dg_mut'].notnull().all()
+    assert df2['dg_mut'].dtype != object
+    df3 = elaspic.elaspic_predictor.convert_features_to_differences(df2)
+    assert df3['dg_change'].notnull().all()
+
+
 class TestElaspicPredictor:
 
     @classmethod
     def setup_class(cls):
-        cls.predictor = elaspic.Predictor(data_dir=op.abspath(op.splitext(__file__)[0]))
+        cls.predictor = elaspic.elaspic_predictor.CorePredictor()
 
-    def test_train(self):
-        self.predictor.train()
+    def test_load(self):
+        self.predictor.load(elaspic.DATA_DIR)
 
     def test_score(self):
-        self.predictor()
+        dfs = [
+            # pd.read_csv(op.join(op.splitext(__file__)[0], 'df1.tsv'), sep='\t'),
+            pd.read_csv(op.join(op.splitext(__file__)[0], 'df2.tsv'), sep='\t')
+        ]
+        for df in dfs:
+            df['ddg'] = self.predictor.score(df)
+            assert df['ddg'].notnull().all()

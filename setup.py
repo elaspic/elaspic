@@ -1,16 +1,18 @@
 import os.path as op
 from setuptools import setup, Command
-import yaml
 
+try:
+    from pypandoc import convert
 
-with open('devtools/conda-recipe/meta.yaml', 'rb') as ifh:
-    META = yaml.load(ifh)
+    def read_md(file):
+        return convert(file, 'rst')
 
+except ImportError:
+    print("warning: pypandoc module not found, could not convert Markdown to RST")
 
-def read(fname):
-    """Read the contents of a file."""
-    with open(op.join(op.dirname(__file__), fname)) as ifh:
-        return ifh.read()
+    def read_md(file):
+        with open(op.join(op.dirname(__file__), file)) as ifh:
+            return ifh.read()
 
 
 class TrainPredictors(Command):
@@ -32,19 +34,22 @@ class TrainPredictors(Command):
 
 setup(
     name='elaspic',
-    version='1.0.24',
-    description=META.get('about', {}).get('summary', ''),
-    url=META.get('about', {}).get('home', ''),
+    version='0.1.39',
+    description=(
+        "Ensemble Learning Approach for Stability Prediction of "
+        "Interface and Core mutations (ELASPIC)."),
+    url="https://github.com/kimlaborg/elaspic",
     author='kimlab',
     author_email='alex.strokach@utoronto.ca',
     packages=['elaspic'],
     package_data={'elaspic': ['data/*']},
-    long_description=read("README.md"),
-    entry_points={'console_scripts': META.get('build', {}).get('entry_points', '')},
+    long_description=read_md("README.md"),
+    entry_points={
+        'console_scripts': 'elaspic = elaspic.__main__:main'
+    },
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "Topic :: Structural Biology",
-        "Topic :: Bioinformatics",
+        "Programming Language :: Python :: 3 :: Only",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
     cmdclass={'train': TrainPredictors},
 )

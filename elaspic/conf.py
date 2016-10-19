@@ -1,3 +1,13 @@
+"""Configure ELASPIC pipeline.
+
+.. todo::
+
+    This is kind of a mess right now...
+    We have a function for each section of the config file,
+    values are not allowed to be integers, etc.
+
+    Deprecate configuration files and do everything from the command line?
+"""
 import os
 import os.path as op
 import tempfile
@@ -22,35 +32,41 @@ DEFAULT = {
 }
 
 
-def read_configuration_file(config_file=None, **vargs):
-    """."""
-    if 'DEFAULT' in vargs:
-        DEFAULT.update(vargs['DEFAULT'])
+def read_configuration_file(config_file=None, **kwargs):
+    if 'DEFAULT' in kwargs:
+        DEFAULT.update(kwargs.pop('DEFAULT'))
     config = configparser.ConfigParser(defaults=DEFAULT)
-    for category in ['DATABASE', 'EXTERNAL_DIRS', 'MODEL', 'LOGGER']:
-        config[category] = {}
+    config_parser('DEFAULT')(config['DEFAULT'])
+
     if config_file is not None:
         config.read(config_file)
-    for key, value in vargs.items():
-        config[key].update(str(value))
 
-    # [DEFAULTS]
-    read_default_configs(config['DEFAULT'])
+    for category in ['EXTERNAL_DIRS', 'DATABASE', 'MODEL', 'LOGGER']:
+        if category not in config:
+            config[category] = {}
+        if category in kwargs:
+            opts = {k: str(v) for k, v in kwargs.pop(category).items()}
+            config[category].update(opts)
+        config_parser(category)(config[category])
 
-    # [EXTERNAL_DIRS]
-    read_sequence_configs(config['EXTERNAL_DIRS'])
+    assert not kwargs
 
-    # [DATABASE]
-    read_database_configs(config['DATABASE'])
-
-    # [MODEL]
-    read_model_configs(config['MODEL'])
-
-    # [LOGGER]
-    read_logger_configs(config['LOGGER'])
-
-    # TODO: Update `unique_temp_dir` and dependencies.
     _prepare_temp_folders(CONFIGS)
+
+
+def config_parser(category):
+    if category == 'DEFAULT':
+        return read_default_configs
+    elif category == 'EXTERNAL_DIRS':
+        return read_sequence_configs
+    elif category == 'DATABASE':
+        return read_database_configs
+    elif category == 'MODEL':
+        return read_model_configs
+    elif category == 'LOGGER':
+        return read_logger_configs
+    else:
+        raise Exception("Unknown category: '{}'".format(category))
 
 
 def read_default_configs(config):

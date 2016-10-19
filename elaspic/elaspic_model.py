@@ -684,17 +684,18 @@ def analyze_alignment(alignment, pdb_contact_idxs=[]):
 
     identity = sequence_1_identity / float(sequence_1_length)
     coverage = sequence_1_coverage / float(sequence_1_length)
+    assert identity <= 1
+    assert coverage <= 1
+
     if pdb_contact_idxs:
         if_identity = sequence_1_identity / float(len(pdb_contact_idxs))
         if_coverage = interface_1_coverage / float(len(pdb_contact_idxs))
+        assert if_identity <= 1
+        assert if_coverage <= 1
     else:
         if_identity = None
         if_coverage = None
 
-    assert identity <= 1
-    assert coverage <= 1
-    assert if_identity <= 1
-    assert if_coverage <= 1
     return identity, coverage, if_identity, if_coverage
 
 
