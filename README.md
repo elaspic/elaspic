@@ -17,7 +17,7 @@ For a small number of mutations, you can try running ELASPIC using our [webserve
 
 ## Development
 
-[Documentation](docs/index.md)
+- Use the issue tracker to discuss changes.
 
 
 ## References
