@@ -10,9 +10,14 @@
 
 Welcome to the ELASPIC code repository!
 
-Complete documentation is availible on [ReadTheDocs](http://elaspic.readthedocs.io).
+Complete documentation is available on [ReadTheDocs](http://elaspic.readthedocs.io).
 
 For a small number of mutations, you can try running ELASPIC using our [webserver](http://elaspic.kimlab.org).
+
+
+## Development
+
+[Documentation](docs/index.md)
 
 
 ## References
@@ -22,3 +27,7 @@ Witvliet D, Strokach A, Giraldo-Forero AF, Teyra J, Colak R, and Kim PM (2016)
 
 Berliner N, Teyra J, Çolak R, Garcia Lopez S, Kim PM (2014) *Combining Structural Modeling with Ensemble Machine Learning to Accurately Predict Protein Fold Stability and Binding Affinity Effects upon Mutation.* PLoS ONE 9(9): e107353. doi: [10.1371/journal.pone.0107353](https://doi.org/10.1371/journal.pone.0107353).
 
+
+## License
+
+MIT
