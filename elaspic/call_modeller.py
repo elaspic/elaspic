@@ -50,7 +50,7 @@ class Modeller(object):
         counter = 0
         max_counter = 3
         while not ranking and counter < max_counter:
-            logger.debug("counter: {}, ranking: '{}'".format(counter, ranking))
+            logger.debug("counter: %s, ranking: '%s'", counter, ranking)
             counter += 1
             # NB: You can actually supply many alignments and modeller will give
             # you the alignment with the best model

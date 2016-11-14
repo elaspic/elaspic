@@ -73,8 +73,8 @@ class Model:
             shutil.copy(modeller_results_file, self.modeller_results_file)
         if op.isfile(self.modeller_results_file):
             logger.debug(
-                'Loading precalculated modeller results from file: {}'
-                .format(self.modeller_results_file)
+                'Loading precalculated modeller results from file: %s',
+                self.modeller_results_file
             )
             with open(self.modeller_results_file) as ifh:
                 self.modeller_results = json.load(ifh)
@@ -380,11 +380,15 @@ class Model:
 
         # Domain definitions, in case not the entire sequence was modelled
         domain_def_offset = self.modeller_results['domain_def_offsets'][sequence_idx]
-        domain_def = (
-            domain_def_offset[0],
-            len(self.sequence_seqrecords[sequence_idx].seq) - domain_def_offset[1]
-        )
-        mutation_pos = int(mutation[1:-1])
+        domain_def = self.modeller_results['model_domain_defs'][sequence_idx]
+        logger.debug("domain_def_offset: %s", domain_def_offset)
+        logger.debug("domain_def: %s", domain_def)
+        # domain_def = (
+        #     domain_def_offset[0],
+        #     len(self.sequence_seqrecords[sequence_idx].seq) - domain_def_offset[1]
+        # )
+
+        mutation_pos = int(mutation[1:-1]) - domain_def[0] + 1
         if mutation_pos > (domain_def[1] - domain_def[0] + 1):
             raise errors.MutationOutsideDomainError()
 

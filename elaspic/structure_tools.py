@@ -699,8 +699,8 @@ class StructureParser:
                 self._get_domain_def_idxs_for_chain(chain, chain_idx)
             )
             logger.debug(
-                'domain_def: {}, domain_start_idxs: {}, domain_end_idxs: {}'.format(
-                    self.domain_boundaries, domain_start_idxs, domain_end_idxs)
+                'domain_def: %s, domain_start_idxs: %s, domain_end_idxs: %s',
+                self.domain_boundaries, domain_start_idxs, domain_end_idxs
             )
 
             res_idx = 0

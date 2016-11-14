@@ -7,6 +7,7 @@ TODO: The model object has two serialization steps:
 import os.path as op
 import logging
 import json
+import pickle
 
 import pandas as pd
 from Bio import SeqIO
@@ -94,7 +95,7 @@ class StandalonePipeline(Pipeline):
         self.mutations = self._split_mutations(mutations)
         if 'mutation' in self.run_type:
             self.mutations = self.parse_mutations(self.mutations, mutation_format)
-        logger.debug('mutations: {}'.format(self.mutations))
+        logger.debug('mutations: %s', self.mutations)
 
         if len(self.sp.chain_ids) != len(self.seqrecords):
             logger.warning(
@@ -122,8 +123,8 @@ class StandalonePipeline(Pipeline):
                     break
                 except (IndexError, ValueError, errors.MutationMismatchError) as e:
                     error_message = (
-                        "Error parsing mutations '{}' using mutation_format '{}':\n{} {}"
-                        .format(mutations, mutation_format, type(e), e)
+                        "Could not parse mutations %s using mutation_format %s: %s: %s",
+                        mutations, mutation_format, type(e), e
                     )
                     logger.error(error_message)
                     continue
@@ -530,14 +531,17 @@ class PrepareMutation:
 
         logger.debug('feature_dict: {}'.format(features))
         feature_df = pd.DataFrame(features, index=[0])
+        feature_df = elaspic_predictor.format_mutation_features(feature_df)
+        feature_df = elaspic_predictor.convert_features_to_differences(feature_df)
 
         if len(self.model.sequence_seqrecords) == 1:
-            pred = elaspic_predictor.CorePredictor()
+            with open(op.join(CACHE_DIR, 'core_clf.pickle'), 'rb') as fh:
+                clf = pickle.load(fh)
         else:
-            pred = elaspic_predictor.InterfacePredictor()
-        pred.load(CACHE_DIR)
-        features['ddg'] = pred.score(feature_df)[0]
-        logger.debug('Predicted ddG: {}'.format(features['ddg']))
+            with open(op.join(CACHE_DIR, 'interface_clf.pickle'), 'rb') as fh:
+                clf = pickle.load(fh)
+        features['ddg'] = clf.predict(feature_df[clf.features])[0]
+        logger.info('Predicted ddG: {}'.format(features['ddg']))
 
         self.mutation_features = features
 

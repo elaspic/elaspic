@@ -28,7 +28,6 @@ DEFAULT = {
     'n_cores': '1',
     'copy_data': 'True',
     'allow_internet': 'False',
-    'testing': 'False',
 }
 
 

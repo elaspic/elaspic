@@ -1,7 +1,4 @@
-import os.path as op
-import pickle
 import logging
-import json
 
 import numpy as np
 import pandas as pd
@@ -295,80 +292,5 @@ def get_final_predictor(data, features, options):
     data_y = data['ddg_exp'].values
     clf = CLF(**clf_options)
     clf.fit(data_x, data_y)
+    clf.features = features
     return clf
-
-
-class _Predictor:
-
-    def __init__(self):
-        self.clf = None
-        self.features = None
-
-    def _assert_trained(self):
-        if self.clf is None:
-            raise Exception(
-                "You must either load or train a classifier before you can score mutations!")
-
-    def load(self, data_dir):
-        """Load predictor data from files in `data_dir`."""
-        with open(op.join(data_dir, self.clf_filename), 'rb') as ifh:
-            self.clf = pickle.load(ifh)
-        with open(op.join(data_dir, self.features_filename), 'rt') as ifh:
-            self.features = json.load(ifh)
-
-    def save(self, data_dir):
-        """Save predictor data to files in `data_dir`."""
-        self._assert_trained()
-        with open(op.join(data_dir, self.clf_filename), 'wb') as ofh:
-            pickle.dump(self.clf, ofh)
-        with open(op.join(data_dir, self.features_filename), 'wt') as ofh:
-            json.dump(self.features, ofh)
-
-    def train(self, df, options):
-        features = options['features']
-        if ',' in features:
-            features = features.split(',')
-        elif '.' in features:
-            features = features.split('.')
-
-        self.clf = get_final_predictor(df, features, options)
-        self.features = features
-
-    def score(self, df):
-        """Predict ΔΔG score.
-
-        Parameters
-        ----------
-        df : DataFrame
-            One or more rows with all data required to predict ΔΔG score.
-            Like something that you would get when you join the appropriate rows in the database.
-
-        Returns
-        -------
-        df : Dataframe
-            Same as the input dataframe, except with one additional column: `ddg`.
-        """
-        self._assert_trained()
-        try:
-            df = format_mutation_features(df)
-        except KeyError:
-            pass
-        try:
-            # Keep mut, remove it in next step
-            df = convert_features_to_differences(df, True)
-        except KeyError:
-            pass
-        ddg = self.clf.predict(df[self.features])
-        return ddg
-
-
-class CorePredictor(_Predictor):
-
-    clf_filename = 'ml_clf_core.pickle'
-    features_filename = 'ml_features_core.json'
-
-
-class InterfacePredictor(_Predictor):
-
-    clf_filename = 'ml_clf_interface.pickle'
-    features_filename = 'ml_features_interface.json'

@@ -1,18 +1,26 @@
 import os.path as op
 from setuptools import setup, Command
 
-try:
+
+def _read_md_as_rst(file):
+    """Read MarkDown file and convert it to ReStructuredText."""
     from pypandoc import convert
+    return convert(file, 'rst')
 
-    def read_md(file):
-        return convert(file, 'rst')
 
-except ImportError:
-    print("warning: pypandoc module not found, could not convert Markdown to RST")
+def _read_md_as_md(file):
+    """Read MarkDown file."""
+    with open(op.join(op.dirname(__file__), file)) as ifh:
+        return ifh.read()
 
-    def read_md(file):
-        with open(op.join(op.dirname(__file__), file)) as ifh:
-            return ifh.read()
+
+def read_md(file):
+    """Read MarkDown file and try to convert it to ReStructuredText if you can."""
+    try:
+        return _read_md_as_rst(file)
+    except ImportError:
+        print("WARNING: pypandoc module not found, could not convert Markdown to RST!")
+        return _read_md_as_md(file)
 
 
 class TrainPredictors(Command):
@@ -24,7 +32,7 @@ class TrainPredictors(Command):
 
     def run(self):
         """Train the ELASPIC classifier."""
-        from elaspic.__main__ import elaspic_train
+        from elaspic.cli.elaspic_train import elaspic_train
         elaspic_train(None)
 
     def finalize_options(self):
@@ -41,7 +49,7 @@ setup(
     url="https://github.com/kimlaborg/elaspic",
     author='kimlab',
     author_email='alex.strokach@utoronto.ca',
-    packages=['elaspic'],
+    packages=['elaspic', 'elaspic.cli'],
     package_data={'elaspic': ['data/*']},
     long_description=read_md("README.md"),
     entry_points={
