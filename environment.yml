@@ -1,51 +1,80 @@
-name: elaspic
-channels:
-- https://conda.anaconda.org/bioconda
-- https://conda.anaconda.org/r
-- https://conda.anaconda.org/ostrokach
+name: _test
+channels: !!python/tuple
+- omnia
+- kimlab
+- bioconda
+- conda-forge
+- defaults
+- ostrokach
+- r
 dependencies:
-- biopython=1.65=np19py34_0
-- cython=0.22=py34_0
-- dateutil=2.4.1=py34_0
-- docutils=0.12=py34_0
-- fastcache=1.0.2=py34_0
-- future=0.14.3=py34_0
-- jinja2=2.7.3=py34_1
-- markupsafe=0.23=py34_0
-- nose=1.3.4=py34_1
-- numpy=1.9.2=py34_0
-- openssl=1.0.1k=1
-- pandas=0.15.2=np19py34_1
-- pip=6.0.8=py34_0
-- psutil=2.2.1=py34_0
-- psycopg2=2.6=py34_0
-- py=1.4.26=py34_0
-- pygments=2.0.2=py34_0
-- pytest=2.6.4=py34_0
-- python=3.4.3=0
-- python-dateutil=2.4.1=py34_0
-- pytz=2014.9=py34_0
-- readline=6.2=2
-- scikit-learn=0.15.2=np19py34_0
-- scipy=0.15.1=np19py34_0
-- setuptools=14.3=py34_0
-- six=1.9.0=py34_0
-- sqlalchemy=0.9.9=py34_0
-- sqlite=3.8.4.1=1
-- system=5.8=1
-- tk=8.5.18=0
-- xz=5.0.5=0
-- zlib=1.2.8=0
-- mysqlclient==1.3.6
-- blast=2.2.30=1
-- cd-hit=4.6.1=1
-- p7zip=9.38.1=0
-- provean=1.1.5=1
-- msms=2.6.1=3
-- stride=1.6.4=1
-- t_coffee=11.0.8=py34_1
-- knot=1.0.0=2
+- bioconda::blast=2.2.31=1
+- bioconda::cd-hit=4.6.6=0
+- bioconda::libxml2=2.9.3=0
+- bioconda::msms=2.6.1=1
+- bioconda::muscle=3.8.1551=2
+- bioconda::p7zip=15.09=3
+- bioconda::python-dateutil=2.3=py35_0
+- bioconda::retrying=1.3.3=py_1
+- bioconda::stride=1.0=0
+- bioconda::t_coffee=11.0.8=py35_1
+- biopython=1.68=np111py35_0
+- bzip2=1.0.6=3
+- conda-forge::ca-certificates=2016.9.26=0
+- conda-forge::certifi=2016.9.26=py35_0
+- conda-forge::curl=7.49.1=1
+- conda-forge::hdf5=1.8.17=7
+- conda-forge::icu=58.1=0
+- conda-forge::libiconv=1.14=3
+- conda-forge::libxslt=1.1.29=1
+- conda-forge::lxml=3.6.4=py35_1
+- conda-forge::ncurses=5.9=9
+- conda-forge::numexpr=2.6.1=np111py35_0
+- conda-forge::openssl=1.0.2h=2
+- conda-forge::pandas=0.19.1=np111py35_0
+- conda-forge::paramiko=1.17.2=py35_0
+- conda-forge::pip=9.0.1=py35_0
+- conda-forge::psutil=4.3.0=py35_0
+- conda-forge::pycrypto=2.6.1=py35_0
+- conda-forge::pytables=3.3.0=np111py35_0
+- conda-forge::python=3.5.2=2
+- conda-forge::pytz=2016.7=py35_0
+- conda-forge::pyyaml=3.11=py35_0
+- conda-forge::readline=6.2=0
+- conda-forge::requests=2.11.1=py35_0
+- conda-forge::setuptools=28.8.0=py35_0
+- conda-forge::six=1.10.0=py35_1
+- conda-forge::sqlite=3.13.0=1
+- conda-forge::tk=8.5.19=0
+- conda-forge::wheel=0.29.0=py35_0
+- conda-forge::xz=5.2.2=0
+- conda-forge::yaml=0.1.6=0
+- conda-forge::zlib=1.2.8=3
+- ecdsa=0.13=py35_0
+- kimlab::kmtools=0.0.15=py35_0
+- libgcc=5.2.0=0
+- libgfortran=3.0.0=1
+- llvmlite=0.14.0=py35_0
+- mkl=11.3.3=0
+- numba=0.29.0=np111py35_0
+- numpy=1.11.2=py35_0
+- omnia::boost=1.59.0=py35_1
+- omnia::hdf5-1814=1.8.14=0
+- omnia::modeller=9.16=py35_1
+- ostrokach::foldx=3.0.6=py_0
+- ostrokach::libfaketime=0.9.6=py35_5
+- ostrokach::pops=1.6.4=1
+- ostrokach::provean=1.0.3=py_0
+- pycurl=7.43.0=py35_0
+- scikit-learn=0.18=np111py35_0
+- scipy=0.18.1=np111py35_0
+- sqlalchemy=1.1.3=py35_0
 - pip:
-  - sphinx>=1.3
-  - sphinxcontrib-programoutput==0.8
-  - retrying>=1.3.3
+  - conda-kapsel==0.3.1
+  - datapkg==0.0.5
+  - elaspic==0.1.39
+  - jobsubmitter==0.0.2
+  - kmtools-extra==0.0.1
+  - tables==3.3.0
+  - transvar==2.2.15.20161002
+prefix: /home/kimlab1/strokach/anaconda/envs/_test

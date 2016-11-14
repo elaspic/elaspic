@@ -1,12 +1,14 @@
+ {% set version = "0.1.39" %}
+
 package:
   name: elaspic
-  version: 0.1.39
+  version: {{ version }}
 
 source:
   path: ../../
 
 build:
-  number: 1
+  number: 0
   entry_points:
     - elaspic = elaspic.__main__:main
 
@@ -28,7 +30,7 @@ requirements:
     - modeller
     # Database access
     - sqlalchemy
-    # - mysqlclient  # can use PyMYSQL instead...
+    - mysqlclient
     # Kimlab
     - kmtools
   run:
@@ -48,29 +50,21 @@ requirements:
     - modeller
     # Database access
     - sqlalchemy
-    # - mysqlclient  # can use PyMYSQL instead...
+    - mysqlclient
     # Kimlab
     - kmtools
     # Binary files
     - p7zip
     - blast
-    - stride
+    - stride ==1.6.4
     - pops
     - msms
     - t_coffee
     - cd-hit
-    - provean  # can't install fake_provean for tests if this is installed...
-    - foldx  # private only and breaks readthedocs
+    - provean
+    - foldx
 
 test:
-  requires:
-    - pytest
-    - pytest-runner
-    - pytest-cov
-    - pep8
-    - flake8
-    - provean ==1.0.3.mock
-    - foldx ==3.0.6.mock
   imports:
     - elaspic
   commands:
@@ -81,5 +75,5 @@ test:
 about:
   home: http://elaspic.kimlab.org
   license: MIT
-  summary: Ensemble Learning Approach for Stability Prediction of
-           Interface and Core mutations (ELASPIC).
+  summary: "Ensemble Learning Approach for Stability Prediction of
+           Interface and Core mutations (ELASPIC)."
