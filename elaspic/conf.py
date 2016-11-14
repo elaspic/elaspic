@@ -41,7 +41,7 @@ def read_configuration_file(config_file=None, **kwargs):
     if config_file is not None:
         config.read(config_file)
 
-    for category in ['EXTERNAL_DIRS', 'DATABASE', 'MODEL', 'LOGGER']:
+    for category in ['EXTERNAL_DIRS', 'DATABASE', 'MODEL']:
         if category not in config:
             config[category] = {}
         if category in kwargs:
@@ -63,8 +63,6 @@ def config_parser(category):
         return read_database_configs
     elif category == 'MODEL':
         return read_model_configs
-    elif category == 'LOGGER':
-        return read_logger_configs
     else:
         raise Exception("Unknown category: '{}'".format(category))
 
@@ -197,40 +195,6 @@ def read_model_configs(config):
     CONFIGS['matrix_type'] = config.get('matrix_type', 'blosum80')
     CONFIGS['gap_start'] = config.getint('gap_start', -16)
     CONFIGS['gap_extend'] = config.getint('gap_extend', -4)
-
-
-def read_logger_configs(config):
-    """Standard logger configuration, with optional tee to a file.
-
-    .. todo:: This needs a cleanup.
-    """
-    # default_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    default_format = '%(message)s'
-    LOGGING_CONFIGS = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'default': {
-                'format':
-                    config.get('format', fallback=default_format)
-            },
-        },
-        'handlers': {
-            'default': {
-                'level': config.get('level', 'ERROR'),
-                'class': 'logging.StreamHandler',
-                'formatter': 'default',
-            },
-        },
-        'loggers': {
-            '': {
-                'handlers': ['default'],
-                'level': 'DEBUG',
-                'propagate': True
-            }
-        }
-    }
-    logging.config.dictConfig(LOGGING_CONFIGS)
 
 
 def _prepare_temp_folders(configs):
