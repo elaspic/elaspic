@@ -65,16 +65,26 @@ def get_sequence(uniprot_id, input_dir, output_dir, use_remote=True):
 
 
 # %% Local tests
-def run_pdb_mutation_pipeline(pdb_id, pdb_mutatations):
+def run_pdb_mutation_pipeline(
+        pdb_id, pdb_mutatations, have_sequences=False, have_models=False, have_mutations=False):
     pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['unique_temp_dir'])
     for chain_id in pdb_mutatations[pdb_id]:
         for mutation in pdb_mutatations[pdb_id][chain_id]:
             mutation_pdb = '{}_{}'.format(chain_id, mutation)
             lp = standalone_pipeline.StandalonePipeline(
                 pdb_file, mutations=mutation_pdb)
-            lp.run_all_sequences()
-            lp.run_all_models()
-            lp.run_all_mutations()
+            if have_sequences:
+                assert lp.have_sequences
+            else:
+                lp.run_all_sequences()
+            if have_models:
+                assert lp.have_models
+            else:
+                lp.run_all_models()
+            if have_mutations:
+                assert lp.have_mutations
+            else:
+                lp.run_all_mutations()
     logger.info('Pass')
 
 

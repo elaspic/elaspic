@@ -122,11 +122,10 @@ class StandalonePipeline(Pipeline):
                     parsed_mutations = self._parse_mutations(mutations, mutation_format)
                     break
                 except (IndexError, ValueError, errors.MutationMismatchError) as e:
-                    error_message = (
+                    logger.warning(
                         "Could not parse mutations %s using mutation_format %s: %s: %s",
                         mutations, mutation_format, type(e), e
                     )
-                    logger.error(error_message)
                     continue
             if not parsed_mutations:
                 raise errors.MutationMismatchError()
@@ -195,12 +194,20 @@ class StandalonePipeline(Pipeline):
         if 'mutation' in self.run_type:
             self.run_all_mutations()
 
+    @property
+    def sequence_results_file(self):
+        return op.join(conf.CONFIGS['unique_temp_dir'], 'sequence.json')
+
+    @property
+    def have_sequences(self):
+        """All sequences have been precalculated."""
+        return op.isfile(self.sequence_results_file)
+
     def run_all_sequences(self):
         sequence_results = []
-        sequence_results_file = op.join(conf.CONFIGS['unique_temp_dir'], 'sequence.json')
-        if op.isfile(sequence_results_file):
-            logger.debug('Results file for sequence already exists: {}'
-                         .format(sequence_results_file))
+        if op.isfile(self.sequence_results_file):
+            logger.debug(
+                'Results file for sequence already exists: %s', self.sequence_results_file)
             return
         for chain_id, _ in zip(self.sp.chain_ids, self.seqrecords):
             if chain_id == self.sp.hetatm_chain_id:
@@ -210,14 +217,23 @@ class StandalonePipeline(Pipeline):
             sequence_result = sequence.result
             sequence_result['idx'] = idx
             sequence_results.append(sequence_result)
-        with open(sequence_results_file, 'w') as ofh:
+        with open(self.sequence_results_file, 'w') as ofh:
             json.dump(sequence_results, ofh)
+
+    @property
+    def model_results_file(self):
+        return op.join(conf.CONFIGS['unique_temp_dir'], 'model.json')
+
+    @property
+    def have_models(self):
+        """All models have been precalculated."""
+        return op.isfile(self.model_results_file)
 
     def run_all_models(self):
         model_results = []
-        model_results_file = op.join(conf.CONFIGS['unique_temp_dir'], 'model.json')
-        if op.isfile(model_results_file):
-            logger.debug('Results file for model already exists: {}'.format(model_results_file))
+        if op.isfile(self.model_results_file):
+            logger.debug(
+                'Results file for model already exists: %s', self.model_results_file)
             return
         for chain_id, _ in zip(self.sp.chain_ids, self.seqrecords):
             if chain_id == self.sp.hetatm_chain_id:
@@ -241,8 +257,19 @@ class StandalonePipeline(Pipeline):
             model_result = model.result
             model_result['idxs'] = tuple(idxs)
             model_results.append(model_result)
-        with open(model_results_file, 'w') as ofh:
+        with open(self.model_results_file, 'w') as ofh:
             json.dump(model_results, ofh)
+
+    def get_mutation_results_file(self, mutation):
+        """All mutations have been precalculated."""
+        return op.join(conf.CONFIGS['unique_temp_dir'], 'mutation_{}.json'.format(mutation))
+
+    @property
+    def have_mutations(self):
+        return all(
+            op.isfile(self.get_mutation_results_file(mutation))
+            for mutation in self.mutations.values()
+        )
 
     def run_all_mutations(self):
         handled_errors = (
@@ -252,9 +279,7 @@ class StandalonePipeline(Pipeline):
         )
         for (mutation_idx, mutation), mutation_in in self.mutations.items():
             mutation_results = []
-            mutation_results_file = op.join(
-                conf.CONFIGS['unique_temp_dir'], 'mutation_{}.json'.format(mutation_in)
-            )
+            mutation_results_file = self.get_mutation_results_file(mutation_in)
             if op.isfile(mutation_results_file):
                 logger.debug(
                     'Results file for mutation {} already exists: {}'
