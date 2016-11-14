@@ -1,4 +1,6 @@
 #!/bin/bash
 
-echo `which elaspic`
+set -ex
+
+echo ${PREFIX}
 ${PREFIX}/bin/elaspic train

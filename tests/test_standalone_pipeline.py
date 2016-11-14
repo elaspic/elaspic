@@ -9,17 +9,12 @@ import helper_fns
 
 logger = logging.getLogger(__name__)
 
-# Constants
-CONFIG_FILE = op.join(op.dirname(__file__), 'config_file.ini')
-
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
-    CONFIG_FILE = pytest.config.getoption('--config-file') or CONFIG_FILE
 else:
     QUICK = False
 
 logger.info('Running quick: {}'.format(QUICK))
-logger.info('Config file: {}'.format(CONFIG_FILE))
 
 
 # Source of good PDB stuctures: http://www.rcsb.org/pdb/101/motm_archive.do
@@ -176,7 +171,16 @@ def test_pdb_mutation_pipeline(pdb_id):
     """
     unique_temp_dir = _get_unique_temp_dir(pdb_id)
     os.makedirs(unique_temp_dir, exist_ok=True)
-    conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+    conf.read_configuration_file(
+        DEFAULT={
+            'unique_temp_dir': unique_temp_dir
+        },
+        EXTERNAL_DIRS={
+            'pdb_dir': os.environ['PDB_DIR'],
+            'blast_db_dir': os.environ['BLAST_DB_DIR'],
+            'archive_dir': os.environ['ARCHIVE_DIR']
+        }
+    )
     os.chdir(unique_temp_dir)
     helper_fns.run_pdb_mutation_pipeline(pdb_id, pdb_mutatations)
 
@@ -190,7 +194,16 @@ def test_pdb_mutation_pipeline_have_mutations(pdb_id):
         shutil.copytree(
             op.join(unique_temp_dir_old),
             op.join(unique_temp_dir))
-        conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+        conf.read_configuration_file(
+            DEFAULT={
+                'unique_temp_dir': unique_temp_dir
+            },
+            EXTERNAL_DIRS={
+                'pdb_dir': os.environ['PDB_DIR'],
+                'blast_db_dir': os.environ['BLAST_DB_DIR'],
+                'archive_dir': os.environ['ARCHIVE_DIR']
+            }
+        )
         os.chdir(unique_temp_dir)
         helper_fns.run_pdb_mutation_pipeline(
             pdb_id, pdb_mutatations, have_sequences=True, have_models=True, have_mutations=True)
@@ -219,7 +232,16 @@ def test_pdb_mutation_pipeline_have_models(pdb_id):
         shutil.copytree(
             op.join(unique_temp_dir_old, 'model'),
             op.join(unique_temp_dir, 'model'))
-        conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+        conf.read_configuration_file(
+            DEFAULT={
+                'unique_temp_dir': unique_temp_dir
+            },
+            EXTERNAL_DIRS={
+                'pdb_dir': os.environ['PDB_DIR'],
+                'blast_db_dir': os.environ['BLAST_DB_DIR'],
+                'archive_dir': os.environ['ARCHIVE_DIR']
+            }
+        )
         os.chdir(unique_temp_dir)
         helper_fns.run_pdb_mutation_pipeline(
             pdb_id, pdb_mutatations, have_sequences=True, have_models=True)
@@ -242,7 +264,16 @@ def test_pdb_mutation_pipeline_have_sequences(pdb_id):
         shutil.copytree(
             op.join(unique_temp_dir_old, 'sequence'),
             op.join(unique_temp_dir, 'sequence'))
-        conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+        conf.read_configuration_file(
+            DEFAULT={
+                'unique_temp_dir': unique_temp_dir
+            },
+            EXTERNAL_DIRS={
+                'pdb_dir': os.environ['PDB_DIR'],
+                'blast_db_dir': os.environ['BLAST_DB_DIR'],
+                'archive_dir': os.environ['ARCHIVE_DIR']
+            }
+        )
         os.chdir(unique_temp_dir)
         helper_fns.run_pdb_mutation_pipeline(
             pdb_id, pdb_mutatations, have_sequences=True)
@@ -255,6 +286,15 @@ def test_pdb_mutation_pipeline_have_sequences(pdb_id):
 def test_sequence_mutation_pipeline(pdb_id_sequence):
     unique_temp_dir = op.join(op.splitext(__file__)[0], '.'.join(pdb_id_sequence), '.elaspic')
     os.makedirs(unique_temp_dir, exist_ok=True)
-    conf.read_configuration_file(CONFIG_FILE, DEFAULT={'unique_temp_dir': unique_temp_dir})
+    conf.read_configuration_file(
+        DEFAULT={
+            'unique_temp_dir': unique_temp_dir
+        },
+        EXTERNAL_DIRS={
+            'pdb_dir': os.environ['PDB_DIR'],
+            'blast_db_dir': os.environ['BLAST_DB_DIR'],
+            'archive_dir': os.environ['ARCHIVE_DIR']
+        }
+    )
     os.chdir(unique_temp_dir)
     return helper_fns.run_sequence_mutation_pipeline(pdb_id_sequence, sequence_mutations,)

@@ -1,11 +1,50 @@
 image: condaforge/linux-anvil:latest
 
+stages:
+  - compile
+  - test
+
 before_script:
+  - ls /home/kimlab1/database_data
   - conda config --add channels bioconda
+  - conda config --add channels conda-forge
   - conda config --add channels ostrokach
+  - conda config --add channels https://conda.binstar.org/t/$ANACONDA_TOKEN/ostrokach
   - conda config --add channels kimlab
   - conda config --add channels omnia
-  - conda build devtools/conda-recipe/
+  - conda install -yq perl  # hack required to get modeller to link properly
+  - |
+    function create_elaspic_env {
+        mkdir -p /opt/conda/conda-bld/linux-64/
+        cp conda-bld/linux-64/* /opt/conda/conda-bld/linux-64/
+        conda create -yq -n $1 --use-local elaspic;
+        source activate $1;
+        conda install -yq -n $1 anaconda-client 'provean==1.0.3.mock' 'foldx==3.0.6.mock';
+        pip install -q 'pytest >3' pytest-runner pytest-cov pytest-logging pytest-xdist flake8;
+    }
 
-job1:
-  script: "echo 'hello world'"
+compile:
+  stage: compile
+  script:
+    - conda build devtools/conda-recipe/
+    - mkdir -p conda-bld && cp -r /opt/conda/conda-bld/linux-64 conda-bld/
+  artifacts:
+    paths:
+      - conda-bld
+
+unit:
+  stage: test
+  script:
+    - create_elaspic_env unit_tests
+    - source activate unit_tests
+    - python setup.py train
+    - flake8
+    - py.test
+
+standalone:
+  stage: test
+  script:
+    - create_elaspic_env standalone
+    - source activate standalone
+    - python setup.py train
+    - py.test tests/test_standalone_pipeline.py
