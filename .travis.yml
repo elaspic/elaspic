@@ -39,8 +39,8 @@ script:
   # Run tests
   - conda create -n _test $PKG_NAME --use-local
   - source activate _test
-  - conda install --yes fake_provean fake_foldx anaconda-client
-  - pip install pytest flake8 pytest-runner pytest-cov pytest-logging
+  - conda install --yes anaconda-client 'provean==1.0.3.mock' 'foldx==3.0.6.mock'
+  - pip install 'pytest >3' pytest-runner pytest-cov pytest-logging flake8
   - py.test -vvv
   - travis_wait 119 "${SCRIPTS_DIR}/travis-ci.sh"
   - source deactivate

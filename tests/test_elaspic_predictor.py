@@ -1,7 +1,8 @@
 import os.path as op
+import pickle
 import pandas as pd
-import elaspic, elaspic.elaspic_predictor
-import pytest
+import elaspic
+import elaspic.elaspic_predictor
 
 
 _foldx_core_features = [
@@ -93,8 +94,6 @@ def test_feature_columns_interface():
     assert not xor, xor
 
 
-# ==== xxx ====
-
 def test_format_mutation_features():
     df = pd.read_csv(op.join(op.splitext(__file__)[0], 'df2.tsv'), sep='\t')
     assert df['stability_energy_wt'].notnull().all()
@@ -108,20 +107,18 @@ def test_format_mutation_features():
     assert df3['dg_change'].notnull().all()
 
 
-class TestElaspicPredictor:
-
-    @classmethod
-    def setup_class(cls):
-        cls.predictor = elaspic.elaspic_predictor.CorePredictor()
-
-    def test_load(self):
-        self.predictor.load(elaspic.DATA_DIR)
-
-    def test_score(self):
-        dfs = [
-            # pd.read_csv(op.join(op.splitext(__file__)[0], 'df1.tsv'), sep='\t'),
-            pd.read_csv(op.join(op.splitext(__file__)[0], 'df2.tsv'), sep='\t')
-        ]
-        for df in dfs:
-            df['ddg'] = self.predictor.score(df)
-            assert df['ddg'].notnull().all()
+def test_core_predictor():
+    # Load predictor
+    with open(op.join(elaspic.CACHE_DIR, 'core_clf.pickle'), 'rb') as fh:
+        clf = pickle.load(fh)
+    # Load data
+    dfs = [
+        # pd.read_csv(op.join(op.splitext(__file__)[0], 'df1.tsv'), sep='\t'),
+        pd.read_csv(op.join(op.splitext(__file__)[0], 'df2.tsv'), sep='\t')
+    ]
+    # Predict
+    for df in dfs:
+        df = elaspic.elaspic_predictor.format_mutation_features(df)
+        df = elaspic.elaspic_predictor.convert_features_to_differences(df)
+        df['ddg'] = clf.predict(df[clf.features])
+        assert df['ddg'].notnull().all()

@@ -2,7 +2,7 @@ import os
 import os.path as op
 import tempfile
 import logging
-import elaspic
+import elaspic.structure_analysis
 
 logger = logging.getLogger(__name__)
 

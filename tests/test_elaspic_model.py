@@ -1,4 +1,4 @@
-import elaspic
+import elaspic.elaspic_model
 import pytest
 
 

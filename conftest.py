@@ -1,22 +1,24 @@
-import os
 import os.path as op
 import pytest
+import numpy as np
 
+# Directories
+PROJECT_DIR = op.dirname(op.abspath(__file__))
+TESTS_DIR = op.join(PROJECT_DIR, 'tests')
 
-# %% Directories
-try:
-    TESTS_BASE_DIR = op.dirname(__file__)
-except NameError:
-    TESTS_BASE_DIR = os.getcwd()
-
-TESTS_DATA_DIR = op.join(TESTS_BASE_DIR, 'data')
 
 # Config files
-DEFAULT_LOCAL_CONFIG = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
-DEFAULT_DATABASE_CONFIG = op.join(TESTS_BASE_DIR, 'test_database_pipeline.ini')
+DEFAULT_LOCAL_CONFIG = op.join(TESTS_DIR, 'test_local_pipeline.ini')
+DEFAULT_DATABASE_CONFIG = op.join(TESTS_DIR, 'test_database_pipeline.ini')
 
 
-# %% Pytest
+# Doctest
+@pytest.fixture(autouse=True)
+def add_np(doctest_namespace):
+    doctest_namespace['np'] = np
+
+
+# Pytest
 def pytest_runtest_makereport(item, call):
     if "incremental" in item.keywords:
         if call.excinfo is not None:

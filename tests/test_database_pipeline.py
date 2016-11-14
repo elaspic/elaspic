@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 QUICK = False
-CONFIG_FILE = op.join(op.dirname(__file__), 'database_pipeline.ini')
+CONFIG_FILE = op.join(op.dirname(__file__), 'config_file_database.ini')
 
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')

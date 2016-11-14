@@ -1,34 +1,26 @@
-# Files
-*.pyc
-*.bak
-
 # Folders
+build
 _build
 dist
 __pycache__
 *.egg-info
+tests/tmp
 
-# Hidden
+# Hidden files
 .*
 !.gitignore
 !.travis.yml
 !.gitlab-ci.yml
+!.pylintrc
 
-# Logs and backups
-*.log
+# Other files
+*.pyc
 *.bak
+*.log
 
-# Configuration files with private information
-config/*.ini
-elaspic/data/ml_clf_*
+# Trained predictors
+elaspic/data/*.pickle
 
-# Files not ready for release
-TODO.md
-docs/datasets.rst
-docs/introduction/elaspic_flowchart.pptx
-docs/introduction/elaspic_flowchart_database.pptx
-docs/introduction/elaspic_flowchart_local.pptx
-
-# Temporary
-tests/tmp
-TODO
+# Configuration files
+*.ini
+!devtools/travis-ci/config_file.ini

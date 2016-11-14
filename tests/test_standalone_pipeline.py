@@ -1,9 +1,3 @@
-""".
-
-.. todo::
-
-    - Test that the standalone pipeline folder is relocatable.
-"""
 import os
 import os.path as op
 import logging
@@ -15,7 +9,7 @@ import helper_fns
 logger = logging.getLogger(__name__)
 
 # Constants
-CONFIG_FILE = op.join(op.dirname(__file__), 'standalone_pipeline_local.ini')
+CONFIG_FILE = op.join(op.dirname(__file__), 'config_file.ini')
 
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
@@ -23,8 +17,8 @@ if hasattr(pytest, "config"):
 else:
     QUICK = False
 
-logger.debug('Running quick: {}'.format(QUICK))
-logger.debug('Config file: {}'.format(CONFIG_FILE))
+logger.info('Running quick: {}'.format(QUICK))
+logger.info('Config file: {}'.format(CONFIG_FILE))
 
 
 # Source of good PDB stuctures: http://www.rcsb.org/pdb/101/motm_archive.do

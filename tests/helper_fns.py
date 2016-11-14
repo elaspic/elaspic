@@ -98,6 +98,7 @@ def run_sequence_mutation_pipeline(pdb_id_sequence, sequence_mutations):
             lp.run_all_sequences()
             lp.run_all_models()
             lp.run_all_mutations()
+            logger.info("Done!\n")
     logger.info('Pass')
 
 

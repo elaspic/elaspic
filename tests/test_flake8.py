@@ -1,6 +1,7 @@
 import os.path as op
 import glob
 import logging
+
 try:
     # flake8 < 3
     from flake8.engine import get_style_guide
@@ -9,6 +10,7 @@ except ImportError:
     from flake8.api.legacy import get_style_guide
 
 logger = logging.getLogger(__name__)
+
 PKG_ROOT_DIR = op.dirname(op.dirname(op.abspath(__file__)))
 
 
@@ -21,6 +23,8 @@ def test_pep8_compliance():
     logging.getLogger('flake8.checker').setLevel(logging.WARNING)
     logging.getLogger('flake8.plugins').setLevel(logging.WARNING)
     logging.getLogger('flake8.options').setLevel(logging.WARNING)
+    logging.getLogger('flake8.style_guide').setLevel(logging.WARNING)
+    logging.getLogger('flake8.api.legacy').setLevel(logging.WARNING)
 
     pep8style = get_style_guide(
         config_file=op.join(PKG_ROOT_DIR, 'setup.cfg'),
