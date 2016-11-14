@@ -1,0 +1,11 @@
+image: condaforge/linux-anvil:latest
+
+before_script:
+  - conda config --add channels bioconda
+  - conda config --add channels ostrokach
+  - conda config --add channels kimlab
+  - conda config --add channels omnia
+  - conda build devtools/conda-recipe/
+
+job1:
+  script: "echo 'hello world'"
