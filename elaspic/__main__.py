@@ -2,10 +2,9 @@ import argparse
 import logging
 import logging.config
 
+from elaspic.cli.elaspic_database import configure_database_parser
 from elaspic.cli.elaspic_run import configure_run_parser
 from elaspic.cli.elaspic_train import configure_train_parser
-from elaspic.cli.elaspic_database import configure_database_parser
-
 
 logger = logging.getLogger(__name__)
 

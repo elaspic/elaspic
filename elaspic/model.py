@@ -1,18 +1,18 @@
+import json
+import logging
 import os
 import os.path as op
-import logging
 import shutil
-import json
 import subprocess
-from Bio import SeqIO, AlignIO
+
+from Bio import AlignIO, SeqIO
+from Bio.PDB import PDBIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from Bio.PDB import PDBIO
-from kmtools.system_tools import switch_paths
-from . import (
-    conf, errors, structure_tools, structure_analysis,
-    call_modeller, call_tcoffee, call_foldx
-)
+
+from kmtools import system_tools, structure_tools
+
+import elaspic
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class Model:
         self.model_id = '{}-{}'.format(self.sequence_id, self.structure_id)
 
         # Check for precalculated data
-        self.modeller_results_file = op.join(conf.CONFIGS['model_dir'], self.model_id + '.json')
+        self.modeller_results_file = op.join(elaspic.CONFIGS['model_dir'], self.model_id + '.json')
         if (modeller_results_file is not None and
                 modeller_results_file != self.modeller_results_file):
             logger.debug(
@@ -88,7 +88,7 @@ class Model:
         # Get interacting amino acids and interface area
         self.modeller_structure = (
             structure_tools.get_pdb_structure(
-                op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']))
+                op.join(elaspic.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']))
         )
         self.modeller_chain_ids = [
             chain.id for chain in self.modeller_structure[0]
@@ -118,18 +118,18 @@ class Model:
 
     def _align_with_tcoffee(self, sequence_seqrec, structure_seqrec):
         alignment_fasta_file = op.join(
-            conf.CONFIGS['tcoffee_dir'],
+            elaspic.CONFIGS['tcoffee_dir'],
             '{}-{}.fasta'.format(sequence_seqrec.id, structure_seqrec.id)
         )
         with open(alignment_fasta_file, 'w') as ofh:
             SeqIO.write([sequence_seqrec, structure_seqrec], ofh, 'fasta')
-        tc = call_tcoffee.TCoffee(
+        tc = elaspic.tools.TCoffee(
             alignment_fasta_file, pdb_file=self.structure_file, mode='3dcoffee')
         alignment_output_file = tc.align()
         return alignment_output_file
 
     def _create_pir_alignment(self):
-        pir_alignment_file = op.join(conf.CONFIGS['model_dir'], self.model_id + '.pir')
+        pir_alignment_file = op.join(elaspic.CONFIGS['model_dir'], self.model_id + '.pir')
         with open(pir_alignment_file, 'w') as ofh:
             write_to_pir_alignment(
                 ofh, 'sequence', self.sequence_id,
@@ -192,7 +192,7 @@ class Model:
                 alignment_stats.append((1.0, 1.0, 1.0,))
                 alignment_output_file = (
                     op.join(
-                        conf.CONFIGS['model_dir'],
+                        elaspic.CONFIGS['model_dir'],
                         '{}-{}.aln'.format(sequence_seqrec.id, structure_seqrec.id))
                 )
                 with open(alignment_output_file, 'w') as ofh:
@@ -228,7 +228,7 @@ class Model:
 
         # Save additional alignment info
         self.modeller_results['alignment_files'] = [
-            op.relpath(f, conf.CONFIGS['unique_temp_dir'])
+            op.relpath(f, elaspic.CONFIGS['unique_temp_dir'])
             for f in alignment_files]
         assert len(domain_def_offsets) <= 2
         self.modeller_results['domain_def_offsets'] = domain_def_offsets
@@ -239,9 +239,9 @@ class Model:
     def _analyse_core(self):
         # Run the homology model through msms and get dataframes with all the
         # per atom and per residue SASA values
-        analyze_structure = structure_analysis.AnalyzeStructure(
-            op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
-            conf.CONFIGS['modeller_dir']
+        analyze_structure = structure_tools.AnalyzeStructure(
+            op.join(elaspic.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
+            elaspic.CONFIGS['modeller_dir']
         )
         __, seasa_by_chain_separately, __, seasa_by_residue_separately = (
             analyze_structure.get_seasa()
@@ -275,7 +275,7 @@ class Model:
                     'Chain has {} non-hetatm AA, but we have SASA score for only {} AA.'
                     .format(number_of_aa, len(self.relative_sasa_scores[chain_id]))
                 )
-                raise errors.MSMSError()
+                raise elaspic.exc.MSMSError()
 
     def _analyse_interface(self):
         # Get a dictionary of interacting residues
@@ -308,7 +308,7 @@ class Model:
             logger.error("interacting_residues: {}".format(interacting_residues))
             logger.error('a2b_contacts: {}'.format(a2b_contacts))
             logger.error('b2a_contacts: {}'.format(b2a_contacts))
-            raise errors.ChainsNotInteractingError()
+            raise elaspic.exc.ChainsNotInteractingError()
 
         def _validate_a2b_contacts(a2b_contacts, chain_idx):
             logger.debug('Validating chain {} interacting AA...'.format(chain_idx))
@@ -334,7 +334,7 @@ class Model:
             logger.debug(
                 "domain_def_offsets: {}".format(self.modeller_results['domain_def_offsets']))
             if interface_aa_a != interface_aa_b:
-                raise errors.InterfaceMismatchError()
+                raise elaspic.exc.InterfaceMismatchError()
 
         _validate_a2b_contacts(a2b_contacts, 0)
         _validate_a2b_contacts(b2a_contacts, 1)
@@ -346,9 +346,9 @@ class Model:
         self.interacting_aa_2 = sorted(i[0] + 1 for i in b2a_contacts)
 
         # Interface area
-        analyze_structure = structure_analysis.AnalyzeStructure(
-            op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
-            conf.CONFIGS['modeller_dir']
+        analyze_structure = structure_tools.AnalyzeStructure(
+            op.join(elaspic.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
+            elaspic.CONFIGS['modeller_dir']
         )
         (self.interface_area_hydrophobic,
          self.interface_area_hydrophilic,
@@ -390,7 +390,7 @@ class Model:
 
         mutation_pos = int(mutation[1:-1]) - domain_def[0] + 1
         if mutation_pos > (domain_def[1] - domain_def[0] + 1):
-            raise errors.MutationOutsideDomainError()
+            raise elaspic.exc.MutationOutsideDomainError()
 
         position_modeller = (
             structure_tools.convert_position_to_resid(
@@ -420,11 +420,11 @@ class Model:
             if sequence_idx == 0:
                 logger.debug('interacting_aa_1: {}'.format(self.interacting_aa_1))
                 if int(mutation[1:-1]) not in self.interacting_aa_1:
-                    raise errors.MutationOutsideInterfaceError()
+                    raise elaspic.exc.MutationOutsideInterfaceError()
             elif sequence_idx == 1:
                 logger.debug('interacting_aa_2: {}'.format(self.interacting_aa_2))
                 if int(mutation[1:-1]) not in self.interacting_aa_2:
-                    raise errors.MutationOutsideInterfaceError()
+                    raise elaspic.exc.MutationOutsideInterfaceError()
             else:
                 logger.warning(
                     "Can't make sure that a mutation is inside an interface if there are only "
@@ -453,21 +453,21 @@ class Model:
 
         #######################################################################
         # Create a folder for all mutation data.
-        mutation_dir = op.join(conf.CONFIGS['model_dir'], 'mutations', mutation_id)
+        mutation_dir = op.join(elaspic.CONFIGS['model_dir'], 'mutations', mutation_id)
         os.makedirs(mutation_dir, exist_ok=True)
         os.makedirs(mutation_dir, exist_ok=True)
-        shutil.copy(op.join(conf.CONFIGS['data_dir'], 'rotabase.txt'), mutation_dir)
+        shutil.copy(op.join(elaspic.CONFIGS['data_dir'], 'rotabase.txt'), mutation_dir)
 
         #######################################################################
         # Copy the homology model to the mutation folder
         model_file = op.join(mutation_dir, op.basename(self.modeller_results['model_file']))
         shutil.copy(
-            op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
+            op.join(elaspic.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
             model_file)
 
         #######################################################################
         # 2nd: use the 'Repair' feature of FoldX to optimise the structure
-        fX = call_foldx.FoldX(model_file, chain_id, mutation_dir)
+        fX = elaspic.tools.FoldX(model_file, chain_id, mutation_dir)
         repairedPDB_wt = fX('RepairPDB')
 
         #######################################################################
@@ -476,7 +476,7 @@ class Model:
         logger.debug('Mutcodes for foldx: {}'.format(mutCodes))
 
         # Introduce the mutation using foldX
-        fX_wt = call_foldx.FoldX(repairedPDB_wt, chain_id, mutation_dir)
+        fX_wt = elaspic.tools.FoldX(repairedPDB_wt, chain_id, mutation_dir)
         repairedPDB_wt_list, repairedPDB_mut_list = fX_wt('BuildModel', mutCodes)
 
         logger.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
@@ -498,11 +498,11 @@ class Model:
         # 4th: set up the classes for the wildtype and the mutant structures
         fX_wt_list = list()
         for wPDB in repairedPDB_wt_list:
-            fX_wt_list.append(call_foldx.FoldX(wPDB, chain_id, mutation_dir))
+            fX_wt_list.append(elaspic.tools.FoldX(wPDB, chain_id, mutation_dir))
 
         fX_mut_list = list()
         for mPDB in repairedPDB_mut_list:
-            fX_mut_list.append(call_foldx.FoldX(mPDB, chain_id, mutation_dir))
+            fX_mut_list.append(elaspic.tools.FoldX(mPDB, chain_id, mutation_dir))
 
         #######################################################################
         # 5th: Calculate energies
@@ -531,13 +531,13 @@ class Model:
         #######################################################################
         # 6: Calculate all other relevant properties
         # (This also verifies that mutations match mutated residues in pdb structures).
-        analyze_structure_wt = structure_analysis.AnalyzeStructure(
+        analyze_structure_wt = structure_tools.AnalyzeStructure(
             repairedPDB_wt_list[0], mutation_dir,
         )
         analyze_structure_results_wt = analyze_structure_wt(
             chain_id, mutation_modeller, partner_chain_id)
 
-        analyze_structure_mut = structure_analysis.AnalyzeStructure(
+        analyze_structure_mut = structure_tools.AnalyzeStructure(
             repairedPDB_mut_list[0], mutation_dir,
         )
         analyze_structure_results_mut = analyze_structure_mut(
@@ -580,14 +580,14 @@ class Model:
     def result(self):
         result = dict(
             model_id=self.model_id,
-            structure_file=op.relpath(self.structure_file, conf.CONFIGS['unique_temp_dir']),
+            structure_file=op.relpath(self.structure_file, elaspic.CONFIGS['unique_temp_dir']),
             structure_id=self.structure_id,
-            sequence_file=op.relpath(self.sequence_file, conf.CONFIGS['unique_temp_dir']),
+            sequence_file=op.relpath(self.sequence_file, elaspic.CONFIGS['unique_temp_dir']),
             sequence_id=self.sequence_id,
             chain_ids=tuple(self.chain_ids),
             mutations=self.mutations,
             modeller_results_file=op.relpath(
-                self.modeller_results_file, conf.CONFIGS['unique_temp_dir']),
+                self.modeller_results_file, elaspic.CONFIGS['unique_temp_dir']),
             modeller_chain_ids=tuple(self.modeller_chain_ids),
             relative_sasa_scores=self.relative_sasa_scores,
             core_or_interface=self.core_or_interface,
@@ -621,7 +621,7 @@ def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data
     logger.debug(
         "Calling t_coffee with parameters:\n" +
         ', '.join(['{}'.format(x) for x in t_coffee_parameters]))
-    tcoffee = call_tcoffee.tcoffee_alignment(*t_coffee_parameters)
+    tcoffee = elaspic.tools.TCoffee(*t_coffee_parameters)
     alignments = tcoffee.align()
     assert len(alignments) == 1
     alignment = alignments[0]
@@ -633,7 +633,7 @@ def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data
         AlignIO.write(
             alignment, self.unique_temp_folder + 'tcoffee/' + alignment_filename, 'clustal')
     except IndexError as e:
-        raise errors.EmptyPDBSequenceError('{}: {}'.format(type(e), e))
+        raise elaspic.exc.EmptyPDBSequenceError('{}: {}'.format(type(e), e))
     temp_save_path = self.temp_archive_path + path_to_data
     subprocess.check_call("mkdir -p '{}'".format(temp_save_path), shell=True)
     subprocess.check_call("cp -f '{}' '{}'".format(
@@ -758,13 +758,13 @@ def run_modeller(
         'target_id: {}\n'.format(target_id) +
         'template_id: {}\n'.format(template_id)
     )
-    modeller = call_modeller.Modeller(
-        [pir_alignment_file], target_id, template_id, conf.CONFIGS['unique_temp_dir'])
+    modeller = elaspic.tools.Modeller(
+        [pir_alignment_file], target_id, template_id, elaspic.CONFIGS['unique_temp_dir'])
 
-    with switch_paths(conf.CONFIGS['modeller_dir']):
+    with system_tools.switch_paths(elaspic.CONFIGS['modeller_dir']):
         norm_dope, pdb_filename = modeller.run()
 
-    raw_model_file = op.join(conf.CONFIGS['modeller_dir'], pdb_filename)
+    raw_model_file = op.join(elaspic.CONFIGS['modeller_dir'], pdb_filename)
 
     # If there is only one chain in the pdb, label that chain 'A'
     io = PDBIO()
@@ -779,9 +779,9 @@ def run_modeller(
     io.save(model_file)
 
     results = {
-        'model_file': op.relpath(model_file, conf.CONFIGS['unique_temp_dir']),
-        'raw_model_file': op.relpath(raw_model_file, conf.CONFIGS['unique_temp_dir']),
+        'model_file': op.relpath(model_file, elaspic.CONFIGS['unique_temp_dir']),
+        'raw_model_file': op.relpath(raw_model_file, elaspic.CONFIGS['unique_temp_dir']),
         'norm_dope': norm_dope,
-        'pir_alignment_file': op.relpath(pir_alignment_file, conf.CONFIGS['unique_temp_dir']),
+        'pir_alignment_file': op.relpath(pir_alignment_file, elaspic.CONFIGS['unique_temp_dir']),
     }
     return results

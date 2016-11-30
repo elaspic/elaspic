@@ -2,45 +2,53 @@
 """
 import os
 import logging
-from elaspic import conf
-from kmtools.system_tools import decompress
 
+from kmtools import system_tools
+
+import elaspic
 
 logger = logging.getLogger(__name__)
 
 
 def elaspic_database(args):
     if args.config_file:
-        conf.read_configuration_file(args.config_file)
+        elaspic.conf.read_configuration_file(args.config_file)
     elif args.connection_string:
-        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+        elaspic.conf.read_configuration_file(
+            DATABASE={'connection_string': args.connection_string})
     else:
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     print("Running function '{}'...".format(args.func.__name__))
 
 
 def create_database(args):
+    global elaspic
     if args.config_file:
-        conf.read_configuration_file(args.config_file)
+        elaspic.conf.read_configuration_file(args.config_file)
     elif args.connection_string:
-        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+        elaspic.conf.read_configuration_file(
+            DATABASE={'connection_string': args.connection_string})
     else:
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
-    from elaspic import elaspic_database
-    db = elaspic_database.MyDatabase()
+
+    import elaspic.database
+    db = elaspic.database.Database()
     db.create_database_tables(args.drop_schema)
     logger.info('Done!')
 
 
 def load_data_to_database(args):
+    global elaspic
     if args.config_file:
-        conf.read_configuration_file(args.config_file)
+        elaspic.conf.read_configuration_file(args.config_file)
     elif args.connection_string:
-        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+        elaspic.conf.read_configuration_file(
+            DATABASE={'connection_string': args.connection_string})
     else:
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
-    from elaspic import elaspic_database
-    db = elaspic_database.MyDatabase()
+
+    import elaspic.database
+    db = elaspic.database.Database()
     args.data_folder = args.data_folder.rstrip('/')
     table_names = args.data_files.split(',') if args.data_files else None
     dirpath, dirnames, filenames = next(os.walk(args.data_folder))
@@ -54,7 +62,8 @@ def load_data_to_database(args):
             print("Successfully loaded data from file '{}' to table '{}'"
                   .format('{}.tsv'.format(table.name), table.name))
         elif '{}.tsv.gz'.format(table.name) in filenames:
-            with decompress(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
+            with system_tools.decompress(
+                    os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
                 db.copy_table_to_db(table.name, args.data_folder.rstrip('/'))
             print("Successfully loaded data from file '{}' to table '{}'"
                   .format('{}.tsv.gz'.format(table.name), table.name))
@@ -65,14 +74,17 @@ def test_database(args):
 
 
 def delete_database(args):
+    global elaspic
     if args.config_file:
-        conf.read_configuration_file(args.config_file)
+        elaspic.conf.read_configuration_file(args.config_file)
     elif args.connection_string:
-        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+        elaspic.conf.read_configuration_file(
+            DATABASE={'connection_string': args.connection_string})
     else:
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
-    from elaspic import elaspic_database
-    db = elaspic_database.MyDatabase()
+
+    import elaspic.database
+    db = elaspic.database.Database()
     db.delete_database_tables(args.drop_schema, args.drop_uniprot_sequence)
     logger.info('Done!')
 

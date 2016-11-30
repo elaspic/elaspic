@@ -1,29 +1,30 @@
-import re
+import atexit
+import logging
 import os
 import os.path as op
-import requests
-import psutil
-import time
-import shutil
-import logging
-import atexit
-import subprocess
+import re
 import shlex
-import six
+import shutil
+import subprocess
+import time
 
+import psutil
+import requests
+import six
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.SubsMat import MatrixInfo
 
-from . import conf, helper, errors
+from kmtools import py_tools, system_tools
+
+import elaspic
 
 logger = logging.getLogger(__name__)
 
 CANONICAL_AMINO_ACIDS = 'ARNDCEQGHILKMFPSTWYV'
 
 
-# %% Sequence tools
 def download_uniport_sequence(uniprot_id, output_dir):
     """
     """
@@ -55,7 +56,6 @@ def convert_basestring_to_seqrecord(sequence, sequence_id='id'):
     return seqrec
 
 
-# %%
 class Sequence:
     """Class for calculating sequence level features."""
 
@@ -76,7 +76,7 @@ class Sequence:
 
         self.sequence_file = sequence_file
         self.seqrecord = SeqIO.read(self.sequence_file, 'fasta')
-        self.protein_id = helper.slugify(self.seqrecord.id)
+        self.protein_id = py_tools.slugify(self.seqrecord.id)
         self.sequence = str(self.seqrecord.seq)
 
         # Provean supset
@@ -100,7 +100,7 @@ class Sequence:
         if mutation[0] != self.sequence[int(mutation[1:-1]) - 1]:
             logger.error('sequence: {}'.format(self.sequence))
             logger.error('mutation: {}'.format(mutation))
-            raise errors.MutationMismatchError()
+            raise elaspic.exc.MutationMismatchError()
 
         results = dict(
             protein_id=self.protein_id,
@@ -113,8 +113,8 @@ class Sequence:
     @property
     def provean_supset_file(self):
         return op.join(
-            conf.CONFIGS['sequence_dir'],
-            helper.slugify(self.protein_id + '_provean_supset')
+            elaspic.CONFIGS['sequence_dir'],
+            py_tools.slugify(self.protein_id + '_provean_supset')
         )
 
     @property
@@ -129,10 +129,10 @@ class Sequence:
         result = dict(
             protein_id=self.protein_id,
             sequence=self.sequence,
-            sequence_file=op.relpath(self.sequence_file, conf.CONFIGS['unique_temp_dir']),
+            sequence_file=op.relpath(self.sequence_file, elaspic.CONFIGS['unique_temp_dir']),
             provean_supset_exists=self.provean_supset_exists,
             provean_supset_file=op.relpath(
-                self.provean_supset_file, conf.CONFIGS['unique_temp_dir']),
+                self.provean_supset_file, elaspic.CONFIGS['unique_temp_dir']),
             provean_supset_length=self.provean_supset_length,
             mutations=self.mutations,
         )
@@ -174,7 +174,7 @@ class Sequence:
             try:
                 provean_score = self._run_provean(mutation, *args, **kwargs)
                 break
-            except errors.ProveanError as e:
+            except elaspic.exc.ProveanError as e:
                 bad_ids = re.findall("Entry not found in BLAST database: '(.*)'", e.args[0])
                 provean_supset_data = []
                 with open(self.provean_supset_file, 'rt') as ifh:
@@ -224,27 +224,27 @@ class Sequence:
 
         Raises
         ------
-        errors.ProveanError
+        elaspic.exc.ProveanError
             Can raise this exception only if ``check_mem_usage`` is set to ``True``.
         """
         if check_mem_usage:
             # Get initial measurements of how much virtual memory and disk space is availible
             disk_space_availible = psutil.disk_usage(
-                conf.CONFIGS['provean_temp_dir']).free / (1024**3)
+                elaspic.CONFIGS['provean_temp_dir']).free / (1024**3)
             logger.debug('Disk space availible: {:.2f} GB'.format(disk_space_availible))
             if disk_space_availible < 5:
-                raise errors.ProveanError(
+                raise elaspic.exc.ProveanError(
                     'Not enough disk space ({:.2f} GB) to run provean'
                     .format(disk_space_availible))
             memory_availible = psutil.virtual_memory().available / float(1024)**3
             logger.debug('Memory availible: {:.2f} GB'.format(memory_availible))
             if memory_availible < 0.5:
-                raise errors.ProveanError(
+                raise elaspic.exc.ProveanError(
                     'Not enough memory ({:.2f} GB) to run provean'
                     .format(memory_availible))
 
         # Create a file with mutation
-        mutation_file = op.join(conf.CONFIGS['sequence_dir'], '{}.var'.format(mutation))
+        mutation_file = op.join(elaspic.CONFIGS['sequence_dir'], '{}.var'.format(mutation))
         with open(mutation_file, 'w') as ofh:
             ofh.write(mutation)
 
@@ -253,12 +253,12 @@ class Sequence:
             "provean " +
             " -q '{}' ".format(self.sequence_file) +
             " -v '{}' ".format(mutation_file) +
-            " -d " + op.join(conf.CONFIGS['blast_db_dir'], 'nr') +
-            " --tmp_dir '{}' ".format(conf.CONFIGS['provean_temp_dir']) +
-            " --num_threads {} ".format(conf.CONFIGS['n_cores']) +
-            " --psiblast '{}' ".format(helper.get_which('psiblast')) +
-            " --blastdbcmd '{}' ".format(helper.get_which('blastdbcmd')) +
-            " --cdhit '{}' ".format(helper.get_which('cd-hit'))
+            " -d " + op.join(elaspic.CONFIGS['blast_db_dir'], 'nr') +
+            " --tmp_dir '{}' ".format(elaspic.CONFIGS['provean_temp_dir']) +
+            " --num_threads {} ".format(elaspic.CONFIGS['n_cores']) +
+            " --psiblast '{}' ".format(system_tools.get_which('psiblast')) +
+            " --blastdbcmd '{}' ".format(system_tools.get_which('blastdbcmd')) +
+            " --cdhit '{}' ".format(system_tools.get_which('cd-hit'))
         )
 
         if self.provean_supset_exists:
@@ -270,7 +270,7 @@ class Sequence:
         logger.debug(system_command)
         p = subprocess.Popen(
             shlex.split(system_command),
-            cwd=conf.CONFIGS['sequence_dir'],
+            cwd=elaspic.CONFIGS['sequence_dir'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True
@@ -284,10 +284,10 @@ class Sequence:
         time.sleep(5)
         while check_mem_usage and p.poll() is None:
             disk_space_availible_now = (
-                psutil.disk_usage(conf.CONFIGS['provean_temp_dir']).free / float(1024)**3
+                psutil.disk_usage(elaspic.CONFIGS['provean_temp_dir']).free / float(1024)**3
             )
             if disk_space_availible_now < 5:  # less than 5 GB of free disk space left
-                raise errors.ProveanResourceError(
+                raise elaspic.exc.ProveanResourceError(
                     'Ran out of disk space and provean had to be terminated ({} GB used)'
                     .format(disk_space_availible - disk_space_availible_now),
                     child_process_group_id)
@@ -295,7 +295,7 @@ class Sequence:
                 psutil.virtual_memory().available / float(1024)**3
             )
             if memory_availible_now < 0.5:
-                raise errors.ProveanResourceError(
+                raise elaspic.exc.ProveanResourceError(
                     'Ran out of RAM and provean had to be terminated ({} GB left)'
                     .format(memory_availible - memory_availible_now),
                     child_process_group_id)
@@ -319,7 +319,7 @@ class Sequence:
             logger.error('return_code: {}'.format(p.returncode))
             logger.error('provean_score: {}'.format(provean_score))
             logger.error('error_message: {}'.format(stderr))
-            raise errors.ProveanError(stderr)
+            raise elaspic.exc.ProveanError(stderr)
 
         return provean_score
 
@@ -327,9 +327,9 @@ class Sequence:
 
     def score_pairwise(self, seq1, seq2, matrix=None, gap_s=None, gap_e=None):
         """Get the BLOSUM (or what ever matrix is given) score."""
-        matrix = matrix or getattr(MatrixInfo, conf.CONFIGS['matrix_type'])
-        gap_s = gap_s or conf.CONFIGS['gap_start']
-        gap_e = gap_e or conf.CONFIGS['gap_extend']
+        matrix = matrix or getattr(MatrixInfo, elaspic.CONFIGS['matrix_type'])
+        gap_s = gap_s or elaspic.CONFIGS['gap_start']
+        gap_e = gap_e or elaspic.CONFIGS['gap_extend']
 
         score = 0
         gap = False
@@ -359,7 +359,7 @@ class Sequence:
 
 
 def _clear_provean_temp():
-    provean_temp_dir = conf.CONFIGS['provean_temp_dir']
+    provean_temp_dir = elaspic.CONFIGS['provean_temp_dir']
     logger.info("Clearning provean temporary files from '{}'...".format(provean_temp_dir))
     for filename in os.listdir(provean_temp_dir):
         file_path = os.path.join(provean_temp_dir, filename)

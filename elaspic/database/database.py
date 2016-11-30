@@ -1,21 +1,20 @@
+import datetime
+import logging
 import os
 import os.path as op
-import subprocess
-import datetime
-import six
-import logging
 import shutil
+import subprocess
 from contextlib import contextmanager
+
 import pandas as pd
+import six
 import sqlalchemy as sa
-from kmtools.db_tools import parse_connection_string, make_connection_string
-from . import helper, errors, conf
-from .elaspic_database_tables import (
-    Base,
-    UniprotDomain, UniprotDomainModel, UniprotDomainMutation,
-    UniprotDomainPair, UniprotDomainPairModel,
-    UniprotDomainPairMutation,
-)
+import sqlalchemy.orm  # noqa
+
+from kmtools import db_tools, system_tools
+
+import elaspic
+import elaspic.database
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ Session = sa.orm.sessionmaker(expire_on_commit=False)
 # Session = sa.orm.scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
 
 
-class MyDatabase(object):
+class Database:
     """
     """
 
@@ -55,7 +54,7 @@ class MyDatabase(object):
 
         logger.info(
             "Using precalculated data from the following folder: '{archive_dir}'"
-            .format(**conf.CONFIGS)
+            .format(**elaspic.CONFIGS)
         )
 
     def get_engine(self, echo=False):
@@ -64,17 +63,17 @@ class MyDatabase(object):
             'echo': echo,
             'pool_size': 1,
         }
-        if conf.CONFIGS['db_type'] == 'sqlite':
+        if elaspic.CONFIGS['db_type'] == 'sqlite':
             sa_opts['isolation_level'] = 'READ UNCOMMITTED'
-        elif conf.CONFIGS['db_type'] == 'mysql':
+        elif elaspic.CONFIGS['db_type'] == 'mysql':
             sa_opts['isolation_level'] = 'READ UNCOMMITTED'
             sa_opts['pool_recycle'] = 3600
-        elif conf.CONFIGS['db_type'] == 'postgresql':
+        elif elaspic.CONFIGS['db_type'] == 'postgresql':
             sa_opts['pool_recycle'] = 3600
         else:
-            raise Exception("Unsupported 'db_type': '{}'!".format(conf.CONFIGS['db_type']))
-        engine = sa.create_engine(conf.CONFIGS['connection_string'], **sa_opts)
-        if conf.CONFIGS['db_type'] == 'sqlite':
+            raise Exception("Unsupported 'db_type': '{}'!".format(elaspic.CONFIGS['db_type']))
+        engine = sa.create_engine(elaspic.CONFIGS['connection_string'], **sa_opts)
+        if elaspic.CONFIGS['db_type'] == 'sqlite':
             enable_sqlite_foreign_key_checks(engine)
         logger.info("Opened database connection using engine: '{}'".format(engine))
         return engine
@@ -88,11 +87,11 @@ class MyDatabase(object):
 
         """
         global Session
-        if conf.CONFIGS['db_type'] == 'sqlite':
+        if elaspic.CONFIGS['db_type'] == 'sqlite':
             autocommit = False  # True
             autoflush = True  # True
             # retry_on_failure = True
-        elif conf.CONFIGS['db_type'] in ['postgresql', 'mysql']:
+        elif elaspic.CONFIGS['db_type'] in ['postgresql', 'mysql']:
             autocommit = False
             autoflush = True
             # retry_on_failure = True
@@ -107,10 +106,10 @@ class MyDatabase(object):
         session = Session()
         try:
             yield session
-            if not conf.CONFIGS['db_is_immutable']:
+            if not elaspic.CONFIGS['db_is_immutable']:
                 session.commit()
         except:
-            if not conf.CONFIGS['db_is_immutable']:
+            if not elaspic.CONFIGS['db_is_immutable']:
                 session.rollback()
             raise
         finally:
@@ -121,8 +120,8 @@ class MyDatabase(object):
         """Create ELASPIC database schema."""
         # Create engine without a default schema
         engine = sa.create_engine(
-            make_connection_string(**{
-                **parse_connection_string(conf.CONFIGS['connection_string']),
+            db_tools.make_connection_string(**{
+                **db_tools.parse_connection_string(elaspic.CONFIGS['connection_string']),
                 'db_schema': '',
             }))
         sql_command = "CREATE SCHEMA IF NOT EXISTS `{}`;".format(db_schema)
@@ -133,8 +132,8 @@ class MyDatabase(object):
         """Drop ELASPIC database schema."""
         # Create engine without a default schema
         engine = sa.create_engine(
-            make_connection_string(**{
-                **parse_connection_string(conf.CONFIGS['connection_string']),
+            db_tools.make_connection_string(**{
+                **db_tools.parse_connection_string(elaspic.CONFIGS['connection_string']),
                 'db_schema': '',
             }))
         sql_command = "DROP SCHEMA IF EXISTS {};".format(db_schema)
@@ -160,12 +159,12 @@ class MyDatabase(object):
             Only relevant if `clear_schema` is `True`.
         """
         if drop_schema:
-            self.drop_database_schema(conf.CONFIGS['db_schema'])
+            self.drop_database_schema(elaspic.CONFIGS['db_schema'])
 
-        self.create_database_schema(conf.CONFIGS['db_schema'])
+        self.create_database_schema(elaspic.CONFIGS['db_schema'])
 
         # Create all tables, creating schema as neccessary
-        for table in Base.metadata.sorted_tables:
+        for table in elaspic.database.Base.metadata.sorted_tables:
             table.create(self.engine, checkfirst=True)
         logger.debug('Database tables were created successfully.')
 
@@ -180,23 +179,23 @@ class MyDatabase(object):
             Wheter or not to keep the table (and schema) containing uniprot sequences.
         """
         if drop_schema:
-            if conf.CONFIGS['db_type'] == 'sqlite':
-                os.remove(conf.CONFIGS['db_schema'])
+            if elaspic.CONFIGS['db_type'] == 'sqlite':
+                os.remove(elaspic.CONFIGS['db_schema'])
             else:
-                self.engine.execute('drop schema {db_schema};'.format(**conf.CONFIGS))
+                self.engine.execute('drop schema {db_schema};'.format(**elaspic.CONFIGS))
             logger.info(
                 "Successfully removed database schema: {db_schema}"
-                .format(**conf.CONFIGS))
+                .format(**elaspic.CONFIGS))
             return
 
         # Remove tables one by one
-        for table in reversed(Base.metadata.sorted_tables):
+        for table in reversed(elaspic.database.Base.metadata.sorted_tables):
             if table.name != 'uniprot_sequence' or drop_uniprot_sequence:
-                conf.CONFIGS['table_name'] = table.name
+                elaspic.CONFIGS['table_name'] = table.name
                 self.engine.execute(
-                    'drop table if exists {db_schema}.{table_name};'.format(**conf.CONFIGS))
+                    'drop table if exists {db_schema}.{table_name};'.format(**elaspic.CONFIGS))
                 self.engine.execute(
-                    'drop table if exists {db_schema}.{table_name};'.format(**conf.CONFIGS))
+                    'drop table if exists {db_schema}.{table_name};'.format(**elaspic.CONFIGS))
 
     # %%
     mysql_load_table_template = (
@@ -229,20 +228,20 @@ class MyDatabase(object):
             self.sqlite_table_filename.format(**configs),
             sep='\t', na_values='\\N',
             # escapechar='\\', # escapes the `na_values` character and causes problems
-            names=Base.metadata.tables[configs['table_name']].columns.keys())
+            names=elaspic.database.Base.metadata.tables[configs['table_name']].columns.keys())
         table_df.to_sql(configs['table_name'], self.engine, index=False, if_exists='append')
 
     def _run_create_table_system_command(self, system_command):
-        if conf.CONFIGS['debug']:
+        if elaspic.CONFIGS['debug']:
             logger.debug(system_command)
-        result, error_message, return_code = helper.subprocess_check_output(system_command)
+        result, error_message, return_code = system_tools.subprocess_check_output(system_command)
         if return_code != 0:
             logger.error(result)
             raise Exception(error_message)
 
     def copy_table_to_db(self, table_name, table_folder):
         """Copy data from a ``.tsv`` file to a table in the database."""
-        cmd_options = conf.CONFIGS.copy()
+        cmd_options = elaspic.CONFIGS.copy()
         cmd_options['table_name'] = table_name
         cmd_options['table_folder'] = table_folder
 
@@ -265,7 +264,7 @@ class MyDatabase(object):
         else:
             raise Exception("Unsupported database type: '{}'".format(cmd_options['db_type']))
 
-    @helper.retry_database
+    @system_tools.retry_database
     def get_rows_by_ids(self, row_object, row_object_identifiers, row_object_identifier_values):
         """Get the rows from the table `row_object` identified by keys `row_object_identifiers`."""
         with self.session_scope() as session:
@@ -297,23 +296,23 @@ class MyDatabase(object):
                     .all())
             return row_instances
 
-    @helper.retry_database
+    @system_tools.retry_database
     def get_uniprot_domain(self, uniprot_id, copy_data=False):
         """
         """
         with self.session_scope() as session:
             uniprot_domains = (
                 session
-                .query(UniprotDomain)
-                .filter(UniprotDomain.uniprot_id == uniprot_id)
+                .query(elaspic.database.UniprotDomain)
+                .filter(elaspic.database.UniprotDomain.uniprot_id == uniprot_id)
                 # .options(sa.orm.joinedload('template').joinedload('model'))
                 # .options(sa.orm.joinedload('template', innerjoin=True))
                 .limit(100)
                 .all()
             )
 
-        archive_dir = conf.CONFIGS['archive_dir']
-        archive_type = conf.CONFIGS['archive_type']
+        archive_dir = elaspic.CONFIGS['archive_dir']
+        archive_type = elaspic.CONFIGS['archive_type']
         d_idx = 0
         while d_idx < len(uniprot_domains):
             d = uniprot_domains[d_idx]
@@ -347,13 +346,13 @@ class MyDatabase(object):
 
         return uniprot_domains
 
-    @helper.retry_database
+    @system_tools.retry_database
     def get_uniprot_domain_pair(self, uniprot_id, copy_data=False, uniprot_domain_pair_ids=[]):
         """
         """
         with self.session_scope() as session:
             uniprot_domain_pairs_query = (
-                session.query(UniprotDomainPair)
+                session.query(elaspic.database.UniprotDomainPair)
                 .filter(sa.or_(
                     sa.text("uniprot_id_1='{}'".format(uniprot_id)),
                     sa.text("uniprot_id_2='{}'".format(uniprot_id))))
@@ -361,7 +360,9 @@ class MyDatabase(object):
             if uniprot_domain_pair_ids:
                 uniprot_domain_pairs_query = (
                     uniprot_domain_pairs_query
-                    .filter(UniprotDomainPair.uniprot_domain_pair_id.in_(uniprot_domain_pair_ids))
+                    .filter(
+                        elaspic.database.UniprotDomainPair.uniprot_domain_pair_id.in_(
+                            uniprot_domain_pair_ids))
                 )
             uniprot_domain_pairs = (
                 uniprot_domain_pairs_query
@@ -380,8 +381,8 @@ class MyDatabase(object):
             not _seen.add(d.uniprot_domain_pair_id)
         ]
         #
-        archive_dir = conf.CONFIGS['archive_dir']
-        archive_type = conf.CONFIGS['archive_type']
+        archive_dir = elaspic.CONFIGS['archive_dir']
+        archive_type = elaspic.CONFIGS['archive_type']
         d_idx = 0
         while d_idx < len(uniprot_domain_pairs):
             d = uniprot_domain_pairs[d_idx]
@@ -428,7 +429,7 @@ class MyDatabase(object):
                 d.template.model.alignment_filename and
                 d.template.model.model_filename):
             try:
-                tmp_save_path = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
+                tmp_save_path = op.join(elaspic.CONFIGS['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 args = [tmp_save_path] + d.template.model.alignment_filename.split('/')[:-1]
                 path_to_alignment = op.join(*args)
@@ -468,7 +469,7 @@ class MyDatabase(object):
                 d.template.model.alignment_filename_2 and
                 d.template.model.model_filename):
             try:
-                tmp_save_path = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
+                tmp_save_path = op.join(elaspic.CONFIGS['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 path_to_alignment_1 = op.join(
                     tmp_save_path,
@@ -514,38 +515,38 @@ class MyDatabase(object):
             # archive_type != '7zip' or extraction failed
             os.makedirs(
                 op.dirname(op.join(
-                    conf.CONFIGS['archive_temp_dir'],
-                    get_uniprot_base_path(ud),
+                    elaspic.CONFIGS['archive_temp_dir'],
+                    self.get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename)),
                 exist_ok=True
             )
             shutil.copyfile(
                 op.join(
                     archive_dir,
-                    get_uniprot_base_path(ud),
+                    self.get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename),
                 op.join(
-                    conf.CONFIGS['archive_temp_dir'],
-                    get_uniprot_base_path(ud),
+                    elaspic.CONFIGS['archive_temp_dir'],
+                    self.get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename))
             shutil.copyfile(
                 op.join(
                     archive_dir,
-                    get_uniprot_base_path(ud),
+                    self.get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
                 op.join(
-                    conf.CONFIGS['archive_temp_dir'],
-                    get_uniprot_base_path(ud),
+                    elaspic.CONFIGS['archive_temp_dir'],
+                    self.get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'))
         except FileNotFoundError:
             if archive_type != '7zip':
                 raise
             filenames = [
                 op.join(
-                    get_uniprot_base_path(ud),
+                    self.get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename),
                 op.join(
-                    get_uniprot_base_path(ud),
+                    self.get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
             ]
             path_to_7zip = os.path.join(
@@ -557,7 +558,7 @@ class MyDatabase(object):
             try:
                 self._extract_files_from_7zip(path_to_7zip, filenames)
                 return
-            except errors.Archive7zipFileNotFoundError as e:
+            except system_tools.ArchiveNotFoundError as e:
                 logger.debug(e)
                 logger.debug(
                     "Could not extract these files: {} from this archive: {}\n"
@@ -565,13 +566,13 @@ class MyDatabase(object):
                     .format(filenames, path_to_7zip)
                 )
 
-    @helper.retry_archive
+    @system_tools.retry_archive
     def _extract_files_from_7zip(self, path_to_7zip, filenames_in):
         """Extract files to `config['archive_temp_dir']`."""
         logger.debug("Extracting the following files: {}".format(filenames_in))
         filenames = [
             f for f in filenames_in
-            if not op.isfile(op.join(conf.CONFIGS['archive_temp_dir'], f))
+            if not op.isfile(op.join(elaspic.CONFIGS['archive_temp_dir'], f))
         ]
         if not filenames:
             logger.debug("All files already been extracted. Done!")
@@ -581,33 +582,36 @@ class MyDatabase(object):
             files="' '".join(filenames)
         )
         logger.debug('System command:\n{}'.format(system_command))
-        p = helper.run(system_command, cwd=conf.CONFIGS['archive_temp_dir'])
+        p = system_tools.run(system_command, cwd=elaspic.CONFIGS['archive_temp_dir'])
         if 'No files to process' in p.stdout:
-            raise errors.Archive7zipFileNotFoundError(p.stdout, p.stderr, p.returncode)
+            raise system_tools.ArchiveNotFoundError(p.stdout, p.stderr, p.returncode)
         if p.returncode != 0:
-            raise errors.Archive7zipError(p.stdout, p.stderr, p.returncode)
+            raise elaspic.exc.ArchiveError(p.stdout, p.stderr, p.returncode)
 
-    @helper.retry_database
+    @system_tools.retry_database
     def get_uniprot_mutation(self, d, mutation, uniprot_id=None, copy_data=False):
         """
         """
-        if isinstance(d, UniprotDomain):
+        if isinstance(d, elaspic.database.UniprotDomain):
             with self.session_scope() as session:
                 uniprot_mutation = (
-                    session.query(UniprotDomainMutation)
+                    session.query(elaspic.database.UniprotDomainMutation)
                     .filter(
-                        (UniprotDomainMutation.uniprot_domain_id == d.uniprot_domain_id) &
-                        (UniprotDomainMutation.mutation == mutation))
+                        (elaspic.database.UniprotDomainMutation.uniprot_domain_id ==
+                         d.uniprot_domain_id) &
+                        (elaspic.database.UniprotDomainMutation.mutation ==
+                         mutation))
                     .scalar())
-        elif isinstance(d, UniprotDomainPair) and isinstance(uniprot_id, six.string_types):
+        elif (isinstance(d, elaspic.database.UniprotDomainPair) and
+                isinstance(uniprot_id, six.string_types)):
             with self.session_scope() as session:
                 uniprot_mutation = (
-                    session.query(UniprotDomainPairMutation)
+                    session.query(elaspic.database.UniprotDomainPairMutation)
                     .filter(
-                        (UniprotDomainPairMutation.uniprot_id == uniprot_id) &
-                        (UniprotDomainPairMutation.uniprot_domain_pair_id ==
+                        (elaspic.database.UniprotDomainPairMutation.uniprot_id == uniprot_id) &
+                        (elaspic.database.UniprotDomainPairMutation.uniprot_domain_pair_id ==
                          d.uniprot_domain_pair_id) &
-                        (UniprotDomainPairMutation.mutation == mutation))
+                        (elaspic.database.UniprotDomainPairMutation.mutation == mutation))
                     .scalar())
         else:
             logger.debug('d: {}\td type: {}'.format(d, type(d)))
@@ -616,10 +620,10 @@ class MyDatabase(object):
         if copy_data:
             try:
                 self._copy_mutation_data(
-                    uniprot_mutation, d.path_to_data, conf.CONFIGS['archive_dir'])
+                    uniprot_mutation, d.path_to_data, elaspic.CONFIGS['archive_dir'])
             except (subprocess.CalledProcessError,
-                    errors.Archive7zipError,
-                    errors.Archive7zipFileNotFoundError) as e:
+                    system_tools.ArchiveError,
+                    system_tools.ArchiveNotFoundError) as e:
                 logger.error(e)
                 uniprot_mutation.model_filename_wt = None
         return uniprot_mutation
@@ -634,7 +638,7 @@ class MyDatabase(object):
                 ]
                 self._extract_files_from_7zip(archive_dir, filenames)
             else:
-                tmp_save_path = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
+                tmp_save_path = op.join(elaspic.CONFIGS['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 path_to_mutation = op.dirname(op.join(tmp_save_path, mutation.model_filename_wt))
                 subprocess.check_call(
@@ -646,7 +650,7 @@ class MyDatabase(object):
                     op.join(archive_save_path, mutation.model_filename_mut),
                     op.join(tmp_save_path, mutation.model_filename_mut))
 
-    @helper.retry_database
+    @system_tools.retry_database
     def remove_model(self, d):
         """Remove a model from the database.
 
@@ -655,27 +659,27 @@ class MyDatabase(object):
 
         Raises
         ------
-        errors.ModelHasMutationsError
+        elaspic.exc.ModelHasMutationsError
             The model you are trying to delete has precalculated mutations,
             so it can't be that bad. Delete those mutations and try again.
         """
         with self.session_scope() as session:
-            if isinstance(d, UniprotDomain):
+            if isinstance(d, elaspic.database.UniprotDomain):
                 session.execute(
                     'delete from {0}.uniprot_domain_model where uniprot_domain_id = {1}'
-                    .format(conf.CONFIGS['db_schema'], d.uniprot_domain_id))
-            elif isinstance(d, UniprotDomainPair):
+                    .format(elaspic.CONFIGS['db_schema'], d.uniprot_domain_id))
+            elif isinstance(d, elaspic.database.UniprotDomainPair):
                 session.execute(
                     'delete from {0}.uniprot_domain_pair_model where uniprot_domain_pair_id = {1}'
-                    .format(conf.CONFIGS['db_schema'], d.uniprot_domain_pair_id))
+                    .format(elaspic.CONFIGS['db_schema'], d.uniprot_domain_pair_id))
             else:
                 raise Exception("'d' is of incorrect type!")
 
     # %% Add objects to the database
-    @helper.retry_database
+    @system_tools.retry_database
     def merge_row(self, row_instance):
         """Add a list of rows (`row_instances`) to the database."""
-        if not conf.CONFIGS['db_is_immutable']:
+        if not elaspic.CONFIGS['db_is_immutable']:
             with self.session_scope() as session:
                 if not isinstance(row_instance, (tuple, list)):
                     session.merge(row_instance)
@@ -688,16 +692,16 @@ class MyDatabase(object):
         assert op.isfile(provean_supset_file)
         assert op.isfile(provean_supset_file + '.fasta')
 
-        archive_dir = conf.CONFIGS['archive_dir']
+        archive_dir = elaspic.CONFIGS['archive_dir']
         logger.debug(
             'Moving provean supset to the output folder: {}'
             .format(op.join(archive_dir, path_to_data)))
-        helper.makedirs(op.join(archive_dir, path_to_data), mode=0o777)
-        helper.copyfile(
+        system_tools.makedirs(op.join(archive_dir, path_to_data), mode=0o777)
+        system_tools.copyfile(
             provean_supset_file,
             op.join(archive_dir, path_to_data, provean.provean_supset_filename),
             mode=0o666)
-        helper.copyfile(
+        system_tools.copyfile(
             provean_supset_file + '.fasta',
             op.join(archive_dir, path_to_data, provean.provean_supset_filename + '.fasta'),
             mode=0o666)
@@ -707,30 +711,30 @@ class MyDatabase(object):
         """Add MODELLER models to the database."""
         # Save a copy of the alignment to the export folder
         if files_dict:
-            archive_dir = conf.CONFIGS['archive_dir']
+            archive_dir = elaspic.CONFIGS['archive_dir']
             archive_save_path = op.join(archive_dir, d.path_to_data)
-            helper.makedirs(archive_save_path, mode=0o777)
+            system_tools.makedirs(archive_save_path, mode=0o777)
             if d.template.model.model_filename is not None:
                 # Save alignments
-                if isinstance(d.template.model, UniprotDomainModel):
-                    helper.copyfile(
+                if isinstance(d.template.model, elaspic.database.UniprotDomainModel):
+                    system_tools.copyfile(
                         files_dict['alignment_files'][0],
                         op.join(archive_save_path, d.template.model.alignment_filename),
                         mode=0o666
                     )
-                elif isinstance(d.template.model, UniprotDomainPairModel):
-                    helper.copyfile(
+                elif isinstance(d.template.model, elaspic.database.UniprotDomainPairModel):
+                    system_tools.copyfile(
                         files_dict['alignment_files'][0],
                         op.join(archive_save_path, d.template.model.alignment_filename_1),
                         mode=0o666
                     )
-                    helper.copyfile(
+                    system_tools.copyfile(
                         files_dict['alignment_files'][1],
                         op.join(archive_save_path, d.template.model.alignment_filename_2),
                         mode=0o666
                     )
                 # Save the modelled structure
-                helper.copyfile(
+                system_tools.copyfile(
                     files_dict['model_file'],
                     op.join(archive_save_path, d.template.model.model_filename),
                     mode=0o666
@@ -742,102 +746,102 @@ class MyDatabase(object):
         """
         mut.mut_date_modified = datetime.datetime.utcnow()
         if path_to_data and (mut.model_filename_wt is not None):
-            archive_temp_save_dir = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
-            archive_save_dir = op.join(conf.CONFIGS['archive_dir'], path_to_data)
+            archive_temp_save_dir = op.join(elaspic.CONFIGS['archive_temp_dir'], path_to_data)
+            archive_save_dir = op.join(elaspic.CONFIGS['archive_dir'], path_to_data)
             # Save Foldx structures
             if mut.model_filename_wt and mut.model_filename_mut:
-                helper.makedirs(
+                system_tools.makedirs(
                     op.dirname(op.join(archive_save_dir, mut.model_filename_wt)),
                     mode=0o777)
-                helper.copyfile(
+                system_tools.copyfile(
                     op.join(archive_temp_save_dir, mut.model_filename_wt),
                     op.join(archive_save_dir, mut.model_filename_wt),
                     mode=0o666
                 )
-                helper.copyfile(
+                system_tools.copyfile(
                     op.join(archive_temp_save_dir, mut.model_filename_mut),
                     op.join(archive_save_dir, mut.model_filename_mut),
                     mode=0o666
                 )
         self.merge_row(mut)
 
+    @staticmethod
+    def get_uniprot_base_path(d=None, uniprot_name=None, uniprot_id=None):
+        """Return the name of the subfolder for storing protein information.
 
-def get_uniprot_base_path(d=None, uniprot_name=None, uniprot_id=None):
-    """Return the name of the subfolder for storing protein information.
+        Parameters
+        ----------
+        d : UniprotDomain | UniprotDomainPair | None
+        uniprot_name : str
+        uniprot_id : str
+        """
+        if isinstance(d, elaspic.database.UniprotDomain):
+            uniprot_name = d.uniprot_sequence.uniprot_name
+            uniprot_id = d.uniprot_id
+        elif isinstance(d, elaspic.database.UniprotDomainPair):
+            uniprot_name = d.uniprot_domain_1.uniprot_sequence.uniprot_name
+            uniprot_id = d.uniprot_domain_1.uniprot_id
+        else:
+            assert uniprot_name is not None and uniprot_id is not None
 
-    Parameters
-    ----------
-    d : UniprotDomain | UniprotDomainPair | None
-    uniprot_name : str
-    uniprot_id : str
-    """
-    if isinstance(d, UniprotDomain):
-        uniprot_name = d.uniprot_sequence.uniprot_name
-        uniprot_id = d.uniprot_id
-    elif isinstance(d, UniprotDomainPair):
-        uniprot_name = d.uniprot_domain_1.uniprot_sequence.uniprot_name
-        uniprot_id = d.uniprot_domain_1.uniprot_id
-    else:
-        assert uniprot_name is not None and uniprot_id is not None
+        # TODO: Screw the splitting of uniprot ids!
+        uniprot_base_path = (
+            '{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/'
+            .format(
+                organism_name=uniprot_name.split('_')[-1].lower(),
+                uniprot_id_part_1=uniprot_id[:3],
+                uniprot_id_part_2=uniprot_id[3:5],
+                uniprot_id_part_3=uniprot_id,))
+        return uniprot_base_path
 
-    # TODO: Screw the splitting of uniprot ids!
-    uniprot_base_path = (
-        '{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/'
-        .format(
-            organism_name=uniprot_name.split('_')[-1].lower(),
-            uniprot_id_part_1=uniprot_id[:3],
-            uniprot_id_part_2=uniprot_id[3:5],
-            uniprot_id_part_3=uniprot_id,))
-    return uniprot_base_path
+    @staticmethod
+    def get_uniprot_domain_path(d=None, **vargs):
+        """Return the name of the subfolder for storing protein *domain* information.
 
+        Parameters
+        ----------
+        ### Domain
+        d : UniprotDomain | None
+        pfam_clan : str
+        alignment_def : str
 
-def get_uniprot_domain_path(d=None, **vargs):
-    """Return the name of the subfolder for storing protein *domain* information.
+        #### Domain pair
+        d : UniprotDomainPair | None
+        pfam_clan_1 : str
+        alignment_def_1 : str
+        pfam_clan_2 : str
+        alignment_def_2 : str
+        uniprot_id_2 : str
+        """
+        if d is not None:
+            if isinstance(d, elaspic.database.UniprotDomain):
+                vargs['pfam_clan'] = d.pfam_clan
+                vargs['alignment_def'] = d.alignment_def
+            elif isinstance(d, elaspic.database.UniprotDomainPair):
+                vargs['pfam_clan_1'] = d.uniprot_domain_1.pfam_clan
+                vargs['alignment_def_1'] = d.uniprot_domain_1.alignment_def
+                vargs['pfam_clan_2'] = d.uniprot_domain_2.pfam_clan
+                vargs['alignment_def_2'] = d.uniprot_domain_2.alignment_def
+                vargs['uniprot_id_2'] = d.uniprot_domain_2.uniprot_id
+            else:
+                raise Exception
 
-    Parameters
-    ----------
-    ### Domain
-    d : UniprotDomain | None
-    pfam_clan : str
-    alignment_def : str
-
-    #### Domain pair
-    d : UniprotDomainPair | None
-    pfam_clan_1 : str
-    alignment_def_1 : str
-    pfam_clan_2 : str
-    alignment_def_2 : str
-    uniprot_id_2 : str
-    """
-    if d is not None:
-        if isinstance(d, UniprotDomain):
-            vargs['pfam_clan'] = d.pfam_clan
-            vargs['alignment_def'] = d.alignment_def
-        elif isinstance(d, UniprotDomainPair):
-            vargs['pfam_clan_1'] = d.uniprot_domain_1.pfam_clan
-            vargs['alignment_def_1'] = d.uniprot_domain_1.alignment_def
-            vargs['pfam_clan_2'] = d.uniprot_domain_2.pfam_clan
-            vargs['alignment_def_2'] = d.uniprot_domain_2.alignment_def
-            vargs['uniprot_id_2'] = d.uniprot_domain_2.uniprot_id
+        if 'pfam_clan' in vargs:
+            vargs['alignment_def'] = vargs['alignment_def'].replace(':', '-')
+            uniprot_domain_path = (
+                '{pfam_clan:.36}.{alignment_def}/'
+                .format(**vargs)
+            )
+        elif 'pfam_clan_1' in vargs:
+            vargs['alignment_def_1'] = vargs['alignment_def_1'].replace(':', '-')
+            vargs['alignment_def_2'] = vargs['alignment_def_2'].replace(':', '-')
+            uniprot_domain_path = (
+                '{pfam_clan_1:.36}.{alignment_def_1}/'
+                '{pfam_clan_2:.36}.{alignment_def_2}/'
+                '{uniprot_id_2}/'
+                .format(**vargs)
+            )
         else:
             raise Exception
 
-    if 'pfam_clan' in vargs:
-        vargs['alignment_def'] = vargs['alignment_def'].replace(':', '-')
-        uniprot_domain_path = (
-            '{pfam_clan:.36}.{alignment_def}/'
-            .format(**vargs)
-        )
-    elif 'pfam_clan_1' in vargs:
-        vargs['alignment_def_1'] = vargs['alignment_def_1'].replace(':', '-')
-        vargs['alignment_def_2'] = vargs['alignment_def_2'].replace(':', '-')
-        uniprot_domain_path = (
-            '{pfam_clan_1:.36}.{alignment_def_1}/'
-            '{pfam_clan_2:.36}.{alignment_def_2}/'
-            '{uniprot_id_2}/'
-            .format(**vargs)
-        )
-    else:
-        raise Exception
-
-    return uniprot_domain_path
+        return uniprot_domain_path

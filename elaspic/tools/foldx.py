@@ -1,57 +1,59 @@
+import logging
 import os
 import os.path as op
 import shutil
-import logging
 
-from . import conf, errors, helper
+from kmtools import system_tools
+
+import elaspic
 
 logger = logging.getLogger(__name__)
 
-names_rows_stability = [
-    ['dg', 1],  # totalEnergy
-    ['backbone_hbond', 2],
-    ['sidechain_hbond', 3],
-    ['van_der_waals', 4],
-    ['electrostatics', 5],
-    ['solvation_polar', 6],
-    ['solvation_hydrophobic', 7],
-    ['van_der_waals_clashes', 8],
-    ['entropy_sidechain', 9],
-    ['entropy_mainchain', 10],
-    ['sloop_entropy', 11],
-    ['mloop_entropy', 12],
-    ['cis_bond', 13],
-    ['torsional_clash', 14],
-    ['backbone_clash', 15],
-    ['helix_dipole', 16],
-    ['water_bridge', 17],
-    ['disulfide', 18],
-    ['electrostatic_kon', 19],
-    ['partial_covalent_bonds', 20],
-    ['energy_ionisation', 21],
-    ['entropy_complex', 22],
-    ['number_of_residues', 23]
-]
-names_stability_wt = (
-    [name + '_wt' for name in list(zip(*names_rows_stability))[0][:-1]] +
-    ['number_of_residues'])
-names_stability_mut = (
-    [name + '_mut' for name in list(zip(*names_rows_stability))[0][:-1]] +
-    ['number_of_residues'])
 
-names_rows_stability_complex = (
-    [['intraclashes_energy_1', 3], ['intraclashes_energy_2', 4], ] +
-    [[x[0], x[1] + 4] for x in names_rows_stability]
-)
-names_stability_complex_wt = (
-    [name + '_wt' for name in list(zip(*names_rows_stability_complex))[0][:-1]] +
-    ['number_of_residues'])
-names_stability_complex_mut = (
-    [name + '_mut' for name in list(zip(*names_rows_stability_complex))[0][:-1]] +
-    ['number_of_residues'])
+class FoldX:
 
+    names_rows_stability = [
+        ['dg', 1],  # totalEnergy
+        ['backbone_hbond', 2],
+        ['sidechain_hbond', 3],
+        ['van_der_waals', 4],
+        ['electrostatics', 5],
+        ['solvation_polar', 6],
+        ['solvation_hydrophobic', 7],
+        ['van_der_waals_clashes', 8],
+        ['entropy_sidechain', 9],
+        ['entropy_mainchain', 10],
+        ['sloop_entropy', 11],
+        ['mloop_entropy', 12],
+        ['cis_bond', 13],
+        ['torsional_clash', 14],
+        ['backbone_clash', 15],
+        ['helix_dipole', 16],
+        ['water_bridge', 17],
+        ['disulfide', 18],
+        ['electrostatic_kon', 19],
+        ['partial_covalent_bonds', 20],
+        ['energy_ionisation', 21],
+        ['entropy_complex', 22],
+        ['number_of_residues', 23]
+    ]
+    names_stability_wt = (
+        [name + '_wt' for name in list(zip(*names_rows_stability))[0][:-1]] +
+        ['number_of_residues'])
+    names_stability_mut = (
+        [name + '_mut' for name in list(zip(*names_rows_stability))[0][:-1]] +
+        ['number_of_residues'])
 
-class FoldX(object):
+    names_rows_stability_complex = (
+        [['intraclashes_energy_1', 3], ['intraclashes_energy_2', 4], ] +
+        [[x[0], x[1] + 4] for x in names_rows_stability]
+    )
+    names_stability_complex_wt = (
+        [name + '_wt' for name in list(zip(*names_rows_stability_complex))[0][:-1]] +
+        ['number_of_residues'])
+    names_stability_complex_mut = (
+        [name + '_mut' for name in list(zip(*names_rows_stability_complex))[0][:-1]] +
+        ['number_of_residues'])
 
     def __init__(self, pdb_file, chain_id, foldx_dir=None):
         """
@@ -59,7 +61,7 @@ class FoldX(object):
         self.pdb_filename = op.basename(pdb_file)
         self.chain_id = chain_id
         if foldx_dir is None:
-            self.foldx_dir = conf.CONFIGS['foldx_dir']
+            self.foldx_dir = elaspic.CONFIGS['foldx_dir']
         else:
             self.foldx_dir = foldx_dir
         self.foldx_runfile = op.join(self.foldx_dir, 'runfile_FoldX.txt')
@@ -92,20 +94,20 @@ class FoldX(object):
             return op.join(self.foldx_dir, 'RepairPDB_' + self.pdb_filename)
         elif whatToRun == 'BuildModel':
             # see the FoldX manual for the naming of the generated structures
-            if conf.CONFIGS['foldx_num_of_runs'] == 1:
+            if elaspic.CONFIGS['foldx_num_of_runs'] == 1:
                 mutants = [op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1.pdb'), ]
                 wiltype = [op.join(self.foldx_dir, 'WT_' + self.pdb_filename[:-4] + '_1.pdb'), ]
                 results = [wiltype, mutants]
             else:
                 mutants = [
                     op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
-                    for x in range(0, conf.CONFIGS['foldx_num_of_runs'])
+                    for x in range(0, elaspic.CONFIGS['foldx_num_of_runs'])
                 ]
                 wiltype = [
                     op.join(
                         self.foldx_dir,
                         'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
-                    for x in range(0, conf.CONFIGS['foldx_num_of_runs'])
+                    for x in range(0, elaspic.CONFIGS['foldx_num_of_runs'])
                 ]
                 results = [wiltype, mutants]
             return results
@@ -159,8 +161,8 @@ class FoldX(object):
             '<ENDFILE>#;\n').replace(' ', '').format(
                 pdbFile=pdbFile,
                 command_line=command_line,
-                buildModel_runs=conf.CONFIGS['foldx_num_of_runs'],
-                water=conf.CONFIGS['foldx_water'],
+                buildModel_runs=elaspic.CONFIGS['foldx_num_of_runs'],
+                water=elaspic.CONFIGS['foldx_water'],
                 output_pdb=output_pdb)
 
         # This just makes copies of the runfiles for debugging...
@@ -181,16 +183,16 @@ class FoldX(object):
         env = os.environ.copy()
         env['LD_PRELOAD'] = faketime.config.libfaketime_so_file
         env['FAKETIME'] = '2015-12-26 00:00:00'
-        p = helper.run(system_command, cwd=self.foldx_dir, env=env)
+        p = system_tools.run(system_command, cwd=self.foldx_dir, env=env)
         if p.stderr.strip():
             logger.debug('foldx result:\n{}'.format(p.stdout.strip()))
             logger.error('foldx error message:\n{}'.format(p.stderr.strip()))
             if 'Cannot allocate memory' in p.stderr:
-                raise errors.ResourceError(p.stderr)
+                raise elaspic.exc.ResourceError(p.stderr)
         if 'There was a problem' in p.stdout:
             logger.error('foldx result:\n{}'.format(p.stdout.strip()))
             if 'Specified residue not found.' in p.stdout:
-                raise errors.MutationMismatchError()
+                raise elaspic.exc.MutationMismatchError()
 
     def __read_result(self, outFile, whatToRead):
         with open(outFile, 'r') as f:
@@ -201,11 +203,11 @@ class FoldX(object):
                 return total_energy_difference
             if whatToRead == 'Stability':
                 stability_values = [
-                    line[x[1]].strip() for x in names_rows_stability
+                    line[x[1]].strip() for x in self.names_rows_stability
                 ]
                 return stability_values
             if whatToRead == 'AnalyseComplex':
                 complex_stability_values = [
-                    line[x[1]].strip() for x in names_rows_stability_complex
+                    line[x[1]].strip() for x in self.names_rows_stability_complex
                 ]
                 return complex_stability_values

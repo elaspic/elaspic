@@ -1,9 +1,9 @@
 import datetime
+
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative as sa_ext_declarative
 
-from . import conf
-
+import elaspic
 
 # Default sizes for creating varchar fields
 SHORT = 15
@@ -34,7 +34,27 @@ db_specific_properties = {
     },
 }
 
-if conf.CONFIGS.get('db_type') is None:
+
+def decode_domain_def(domains, merge=True, return_string=False):
+    """Return a tuple of tuples of strings, preserving letter numbering (e.g. 10B)."""
+    if not domains:
+        return None, None
+
+    if domains[-1] == ',':
+        domains = domains[:-1]
+    x = domains
+    if return_string:
+        domain_fragments = [[r.strip() for r in ro.split(':')] for ro in x.split(',')]
+    else:
+        domain_fragments = [[int(r.strip()) for r in ro.split(':')] for ro in x.split(',')]
+    domain_merged = [domain_fragments[0][0], domain_fragments[-1][-1]]
+    if merge:
+        return domain_merged
+    else:
+        return domain_fragments
+
+
+if elaspic.CONFIGS.get('db_type') is None:
     print('The `DB_TYPE` has not been set. Do not know what database is being used!')
 
 
@@ -59,7 +79,7 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
         table_args.append(sa.Index(index_name, *column_names, **kwargs))
     # Other table parameters, such as schemas, etc.
     for db_specific_param in db_specific_params:
-        table_args.append(db_specific_properties[conf.CONFIGS['db_type']][db_specific_param])
+        table_args.append(db_specific_properties[elaspic.CONFIGS['db_type']][db_specific_param])
     table_args.append({'mysql_engine': 'InnoDB'})  # this has to be last
     return tuple(table_args)
 
@@ -99,7 +119,7 @@ class Domain(Base):
     """
 
     __tablename__ = 'domain'
-    if conf.CONFIGS.get('db_type') == 'mysql':
+    if elaspic.CONFIGS.get('db_type') == 'mysql':
         # MySQL can't handle long indexes
         _indexes = [
             ['pdb_id', 'pdb_chain'],
@@ -114,13 +134,13 @@ class Domain(Base):
     cath_id = sa.Column(
         sa.String(
             SHORT,
-            collation=db_specific_properties[conf.CONFIGS['db_type']]['BINARY_COLLATION']),
+            collation=db_specific_properties[elaspic.CONFIGS['db_type']]['BINARY_COLLATION']),
         primary_key=True)
     pdb_id = sa.Column(sa.String(SHORT), nullable=False)
     pdb_chain = sa.Column(
         sa.String(
             SHORT,
-            collation=db_specific_properties[conf.CONFIGS['db_type']]['BINARY_COLLATION']),
+            collation=db_specific_properties[elaspic.CONFIGS['db_type']]['BINARY_COLLATION']),
         nullable=False)
     pdb_domain_def = sa.Column(sa.String(MEDIUM), nullable=False)
     pdb_pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
@@ -390,7 +410,7 @@ class UniprotDomain(Base):
     alignment_subdefs = sa.Column(sa.Text)
     path_to_data = sa.Column(sa.Text)
 
-    if 'training' in conf.CONFIGS.get('db_schema', ''):
+    if 'training' in elaspic.CONFIGS.get('db_schema', ''):
         # The database used for storing training data has an extra column `max_seq_identity`,
         # because we want to make homology models at different sequence identities.
         max_seq_identity = sa.Column(sa.Integer, index=True)
@@ -413,6 +433,33 @@ class UniprotDomain(Base):
     uniprot_sequence = sa.orm.relationship(
         UniprotSequence, uselist=False, cascade='expunge', lazy='joined',
         backref=sa.orm.backref('uniprot_domain', cascade='expunge'))  # many to one
+
+    @property
+    def protein_ids(self):
+        return [self.uniprot_id]
+
+    @property
+    def protein_sequences(self):
+        return [self.uniprot_sequence.uniprot_sequence]
+
+    @property
+    def protein_domain_defs(self):
+        if self.template.model and self.template.model.model_domain_def:
+            return [decode_domain_def(self.template.model.model_domain_def)]
+        else:
+            return [decode_domain_def(self.template.domain_def)]
+
+    @property
+    def pdb_id(self):
+        return self.template.domain.pdb_id
+
+    @property
+    def pdb_chains(self):
+        return [self.template.domain.pdb_chain]
+
+    @property
+    def pdb_domain_defs(self):
+        return [decode_domain_def(self.template.domain.pdb_domain_def)]
 
 
 class UniprotDomainPair(Base):
@@ -462,7 +509,7 @@ class UniprotDomainPair(Base):
     uniprot_id_1 = sa.Column(sa.String(MEDIUM))
     uniprot_id_2 = sa.Column(sa.String(MEDIUM))
 
-    if 'training' in conf.CONFIGS.get('db_schema', ''):
+    if 'training' in elaspic.CONFIGS.get('db_schema', ''):
         # The database used for storing training data has an extra column `max_seq_identity`,
         # because we want to make homology models at different sequence identities.
         max_seq_identity = sa.Column(sa.Integer, index=True)
@@ -490,6 +537,53 @@ class UniprotDomainPair(Base):
         UniprotDomain,
         primaryjoin=uniprot_domain_id_2 == UniprotDomain.uniprot_domain_id,
         cascade='expunge', lazy='joined')  # many to one
+
+    @property
+    def protein_ids(self):
+        return [
+            self.uniprot_domain_1.uniprot_id,
+            self.uniprot_domain_2.uniprot_id
+        ]
+
+    @property
+    def protein_sequences(self):
+        return [
+            self.uniprot_domain_1.uniprot_sequence.uniprot_sequence,
+            self.uniprot_domain_2.uniprot_sequence.uniprot_sequence
+        ]
+
+    @property
+    def protein_domain_defs(self):
+        if (self.template.model and
+                self.template.model.model_domain_def_1 and
+                self.template.model.model_domain_def_2):
+            return [
+                decode_domain_def(self.template.model.model_domain_def_1),
+                decode_domain_def(self.template.model.model_domain_def_2)
+            ]
+        else:
+            return [
+                decode_domain_def(self.uniprot_domain_1.template.domain_def),
+                decode_domain_def(self.uniprot_domain_2.template.domain_def)
+            ]
+
+    @property
+    def pdb_id(self):
+        return self.template.domain_1.pdb_id
+
+    @property
+    def pdb_chains(self):
+        return [
+            self.template.domain_1.pdb_chain,
+            self.template.domain_2.pdb_chain
+        ]
+
+    @property
+    def pdb_domain_defs(self):
+        return [
+            decode_domain_def(self.template.domain_1.pdb_domain_def),
+            decode_domain_def(self.template.domain_2.pdb_domain_def)
+        ]
 
 
 class UniprotDomainTemplate(Base):
@@ -684,7 +778,7 @@ class UniprotDomainMutation(Base):
       stability_energy_wt
         Comma-separated list of scores returned by FoldX for the wildtype protein.
         The comma-separated list can be converted into a DataFrame with each column clearly
-        labelled using the :func:`elaspic.predictor.format_mutation_features`.
+        labelled using the :func:`elaspic.Predictor.format_mutation_features`.
         The FoldX energy terms are:
 
             - dg

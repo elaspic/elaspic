@@ -4,9 +4,9 @@ TODO: The model object has two serialization steps:
     1. Inside the modeller class to save modeller results.
     2. In the local_pipeline to save all results.
 """
-import os.path as op
-import logging
 import json
+import logging
+import os.path as op
 import pickle
 
 import pandas as pd
@@ -14,11 +14,9 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from . import (
-    CACHE_DIR, conf, helper, errors, structure_tools, elaspic_sequence,
-    elaspic_model, elaspic_predictor
-)
-from .pipeline import Pipeline, execute_and_remember
+from kmtools import py_tools, structure_tools
+
+import elaspic
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +26,7 @@ domain_model = None
 domain_mutation = None
 
 
-class StandalonePipeline(Pipeline):
+class StandalonePipeline(elaspic._Pipeline):
     """Run elaspic locally without a database.
 
     Parameters
@@ -68,8 +66,8 @@ class StandalonePipeline(Pipeline):
         # fix_pdb(self.pdb_file, self.pdb_file)
         self.sp = structure_tools.StructureParser(self.pdb_file)
         self.sp.extract()
-        self.sp.save_structure(conf.CONFIGS['unique_temp_dir'])
-        self.sp.save_sequences(conf.CONFIGS['unique_temp_dir'])
+        self.sp.save_structure(elaspic.CONFIGS['unique_temp_dir'])
+        self.sp.save_sequences(elaspic.CONFIGS['unique_temp_dir'])
 
         if sequence_file in ['', 'None', None]:
             self.sequence_file = ''
@@ -90,7 +88,7 @@ class StandalonePipeline(Pipeline):
             # Read template sequences from the sequence file
             self.seqrecords = tuple(SeqIO.parse(self.sequence_file, 'fasta'))
             for i, seqrec in enumerate(self.seqrecords):
-                seqrec.id = helper.slugify('{}_{}'.format(seqrec.id, str(i)))
+                seqrec.id = py_tools.slugify('{}_{}'.format(seqrec.id, str(i)))
 
         self.mutations = self._split_mutations(mutations)
         if 'mutation' in self.run_type:
@@ -121,14 +119,14 @@ class StandalonePipeline(Pipeline):
                 try:
                     parsed_mutations = self._parse_mutations(mutations, mutation_format)
                     break
-                except (IndexError, ValueError, errors.MutationMismatchError) as e:
+                except (IndexError, ValueError, elaspic.exc.MutationMismatchError) as e:
                     logger.warning(
                         "Could not parse mutations %s using mutation_format %s: %s: %s",
                         mutations, mutation_format, type(e), e
                     )
                     continue
             if not parsed_mutations:
-                raise errors.MutationMismatchError()
+                raise elaspic.exc.MutationMismatchError()
         logger.debug('parsed mutations: {}'.format(self.mutations))
         return parsed_mutations
 
@@ -169,7 +167,7 @@ class StandalonePipeline(Pipeline):
                     [self.sp.structure[0][mutation_chain][mutation_id].resname]
                 )
                 if mutation_residue[0] != mutation_expected_aa:
-                    raise errors.MutationMismatchError()
+                    raise elaspic.exc.MutationMismatchError()
             elif mutation_format in ['2', '3']:
                 # Mutation is already in sequence coordinates
                 mutation = mutation_residue
@@ -178,7 +176,7 @@ class StandalonePipeline(Pipeline):
                     str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1]) - 1]
                 )
                 if mutation[0] != mutation_expected_aa:
-                    raise errors.MutationMismatchError()
+                    raise elaspic.exc.MutationMismatchError()
                 mutations_out[(mutation_idx, mutation,)] = mutation_in
 
             mutations_out[(mutation_idx, mutation,)] = mutation_in
@@ -187,6 +185,7 @@ class StandalonePipeline(Pipeline):
     # === Run methods ===
 
     def run(self):
+        logger.debug("run()")
         if 'sequence' in self.run_type:
             self.run_all_sequences()
         if 'model' in self.run_type:
@@ -196,7 +195,7 @@ class StandalonePipeline(Pipeline):
 
     @property
     def sequence_results_file(self):
-        return op.join(conf.CONFIGS['unique_temp_dir'], 'sequence.json')
+        return op.join(elaspic.CONFIGS['unique_temp_dir'], 'sequence.json')
 
     @property
     def have_sequences(self):
@@ -204,6 +203,7 @@ class StandalonePipeline(Pipeline):
         return op.isfile(self.sequence_results_file)
 
     def run_all_sequences(self):
+        logger.debug("run_all_sequences()")
         sequence_results = []
         if op.isfile(self.sequence_results_file):
             logger.debug(
@@ -222,7 +222,7 @@ class StandalonePipeline(Pipeline):
 
     @property
     def model_results_file(self):
-        return op.join(conf.CONFIGS['unique_temp_dir'], 'model.json')
+        return op.join(elaspic.CONFIGS['unique_temp_dir'], 'model.json')
 
     @property
     def have_models(self):
@@ -262,7 +262,7 @@ class StandalonePipeline(Pipeline):
 
     def get_mutation_results_file(self, mutation):
         """All mutations have been precalculated."""
-        return op.join(conf.CONFIGS['unique_temp_dir'], 'mutation_{}.json'.format(mutation))
+        return op.join(elaspic.CONFIGS['unique_temp_dir'], 'mutation_{}.json'.format(mutation))
 
     @property
     def have_mutations(self):
@@ -273,9 +273,9 @@ class StandalonePipeline(Pipeline):
 
     def run_all_mutations(self):
         handled_errors = (
-            errors.ChainsNotInteractingError,
-            errors.MutationOutsideDomainError,
-            errors.MutationOutsideInterfaceError,
+            elaspic.exc.ChainsNotInteractingError,
+            elaspic.exc.MutationOutsideDomainError,
+            elaspic.exc.MutationOutsideInterfaceError,
         )
         for (mutation_idx, mutation), mutation_in in self.mutations.items():
             mutation_results = []
@@ -347,10 +347,10 @@ class StandalonePipeline(Pipeline):
             if chain.id == chain_id
         ]
         if len(chain_idx) == 0:
-            raise errors.PDBChainError(
+            raise elaspic.exc.PDBChainError(
                 'Chain {} was not found in PDB {}!'.format(chain_id, self.sp.pdb_file))
         elif len(chain_idx) > 1:
-            raise errors.PDBChainError(
+            raise elaspic.exc.PDBChainError(
                 'Chain {} was found more than once in PDB {}!'.format(chain_id, self.sp.pdb_file))
         return chain_idx[0]
 
@@ -363,14 +363,14 @@ class StandalonePipeline(Pipeline):
         return idxs
 
 
-@execute_and_remember
+@StandalonePipeline.execute_and_remember
 class PrepareSequence:
     """.
 
     Raises
     -------
-    errors.ProveanError
-    errors.ProveanResourceError
+    elaspic.exc.ProveanError
+    elaspic.exc.ProveanResourceError
     """
 
     def __init__(self, seqrecords, position, provean_supset_file):
@@ -384,14 +384,14 @@ class PrepareSequence:
 
     def __enter__(self):
         sequence_file = op.join(
-            conf.CONFIGS['sequence_dir'],
-            helper.slugify(self.seqrecord.id + '.fasta'))
+            elaspic.CONFIGS['sequence_dir'],
+            py_tools.slugify(self.seqrecord.id + '.fasta'))
         with open(sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecord, ofh, 'fasta')
         self.sequence_file = sequence_file
 
     def run(self):
-        self.sequence = elaspic_sequence.Sequence(self.sequence_file, self.provean_supset_file)
+        self.sequence = elaspic.Sequence(self.sequence_file, self.provean_supset_file)
 
     def __exit__(self, exc_type, exc_value, traceback):
         return False
@@ -401,7 +401,7 @@ class PrepareSequence:
         return self.sequence
 
 
-@execute_and_remember
+@StandalonePipeline.execute_and_remember
 class PrepareModel:
     """.
 
@@ -412,10 +412,10 @@ class PrepareModel:
 
     Raises
     -------
-    errors.ModellerError
-    errors.PDBChainError
-    errors.PDBEmptySequenceError
-    errors.PDBNotFoundError
+    elaspic.exc.ModellerError
+    elaspic.exc.PDBChainError
+    elaspic.exc.PDBEmptySequenceError
+    elaspic.exc.PDBNotFoundError
     """
 
     def __init__(self, seqrecords, sp, positions):
@@ -432,8 +432,8 @@ class PrepareModel:
     def __enter__(self):
         # Target sequence file
         self.sequence_file = op.join(
-            conf.CONFIGS['model_dir'],
-            helper.slugify('_'.join(seqrec.id for seqrec in self.seqrecords) + '.fasta')
+            elaspic.CONFIGS['model_dir'],
+            py_tools.slugify('_'.join(seqrec.id for seqrec in self.seqrecords) + '.fasta')
         )
         with open(self.sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecords, ofh, 'fasta')
@@ -442,17 +442,17 @@ class PrepareModel:
         # Template structure file
         chain_string = ''.join(self.sp.structure[0].child_list[pos].id for pos in self.positions)
         self.structure_file = op.join(
-            conf.CONFIGS['unique_temp_dir'],
-            helper.slugify(self.sp.pdb_id + chain_string + '.pdb')
+            elaspic.CONFIGS['unique_temp_dir'],
+            py_tools.slugify(self.sp.pdb_id + chain_string + '.pdb')
         )
         assert op.isfile(self.structure_file)
 
     def run(self):
-        self.model = elaspic_model.Model(self.sequence_file, self.structure_file)
+        self.model = elaspic.Model(self.sequence_file, self.structure_file)
 
     def __exit__(self, exc_type, exc_value, traceback):
         handled_errors = (
-            errors.ChainsNotInteractingError,
+            elaspic.exc.ChainsNotInteractingError,
         )
         if exc_type in handled_errors:
             logger.debug("Caught the following error: '{}'".format(exc_type))
@@ -464,18 +464,18 @@ class PrepareModel:
         return self.model
 
 
-@execute_and_remember
+@StandalonePipeline.execute_and_remember
 class PrepareMutation:
     """.
 
     Raises
     ------
-    errors.PDBError
-    errors.FoldxError
-    errors.ResourceError
-    errors.FoldXAAMismatchError
-    errors.MutationOutsideDomainError
-    errors.MutationOutsideInterfaceError
+    elaspic.exc.PDBError
+    elaspic.exc.FoldxError
+    elaspic.exc.ResourceError
+    elaspic.exc.FoldXAAMismatchError
+    elaspic.exc.MutationOutsideDomainError
+    elaspic.exc.MutationOutsideInterfaceError
 
     """
 
@@ -493,7 +493,7 @@ class PrepareMutation:
 
     def run(self):
         if not self.sequence or not self.model:
-            raise errors.ChainsNotInteractingError
+            raise elaspic.exc.ChainsNotInteractingError
 
         features = dict()
         features['mutation'] = self.mutation
@@ -556,14 +556,14 @@ class PrepareMutation:
 
         logger.debug('feature_dict: {}'.format(features))
         feature_df = pd.DataFrame(features, index=[0])
-        feature_df = elaspic_predictor.format_mutation_features(feature_df)
-        feature_df = elaspic_predictor.convert_features_to_differences(feature_df)
+        feature_df = elaspic.Predictor.format_mutation_features(feature_df)
+        feature_df = elaspic.Predictor.convert_features_to_differences(feature_df)
 
         if len(self.model.sequence_seqrecords) == 1:
-            with open(op.join(CACHE_DIR, 'core_clf.pickle'), 'rb') as fh:
+            with open(op.join(elaspic.CACHE_DIR, 'core_clf.pickle'), 'rb') as fh:
                 clf = pickle.load(fh)
         else:
-            with open(op.join(CACHE_DIR, 'interface_clf.pickle'), 'rb') as fh:
+            with open(op.join(elaspic.CACHE_DIR, 'interface_clf.pickle'), 'rb') as fh:
                 clf = pickle.load(fh)
         features['ddg'] = clf.predict(feature_df[clf.features])[0]
         logger.info('Predicted ddG: {}'.format(features['ddg']))

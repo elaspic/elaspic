@@ -1,5 +1,5 @@
 import os.path as op
-from setuptools import setup, Command
+from setuptools import setup, find_packages, Command
 
 
 def _read_md_as_rst(file):
@@ -42,22 +42,27 @@ class TrainPredictors(Command):
 
 setup(
     name='elaspic',
-    version='0.1.39',
+    version='0.1.40',
+    author='kimlab',
+    author_email='alex.strokach@utoronto.ca',
+    url="https://github.com/kimlaborg/elaspic",
     description=(
         "Ensemble Learning Approach for Stability Prediction of "
         "Interface and Core mutations (ELASPIC)."),
-    url="https://github.com/kimlaborg/elaspic",
-    author='kimlab',
-    author_email='alex.strokach@utoronto.ca',
-    packages=['elaspic', 'elaspic.cli'],
-    package_data={'elaspic': ['data/*']},
     long_description=read_md("README.md"),
-    entry_points={
-        'console_scripts': 'elaspic = elaspic.__main__:main'
-    },
     classifiers=[
+        "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3 :: Only",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
+    license='MIT',
+    packages=find_packages('elaspic'),
+    package_data={
+        'elaspic': ['predictor/*'],
+        'elaspic.tools': ['foldx/*']
+    },
+    entry_points={
+        'console_scripts': 'elaspic = elaspic.__main__:main'
+    },
     cmdclass={'train': TrainPredictors},
 )

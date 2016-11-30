@@ -1,10 +1,49 @@
 """Homology modeling by the automodel class."""
 import logging
-from modeller import ModellerError, log, environ, physical
-from modeller.automodel import automodel, dope_loopmodel, assess, refine, autosched
-from . import conf, errors, helper
+import sys
+from contextlib import contextmanager
+
+from modeller import ModellerError, environ, log, physical
+from modeller.automodel import (assess, automodel, autosched, dope_loopmodel,
+                                refine)
+
+import elaspic
 
 logger = logging.getLogger(__name__)
+
+
+# Logging
+class WritableObject:
+    """A writable object which writes everything to the logger."""
+
+    def __init__(self, logger):
+        self.logger = logger
+
+    def write(self, string):
+        self.logger.debug(string.strip())
+
+
+@contextmanager
+def log_print_statements(logger):
+    """Channel print statements to the debug logger.
+
+    Useful for modules that default to printing things instead of using a logger (Modeller...).
+    """
+    original_stdout = sys.stdout
+    original_formatters = []
+    for i in range(len(logger.handlers)):
+        original_formatters.append(logger.handlers[0].formatter)
+        logger.handlers[i].formatter = logging.Formatter('%(message)s')
+    wo = WritableObject(logger)
+    try:
+        sys.stdout = wo
+        yield
+    except:
+        raise
+    finally:
+        sys.stdout = original_stdout
+        for i in range(len(logger.handlers)):
+            logger.handlers[i].formatter = original_formatters[i]
 
 
 class Modeller(object):
@@ -36,7 +75,7 @@ class Modeller(object):
         self.templateID = templateID
         self.loopRefinement = loopRefinement
         self.start = 1  # start model
-        self.end = conf.CONFIGS['modeller_runs']  # end model
+        self.end = elaspic.CONFIGS['modeller_runs']  # end model
         self.loopStart = 1  # start loop refinement model
         self.loopEnd = 4  # end loop refinement model
 
@@ -66,11 +105,11 @@ class Modeller(object):
                     try:
                         result, loop, failures = self.__run_modeller(aln, False)
                     except ModellerError as e:
-                        raise errors.ModellerError(e)
+                        raise elaspic.exc.ModellerError(e)
                     except Exception as e:
                         raise e
                 if not result:
-                    raise errors.ModellerError(failures[-1])
+                    raise elaspic.exc.ModellerError(failures[-1])
 
                 for i in range(len(result)):
                     pdbFile, normDOPE = result[i][0], result[i][1]
@@ -158,8 +197,7 @@ class Modeller(object):
 
         a.max_molpdf = 2e5
 
-        # with helper.print_heartbeats():  # use 'long_wait' in .travis.yml
-        with helper.log_print_statements(logger):
+        with log_print_statements(logger):
             a.make()  # do the actual homology modeling
 
         # The output produced by modeller is stored in a.loop.outputs or a.outputs

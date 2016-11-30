@@ -5,7 +5,6 @@ stages:
   - test
 
 before_script:
-  - ls /home/kimlab1/database_data
   - conda config --add channels bioconda
   - conda config --add channels conda-forge
   - conda config --add channels ostrokach
@@ -48,3 +47,9 @@ standalone:
     - source activate standalone
     - python setup.py train
     - py.test tests/test_standalone_pipeline.py
+
+database:
+  stage: test
+  script:
+    - elaspic -vvv database --connection_string='mysql://strokach:@192.168.6.19/elaspic_test' create
+    - elaspic -vvv database --connection_string='mysql://strokach:@192.168.6.19/elaspic_test' delete
