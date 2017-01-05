@@ -8,8 +8,13 @@ from modeller.automodel import (assess, automodel, autosched, dope_loopmodel,
                                 refine)
 
 import elaspic
+from elaspic.tools._abc import ToolError
 
 logger = logging.getLogger(__name__)
+
+
+class ModellerError(ToolError):
+    pass
 
 
 # Logging

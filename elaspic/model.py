@@ -370,6 +370,15 @@ class Model:
         MutationOutsideDomainError
         MutationOutsideInterfaceError
         """
+        # Need to fill in the following results:
+        # results = dict(
+        #     solvent_accessibility=solvent_accessibility,
+        #     secondary_structure=secondary_structure,
+        #     contact_distance=contact_distance,
+        #     physchem=physchem,
+        #     physchem_ownchain=physchem_ownchain,
+        # )
+
         if (sequence_idx, mutation) in self.mutations:
             return self.mutations[(sequence_idx, mutation)]
 

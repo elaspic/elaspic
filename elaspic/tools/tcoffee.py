@@ -9,8 +9,13 @@ from Bio import SeqIO
 from kmtools import system_tools, structure_tools
 
 import elaspic
+from elaspic.tools._abc import ToolError
 
 logger = logging.getLogger(__name__)
+
+
+class TCoffeeError(ToolError):
+    pass
 
 
 class TCoffee(object):

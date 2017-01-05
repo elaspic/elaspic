@@ -6,8 +6,13 @@ import shutil
 from kmtools import system_tools
 
 import elaspic
+from elaspic.tools._abc import ToolError
 
 logger = logging.getLogger(__name__)
+
+
+class FoldxError(ToolError):
+    pass
 
 
 class FoldX:

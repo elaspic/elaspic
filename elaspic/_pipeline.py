@@ -118,13 +118,6 @@ class _Pipeline(abc.ABC):
         return f_new
 
 
-# Make Bio objects hashable (hack!)
-# TODO: Think more closely about which fields should be used to construct the hash.
-Bio.Seq.Seq.__hash__ = lambda self: hash(self.__repr__())
-Bio.SeqRecord.SeqRecord.__hash__ = lambda self: hash(self.__repr__())
-Bio.SeqRecord.SeqRecord.__eq__ = lambda self, other: self.__hash__() == other.__hash__()
-
-
 # Locks
 def lock(fn):
     """Allow only a single instance of function `fn`, and save results to a lock file."""
