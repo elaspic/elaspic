@@ -1,125 +1,188 @@
-from elaspic.tools._abc import ToolError
+import functools
+import os.path as op
+from collections import namedtuple
+
+import pandas as pd
+
+from elaspic.tools._abc import ToolError, _Mutator
+from kmtools import py_tools, structure_tools, system_tools
+
+logger = py_tools.get_logger(__name__)
 
 
 class MSMSError(ToolError):
     pass
 
 
-def __init__(self):
-    # Solvent accessibility
-    (seasa_by_chain_together, seasa_by_chain_separately,
-     seasa_by_residue_together, seasa_by_residue_separately) = self.get_seasa()
-    seasa_info = (
-        seasa_by_residue_separately[
-            (seasa_by_residue_separately['pdb_chain'] == chain_id) &
-            (seasa_by_residue_separately['res_num'] == mutation[1:-1])
-        ].iloc[0]
-    )
-    self._validate_mutation(seasa_info['res_name'], mutation)
-    solvent_accessibility = seasa_info['rel_sasa']
+class MSMS(_Mutator):
 
-def get_seasa(self):
-    structure_file = self.get_structure_file(''.join(self.chain_ids))
-    seasa_by_chain, seasa_by_residue = self._run_msms(structure_file)
-    if len(self.chain_ids) > 1:
-        seasa_by_chain_separately = []
-        seasa_by_residue_separately = []
-        for chain_id in self.chain_ids:
-            structure_file = self.get_structure_file(chain_id)
-            seasa_by_chain, seasa_by_residue = self._run_msms(structure_file)
-            seasa_by_chain_separately.append(seasa_by_chain)
-            seasa_by_residue_separately.append(seasa_by_residue)
-        seasa_by_chain_separately = pd.concat(seasa_by_chain_separately, ignore_index=True)
-        seasa_by_residue_separately = pd.concat(seasa_by_residue_separately, ignore_index=True)
-        return [
-            seasa_by_chain, seasa_by_chain_separately, seasa_by_residue,
-            seasa_by_residue_separately
-        ]
-    else:
-        return [None, seasa_by_chain, None, seasa_by_residue]
-
-def _run_msms(self, filename):
-    """.
-
-    In the future, could add an option to measure residue depth
-    using Bio.PDB.ResidueDepth().residue_depth()...
-    """
-    base_filename = op.splitext(filename)[0]
-
-    # Convert pdb to xyz coordiates
-    assert(os.path.isfile(op.join(self.working_dir, filename)))
-
-    system_command = 'pdb_to_xyzrn {0}.pdb'.format(op.join(self.working_dir, base_filename))
-    logger.debug('msms system command 1: %s' % system_command)
-    p = system_tools.run(system_command, cwd=self.working_dir)
-    if p.returncode != 0:
-        logger.debug('msms 1 stdout:\n{}'.format(p.stdout))
-        logger.debug('msms 1 stderr:\n{}'.format(p.stderr))
-        logger.debug('msms 1 returncode:\n{}'.format(p.returncode))
-        raise exc.MSMSError(p.stderr)
-    else:
-        tempfile_xyzrn = tempfile.NamedTemporaryFile('wt', delete=False)
-        tempfile_xyzrn.write(p.stdout)
-        tempfile_xyzrn.close()
-
-    # Calculate SASA and SESA (excluded)
-    probe_radius = 1.4
-    system_command_template = """\
-msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{area_file}' \
-"""
-    system_command = system_command_template.format(
-        probe_radius=probe_radius,
-        input_file=tempfile_xyzrn.name,
-        area_file=op.join(self.working_dir, base_filename + '.area'))
-    logger.debug('msms system command 2: %s' % system_command)
-    p = system_tools.run(system_command, cwd=self.working_dir)
-    number_of_tries = 0
-    while p.returncode != 0 and number_of_tries < 5:
-        logger.warning('MSMS exited with an error!')
-        probe_radius -= 0.1
-        logger.debug('Reducing probe radius to {}'.format(probe_radius))
-        p = system_tools.run(system_command, cwd=self.working_dir)
-        number_of_tries += 1
-    if p.returncode != 0:
-        logger.debug('msms stdout 2:\n{}'.format(p.stdout))
-        logger.debug('msms stderr 2:\n{}'.format(p.stderr))
-        logger.debug('msms returncode 2:\n{}'.format(p.returncode))
-        raise exc.MSMSError(p.stderr)
-    os.remove(tempfile_xyzrn.name)
-
-    # Read and parse the output
-    with open(op.join(self.working_dir, base_filename + '.area'), 'r') as fh:
-        file_data = fh.readlines()
-    file_data = [
-        [l.strip() for l in line.split()] for line in file_data
-    ]
-    del file_data[0]
-
-    msms_columns = [
-        'atom_num', 'abs_sesa', 'abs_sasa', 'atom_id', 'res_name', 'res_num', 'pdb_chain'
+    _result_slots = [
+        'structure_seasa_by_chain', 'structure_seasa_by_residue',
+        'chain_seasa_by_chain', 'chain_seasa_by_residue',
     ]
 
-    def msms_parse_row(row):
-        parsed_row = [
-            int(row[0]), float(row[1]), float(row[2]),
-            row[3].split('_')[0].strip(),
-            row[3].split('_')[1].strip(),
-            row[3].split('_')[2],
-            row[3].split('_')[3]
-        ]
-        return parsed_row
+    def __init__(self, structrue):
+        assert len(structrue) == 1, "MSMS requires that the structre have only one model"
+        self.structrue = structrue
+        super().__init__()
 
-    file_data = [msms_parse_row(row) for row in file_data if row]
-    seasa_df = pd.DataFrame(data=file_data, columns=msms_columns)
-    seasa_df['atom_num'] = seasa_df['atom_num'].apply(lambda x: x + 1)
-    seasa_df['rel_sasa'] = [
-        x[0] / STANDARD_SASA.get(x[1], x[0]) * 100
-        for x in zip(seasa_df['abs_sasa'], seasa_df['res_name'])
-    ]
+    def build(self):
+        # Calculate for the entire structure
+        structure = self.structrue
+        structure_file = op.join(self.tempdir, structure.id + '.pdb')
+        structure_tools.save_structure(structure, structure_file)
+        seasa_by_chain, seasa_by_residue = self._build(structure_file)
+        self.result.update({
+            'structure_seasa_by_chain': seasa_by_chain,
+            'structure_seasa_by_residue': seasa_by_residue,
+        })
+        # Calculate chain by chain
+        chain_seasa_by_chain = []
+        chain_seasa_by_residue = []
+        for chain in structure[0]:
+            chain_structure = structure[0].extract([chain.id])
+            chain_structure_file = op.join(self.tempdir, structure.id + chain.id + '.pdb')
+            structure_tools.save_structure(chain_structure, chain_structure_file)
+            seasa_by_chain, seasa_by_residue = self._build(chain_structure_file)
+            chain_seasa_by_chain.append(seasa_by_chain)
+            chain_seasa_by_residue.append(seasa_by_residue)
+        self.result.update({
+            'chain_seasa_by_chain': pd.concat(chain_seasa_by_chain, ignore_index=True),
+            'chain_seasa_by_residue': pd.concat(chain_seasa_by_residue, ignore_index=True),
+        })
 
-    seasa_gp_by_chain = seasa_df.groupby(['pdb_chain'])
-    seasa_gp_by_residue = seasa_df.groupby(['pdb_chain', 'res_name', 'res_num'])
-    seasa_by_chain = seasa_gp_by_chain.sum().reset_index()
-    seasa_by_residue = seasa_gp_by_residue.sum().reset_index()
+    @functools.lru_cache(maxsize=512)
+    def mutate(self, chain_id, mutation):
+        assert self.done
 
-    return seasa_by_chain, seasa_by_residue
+        structure_seasa = (
+            self.result['structure_seasa_by_residue'][
+                (self.result['structure_seasa_by_residue']['chain_id'] == chain_id) &
+                (self.result['structure_seasa_by_residue']['residue_id'] == mutation[1:-1])
+            ])
+        assert len(structure_seasa) == 1, structure_seasa
+        structure_seasa = structure_seasa.iloc[0]
+        _validate_mutation(structure_seasa['res_name'], mutation)
+
+        chain_seasa = (
+            self.result['chain_seasa_by_residue'][
+                (self.result['chain_seasa_by_residue']['chain_id'] == chain_id) &
+                (self.result['chain_seasa_by_residue']['residue_id'] == mutation[1:-1])
+            ])
+        assert len(chain_seasa) == 1, chain_seasa
+        chain_seasa = chain_seasa.iloc[0]
+        _validate_mutation(chain_seasa['res_name'], mutation)
+
+        return {
+            'solvent_accessibility': structure_seasa['rel_sasa'],
+            'solvent_occlusion': structure_seasa['rel_sasa'] - chain_seasa['rel_sasa'],
+        }
+
+    # Helper methods
+    def _build(self, structure_file):
+        xyzrn_file = self._run_pdb_to_xyzrn(structure_file)
+        area_file = self._run_msms(xyzrn_file)
+        file_data = self._parse_area_file(area_file)
+        seasa_by_chain, seasa_by_residue = self._generate_df(file_data)
+        return seasa_by_chain, seasa_by_residue
+
+    def _run_pdb_to_xyzrn(self, structure_file):
+        """Generate *.xyzrn file."""
+        system_command = "pdb_to_xyzrn '{}'".format(structure_file)
+        p = system_tools.run(system_command, cwd=self.tempdir)
+        p.check_returncode()
+        xyzrn_file = op.join(self.tempdir, op.splitext(structure_file)[0] + '.xyzrn')
+        with open(xyzrn_file, 'wt') as ofh:
+            ofh.write(p.stdout)
+        return xyzrn_file
+
+    def _run_msms(self, xyzrn_file):
+        """.
+        In the future, could add an option to measure residue depth
+        using Bio.PDB.ResidueDepth().residue_depth()...
+        """
+        # Calculate solvent accessible (SASA) and solvent excluded (SESA) surface area
+        probe_radius = 1.4
+        area_file = op.join(self.tempdir, op.splitext(xyzrn_file)[0] + '.area')
+        system_command = (
+            "msms "
+            " -probe_radius {probe_radius:.1f} "
+            " -surface ases "
+            " -if '{input_file}' "
+            " -af '{output_file}'"
+            .format(
+                probe_radius=probe_radius,
+                input_file=xyzrn_file,
+                output_file=area_file))
+        p = system_tools.run(system_command, cwd=self.tempdir)
+        number_of_tries = 0
+        while p.returncode != 0 and number_of_tries < 5:
+            logger.warning('MSMS exited with an error!')
+            probe_radius -= 0.1
+            logger.debug('Reducing probe radius to {}', probe_radius)
+            p = system_tools.run(system_command, cwd=self.tempdir)
+            number_of_tries += 1
+        p.check_returncode()
+        return area_file
+
+    def _parse_area_file(self, area_file):
+        """Read and parse MSMS output."""
+        msms_columns = [
+            'chain_id', 'residue_id', 'res_name', 'atom_id', 'atom_num',
+            'abs_sesa', 'abs_sasa', 'rel_sasa']
+        MSMSRow = namedtuple("MSMSRow", msms_columns)
+
+        def absolute_to_relative(res_name, abs_sasa):
+            try:
+                ref_sasa = structure_tools.STANDARD_SASA[res_name]
+            except KeyError:
+                # logger.warning("No reference SASA value for residue {}", res_name)
+                return 0.0
+            else:
+                return abs_sasa / ref_sasa
+
+        def parse_row(row):
+            atom_num = int(row[0]) + 1  # atom_num needs to be incremented by 1 for some reason?
+            abs_sesa = float(row[1])
+            abs_sasa = float(row[2])
+
+            _extra_fields = row[3].split('_')
+            atom_id = _extra_fields[0].strip()
+            res_name = _extra_fields[1].strip()
+            residue_id = _extra_fields[2]
+            chain_id = _extra_fields[3]
+
+            rel_sasa = absolute_to_relative(res_name, abs_sasa)
+
+            row = MSMSRow(
+                atom_num=atom_num,
+                abs_sesa=abs_sesa,
+                abs_sasa=abs_sasa,
+                atom_id=atom_id,
+                res_name=res_name,
+                residue_id=residue_id,
+                chain_id=chain_id,
+                rel_sasa=rel_sasa,
+            )
+            return row
+
+        with open(area_file, 'r') as fh:
+            file_data = fh.readlines()
+        file_data = [[l.strip() for l in line.split()] for line in file_data[1:]]
+        file_data = [parse_row(row) for row in file_data if row]
+        return file_data
+
+    def _generate_df(self, file_data):
+        df = pd.DataFrame(data=file_data)
+        df_by_chain = df.groupby(['chain_id']).sum().reset_index()
+        df_by_residue = df.groupby(['chain_id', 'res_name', 'residue_id']).sum().reset_index()
+        return df_by_chain, df_by_residue
+
+
+def _validate_mutation(resname, mutation):
+    valid_aa = [mutation[0].upper(), mutation[-1].upper()]
+    if structure_tools.AAA_DICT.get(resname, resname) not in valid_aa:
+        logger.error(
+            "Mutation {} does not match resname {} ({})",
+            mutation, resname, structure_tools.AAA_DICT[resname])
+        raise structure_tools.exc.MutationMismatchError()
