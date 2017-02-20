@@ -5,13 +5,53 @@ import tempfile
 
 from abc import ABC, abstractmethod
 
-from kmtools import structure_tools
+from kmtools import structure_tools, py_tools
 
 logger = logging.getLogger(__name__)
 
 
 class ToolError(Exception):
     pass
+
+
+class MutatorError(ToolError):
+    pass
+
+
+class _Tool(ABC):
+
+    def __init__(self):
+        self.tempdir = op.join(tempfile.gettempdir(), self.__class__.__name__)
+        os.makedirs(self.tempdir, exist_ok=True)
+        # atexit.register(self.cleanup)
+
+
+class _Mutator(_Tool):
+
+    @property
+    @abstractmethod
+    def _result_slots(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def __init__(self):
+        self.result = py_tools.Struct(self._result_slots)
+        self.cache = {}
+        self.mutations = {}
+        super().__init__()
+
+    @abstractmethod
+    def build(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def mutate(self, mutation):
+        raise NotImplementedError
+
+    @property
+    def done(self):
+        return (all(key in self.result for key in self._result_slots) and
+                all(op.isfile(key) for key in self._result_slots if key.endswith('file')))
 
 
 class Modeller(ABC):
@@ -25,24 +65,6 @@ class Modeller(ABC):
 
     @abstractmethod
     def model(self):
-        raise NotImplementedError
-
-
-class Mutator(ABC):
-
-    def __init__(self, structure, mutation):
-        self.structure = structure
-        self.mutation = mutation
-        self.tempdir = op.join(tempfile.gettempdir(), self.__class__.__name__)
-        os.makedires(self.tempdir, exist_ok=True)
-
-    @abstractmethod
-    def mutate(self):
-        """
-        Returns
-        -------
-        (str, str) : Filename of the wild type and mutant structures, respectively.
-        """
         raise NotImplementedError
 
 

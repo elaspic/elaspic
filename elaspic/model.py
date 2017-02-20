@@ -30,10 +30,10 @@ class Model:
         Precalculated data from a previous modeller run.
     """
 
-    def __init__(self, sequence_file, structure_file, modeller_results_file=None):
-        logger.debug('Initialising a Model instance with parameters:')
-        logger.debug('sequence_file: {}:'.format(sequence_file))
-        logger.debug('structure_file: {}:'.format(structure_file))
+    def __init__(self, sequence_file, structure_file, results=None):
+        logger.debug(
+            'Model({}, {}, {})'.format(
+                repr(sequence_file), repr(structure_file), repr(modeller_results_file)))
 
         # Target sequences
         self.sequence_file = sequence_file
@@ -57,6 +57,7 @@ class Model:
         self.chain_ids = [chain.id for chain in self.structure.child_list[0].child_list]
         logger.debug('structure_seqrecords: {}'.format(self.structure_seqrecords))
 
+    def run(self):
         # Homology modelling
         if self.sequence_id == self.structure_id:
             self.sequence_id += '_sequence'

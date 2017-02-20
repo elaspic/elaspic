@@ -1,55 +1,48 @@
 image: condaforge/linux-anvil:latest
 
 stages:
-  - compile
+  - build
   - test
+  - deploy
 
-before_script:
-  - conda config --add channels bioconda
-  - conda config --add channels conda-forge
-  - conda config --add channels ostrokach
-  - conda config --add channels https://conda.binstar.org/t/$ANACONDA_TOKEN/ostrokach
-  - conda config --add channels kimlab
-  - conda config --add channels omnia
-  - conda install -yq perl  # hack required to get modeller to link properly
-  - |
-    function create_elaspic_env {
-        mkdir -p /opt/conda/conda-bld/linux-64/
-        cp conda-bld/linux-64/* /opt/conda/conda-bld/linux-64/
-        conda create -yq -n $1 --use-local elaspic;
-        source activate $1;
-        conda install -yq -n $1 anaconda-client 'provean==1.0.3.mock' 'foldx==3.0.6.mock';
-        pip install -q 'pytest >3' pytest-runner pytest-cov pytest-logging pytest-xdist flake8;
-    }
-
-compile:
-  stage: compile
+build:
+  stage: build
   script:
-    - conda build devtools/conda-recipe/
-    - mkdir -p conda-bld && cp -r /opt/conda/conda-bld/linux-64 conda-bld/
+    # Build conda packages
+    - conda config --append channels $CI_PROJECT_NAMESPACE
+    - cd $CI_PROJECT_DIR/devtools/conda-recipe
+    - conda build .
+    # Save built packages as artifacts
+    - mkdir $CI_PROJECT_DIR/conda-bld
+    - cp -r /opt/conda/conda-bld/{linux-64,noarch} $CI_PROJECT_DIR/conda-bld
   artifacts:
     paths:
-      - conda-bld
+    - conda-bld
 
-unit:
+.test_template: &test_job
   stage: test
-  script:
-    - create_elaspic_env unit_tests
-    - source activate unit_tests
-    - python setup.py train
-    - flake8
-    - py.test
+  before_script:
+    - conda config --append channels $CI_PROJECT_NAMESPACE
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install 'requests<2.12'
+    - conda install -yq --use-local $CI_PROJECT_NAME
 
-standalone:
-  stage: test
+deploy:
+  stage: deploy
   script:
-    - create_elaspic_env standalone
-    - source activate standalone
-    - python setup.py train
-    - py.test tests/test_standalone_pipeline.py
+    - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE -t test --force
 
-database:
-  stage: test
+deploy:
+  stage: deploy
   script:
-    - elaspic -vvv database --connection_string='mysql://strokach:@192.168.6.19/elaspic_test' create
-    - elaspic -vvv database --connection_string='mysql://strokach:@192.168.6.19/elaspic_test' delete
+    - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE --force
+  only:
+    - master
+
+# Tests
+
+tools:
+  <<: *test_job
+  script:
+    - py.test tests/test_tools

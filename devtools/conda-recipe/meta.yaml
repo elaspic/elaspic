@@ -1,8 +1,8 @@
- {% set version = "0.1.40" %}
+{% set data = load_setup_py_data() %}
 
 package:
   name: elaspic
-  version: {{ version }}
+  version: {{ data.get('version') }}
 
 source:
   path: ../../
@@ -19,19 +19,14 @@ requirements:
     - pyyaml
     - requests
     - psutil
-    - retrying
     # Scientific python
     - numpy
     - scipy
     - pandas
     - scikit-learn
-    - biopython
-    - libfaketime
     - modeller
-    # Database access
-    - sqlalchemy
-    - mysqlclient
     # Kimlab
+    - kmbio
     - kmtools
   run:
     # Basic python
@@ -39,21 +34,20 @@ requirements:
     - pyyaml
     - requests
     - psutil
-    - retrying
     # Scientific python
     - numpy
     - scipy
     - pandas
     - scikit-learn
-    - biopython
-    - libfaketime
-    - modeller
     # Database access
-    - sqlalchemy
+    - mysql
     - mysqlclient
+    - sqlalchemy
     # Kimlab
+    - kmbio
     - kmtools
     # Binary files
+    - modeller
     - p7zip
     - blast
     - stride ==1.6.4
@@ -63,6 +57,7 @@ requirements:
     - cd-hit
     - provean
     - foldx
+    - libfaketime
 
 test:
   imports:

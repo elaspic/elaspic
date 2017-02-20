@@ -75,7 +75,7 @@ def _configure_database(args):
     logger.debug("_configure_database(%s)", args)
     elaspic.conf.read_configuration_file(
         DATABASE={
-            'connection_string': args.connection_string
+            'db_connection_string': args.connection_string
         },
         EXTERNAL_DIRS={
             'pdb_dir': args.pdb_dir,
@@ -140,10 +140,10 @@ $ elaspic run -u P00044 -m M1A \
     )
 
     parser.add_argument(
-        '-c', '--config_file', nargs='?', type=str,
+        '--config_file', nargs='?', type=str,
         help='ELASPIC configuration file.')
     parser.add_argument(
-        '--connection_string', nargs='?', type=str,
+        '-c', '--connection_string', nargs='?', type=str,
         help=('SQLAlchemy formatted string describing the connection to the database.'))
     parser.add_argument(
         '--pdb_dir', nargs='?', type=str,

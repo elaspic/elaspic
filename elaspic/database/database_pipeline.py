@@ -48,6 +48,8 @@ class DatabasePipeline(elaspic._Pipeline):
         self.mutations = self._split_mutations(mutations)
         self.calculated_mutations = []
         self.run_type = self._validate_run_type(run_type)
+        assert not set(self.run_type.split('.')) - {'sequence', 'model', 'mutation'}
+
         self.number_of_tries = number_of_tries
         self.uniprot_domain_pair_ids = uniprot_domain_pair_ids
 
@@ -380,7 +382,7 @@ class _PrepareModel:
             # ]
 
         modeller_results['model_domain_defs'] = [
-            [0, x[1] - x[0]] for x in self.d.protein_domain_defs
+            (0, int(x[1]) - int(x[0]) + 1) for x in self.d.protein_domain_defs
         ]
         modeller_results_file = op.join(
             elaspic.CONFIGS['model_dir'],
@@ -588,7 +590,7 @@ class _PrepareModel:
             seqrecord = SeqRecord(
                 id=sequence_id,
                 name=protein_id,
-                seq=Seq(protein_sequence[protein_domain_def[0] - 1:protein_domain_def[1]])
+                seq=Seq(protein_sequence[protein_domain_def])
             )
             sequence_seqrecords.append(seqrecord)
 
@@ -600,26 +602,32 @@ class _PrepareModel:
         return sequence_file, sequence_seqrecords
 
     def _write_domain_structure_file(self):
-        """Write a pdb file containing template domain chains (cut to domain bounaries)."""
-        pdb_file = structure_tools.get_pdb_file(self.d.pdb_id, elaspic.CONFIGS['pdb_dir'], 'ent')
-        if not op.isfile(pdb_file) and elaspic.CONFIGS['allow_internet']:
-            pdb_file = structure_tools.download_pdb_file(self.d.pdb_id, elaspic.CONFIGS['pdb_dir'])
-        sp = structure_tools.StructureParser(pdb_file, self.d.pdb_chains, self.d.pdb_domain_defs)
-        sp.extract()
-        sp.save_structure(elaspic.CONFIGS['unique_temp_dir'])
-        sp.save_sequences(elaspic.CONFIGS['unique_temp_dir'])
+        """Write a pdb file containing template domain chains (cut to domain bounaries).
 
-        structure_file = op.join(
-            elaspic.CONFIGS['unique_temp_dir'], sp.pdb_id + ''.join(sp.chain_ids) + '.pdb'
-        )
+        TODO: Switch to using ``biounit=True``.
+        """
+        pdb_id = self.d.pdb_id
+        pdb_chains = self.d.pdb_chains
+        pdb_domain_defs = self.d.pdb_domain_defs
+        model_id = 0
+
+        s = structure_tools.fetch_structure(
+            pdb_id, pdb_type='cif', biounit=False, pdb_mirror=elaspic.CONFIGS['pdb_dir'])
+        ps = structure_tools.process_structure(s)
+        pdb_domain_defs = _format_domain_defs_legacy(ps, pdb_chains, pdb_domain_defs)
+        es = structure_tools.extract(ps, chain_ids=pdb_chains, domain_defs=pdb_domain_defs)
+
+        structure_filename = op.join(
+            elaspic.CONFIGS['unique_temp_dir'], pdb_id + ''.join(pdb_chains) + '.pdb')
+        structure_tools.save_structure(es, structure_filename)
 
         structure_seqrecords = []
-        for pdb_chain in self.d.pdb_chains:
-            chain_sequence = sp.chain_sequence_dict[pdb_chain]
+        for chain_id in pdb_chains:
+            chain_sequence = structure_tools.get_chain_sequence(es[model_id][chain_id])
             seqrecord = SeqRecord(id=self.d.pdb_id + self.d.pdb_chains, seq=Seq(chain_sequence))
             structure_seqrecords.append(seqrecord)
 
-        return structure_file, structure_seqrecords
+        return structure_filename, structure_seqrecords
 
     def __add_new_error(self, d_error_log, e):
         if d_error_log is None:
@@ -633,6 +641,18 @@ class _PrepareModel:
 
 
 PrepareModel = DatabasePipeline.execute_and_remember(_PrepareModel)
+
+
+def _format_domain_defs_legacy(structure, pdb_chains, pdb_domain_defs):
+    new_domain_defs = []
+    logger.debug(sorted(structure.xtra['mapping'].keys()))
+    logger.debug(sorted(structure.xtra['mapping'].values()))
+    for chain_id, domain_def in zip(pdb_chains, pdb_domain_defs):
+        _, _, new_domain_start = structure.xtra['mapping'][(0, chain_id, str(domain_def.start))]
+        _, _, new_domain_stop = structure.xtra['mapping'][(0, chain_id, str(domain_def.stop))]
+        new_domain_def = slice(new_domain_start, new_domain_stop)
+        new_domain_defs.append(new_domain_def)
+    return new_domain_defs
 
 
 class _PrepareMutation:

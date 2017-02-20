@@ -766,35 +766,6 @@ class Database:
         self.merge_row(mut)
 
     @staticmethod
-    def get_uniprot_base_path(d=None, uniprot_name=None, uniprot_id=None):
-        """Return the name of the subfolder for storing protein information.
-
-        Parameters
-        ----------
-        d : UniprotDomain | UniprotDomainPair | None
-        uniprot_name : str
-        uniprot_id : str
-        """
-        if isinstance(d, elaspic.database.UniprotDomain):
-            uniprot_name = d.uniprot_sequence.uniprot_name
-            uniprot_id = d.uniprot_id
-        elif isinstance(d, elaspic.database.UniprotDomainPair):
-            uniprot_name = d.uniprot_domain_1.uniprot_sequence.uniprot_name
-            uniprot_id = d.uniprot_domain_1.uniprot_id
-        else:
-            assert uniprot_name is not None and uniprot_id is not None
-
-        # TODO: Screw the splitting of uniprot ids!
-        uniprot_base_path = (
-            '{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/'
-            .format(
-                organism_name=uniprot_name.split('_')[-1].lower(),
-                uniprot_id_part_1=uniprot_id[:3],
-                uniprot_id_part_2=uniprot_id[3:5],
-                uniprot_id_part_3=uniprot_id,))
-        return uniprot_base_path
-
-    @staticmethod
     def get_uniprot_domain_path(d=None, **vargs):
         """Return the name of the subfolder for storing protein *domain* information.
 

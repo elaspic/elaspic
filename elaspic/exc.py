@@ -15,17 +15,6 @@ class TcoffeeError(Exception):
         self.result = result
 
 
-# Provean
-class ProveanError(Exception):
-    pass
-
-
-class ProveanResourceError(Exception):
-    def __init__(self, message, child_process_group_id):
-        Exception.__init__(self, message)
-        self.child_process_group_id = child_process_group_id
-
-
 # Making models
 class ModellerError(Exception):
     pass

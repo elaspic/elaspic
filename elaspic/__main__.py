@@ -2,6 +2,8 @@ import argparse
 import logging
 import logging.config
 
+import coloredlogs
+
 from elaspic.cli.elaspic_database import configure_database_parser
 from elaspic.cli.elaspic_run import configure_run_parser
 from elaspic.cli.elaspic_train import configure_train_parser
@@ -33,11 +35,19 @@ def main():
     configure_database_parser(sub_parsers)
     configure_train_parser(sub_parsers)
     args = parser.parse_args()
-    # default_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    # default_format = '%(message)s'
+    # Configure logging
+    default_format = '%(levelname)-7s %(name)s[%(lineno)d] %(message)s'
     logger.debug("Before setting level")
-    logging.basicConfig(level=LOGGING_LEVELS[args.verbose])
+    if True:
+        coloredlogs.install(
+            fmt=default_format,
+            level=LOGGING_LEVELS[args.verbose])
+    else:
+        logging.basicConfig(
+            format=default_format,
+            level=LOGGING_LEVELS[args.verbose])
     logger.warning("After setting level")
+    #
     if 'func' not in args.__dict__:
         args = parser.parse_args(['--help'])
     args.func(args)

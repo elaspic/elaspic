@@ -18,7 +18,7 @@ class TCoffeeError(ToolError):
     pass
 
 
-class TCoffee(object):
+class TCoffee:
     """Alignes sequences using t_coffee in expresso mode."""
 
     def __init__(self, alignment_fasta_file, mode, pdb_file=None):

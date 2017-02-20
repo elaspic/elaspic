@@ -58,8 +58,9 @@ setup(
     license='MIT',
     packages=find_packages('elaspic'),
     package_data={
-        'elaspic': ['predictor/*'],
-        'elaspic.tools': ['foldx/*']
+        'elaspic.database': ['sql/*.sql'],
+        'elaspic.predictor': ['data/*'],
+        'elaspic.tools': ['foldx/*'],
     },
     entry_points={
         'console_scripts': 'elaspic = elaspic.__main__:main'

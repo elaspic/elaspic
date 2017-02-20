@@ -1,4 +1,13 @@
-"""Homology modeling by the automodel class."""
+"""Homology modeling by the automodel class.
+
+
+Can use either dunamic_sphere or dynamic_lennard contraints
+https://salilab.org/modeller/9.17/manual/node108.html
+
+
+selection.randomize_xyz
+
+"""
 import logging
 import sys
 from contextlib import contextmanager
@@ -11,44 +20,8 @@ import elaspic
 from elaspic.tools._abc import ToolError
 
 logger = logging.getLogger(__name__)
+ToolError.register(ModellerError)
 
-
-class ModellerError(ToolError):
-    pass
-
-
-# Logging
-class WritableObject:
-    """A writable object which writes everything to the logger."""
-
-    def __init__(self, logger):
-        self.logger = logger
-
-    def write(self, string):
-        self.logger.debug(string.strip())
-
-
-@contextmanager
-def log_print_statements(logger):
-    """Channel print statements to the debug logger.
-
-    Useful for modules that default to printing things instead of using a logger (Modeller...).
-    """
-    original_stdout = sys.stdout
-    original_formatters = []
-    for i in range(len(logger.handlers)):
-        original_formatters.append(logger.handlers[0].formatter)
-        logger.handlers[i].formatter = logging.Formatter('%(message)s')
-    wo = WritableObject(logger)
-    try:
-        sys.stdout = wo
-        yield
-    except:
-        raise
-    finally:
-        sys.stdout = original_stdout
-        for i in range(len(logger.handlers)):
-            logger.handlers[i].formatter = original_formatters[i]
 
 
 class Modeller(object):
@@ -70,6 +43,7 @@ class Modeller(object):
         If True, calculate loop refinemnts
     """
 
+    # API
     def __init__(self, alignment, seqID, templateID, filePath, loopRefinement=True):
 
         if not isinstance(alignment, list):
@@ -87,7 +61,7 @@ class Modeller(object):
         # Some environment settings
         self.filePath = filePath
 
-    def run(self):
+    def build(self):
         # key: assessment score
         # values: alignment, pdb filename, whether or not using loop refinement
         ranking = dict()
@@ -120,6 +94,9 @@ class Modeller(object):
                     pdbFile, normDOPE = result[i][0], result[i][1]
                     ranking[normDOPE] = (aln, pdbFile, loop,)
         return min(ranking), ranking[min(ranking)][1]
+
+    def mutate(self, mutation):
+        raise NotImplementedError
 
     def __run_modeller(self, alignFile, loopRefinement):
         """.
@@ -247,3 +224,37 @@ class Modeller(object):
         # Return the successfully calculated models and a loop flag indicating
         # whether the returned models are loop refined or not
         return result, loop, failures
+
+
+# Logging
+class WritableObject:
+    """A writable object which writes everything to the logger."""
+
+    def __init__(self, logger):
+        self.logger = logger
+
+    def write(self, string):
+        self.logger.debug(string.strip())
+
+
+@contextmanager
+def log_print_statements(logger):
+    """Channel print statements to the debug logger.
+
+    Useful for modules that default to printing things instead of using a logger (Modeller...).
+    """
+    original_stdout = sys.stdout
+    original_formatters = []
+    for i in range(len(logger.handlers)):
+        original_formatters.append(logger.handlers[0].formatter)
+        logger.handlers[i].formatter = logging.Formatter('%(message)s')
+    wo = WritableObject(logger)
+    try:
+        sys.stdout = wo
+        yield
+    except:
+        raise
+    finally:
+        sys.stdout = original_stdout
+        for i in range(len(logger.handlers)):
+            logger.handlers[i].formatter = original_formatters[i]
