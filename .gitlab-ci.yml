@@ -10,6 +10,8 @@ build:
   script:
     # Build conda packages
     - conda config --append channels $CI_PROJECT_NAMESPACE
+    - conda config --append channels bioconda
+    - conda config --append channels ostrokach
     - cd $CI_PROJECT_DIR/devtools/conda-recipe
     - conda build .
     # Save built packages as artifacts
@@ -54,7 +56,6 @@ anaconda-dev:
     - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE -t dev --force
   except:
     - master
-
 
 # Tests
 
