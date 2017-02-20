@@ -11,6 +11,7 @@ Table of Contents
 .. toctree::
    :maxdepth: 2
    :includehidden:
+   :glob:
 
    introduction
    installation_guide

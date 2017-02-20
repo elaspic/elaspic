@@ -196,7 +196,7 @@ def lock(fn):
 
 
 
-class StandalonePipeline(elaspic._Pipeline):
+class StandalonePipeline(_Pipeline):
     """Run elaspic locally without a database.
 
     Parameters
@@ -766,5 +766,3 @@ class MutationTask:
             self.run()
         assert self._result is not None
         return self._result
-
-requires =

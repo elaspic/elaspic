@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import sklearn.ensemble
 
-import elaspic
+from elaspic.tools.foldx import FoldX
 
 logger = logging.getLogger(__name__)
 
@@ -28,17 +28,17 @@ def _get_foldx_features(core_or_interface):
     feature_columns = []
     # FoldX
     if core_or_interface in [False, 0, 'core']:
-        feature_columns += elaspic.tools.FoldX.names_stability_wt
+        feature_columns += FoldX.names_stability_wt
         feature_columns += [
             c[:-4] + '_change'
-            for c in elaspic.tools.FoldX.names_stability_mut
+            for c in FoldX.names_stability_mut
             if c.endswith('_mut')
         ]
     else:
-        feature_columns += elaspic.tools.FoldX.names_stability_complex_wt
+        feature_columns += FoldX.names_stability_complex_wt
         feature_columns += [
             c[:-4] + '_change'
-            for c in elaspic.tools.FoldX.names_stability_complex_mut
+            for c in FoldX.names_stability_complex_mut
             if c.endswith('_mut')
         ]
     return feature_columns
@@ -105,8 +105,9 @@ class Predictor:
         Parameters
         ----------
         feature_df : DataFrame
-            A pandas DataFrame containing a subset of rows from the :ref:`uniprot_domain_mutation`
-            or the :ref:`uniprot_domain_pair_mutation` tables.
+            A pandas DataFrame containing a subset of rows from the :ref:`domain_model` and
+            :ref:`domain_mutation` tables or the :ref:`interface_model` and
+            :ref:`interface_mutation` tables.
 
         Returns
         -------
@@ -163,11 +164,11 @@ class Predictor:
             df_interface = cls._split_foldx_features(
                 df_interface,
                 foldx_interface_column_name + '_wt',
-                elaspic.tools.FoldX.names_stability_complex_wt)
+                FoldX.names_stability_complex_wt)
             df_interface = cls._split_foldx_features(
                 df_interface,
                 foldx_interface_column_name + '_mut',
-                elaspic.tools.FoldX.names_stability_complex_mut)
+                FoldX.names_stability_complex_mut)
             result.append(df_interface)
 
             df_core = df[df[(foldx_interface_column_name + '_wt')].isnull()]
@@ -179,11 +180,11 @@ class Predictor:
         df_core = cls._split_foldx_features(
             df_core,
             foldx_core_column_name + '_wt',
-            elaspic.tools.FoldX.names_stability_wt)
+            FoldX.names_stability_wt)
         df_core = cls._split_foldx_features(
             df_core,
             foldx_core_column_name + '_mut',
-            elaspic.tools.FoldX.names_stability_mut)
+            FoldX.names_stability_mut)
         result.append(df_core)
 
         result_df = pd.concat(result, ignore_index=True)

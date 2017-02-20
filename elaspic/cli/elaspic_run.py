@@ -198,7 +198,7 @@ $ elaspic run -u P00044 -m M1A \
              "(useful if you want to restrict your analysis to only a handful of domains).")
     parser.add_argument(
         '-t', '--run_type', nargs='?', type=str, default='all',
-        choices=sorted(elaspic._Pipeline._valid_run_types),
+        choices=sorted(elaspic.pipeline._Pipeline._valid_run_types),
         help='Type of analysis to perform.')
 
     parser.set_defaults(func=elaspic_run)

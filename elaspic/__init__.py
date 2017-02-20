@@ -8,6 +8,7 @@ __all__ = [
     'conf',
     'exc',
     'tools',
+    'pipeline',
 ]
 from . import *
 

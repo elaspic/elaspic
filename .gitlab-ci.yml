@@ -19,8 +19,7 @@ build:
     paths:
     - conda-bld
 
-.test_template: &test_job
-  stage: test
+.install: &install_conda_package
   before_script:
     - conda config --append channels $CI_PROJECT_NAMESPACE
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
@@ -28,21 +27,42 @@ build:
     - conda install 'requests<2.12'
     - conda install -yq --use-local $CI_PROJECT_NAME
 
-deploy:
+documentation:
+  <<: *install_conda_package
   stage: deploy
   script:
-    - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE -t test --force
+    - pip install -q sphinx sphinx_rtd_theme
+    - sphinx-apidoc elaspic -o docs/modules/ -TEMP --force
+    - mkdir public
+    - sphinx-build docs public
+  artifacts:
+    paths:
+    - public
 
-deploy:
+anaconda:
+  <<: *install_conda_package
   stage: deploy
   script:
     - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE --force
   only:
     - master
 
+anaconda-dev:
+  <<: *install_conda_package
+  stage: deploy
+  script:
+    - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE -t dev --force
+  except:
+    - master
+
+
 # Tests
+
+.test_template: &test_job
+  <<: *install_conda_package
+  stage: test
 
 tools:
   <<: *test_job
   script:
-    - py.test tests/test_tools
+    - py.test tests/test_tools/test_msms.py

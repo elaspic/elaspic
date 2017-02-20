@@ -7,9 +7,21 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-import elaspic
-from elaspic.database import (LONG, MEDIUM, SHORT, Base,  # noqa
-                              decode_domain_def, get_binary_collation)
+from .database_config import Base, get_binary_collation
+
+
+# Default sizes for creating varchar fields
+SHORT = 15
+MEDIUM = 255
+LONG = 8192
+
+
+def decode_domain_def(domains):
+    if domains[-1] == ',':
+        domains = domains[:-1]
+    domain_fragments = [[r.strip() for r in ro.split(':')] for ro in domains.split(',')]
+    domain_merged = domain_fragments[0][0], domain_fragments[-1][-1]
+    return domain_merged
 
 
 def get_protein_name():
@@ -42,8 +54,13 @@ class _View:
         return "DROP VIEW {};".format(self.__tablename__)
 
 
-class _Protein(abc.ABC, elaspic.Sequence):
-    protein_id = sa.Column(sa.String(MEDIUM), primary_key=True)
+class Protein(Base):
+    """Protein table.
+
+    Stores information about the protein.
+    """
+    id = sa.Column(sa.Integer, primary_key=True)
+    protein_id = sa.Column(sa.String(MEDIUM), unique=True)
     protein_name = sa.Column(sa.String(MEDIUM), nullable=False)
     protein_description = sa.Column(sa.Text)
     gene_name = sa.Column(sa.String(MEDIUM))
@@ -86,23 +103,22 @@ class _Protein(abc.ABC, elaspic.Sequence):
         assert provean_supset_filename == op.basename(provean_supset_filename)
         self.provean_supset_filename = provean_supset_filename
 
+    # === Database ===
+    # @property
+    # def root_dir(self):
+    #     organism_name = self.protein_name.split('_')[-1].lower()
+    #     root_dir = op.join(
+    #         elaspic.CONFIGS['archive_dir'], get_protein_subfolder(organism_name, self.protein_id))
+    #     return root_dir
 
-class Protein(_View, _Protein, Base):
-    @property
-    def root_dir(self):
-        organism_name = self.protein_name.split('_')[-1].lower()
-        root_dir = op.join(
-            elaspic.CONFIGS['archive_dir'], get_protein_subfolder(organism_name, self.protein_id))
-        return root_dir
+    # === Local ===
+    # class ProteinLocal(_Protein, Base):
+    #     @property
+    #     def root_dir(self):
+    #         return elaspic.CONFIGS['archive_dir']
 
 
-class ProteinLocal(_Protein, Base):
-    @property
-    def root_dir(self):
-        return elaspic.CONFIGS['archive_dir']
-
-
-class _CoreModel:
+class DomainModel(Base):
     __indexes = [
         (['protein_id', 'domain_idx'], {'unique': True}),
     ]
@@ -152,7 +168,7 @@ class _CoreModel:
     align_coverage = sa.Column('alignment_coverage', sa.Float)
     template_errors = sa.Column('template_errors', sa.Text)
     domain_def = sa.Column(sa.String(MEDIUM))
-    cath = sa.Column('cath_id', sa.String(MEDIUM))
+    cath = sa.Column('cath_id', sa.String(MEDIUM, collation=get_binary_collation()))
     seq_id = sa.Column('alignment_identity', sa.Float)
 
     def getcath(self, chain=1):
@@ -186,7 +202,7 @@ class _CoreModel:
 
     # Model
     model_errors = sa.Column('model_errors', sa.Text)
-    dope_score = sa.Column('norm_dope'. sa.Float)
+    dope_score = sa.Column('norm_dope', sa.Float)
     model_filename = sa.Column(sa.String(MEDIUM))
     alignment_filename = sa.Column(sa.String(MEDIUM))
     chain = sa.Column(sa.String(1))
@@ -198,40 +214,39 @@ class _CoreModel:
     def __str__(self):
         return '{}.{}.{}'.format(self.id, self.protein_id, self.domain_idx)
 
+    # === Database ===
 
-class CoreModel(_View, _CoreModel, Base):
+    # local = False
+    # # interactions = models.ManyToManyField(
+    # #     'self', symmetrical=False, through='InterfaceModel', blank=True)
+    # # interactions = sa.orm.relationship(CoreModel, secondary=InterfaceModel)
+    # # protein = models.ForeignKey(Protein, db_index=True, db_column='protein_id')
+    #
+    # def getprot(self, chain=1):
+    #     return Protein.objects.get(id=self.protein_id)
+    #
+    # def getpdbtemplate(self, chain=1, link=True):
+    #     pdb = self.cath[:-3] + '_' + self.cath[-3]
+    #     if link:
+    #         return (
+    #             '<a class="click2" target="_blank" href="http://www.cathdb.info/pdb/%s">%s</a>'
+    #             % (self.cath[:-3], pdb)
+    #         )
+    #     return pdb
 
-    local = False
-    # interactions = models.ManyToManyField(
-    #     'self', symmetrical=False, through='InterfaceModel', blank=True)
-    # interactions = sa.orm.relationship(CoreModel, secondary=InterfaceModel)
-    # protein = models.ForeignKey(Protein, db_index=True, db_column='protein_id')
+    # === Local ===
 
-    def getprot(self, chain=1):
-        return Protein.objects.get(id=self.protein_id)
-
-    def getpdbtemplate(self, chain=1, link=True):
-        pdb = self.cath[:-3] + '_' + self.cath[-3]
-        if link:
-            return (
-                '<a class="click2" target="_blank" href="http://www.cathdb.info/pdb/%s">%s</a>'
-                % (self.cath[:-3], pdb)
-            )
-        return pdb
-
-
-class CoreModelLocal(_CoreModel, Base):
-
-    local = True
-
-    def getprot(self, chain=1):
-        return ProteinLocal.objects.get(id=self.protein_id)
-
-    def getpdbtemplate(self, chain=1, link=True):
-        return self.cath
+    # local = True
+    #
+    # def getprot(self, chain=1):
+    #     return ProteinLocal.objects.get(id=self.protein_id)
+    #
+    # def getpdbtemplate(self, chain=1, link=True):
+    #     return self.cath
+    #
 
 
-class _CoreMutation:
+class DomainMutation(Base):
 
     mutation_type = 'core'
 
@@ -253,7 +268,7 @@ class _CoreMutation:
 
     mut_errors = sa.Column('mutation_errors', sa.Text)
 
-    pdb_chain = sa.Column('chain_modeller'. sa.String(1))
+    pdb_chain = sa.Column('chain_modeller', sa.String(2, collation=get_binary_collation()))
     pdb_mut = sa.Column('mutation_modeller', sa.String(8))
 
     stability_energy_wt = sa.Column(sa.Text)
@@ -302,40 +317,38 @@ class _CoreMutation:
             ("protein_id", "mut"),
         ]
 
+    # === Database ===
 
-class CoreMutation(_View, _CoreMutation, Base):
+    # # model = models.ForeignKey(CoreModel, db_column='domain_id', related_name='muts')
+    #
+    # @property
+    # def protein(self):
+    #     return Protein.objects.get(id=self.protein_id)
+    #
+    # # protein = models.ForeignKey(Protein, db_index=True, db_column='protein_id')
 
-    # model = models.ForeignKey(CoreModel, db_column='domain_id', related_name='muts')
+    # === Local ===
 
-    @property
-    def protein(self):
-        return Protein.objects.get(id=self.protein_id)
-
-    # protein = models.ForeignKey(Protein, db_index=True, db_column='protein_id')
-
-
-class CoreMutationLocal(_CoreMutation, Base):
-
-    # model = models.ForeignKey(CoreModelLocal, db_column='domain_id', related_name='muts')
-
-    @property
-    def protein(self):
-        return ProteinLocal.objects.get(id=self.protein_id)
-
-    # protein = models.ForeignKey(ProteinLocal, db_index=True, db_column='protein_id')
-
-    class Meta(_CoreMutation.Meta):
-        db_table = 'elaspic_core_mutation_local'
+    # # model = models.ForeignKey(CoreModelLocal, db_column='domain_id', related_name='muts')
+    #
+    # @property
+    # def protein(self):
+    #     return ProteinLocal.objects.get(id=self.protein_id)
+    #
+    # # protein = models.ForeignKey(ProteinLocal, db_index=True, db_column='protein_id')
+    #
+    # class Meta(_CoreMutation.Meta):
+    #     db_table = 'elaspic_core_mutation_local'
 
 
-class _InterfaceModel:
+class InterfaceModel(Base):
 
     @property
     def local(self):
         raise NotImplementedError
 
     # Key
-    id = sa.Column('interface_id', sa.Integer)
+    id = sa.Column('interface_id', sa.Integer, primary_key=True)
     protein_id_1 = sa.Column(sa.String(SHORT))
     domain_id_1 = sa.Column(sa.Integer, index=True)
     # domain_idx_1 = sa.Column(sa.Integer, index=True)
@@ -400,8 +413,8 @@ class _InterfaceModel:
     cath_id_1 = sa.Column(sa.String(MEDIUM))
     cath_id_2 = sa.Column(sa.String(MEDIUM))
 
-    seq_id1 = sa.Column('alignment_identity_1', sa.Float)
-    seq_id2 = sa.Column('alignment_identity_2', sa.Float)
+    # seq_id1 = sa.Column('alignment_identity_1', sa.Float)
+    # seq_id2 = sa.Column('alignment_identity_2', sa.Float)
 
     errors = sa.Column('template_errors', sa.Text)
 
@@ -471,72 +484,70 @@ class _InterfaceModel:
         abstract = True
         ordering = ['id']
 
+    # === Database ===
 
-class InterfaceModel(_View, _InterfaceModel, Base):
-
-    local = False
-    # domain1 = models.ForeignKey(
-    #     CoreModel, db_index=True, related_name='p1', db_column='domain_id_1')
-    # domain2 = models.ForeignKey(
-    #     CoreModel, db_index=True, related_name='p2', db_column='domain_id_2')
-
-    def getprot(self, chain):
-        if chain == 1:
-            return Protein.objects.get(id=self.protein_id_1)
-        elif chain == 2:
-            return Protein.objects.get(id=self.protein_id_2)
-
-    def getpdbtemplate(self, chain, link=True):
-        if link:
-            a1 = (
-                '<a class="click2" target="_blank" href="http://www.cathdb.info/pdb/%s">%s_%s</a>'
-                % (self.cath1[:-3], self.cath1[:-3], self.cath1[-3])
-            )
-            a2 = (
-                '<a class="click2" target="_blank" href="http://www.cathdb.info/pdb/%s">%s_%s</a>'
-                % (self.cath2[:-3], self.cath2[:-3], self.cath2[-3])
-            )
-        else:
-            a1 = self.cath1[:-3] + '_' + self.cath1[-3]
-            a2 = self.cath2[:-3] + '_' + self.cath2[-3]
-        if chain == 1:
-            return '%s, %s' % (a1, a2)
-        elif chain == 2:
-            return '%s, %s' % (a2, a1)
-
-
-class InterfaceModelLocal(_InterfaceModel, Base):
-
-    # local = True
-    # domain1 = models.ForeignKey(
-    #     CoreModelLocal, db_index=True, related_name='p1', db_column='domain_id_1')
-    # domain2 = models.ForeignKey(
-    #     CoreModelLocal, db_index=True, related_name='p2', db_column='domain_id_2')
+    # local = False
+    # # domain1 = models.ForeignKey(
+    # #     CoreModel, db_index=True, related_name='p1', db_column='domain_id_1')
+    # # domain2 = models.ForeignKey(
+    # #     CoreModel, db_index=True, related_name='p2', db_column='domain_id_2')
     #
-    # domain_1 = sa.orm.relationship(
-    #     CoreModelLocal, uselist=False, cascade='expunge', lazy='joined',
-    #     primaryjoin=(cath_id_1 == Domain.cath_id))  # many to one
-    # domain_2 = sa.orm.relationship(
-    #     CoreModelLocal, uselist=False, cascade='expunge', lazy='joined',
-    #     primaryjoin=(cath_id_2 == Domain.cath_id))  # many to one
+    # def getprot(self, chain):
+    #     if chain == 1:
+    #         return Protein.objects.get(id=self.protein_id_1)
+    #     elif chain == 2:
+    #         return Protein.objects.get(id=self.protein_id_2)
+    #
+    # def getpdbtemplate(self, chain, link=True):
+    #     if link:
+    #         a1 = (
+    #             '<a class="click2" target="_blank" href="http://www.cathdb.info/pdb/%s">%s_%s</a>'
+    #             % (self.cath1[:-3], self.cath1[:-3], self.cath1[-3])
+    #         )
+    #         a2 = (
+    #             '<a class="click2" target="_blank" href="http://www.cathdb.info/pdb/%s">%s_%s</a>'
+    #             % (self.cath2[:-3], self.cath2[:-3], self.cath2[-3])
+    #         )
+    #     else:
+    #         a1 = self.cath1[:-3] + '_' + self.cath1[-3]
+    #         a2 = self.cath2[:-3] + '_' + self.cath2[-3]
+    #     if chain == 1:
+    #         return '%s, %s' % (a1, a2)
+    #     elif chain == 2:
+    #         return '%s, %s' % (a2, a1)
 
-    def getprot(self, chain):
-        if chain == 1:
-            return ProteinLocal.objects.get(id=self.protein_id_1)
-        elif chain == 2:
-            return ProteinLocal.objects.get(id=self.protein_id_2)
+    # === Local ===
 
-    def getpdbtemplate(self, chain, link=True):
-        if chain == 1:
-            return '{}, {}'.format(self.cath1, self.cath2)
-        elif chain == 2:
-            return '{}, {}'.format(self.cath2, self.cath1)
+    # # local = True
+    # # domain1 = models.ForeignKey(
+    # #     CoreModelLocal, db_index=True, related_name='p1', db_column='domain_id_1')
+    # # domain2 = models.ForeignKey(
+    # #     CoreModelLocal, db_index=True, related_name='p2', db_column='domain_id_2')
+    # #
+    # # domain_1 = sa.orm.relationship(
+    # #     CoreModelLocal, uselist=False, cascade='expunge', lazy='joined',
+    # #     primaryjoin=(cath_id_1 == Domain.cath_id))  # many to one
+    # # domain_2 = sa.orm.relationship(
+    # #     CoreModelLocal, uselist=False, cascade='expunge', lazy='joined',
+    # #     primaryjoin=(cath_id_2 == Domain.cath_id))  # many to one
+    #
+    # def getprot(self, chain):
+    #     if chain == 1:
+    #         return ProteinLocal.objects.get(id=self.protein_id_1)
+    #     elif chain == 2:
+    #         return ProteinLocal.objects.get(id=self.protein_id_2)
+    #
+    # def getpdbtemplate(self, chain, link=True):
+    #     if chain == 1:
+    #         return '{}, {}'.format(self.cath1, self.cath2)
+    #     elif chain == 2:
+    #         return '{}, {}'.format(self.cath2, self.cath1)
+    #
+    # class Meta(_InterfaceModel.Meta):
+    #     db_table = 'elaspic_interface_model_local'
 
-    class Meta(_InterfaceModel.Meta):
-        db_table = 'elaspic_interface_model_local'
 
-
-class _InterfaceMutation:
+class InterfaceMutation(Base):
 
     mutation_type = 'interface'  # interface
 
@@ -550,6 +561,7 @@ class _InterfaceMutation:
     # domain_id_1 = models.IntegerField(db_index=True)
     # protein_id_2 = sa.Column(sa.String(SHORT))
     # domain_id_2 = models.IntegerField(db_index=True)
+    id = sa.Column('interface_id', sa.Integer, primary_key=True)
     protein_id = sa.Column(sa.String(SHORT), primary_key=True)
     mut = sa.Column('mutation', sa.String(8))
     chain_idx = sa.Column(sa.Integer)
@@ -562,7 +574,7 @@ class _InterfaceMutation:
 
     mut_errors = sa.Column('mutation_errors', sa.Text)
 
-    pdb_chain = sa.Column('chain_modeller', sa.String(1))
+    pdb_chain = sa.Column('chain_modeller', sa.String(2, collation=get_binary_collation()))
     pdb_mut = sa.Column('mutation_modeller', sa.String(8))
 
     stability_energy_wt = sa.Column(sa.Text)
@@ -635,38 +647,36 @@ class _InterfaceMutation:
     class Meta:
         abstract = True
 
+    # === Database ===
 
-class InterfaceMutation(_View, _InterfaceMutation, Base):
+    # # model = models.ForeignKey(InterfaceModel, db_column='interface_id', related_name='muts')
+    # model = sa.orm.relationship(
+    #     'interface_id', InterfaceModel, uselist=False, cascade='expunge', lazy='joined',
+    #     backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one
+    #
+    # @property
+    # def protein(self):
+    #     return Protein.objects.get(id=self.protein_id)
+    #
+    # # protein = models.ForeignKey(Protein, db_index=True, db_column='protein_id')
+    #
+    # class Meta(_InterfaceMutation.Meta):
+    #     db_table = 'elaspic_interface_mutation'
+    #     managed = False
 
-    # model = models.ForeignKey(InterfaceModel, db_column='interface_id', related_name='muts')
-    model = sa.orm.relationship(
-        'interface_id', InterfaceModel, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one
+    # === Local ===
 
-    @property
-    def protein(self):
-        return Protein.objects.get(id=self.protein_id)
-
-    # protein = models.ForeignKey(Protein, db_index=True, db_column='protein_id')
-
-    class Meta(_InterfaceMutation.Meta):
-        db_table = 'elaspic_interface_mutation'
-        managed = False
-
-
-class InterfaceMutationLocal(_InterfaceMutation, Base):
-
-    # model = models.ForeignKey(InterfaceModelLocal, db_column='interface_id', related_name='muts')
-    model = sa.orm.relationship(
-        'interface_id', InterfaceModelLocal, uselist=False, cascade='expunge', lazy='joined',
-        backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one
-
-    # Relationships
-    model = sa.orm.relationship(
-        InterfaceModelLocal, cascade='expunge', uselist=False, lazy='joined',
-        backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one
-
-    protein = sa.orm.relationship(
-        ProteinLocal, cascade='expunge', uselist=False, lazy='joined',
-        backfer=sa.orm.backref('mutations', cascade='expunge')
-    )
+    # # model = models.ForeignKey(InterfaceModelLocal, db_column='interface_id', related_name='muts')
+    # model = sa.orm.relationship(
+    #     'interface_id', InterfaceModelLocal, uselist=False, cascade='expunge', lazy='joined',
+    #     backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one
+    #
+    # # Relationships
+    # model = sa.orm.relationship(
+    #     InterfaceModelLocal, cascade='expunge', uselist=False, lazy='joined',
+    #     backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one
+    #
+    # protein = sa.orm.relationship(
+    #     ProteinLocal, cascade='expunge', uselist=False, lazy='joined',
+    #     backfer=sa.orm.backref('mutations', cascade='expunge')
+    # )

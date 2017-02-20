@@ -1,116 +1,43 @@
-.. _domain:
+.. _protein:
 
-domain
-~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.Domain
-   :noindex:
-
-
-
-.. _domain_contact:
-
-domain_contact
-~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.DomainContact
-   :noindex:
-
-
-
-.. _uniprot_sequence:
-
-uniprot_sequence
-~~~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotSequence
-   :noindex:
-
-
-
-.. _provean_table:
-
-provean
+Protein
 ~~~~~~~
 
-.. autosimple:: elaspic.elaspic_database_tables.Provean
+.. autosimple:: elaspic.database.Protein
    :noindex:
 
 
+.. _domain_model:
 
-.. _uniprot_domain:
+Domain model
+~~~~~~~~~~~~
 
-uniprot_domain
-~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotDomain
+.. autosimple:: elaspic.database.DomainModel
    :noindex:
 
 
+.. _domain_mutation:
 
-.. _uniprot_domain_template:
+Domain mutation
+~~~~~~~~~~~~~~~
 
-uniprot_domain_template
-~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainTemplate
+.. autosimple:: elaspic.database.DomainMutation
    :noindex:
 
 
+.. _interface_model:
 
-.. _uniprot_domain_model:
+Interface model
+~~~~~~~~~~~~~~~
 
-uniprot_domain_model
-~~~~~~~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainModel
+.. autosimple:: elaspic.database.InterfaceModel
    :noindex:
 
 
+.. _interface_mutation:
 
-.. _uniprot_domain_mutation:
+Interface mutation
+~~~~~~~~~~~~~~~~~~
 
-uniprot_domain_mutation
-~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainMutation
-   :noindex:
-
-
-
-.. _uniprot_domain_pair:
-
-uniprot_domain_pair
-~~~~~~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainPair
-   :noindex:
-
-
-
-.. _uniprot_domain_pair_template:
-
-uniprot_domain_pair_template
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainPairTemplate
-   :noindex:
-
-
-
-.. _uniprot_domain_pair_model:
-
-uniprot_domain_pair_model
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainPairModel
-   :noindex:
-
-
-.. _uniprot_domain_pair_mutation:
-
-uniprot_domain_pair_mutation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autosimple:: elaspic.elaspic_database_tables.UniprotDomainPairMutation
+.. autosimple:: elaspic.database.InterfaceMutation
    :noindex:

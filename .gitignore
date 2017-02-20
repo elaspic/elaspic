@@ -24,3 +24,6 @@ elaspic/data/*.pickle
 # Configuration files
 *.ini
 !devtools/travis-ci/config_file.ini
+
+# Documentation
+/public

@@ -20,7 +20,7 @@ import elaspic.database
 logger = logging.getLogger(__name__)
 
 
-class DatabasePipeline(elaspic._Pipeline):
+class DatabasePipeline(elaspic.pipeline._Pipeline):
 
     def __init__(
             self, uniprot_id, mutations, configurations=None,

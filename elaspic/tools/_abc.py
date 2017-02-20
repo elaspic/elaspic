@@ -10,7 +10,7 @@ from kmtools import structure_tools, py_tools
 logger = logging.getLogger(__name__)
 
 
-class ToolError(Exception):
+class ToolError(ABC, Exception):
     pass
 
 
@@ -26,7 +26,7 @@ class _Tool(ABC):
         # atexit.register(self.cleanup)
 
 
-class _Mutator(_Tool):
+class Mutator(_Tool):
 
     @property
     @abstractmethod

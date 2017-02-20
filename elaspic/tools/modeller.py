@@ -23,8 +23,7 @@ logger = logging.getLogger(__name__)
 ToolError.register(ModellerError)
 
 
-
-class Modeller(object):
+class Modeller:
     """Run MODELLER in order to make a homology model of the given protein.
 
     Parameters

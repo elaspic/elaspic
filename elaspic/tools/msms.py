@@ -4,7 +4,7 @@ from collections import namedtuple
 
 import pandas as pd
 
-from elaspic.tools._abc import ToolError, _Mutator
+from elaspic.tools._abc import ToolError, Mutator
 from kmtools import py_tools, structure_tools, system_tools
 
 logger = py_tools.get_logger(__name__)
@@ -14,7 +14,7 @@ class MSMSError(ToolError):
     pass
 
 
-class MSMS(_Mutator):
+class MSMS(Mutator):
 
     _result_slots = [
         'structure_seasa_by_chain', 'structure_seasa_by_residue',

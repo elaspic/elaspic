@@ -4,11 +4,6 @@ from sqlalchemy.ext.declarative import declarative_base, declared_attr
 import elaspic
 from kmtools import df_tools
 
-# Default sizes for creating varchar fields
-SHORT = 15
-MEDIUM = 255
-LONG = 8192
-
 naming_convention = {
     "ix": 'ix_%(column_0_label)s',
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -42,24 +37,20 @@ def get_protein_name():
     raise NotImplementedError
 
 
-def decode_domain_def(domains):
-    if domains[-1] == ',':
-        domains = domains[:-1]
-    domain_fragments = [[r.strip() for r in ro.split(':')] for ro in domains.split(',')]
-    domain_merged = domain_fragments[0][0], domain_fragments[-1][-1]
-    return domain_merged
-
-
 def get_binary_collation():
-    return db_specific_properties[elaspic.CONFIGS['db_type']]['BINARY_COLLATION']
+    return db_specific_properties[elaspic.CONFIGS.get('db_type', 'mysql')]['BINARY_COLLATION']
 
 
-class Base(object):
+class MyMixin:
     __indexes__ = []
 
     @declared_attr
     def __tablename__(cls):
-        return df_tools.format_column(cls.__name__)
+        print("Class name: {}".format(cls.__name__))
+        if cls.__name__[0] == '_':
+            return 'hidden_' + df_tools.format_column(cls.__name__)
+        else:
+            return df_tools.format_column(cls.__name__)
 
     @declared_attr
     def __table_args__(cls):
@@ -93,5 +84,5 @@ class Base(object):
         return tuple(table_args)
 
 
-Base = declarative_base(cls=Base)
+Base = declarative_base(cls=MyMixin)
 Base.metadata.naming_conventions = naming_convention
