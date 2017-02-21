@@ -17,7 +17,7 @@ class PhysicoChemical(StructureAnalyzer):
         pass
 
     @functools.lru_cache(maxsize=512)
-    def analyze(self, chain_id, residue_id, aa):  # get_physi_chem
+    def analyze(self, chain_id, residue_id, aa):
         """Return the atomic contact vector.
 
         Count how many interactions there are between charged, polar or "carbon" residues.

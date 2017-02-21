@@ -6,7 +6,11 @@ import elaspic.tools
 
 logger = py_tools.get_logger(__name__)
 
-Analyzers = [elaspic.tools.MSMS, elaspic.tools.PhysicoChemical]
+Analyzers = [
+    elaspic.tools.Stride,
+    elaspic.tools.MSMS,
+    elaspic.tools.PhysicoChemical,
+]
 PDB_IDS = [('4dkl', 'A', 'M65A:M130A:Y252A:R263A:P295A:I302A:I352A'), ]
 
 

@@ -4,7 +4,7 @@ from collections import namedtuple
 
 import pandas as pd
 
-from elaspic.tools._abc import ToolError, StructureAnalyzer
+from elaspic.tools._abc import StructureAnalyzer, ToolError
 from kmtools import py_tools, structure_tools, system_tools
 
 logger = py_tools.get_logger(__name__)
@@ -22,6 +22,10 @@ class MSMS(StructureAnalyzer):
     ]
 
     def build(self):
+        # Header
+        if self.done:
+            logger.info("Already built!")
+            return
         # Calculate for the entire structure
         structure = self.structure
         structure_file = op.join(self.tempdir, structure.id + '.pdb')
@@ -48,6 +52,7 @@ class MSMS(StructureAnalyzer):
 
     @functools.lru_cache(maxsize=512)
     def analyze(self, chain_id, residue_id, aa):
+        # Header
         assert self.done
         if isinstance(residue_id, int):
             residue_id = (' ', residue_id, ' ')
