@@ -56,7 +56,7 @@ setup(
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
     license='MIT',
-    packages=find_packages('elaspic'),
+    packages=find_packages(),
     package_data={
         'elaspic.database': ['sql/*.sql'],
         'elaspic.predictor': ['data/*'],
