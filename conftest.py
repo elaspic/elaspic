@@ -1,4 +1,5 @@
 import os.path as op
+import sys
 
 import numpy as np
 import pytest
@@ -10,6 +11,10 @@ TESTS_DIR = op.join(PROJECT_DIR, 'tests')
 # Config files
 DEFAULT_LOCAL_CONFIG = op.join(TESTS_DIR, 'test_local_pipeline.ini')
 DEFAULT_DATABASE_CONFIG = op.join(TESTS_DIR, 'test_database_pipeline.ini')
+
+
+# Use the installed version of the package instead of the current directory
+sys.path.remove(PROJECT_DIR)
 
 
 # Doctest
