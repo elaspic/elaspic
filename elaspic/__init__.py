@@ -7,8 +7,8 @@ from .model import Model
 __all__ = [
     'conf',
     'exc',
-    'tools',
     'pipeline',
+    'tools',
 ]
 from . import *
 

@@ -1,11 +1,11 @@
 import os.path as op
-import pytest
+
 import numpy as np
+import pytest
 
 # Directories
 PROJECT_DIR = op.dirname(op.abspath(__file__))
 TESTS_DIR = op.join(PROJECT_DIR, 'tests')
-
 
 # Config files
 DEFAULT_LOCAL_CONFIG = op.join(TESTS_DIR, 'test_local_pipeline.ini')

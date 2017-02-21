@@ -1,79 +1,83 @@
-import logging
+import functools
 import os
 import os.path as op
 import re
-import psutil
-import time
-import subprocess
 import shlex
+import subprocess
+import time
+
+import psutil
+
+import Bio.SeqIO
 import elaspic
+from kmtools import py_tools, system_tools
 
-from kmtools import system_tools
+from ._abc import SequenceAnalyzer, ToolError
 
-from ._abc import Mutator, MutatorError
-
-logger = logging.getLogger(__name__)
+logger = py_tools.get_logger(__name__)
 
 
 CANONICAL_AMINO_ACIDS = 'ARNDCEQGHILKMFPSTWYV'
 
 
-class ProveanError(MutatorError):
+class ProveanError(ToolError):
     pass
 
 
-class ProveanResourceError(MutatorError):
+class ProveanResourceError(ToolError):
     def __init__(self, message, child_process_group_id):
         Exception.__init__(self, message)
         self.child_process_group_id = child_process_group_id
 
 
-class ProveanMutator(Mutator):
+class Provean(SequenceAnalyzer):
 
-    _results_keys = ['supporting_set_file', 'supporting_set_length']
-
-    def __init__(self, sequence):
-        self.sequence = sequence
-        super().__init__()
+    _result_slots = ['supporting_set_file', 'supporting_set_length']
 
     def build(self):
-        if self.is_done:
+        logger.info("{} {}", self.sequence, self.sequence.id)
+        # Write sequence file
+        self.sequence_file = op.join(
+            elaspic.CONFIGS['sequence_dir'],
+            "{}.fasta".format(self.sequence.id))
+        with open(self.sequence_file, 'wt') as ofh:
+            Bio.SeqIO.write(self.sequence, ofh, 'fasta')
+        # Build the supporting set
+        if self.done:
             logger.debug('Provean supset is already calculated!')
         else:
             self._build_provean_supset()
-            assert self.is_done
+            assert self.done
 
-    def mutate(self, mutation):
-        if mutation in self.mutations:
-            return self.mutations[mutation]
-        else:
-            self.mutations[mutation] = {
-                'score': self.run_provean(mutation)
-            }
-            return self.mutations[mutation]
-
-    @property
-    def is_done(self):
-        return super().is_done
-
-    def cleanup():
-        return super().cleanup()
+    @functools.lru_cache(maxsize=512)
+    def analyze(self, mutation):
+        return {'provean_score': self.run_provean(mutation)}
 
     # Helper
     @property
     def supporting_set_file(self):
         return op.join(self.tempdir, self.sequence.id + '_provean_supset')
 
+    @property
+    def supporting_set_length(self):
+        provean_supset_length = 0
+        with open(self.supporting_set_file) as fh:
+            for line in fh:
+                if line and not line.startswith('#'):
+                    provean_supset_length += 1
+        assert provean_supset_length > 0
+        return provean_supset_length
+
     def _build_provean_supset(self, mutation=None):
         logger.debug('Building a Provean supporting set. This might take a while...')
 
         # Get the required parameters
         any_position = 0
-        while self.protein_sequence[any_position] not in CANONICAL_AMINO_ACIDS:
+        while self.sequence[any_position] not in CANONICAL_AMINO_ACIDS:
             any_position += 1
-        first_aa = self.protein_sequence[any_position]
+        first_aa = self.sequence[any_position]
         if mutation is None:
-            mutation = '{0}{1}{0}'.format(first_aa, any_position + 1)
+            mutation = '{0}{1}{0}'.format(first_aa, any_position)
 
         # Run provean to generate supporting set files
         self._run_provean(mutation, save_supporting_set=True, check_mem_usage=True)
@@ -89,7 +93,7 @@ class ProveanMutator(Mutator):
             except ProveanError as e:
                 bad_ids = re.findall("Entry not found in BLAST database: '(.*)'", e.args[0])
                 provean_supset_data = []
-                with open(self.results['supporting_set_file'], 'rt') as ifh:
+                with open(self.result['supporting_set_file'], 'rt') as ifh:
                     for line in ifh:
                         if any([(gi_id in line) for gi_id in bad_ids]):
                             logger.debug(
@@ -97,7 +101,7 @@ class ProveanMutator(Mutator):
                                 .format(line.strip()))
                         else:
                             provean_supset_data.append(line)
-                with open(self.results['supporting_set_file'], 'wt') as ofh:
+                with open(self.result['supporting_set_file'], 'wt') as ofh:
                     ofh.writelines(provean_supset_data)
         if provean_score is None:
             # Recalculate provean supporting set
@@ -157,7 +161,8 @@ class ProveanMutator(Mutator):
         # Create a file with mutation
         mutation_file = op.join(elaspic.CONFIGS['sequence_dir'], '{}.var'.format(mutation))
         with open(mutation_file, 'w') as ofh:
-            ofh.write(mutation)
+            # Need to add one because Provean accepts 1-based mutations
+            ofh.write(mutation[0] + str(int(mutation[1:-1]) + 1) + mutation[-1])
 
         # Run provean
         system_command = (
@@ -172,14 +177,11 @@ class ProveanMutator(Mutator):
             " --cdhit '{}' ".format(system_tools.which('cd-hit'))
         )
 
-        if self.is_done:
+        if self.done:
             # use supporting set
-            system_command += " --supporting_set '{}' ".format(self.results['supporting_set_file'])
+            system_command += " --supporting_set '{}' ".format(self.result['supporting_set_file'])
         else:
-            supporting_set_file = self.get_supporting_set_file()
-            system_command += " --save_supporting_set '{}' ".format(system_command)
-            self.results['supporting_set_file'] = supporting_set_file
-            self.results['supporting_set_length'] = _get_supporting_set_length(supporting_set_file)
+            system_command += " --save_supporting_set '{}' ".format(self.supporting_set_file)
 
         logger.debug(system_command)
         p = subprocess.Popen(
@@ -233,13 +235,9 @@ class ProveanMutator(Mutator):
             logger.error('error_message: {}'.format(stderr))
             raise ProveanError(stderr)
 
+        if not self.done:
+            self.result['supporting_set_file'] = self.supporting_set_file
+            self.result['supporting_set_length'] = self.supporting_set_length
+            assert self.done
+
         return provean_score
-
-
-def _get_supporting_set_length(provean_supset_file):
-    provean_supset_length = 0
-    with open(provean_supset_file) as fh:
-        for line in fh:
-            if line and not line.startswith('#'):
-                provean_supset_length += 1
-    return provean_supset_length

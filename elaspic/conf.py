@@ -225,6 +225,7 @@ def read_model_configs(config):
     # FoldX
     CONFIGS['foldx_water'] = config.get('foldx_water', '-IGNORE')
     CONFIGS['foldx_num_of_runs'] = int(config.get('foldx_num_of_runs', 1))
+    # Conservation
     CONFIGS['matrix_type'] = config.get('matrix_type', 'blosum80')
     CONFIGS['gap_start'] = int(config.get('gap_start', -16))
     CONFIGS['gap_extend'] = int(config.get('gap_extend', -4))

@@ -4,7 +4,7 @@ from collections import namedtuple
 
 import pandas as pd
 
-from elaspic.tools._abc import ToolError, Mutator
+from elaspic.tools._abc import ToolError, StructureAnalyzer
 from kmtools import py_tools, structure_tools, system_tools
 
 logger = py_tools.get_logger(__name__)
@@ -14,21 +14,16 @@ class MSMSError(ToolError):
     pass
 
 
-class MSMS(Mutator):
+class MSMS(StructureAnalyzer):
 
     _result_slots = [
         'structure_seasa_by_chain', 'structure_seasa_by_residue',
         'chain_seasa_by_chain', 'chain_seasa_by_residue',
     ]
 
-    def __init__(self, structrue):
-        assert len(structrue) == 1, "MSMS requires that the structre have only one model"
-        self.structrue = structrue
-        super().__init__()
-
     def build(self):
         # Calculate for the entire structure
-        structure = self.structrue
+        structure = self.structure
         structure_file = op.join(self.tempdir, structure.id + '.pdb')
         structure_tools.save_structure(structure, structure_file)
         seasa_by_chain, seasa_by_residue = self._build(structure_file)
@@ -52,26 +47,32 @@ class MSMS(Mutator):
         })
 
     @functools.lru_cache(maxsize=512)
-    def mutate(self, chain_id, mutation):
+    def analyze(self, chain_id, residue_id, aa):
         assert self.done
+        if isinstance(residue_id, int):
+            residue_id = (' ', residue_id, ' ')
 
         structure_seasa = (
             self.result['structure_seasa_by_residue'][
                 (self.result['structure_seasa_by_residue']['chain_id'] == chain_id) &
-                (self.result['structure_seasa_by_residue']['residue_id'] == mutation[1:-1])
+                (self.result['structure_seasa_by_residue']['residue_id'].astype(int) ==
+                    residue_id[1])
             ])
         assert len(structure_seasa) == 1, structure_seasa
         structure_seasa = structure_seasa.iloc[0]
-        _validate_mutation(structure_seasa['res_name'], mutation)
+        assert structure_tools.AAA_DICT.get(
+            structure_seasa['res_name'], structure_seasa['res_name']) == aa
 
         chain_seasa = (
             self.result['chain_seasa_by_residue'][
                 (self.result['chain_seasa_by_residue']['chain_id'] == chain_id) &
-                (self.result['chain_seasa_by_residue']['residue_id'] == mutation[1:-1])
+                (self.result['chain_seasa_by_residue']['residue_id'].astype(int) ==
+                    residue_id[1])
             ])
         assert len(chain_seasa) == 1, chain_seasa
         chain_seasa = chain_seasa.iloc[0]
-        _validate_mutation(chain_seasa['res_name'], mutation)
+        assert structure_tools.AAA_DICT.get(
+            chain_seasa['res_name'], chain_seasa['res_name']) == aa
 
         return {
             'solvent_accessibility': structure_seasa['rel_sasa'],
@@ -177,12 +178,3 @@ class MSMS(Mutator):
         df_by_chain = df.groupby(['chain_id']).sum().reset_index()
         df_by_residue = df.groupby(['chain_id', 'res_name', 'residue_id']).sum().reset_index()
         return df_by_chain, df_by_residue
-
-
-def _validate_mutation(resname, mutation):
-    valid_aa = [mutation[0].upper(), mutation[-1].upper()]
-    if structure_tools.AAA_DICT.get(resname, resname) not in valid_aa:
-        logger.error(
-            "Mutation {} does not match resname {} ({})",
-            mutation, resname, structure_tools.AAA_DICT[resname])
-        raise structure_tools.exc.MutationMismatchError()

@@ -9,8 +9,8 @@ build:
   stage: build
   script:
     # Build conda packages
-    - conda config --append channels $CI_PROJECT_NAMESPACE
     - conda config --append channels bioconda
+    - conda config --append channels kimlab
     - conda config --append channels ostrokach
     - cd $CI_PROJECT_DIR/devtools/conda-recipe
     - conda build .
@@ -23,7 +23,9 @@ build:
 
 .install: &install_conda_package
   before_script:
-    - conda config --append channels $CI_PROJECT_NAMESPACE
+    - conda config --append channels bioconda
+    - conda config --append channels kimlab
+    - conda config --append channels ostrokach
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
     - conda install 'requests<2.12'
@@ -66,4 +68,4 @@ anaconda-dev:
 tools:
   <<: *test_job
   script:
-    - py.test tests/test_tools/test_msms.py
+    - py.test tests/test_tools/

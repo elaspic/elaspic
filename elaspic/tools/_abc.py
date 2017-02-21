@@ -14,19 +14,7 @@ class ToolError(ABC, Exception):
     pass
 
 
-class MutatorError(ToolError):
-    pass
-
-
 class _Tool(ABC):
-
-    def __init__(self):
-        self.tempdir = op.join(tempfile.gettempdir(), self.__class__.__name__)
-        os.makedirs(self.tempdir, exist_ok=True)
-        # atexit.register(self.cleanup)
-
-
-class Mutator(_Tool):
 
     @property
     @abstractmethod
@@ -38,20 +26,42 @@ class Mutator(_Tool):
         self.result = py_tools.Struct(self._result_slots)
         self.cache = {}
         self.mutations = {}
-        super().__init__()
+        self.tempdir = op.join(tempfile.gettempdir(), self.__class__.__name__)
+        os.makedirs(self.tempdir, exist_ok=True)
 
     @abstractmethod
     def build(self):
         raise NotImplementedError
 
-    @abstractmethod
-    def mutate(self, mutation):
-        raise NotImplementedError
-
     @property
     def done(self):
         return (all(key in self.result for key in self._result_slots) and
-                all(op.isfile(key) for key in self._result_slots if key.endswith('file')))
+                all(op.isfile(self.result[key]) for key in self._result_slots
+                    if key.endswith('file')))
+
+
+class SequenceAnalyzer(_Tool):
+
+    def __init__(self, sequence):
+        super().__init__()
+        assert len(sequence) > 0, "The sequence must not be empty!"
+        self.sequence = sequence
+
+    @abstractmethod
+    def analyze(self, mutation):
+        raise NotImplementedError
+
+
+class StructureAnalyzer(_Tool):
+
+    def __init__(self, structure):
+        super().__init__()
+        assert len(structure) == 1, "The structure must have only one model!"
+        self.structure = structure
+
+    @abstractmethod
+    def analyze(self, chain_id, residue_id, aa):
+        raise NotImplementedError
 
 
 class Modeller(ABC):
@@ -90,24 +100,6 @@ class Analyzer(ABC):
         self.sp.save_structure(output_dir=self.working_dir)
 
         self.chain_ids = self.sp.chain_ids
-
-
-class CoreAnalyzer(ABC):
-
-    def __init__(self, structure, chain, residue):
-        self.structure = structure
-        self.chain = chain
-        self.residue = residue
-        self.tempdir = op.join(tempfile.gettempdir(), self.__class__.__name__)
-        os.makedires(self.tempdir, exist_ok=True)
-
-    def analyze(self):
-        """
-        Returns
-        -------
-        dict : Dictionary containing all the calculated features.
-        """
-        raise NotImplementedError
 
 
 class InterfaceAnalyzer(ABC):
