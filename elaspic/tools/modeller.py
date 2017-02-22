@@ -60,7 +60,7 @@ class Modeller:
         # Some environment settings
         self.filePath = filePath
 
-    def build(self):
+    def _build(self):
         # key: assessment score
         # values: alignment, pdb filename, whether or not using loop refinement
         ranking = dict()
@@ -94,8 +94,13 @@ class Modeller:
                     ranking[normDOPE] = (aln, pdbFile, loop,)
         return min(ranking), ranking[min(ranking)][1]
 
-    def mutate(self, mutation):
+    def _mutate(self, mutation):
         raise NotImplementedError
+
+    def _model(self, alignment):
+        raise NotImplementedError
+
+    # ========= Helper methods ==========
 
     def __run_modeller(self, alignFile, loopRefinement):
         """.

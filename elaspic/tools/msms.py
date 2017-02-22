@@ -1,4 +1,3 @@
-import functools
 import os.path as op
 from collections import namedtuple
 
@@ -21,16 +20,9 @@ class MSMS(StructureAnalyzer):
         'chain_seasa_by_chain', 'chain_seasa_by_residue',
     ]
 
-    def build(self):
-        # Header
-        if self.done:
-            logger.info("Already built!")
-            return
+    def _build(self):
         # Calculate for the entire structure
-        structure = self.structure
-        structure_file = op.join(self.tempdir, structure.id + '.pdb')
-        structure_tools.save_structure(structure, structure_file)
-        seasa_by_chain, seasa_by_residue = self._build(structure_file)
+        seasa_by_chain, seasa_by_residue = self._build_msms(self.structure_file)
         self.result.update({
             'structure_seasa_by_chain': seasa_by_chain,
             'structure_seasa_by_residue': seasa_by_residue,
@@ -38,11 +30,11 @@ class MSMS(StructureAnalyzer):
         # Calculate chain by chain
         chain_seasa_by_chain = []
         chain_seasa_by_residue = []
-        for chain in structure[0]:
-            chain_structure = structure[0].extract([chain.id])
-            chain_structure_file = op.join(self.tempdir, structure.id + chain.id + '.pdb')
+        for chain in self.structure[0]:
+            chain_structure = self.structure[0].extract([chain.id])
+            chain_structure_file = op.join(self.tempdir, self.structure.id + chain.id + '.pdb')
             structure_tools.save_structure(chain_structure, chain_structure_file)
-            seasa_by_chain, seasa_by_residue = self._build(chain_structure_file)
+            seasa_by_chain, seasa_by_residue = self._build_msms(chain_structure_file)
             chain_seasa_by_chain.append(seasa_by_chain)
             chain_seasa_by_residue.append(seasa_by_residue)
         self.result.update({
@@ -50,13 +42,8 @@ class MSMS(StructureAnalyzer):
             'chain_seasa_by_residue': pd.concat(chain_seasa_by_residue, ignore_index=True),
         })
 
-    @functools.lru_cache(maxsize=512)
-    def analyze(self, chain_id, residue_id, aa):
-        # Header
-        assert self.done
-        if isinstance(residue_id, int):
-            residue_id = (' ', residue_id, ' ')
-
+    def _analyze(self, chain_id, residue_id, aa):
+        # SEASA for the entire structure
         structure_seasa = (
             self.result['structure_seasa_by_residue'][
                 (self.result['structure_seasa_by_residue']['chain_id'] == chain_id) &
@@ -68,6 +55,7 @@ class MSMS(StructureAnalyzer):
         assert structure_tools.AAA_DICT.get(
             structure_seasa['res_name'], structure_seasa['res_name']) == aa
 
+        # SEASA for each chain on its own
         chain_seasa = (
             self.result['chain_seasa_by_residue'][
                 (self.result['chain_seasa_by_residue']['chain_id'] == chain_id) &
@@ -79,13 +67,15 @@ class MSMS(StructureAnalyzer):
         assert structure_tools.AAA_DICT.get(
             chain_seasa['res_name'], chain_seasa['res_name']) == aa
 
+        # Done
         return {
             'solvent_accessibility': structure_seasa['rel_sasa'],
             'solvent_occlusion': structure_seasa['rel_sasa'] - chain_seasa['rel_sasa'],
         }
 
-    # Helper methods
-    def _build(self, structure_file):
+    # ========= Helper methods ==========
+
+    def _build_msms(self, structure_file):
         xyzrn_file = self._run_pdb_to_xyzrn(structure_file)
         area_file = self._run_msms(xyzrn_file)
         file_data = self._parse_area_file(area_file)

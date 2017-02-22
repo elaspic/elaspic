@@ -1,4 +1,3 @@
-import functools
 import os.path as op
 
 import pandas as pd
@@ -17,20 +16,10 @@ class Stride(StructureAnalyzer):
 
     _result_slots = ['secondary_structure']
 
-    def build(self):
-        if self.done:
-            logger.info("Already built!")
-            return
-        self.structure_file = op.join(self.tempdir, self.structure.id + '.pdb')
-        structure_tools.save_structure(self.structure, self.structure_file)
-        self.result['secondary_structure'] = self._build()
+    def _build(self):
+        self.result['secondary_structure'] = self._build_stride()
 
-    @functools.lru_cache(maxsize=512)
-    def analyze(self, chain_id, residue_id, aa):
-        assert self.done
-        if isinstance(residue_id, int):
-            residue_id = (' ', residue_id, ' ')
-
+    def _analyze(self, chain_id, residue_id, aa):
         secondary_structure = (
             self.result['secondary_structure'][
                 (self.result['secondary_structure']['chain_id'] == chain_id) &
@@ -39,12 +28,14 @@ class Stride(StructureAnalyzer):
         assert len(secondary_structure) == 1
         secondary_structure = secondary_structure.iloc[0]
         assert structure_tools.AAA_DICT.get(
-            secondary_structure['amino_acid'], secondary_structure['amino_acid']) == aa
+            secondary_structure['amino_acid'],
+            secondary_structure['amino_acid']) == aa
         # secondary_structure = secondary_structure_df.ss_code
         return {'ss_code': secondary_structure['ss_code']}
 
-    # Helper
-    def _build(self):
+    # ========= Helper methods ==========
+
+    def _build_stride(self):
         stride_results_file = self._run_stride()
         file_data = self._parse_output(stride_results_file)
         secondary_structure = self._generate_df(file_data)

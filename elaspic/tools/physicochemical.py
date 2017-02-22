@@ -1,5 +1,3 @@
-import functools
-
 from elaspic.tools._abc import StructureAnalyzer
 from kmtools import structure_tools, py_tools
 
@@ -13,11 +11,10 @@ class PhysicoChemical(StructureAnalyzer):
 
     _result_slots = []
 
-    def build(self):
+    def _build(self):
         pass
 
-    @functools.lru_cache(maxsize=512)
-    def analyze(self, chain_id, residue_id, aa):
+    def _analyze(self, chain_id, residue_id, aa):
         """Return the atomic contact vector.
 
         Count how many interactions there are between charged, polar or "carbon" residues.
@@ -31,10 +28,6 @@ class PhysicoChemical(StructureAnalyzer):
         if more than two chains are given, the chains not containing the mutation
         are considered as "opposing" chain
         """
-        assert self.done
-        if isinstance(residue_id, int):
-            residue_id = (' ', residue_id, ' ')
-
         model = self.structure[0]
         chain = model[chain_id]
         opposite_chains = [chain for chain in model if chain.id != chain_id]
@@ -51,15 +44,11 @@ class PhysicoChemical(StructureAnalyzer):
 
         result = {
             # Opposite chain
-            'opposite_chain_equal_charge': [],
-            'opposite_chain_opposite_charge': [],
-            'opposite_chain_h_bond': [],
-            'opposite_chain_carbon_contact': [],
+            'opposite_chain_equal_charge': [], 'opposite_chain_opposite_charge': [],
+            'opposite_chain_h_bond': [], 'opposite_chain_carbon_contact': [],
             # Same chain
-            'same_chain_equal_charge': [],
-            'same_chain_opposite_charge': [],
-            'same_chain_h_bond': [],
-            'same_chain_carbon_contact': []
+            'same_chain_equal_charge': [], 'same_chain_opposite_charge': [],
+            'same_chain_h_bond': [], 'same_chain_carbon_contact': []
         }
 
         # Go through each atom in each residue in each partner chain...
@@ -88,9 +77,10 @@ class PhysicoChemical(StructureAnalyzer):
 
         return result
 
-    def _increment_vector(
-            self, mutated_residue, mutated_atoms, partner_residue,
-            equal_charge, opposite_charge, h_bond, carbon_contact):
+    # ========= Helper methods ==========
+
+    def _iterate_contacts(
+            self, mutated_residue, mutated_atoms, partner_residue):
         # For each residue each atom of the mutated residue has to be checked
         for mutated_atom in mutated_atoms:
             mutated_atom_type = self._get_atom_type(mutated_residue.resname, mutated_atom)
@@ -101,34 +91,31 @@ class PhysicoChemical(StructureAnalyzer):
                     partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
                     if partner_atom_type == 'ignore':
                         continue
-                    if mutated_atom_type == 'carbon' and partner_atom_type == 'carbon':
-                        # The Van der Waals packing should be determined
-                        # nonredundant. Thus, the atomic coordinates are
-                        # used to keep track of which interactions where
-                        # already counted. Does not matter as much for others.
-                        carbon_contact.append(tuple(partner_atom.coord))
-                    if r <= MIN_CONTACT_DISTANCE:
-                        if (mutated_atom_type == 'charged_plus' and
-                                partner_atom_type == 'charged_plus'):
-                            equal_charge.append(tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'charged_minus' and
-                                partner_atom_type == 'charged_plus'):
-                            opposite_charge.append(tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'charged_plus' and
-                                partner_atom_type == 'charged_minus'):
-                            opposite_charge.append(tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'charged_minus' and
-                                partner_atom_type == 'charged_minus'):
-                            equal_charge.append(tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'charged' and
-                                partner_atom_type == 'polar'):
-                            h_bond.append(tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'polar' and
-                                partner_atom_type == 'charged'):
-                            h_bond.append(tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'polar' and
-                                partner_atom_type == 'polar'):
-                            h_bond.append(tuple(mutated_atom.coord))
+                    yield mutated_atom_type, partner_atom_type, mutated_atom, partner_atom, r
+
+    def _increment_vector(
+            self, mutated_residue, mutated_atoms, partner_residue,
+            equal_charge, opposite_charge, h_bond, carbon_contact):
+        for mutated_atom_type, partner_atom_type, mutated_atom, partner_atom, r in \
+                self._iterate_contacts(mutated_residue, mutated_atoms, partner_residue):
+            if mutated_atom_type == 'carbon' and partner_atom_type == 'carbon':
+                # The Van der Waals packing should be determined
+                # nonredundant. Thus, the atomic coordinates are
+                # used to keep track of which interactions where
+                # already counted. Does not matter as much for others.
+                carbon_contact.append(tuple(partner_atom.coord))
+            if r <= MIN_CONTACT_DISTANCE:
+                key = {mutated_atom_type, partner_atom_type}
+                if key == {'charged_plus', 'charged_plus'}:
+                    equal_charge.append(tuple(mutated_atom.coord))
+                elif key == {'charged_minus', 'charged_minus'}:
+                    equal_charge.append(tuple(mutated_atom.coord))
+                elif key == {'charged_minus', 'charged_plus'}:
+                    opposite_charge.append(tuple(mutated_atom.coord))
+                elif key == {'charged', 'polar'}:
+                    h_bond.append(tuple(mutated_atom.coord))
+                elif key == {'polar', 'polar'}:
+                    h_bond.append(tuple(mutated_atom.coord))
 
     def _get_atom_type(self, residue, atom):
         """Get the type of atom we are dealing with (i.e. charged, polar, carbon).

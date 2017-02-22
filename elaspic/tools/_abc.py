@@ -1,3 +1,4 @@
+import functools
 import os
 import os.path as op
 import logging
@@ -5,6 +6,7 @@ import tempfile
 
 from abc import ABC, abstractmethod
 
+import Bio
 from kmtools import structure_tools, py_tools
 
 logger = logging.getLogger(__name__)
@@ -29,8 +31,12 @@ class _Tool(ABC):
         self.tempdir = op.join(tempfile.gettempdir(), self.__class__.__name__)
         os.makedirs(self.tempdir, exist_ok=True)
 
-    @abstractmethod
     def build(self):
+        if not self.done:
+            self._build()
+
+    @abstractmethod
+    def _build(self):
         raise NotImplementedError
 
     @property
@@ -46,9 +52,23 @@ class SequenceAnalyzer(_Tool):
         super().__init__()
         assert len(sequence) > 0, "The sequence must not be empty!"
         self.sequence = sequence
+        self._sequence_file = None
+
+    @property
+    def sequence_file(self):
+        if self._sequence_file is None:
+            self._sequence_file = op.join(self.tempdir, self.sequence.id + '.fasta')
+            with open(self._sequence_file, 'wt') as ofh:
+                Bio.SeqIO.write(self.sequence, ofh, 'fasta')
+        return self._sequence_file
+
+    @functools.lru_cache(maxsize=512)
+    def analyze(self, mutation):
+        assert self.done
+        return self._analyze(self, mutation)
 
     @abstractmethod
-    def analyze(self, mutation):
+    def _analyze(self, mutation):
         raise NotImplementedError
 
 
@@ -58,23 +78,57 @@ class StructureAnalyzer(_Tool):
         super().__init__()
         assert len(structure) == 1, "The structure must have only one model!"
         self.structure = structure
+        self._structure_file = None
+
+    @property
+    def structure_file(self):
+        if self._structure_file is None:
+            self._structure_file = op.join(self.tempdir, self.structure.id + '.pdb')
+            structure_tools.save_structure(self.structure, self._structure_file)
+        return self._structure_file
+
+    @functools.lru_cache(maxsize=512)
+    def analyze(self, chain_id, residue_id, aa):
+        assert self.done
+        if isinstance(residue_id, int):
+            residue_id = (' ', residue_id, ' ')
+        return self._analyze(chain_id, residue_id, aa)
 
     @abstractmethod
-    def analyze(self, chain_id, residue_id, aa):
+    def _analyze(self, chain_id, residue_id, aa):
         raise NotImplementedError
 
 
-class Modeller(ABC):
+class Modeller(_Tool):
 
-    def __init__(self, sequence, structure, alignment):
-        self.sequence = sequence
+    def __init__(self, structure):
+        super().__init__()
         self.structure = structure
-        self.alignment = alignment
-        self.tempdir = op.join(tempfile.gettempdir(), self.__class__.__name__)
-        os.makedires(self.tempdir, exist_ok=True)
+        self._structure_file = None
+
+    @functools.lru_cache(maxsize=512)
+    def mutate(self, mutation):
+        """
+        Returns
+        -------
+        Bio.PDB.Structure
+        """
+        return self._mutate(mutation)
 
     @abstractmethod
-    def model(self):
+    def _mutate(self, mutation):
+        raise NotImplementedError
+
+    def model(self, alignment):
+        """
+        Returns
+        -------
+        Bio.PDB.Structure
+        """
+        return self._model(alignment)
+
+    @abstractmethod
+    def _model(self, alignment):
         raise NotImplementedError
 
 
