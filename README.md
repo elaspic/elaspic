@@ -30,4 +30,5 @@ Berliner N, Teyra J, Çolak R, Garcia Lopez S, Kim PM (2014) *Combining Structur
 
 ## License
 
-LGPL
+MIT
+
