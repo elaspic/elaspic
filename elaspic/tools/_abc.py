@@ -80,25 +80,17 @@ class _StructureTool(_Tool):
 
 class Modeller(_StructureTool):
 
-    def __init__(self, structure, alignment, *args, **kwargs):
-        super().__init__(structure, *args, **kwargs)
-        self.alignment = alignment
+    _result_slots = ['homology_structure_file']
 
     @abstractmethod
-    def model(self):
+    def model(self, alignment):
         raise NotImplementedError
 
 
 class Mutator(_StructureTool):
 
-    _result_slots = ['wt_structure_file', 'mut_structure_file']
-
-    def __init__(self, structure, mutation, *args, **kwargs):
-        super().__init__(structure, *args, **kwargs)
-        self.mutation = structure
-
     @abstractmethod
-    def mutate(self):
+    def mutate(self, mutation):
         raise NotImplementedError
 
 
@@ -111,6 +103,13 @@ class SequenceAnalyzer(_SequenceTool):
 
 class StructureAnalyzer(_StructureTool):
 
-    @abstractmethod
     def analyze(self, mutation):
+        assert self.done
+        chain_id, chain_mutation = mutation.split('-')
+        residue_id = (' ', int(chain_mutation[1:-1]), ' ')
+        aa = chain_mutation[0]
+        return self._analyze(chain_id, residue_id, aa)
+
+    @abstractmethod
+    def _analyze(self, chain_id, residue_id, aa):
         raise NotImplementedError
