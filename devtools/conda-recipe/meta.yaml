@@ -1,8 +1,6 @@
-{% set data = load_setup_py_data() %}
-
 package:
   name: elaspic
-  version: {{ data.get('version') }}
+  version: 0.2.0
 
 source:
   path: ../../

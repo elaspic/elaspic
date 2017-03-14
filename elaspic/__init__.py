@@ -12,7 +12,7 @@ __all__ = [
 ]
 from . import *
 
-__version__ = "0.1.40"
+__version__ = "0.2.0"
 
 import os
 import os.path as op
