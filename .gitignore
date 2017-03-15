@@ -27,3 +27,5 @@ elaspic/data/*.pickle
 
 # Documentation
 /public
+docs/modules/_*
+

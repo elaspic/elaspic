@@ -35,9 +35,7 @@ documentation:
   <<: *install_conda_package
   stage: deploy
   script:
-    - pip install -q sphinx sphinx_rtd_theme
-    - sphinx-apidoc elaspic -o docs/modules/ -TEMP --force
-    - mkdir public
+    - pip install -q sphinx sphinx_rtd_theme recommonmark
     - sphinx-build docs public
   artifacts:
     paths:

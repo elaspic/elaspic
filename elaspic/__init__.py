@@ -1,4 +1,18 @@
 """ELASPIC.
+
+.. autosummary::
+   :toctree:
+
+   __main__
+   cli
+   conf
+   database
+   exc
+   model
+   pipeline
+   predictor
+   sequence
+   tools
 """
 # flake8: noqa
 from .sequence import Sequence

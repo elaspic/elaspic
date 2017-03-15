@@ -14,26 +14,27 @@
 
 import os
 import sys
-from sphinx.ext import autodoc
+# from sphinx.ext import autodoc
+
 
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
 
-class SimpleDocumenter(autodoc.ClassDocumenter):
-    """ Need this class to include column descriptions from the `sql_db` file in the docs.
-    """
-    objtype = "simple"
-
-    # do not indent the content
-    content_indent = ""
-
-    # do not add a header to the docstring
-    def add_directive_header(self, sig):
-        pass
-
-
+# class SimpleDocumenter(autodoc.ClassDocumenter):
+#     """ Need this class to include column descriptions from the `sql_db` file in the docs.
+#     """
+#     objtype = "simple"
+#
+#     # do not indent the content
+#     content_indent = ""
+#
+#     # do not add a header to the docstring
+#     def add_directive_header(self, sig):
+#         pass
+#
+#
 def setup(app):
-    app.add_autodocumenter(SimpleDocumenter)
+    app.add_stylesheet('css/custom.css')
 
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -51,10 +52,10 @@ needs_sphinx = '1.3'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
     'sphinx.ext.autosummary',
     'sphinx.ext.intersphinx',
-    'sphinx.ext.napoleon',
     'sphinx.ext.todo',
     # 'sphinx.ext.linkcode',
     'sphinx.ext.mathjax',
@@ -140,7 +141,9 @@ pygments_style = 'sphinx'
 # keep_warnings = False
 
 autodoc_mock_imports = [
-    'sphinx.paramlinks',
+    'numpy', 'scipy', 'matplotlib', 'modeller', 'Bio', 'Bio.PDB', 'Bio.Seq', 'sqlalchemy',
+    'sqlalchemy.ext',
+    'sphinx.paramlinks', 'modeller.automodel', 'modeller.dope_loopmodel',
 ]
 
 
@@ -171,12 +174,12 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-# html_logo = None
+html_logo = '_static/img/logo.png'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-# html_favicon = None
+html_favicon = '_static/img/favicon.ico'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -235,7 +238,6 @@ html_static_path = ['_static']
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'ELASPICdoc'
-
 
 # -- Options for LaTeX output ---------------------------------------------
 _PREAMBLE = r"""
@@ -388,6 +390,21 @@ epub_exclude_files = ['search.html']
 
 # If false, no index is generated.
 # epub_use_index = True
+
+numpydoc_show_class_members = False  # this screws around autosummary
+autodoc_docstring_signature = False
+autodoc_member_order = 'bysource'
+autoclass_content = 'both'
+# autodoc_default_flags = ['members', 'undoc-members']
+imported_members = False
+
+autosummary_generate = True
+
+# napoleon_google_docstring = False
+# napoleon_numpy_docstring = True
+# # napoleon_include_init_with_doc = True
+# napoleon_use_param = False
+
 
 intersphinx_mapping = {
     'http://docs.python.org/': None,

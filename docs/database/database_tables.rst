@@ -3,7 +3,7 @@
 Protein
 ~~~~~~~
 
-.. autosimple:: elaspic.database.Protein
+.. autoclass:: elaspic.database.Protein
    :noindex:
 
 
@@ -12,7 +12,7 @@ Protein
 Domain model
 ~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database.DomainModel
+.. autoclass:: elaspic.database.DomainModel
    :noindex:
 
 
@@ -21,7 +21,7 @@ Domain model
 Domain mutation
 ~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database.DomainMutation
+.. autoclass:: elaspic.database.DomainMutation
    :noindex:
 
 
@@ -30,7 +30,7 @@ Domain mutation
 Interface model
 ~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database.InterfaceModel
+.. autoclass:: elaspic.database.InterfaceModel
    :noindex:
 
 
@@ -39,5 +39,5 @@ Interface model
 Interface mutation
 ~~~~~~~~~~~~~~~~~~
 
-.. autosimple:: elaspic.database.InterfaceMutation
+.. autoclass:: elaspic.database.InterfaceMutation
    :noindex:

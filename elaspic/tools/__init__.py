@@ -1,3 +1,18 @@
+"""Tools.
+
+.. autosummary::
+    :toctree:
+
+    conservation
+    electrostatics
+    foldx
+    modeller
+    msms
+    physicochemical
+    provean
+    stride
+    tcoffee
+"""
 # flake8: noqa
 from .conservation import Conservation
 from .foldx import FoldXMutator, FoldXAnalyzer
