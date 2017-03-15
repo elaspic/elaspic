@@ -29,3 +29,9 @@ elaspic/data/*.pickle
 /public
 docs/modules/_*
 
+# Temporary
+tests/tmp
+
+# Documentation
+/public
+docs/modules/_*
