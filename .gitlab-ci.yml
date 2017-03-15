@@ -1,0 +1,69 @@
+image: condaforge/linux-anvil:latest
+
+stages:
+  - build
+  - test
+  - deploy
+
+build:
+  stage: build
+  script:
+    # Build conda packages
+    - conda config --append channels bioconda
+    - conda config --append channels kimlab
+    - conda config --append channels ostrokach
+    - cd $CI_PROJECT_DIR/devtools/conda-recipe
+    - conda build .
+    # Save built packages as artifacts
+    - mkdir $CI_PROJECT_DIR/conda-bld
+    - cp -r /opt/conda/conda-bld/{linux-64,noarch} $CI_PROJECT_DIR/conda-bld
+  artifacts:
+    paths:
+    - conda-bld
+
+.install: &install_conda_package
+  before_script:
+    - conda config --append channels bioconda
+    - conda config --append channels kimlab
+    - conda config --append channels ostrokach
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install 'requests<2.12'
+    - conda install -yq --use-local $CI_PROJECT_NAME
+
+documentation:
+  <<: *install_conda_package
+  stage: deploy
+  script:
+    - pip install -q sphinx sphinx_rtd_theme recommonmark
+    - sphinx-build docs public
+  artifacts:
+    paths:
+    - public
+
+anaconda:
+  <<: *install_conda_package
+  stage: deploy
+  script:
+    - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE --force
+  only:
+    - master
+
+anaconda-dev:
+  <<: *install_conda_package
+  stage: deploy
+  script:
+    - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE -t dev --no-progress --force
+  except:
+    - master
+
+# Tests
+
+.test_template: &test_job
+  <<: *install_conda_package
+  stage: test
+
+tools:
+  <<: *test_job
+  script:
+    - py.test tests/test_tools/

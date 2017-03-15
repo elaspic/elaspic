@@ -16,7 +16,7 @@ In order to use the ELASPIC :ref:`database pipeline`, in addition to the steps a
    :maxdepth: 2
    :hidden:
 
-   installation_guide/install_python_and_elaspic
-   installation_guide/download_data
-   installation_guide/config_file
-   installation_guide/import_precalculated
+   install_python_and_elaspic
+   download_data
+   config_file
+   import_precalculated

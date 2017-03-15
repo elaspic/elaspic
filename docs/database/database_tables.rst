@@ -40,6 +40,7 @@ provean
 
 .. _uniprot_domain:
 
+<<<<<<< HEAD
 uniprot_domain
 ~~~~~~~~~~~~~~
 

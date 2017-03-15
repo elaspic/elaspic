@@ -31,4 +31,7 @@ docs/introduction/elaspic_flowchart_local.pptx
 
 # Temporary
 tests/tmp
-TODO
+
+# Documentation
+/public
+docs/modules/_*
