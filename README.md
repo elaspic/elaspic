@@ -1,5 +1,7 @@
 # ELASPIC
 
+[![Join the chat at https://gitter.im/elaspic/Lobby](https://badges.gitter.im/elaspic/Lobby.svg)](https://gitter.im/elaspic/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 [![anaconda](https://anaconda.org/kimlab/elaspic/badges/version.svg?style=flat-square)](https://anaconda.org/kimlab/elaspic)
 [![docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square&?version=latest)](http://elaspic.readthedocs.io)
 [![travis](https://img.shields.io/travis/kimlaborg/elaspic.svg?style=flat-square)](https://travis-ci.org/kimlaborg/elaspic)
