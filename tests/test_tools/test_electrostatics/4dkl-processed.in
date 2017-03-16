@@ -1,0 +1,27 @@
+read
+    mol pqr 4dkl-processed.pqr
+end
+elec 
+    mg-auto
+    dime 129 257 193
+    cglen 86.5759 174.7889 123.4404
+    fglen 70.9270 122.8170 92.6120
+    cgcent mol 1
+    fgcent mol 1
+    mol 1
+    lpbe
+    bcfl sdh
+    pdie 2.0000
+    sdie 78.5400
+    srfm smol
+    chgm spl2
+    sdens 10.00
+    srad 1.40
+    swin 0.30
+    temp 298.15
+    calcenergy total
+    calcforce no
+    write pot dx 4dkl-processed.pqr
+end
+print elecEnergy 1 end
+quit

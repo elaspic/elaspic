@@ -5,15 +5,30 @@ stages:
   - test
   - deploy
 
-build:
-  stage: build
-  script:
-    # Build conda packages
+# === Variables ===
+
+.py35: &py35
+  PYTHON_VERSION: "3.5"
+
+.py36: &py36
+  PYTHON_VERSION: "3.6"
+
+# === Build ===
+
+.conda_configure: &conda_configure
+  before_script:
+    # Conda configure
     - conda config --append channels bioconda
     - conda config --append channels kimlab
     - conda config --append channels ostrokach
+
+.build: &build
+  stage: build
+  <<: *conda_configure
+  script:
+    # Build conda packages
     - cd $CI_PROJECT_DIR/devtools/conda-recipe
-    - conda build .
+    - conda build --python $PYTHON_VERSION .
     # Save built packages as artifacts
     - mkdir $CI_PROJECT_DIR/conda-bld
     - cp -r /opt/conda/conda-bld/{linux-64,noarch} $CI_PROJECT_DIR/conda-bld
@@ -21,19 +36,51 @@ build:
     paths:
     - conda-bld
 
-.install: &install_conda_package
+build-py35:
+  <<: *build
+  variables:
+    <<: [*py35]
+
+build-py36:
+  <<: *build
+  variables:
+    <<: [*py36]
+
+# === Test ===
+
+.conda_install: &conda_install
   before_script:
+    # Conda configure
     - conda config --append channels bioconda
     - conda config --append channels kimlab
     - conda config --append channels ostrokach
+    # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
-    - conda install 'requests<2.12'
-    - conda install -yq --use-local $CI_PROJECT_NAME
+    - conda install -yq 'requests<2.12'
+    - conda install -yq --use-local "python=$PYTHON_VERSION" $CI_PROJECT_NAME
 
-documentation:
-  <<: *install_conda_package
-  stage: deploy
+.test: &test
+  stage: test
+  <<: *conda_install
+  script:
+    - pip install -yq flake8 pytest pytest-cov
+    - flake8
+    - py.test
+
+test-py35:
+  <<: *test
+  dependencies:
+    - build-py35
+
+test-py36:
+  <<: *test
+  dependencies:
+    - build-py36
+
+test-docs:
+  stage: test
+  <<: *conda_install
   script:
     - pip install -q sphinx sphinx_rtd_theme recommonmark
     - sphinx-build docs public
@@ -41,29 +88,19 @@ documentation:
     paths:
     - public
 
-anaconda:
-  <<: *install_conda_package
+# === Deploy ===
+
+.deploy: &deploy
   stage: deploy
   script:
     - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE --force
-  only:
-    - master
 
-anaconda-dev:
-  <<: *install_conda_package
-  stage: deploy
-  script:
-    - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE -t dev --no-progress --force
-  except:
-    - master
+deploy-py35:
+  <<: *deploy
+  dependencies:
+    - build-py35
 
-# Tests
-
-.test_template: &test_job
-  <<: *install_conda_package
-  stage: test
-
-tools:
-  <<: *test_job
-  script:
-    - py.test tests/test_tools/
+deploy-py36:
+  <<: *deploy
+  dependencies:
+    - build-py36
