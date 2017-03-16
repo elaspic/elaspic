@@ -72,15 +72,23 @@ test-py35:
   <<: *test
   dependencies:
     - build-py35
+  variables:
+    <<: [*py35]
 
 test-py36:
   <<: *test
   dependencies:
     - build-py36
+  variables:
+    <<: [*py36]
 
 test-docs:
   stage: test
   <<: *conda_install
+  dependencies:
+    - build-py36
+  variables:
+    <<: [*py36]
   script:
     - pip install -q sphinx sphinx_rtd_theme recommonmark
     - sphinx-build docs public
