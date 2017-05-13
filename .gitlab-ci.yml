@@ -7,6 +7,9 @@ stages:
 
 # === Variables ===
 
+variables:
+  PACKAGE_VERSION: 0.2.0
+
 .py35: &py35
   PYTHON_VERSION: "3.5"
 
@@ -19,8 +22,19 @@ stages:
   before_script:
     # Conda configure
     - conda config --append channels bioconda
-    - conda config --append channels kimlab
-    - conda config --append channels ostrokach
+    - conda config --append channels ostrokach-forge
+    - case "${PACKAGE_VERSION}" in
+      *dev*)
+        conda config --append channels kimlab/label/dev;
+        conda config --append channels kimlab;
+        conda config --append channels ostrokach/label/dev;
+        conda config --append channels ostrokach;
+      ;;
+      *)
+        conda config --append channels kimlab;
+        conda config --append channels ostrokach;
+      ;;
+      esac
 
 .build: &build
   stage: build
@@ -48,50 +62,57 @@ build-py36:
 
 # === Test ===
 
-.conda_install: &conda_install
-  before_script:
-    # Conda configure
-    - conda config --append channels bioconda
-    - conda config --append channels kimlab
-    - conda config --append channels ostrokach
+.test: &test
+  stage: test
+  script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
-    - conda install -yq 'requests<2.12'
-    - conda install -yq --use-local "python=$PYTHON_VERSION" $CI_PROJECT_NAME
-
-.test: &test
-  stage: test
-  <<: *conda_install
-  script:
-    - pip install -q flake8 pytest pytest-cov
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" $CI_PROJECT_NAME >/dev/null
+    # Test
+    - pip install -q flake8 pytest pytest-cov codecov hypothesis
     - flake8
     - py.test
+    - codecov -t $CODECOV_TOKEN
 
 test-py35:
-  <<: *test
+  <<: [*conda_configure, *test]
   dependencies:
     - build-py35
   variables:
     <<: [*py35]
 
 test-py36:
-  <<: *test
+  <<: [*conda_configure, *test]
   dependencies:
     - build-py36
   variables:
     <<: [*py36]
 
-test-docs:
+# === Pages ===
+
+.docs: &docs
   stage: test
-  <<: *conda_install
+  script:
+    # Conda install
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" $CI_PROJECT_NAME >/dev/null
+    # Build docs
+    - conda install -yq nbconvert ipython ipykernel pandoc
+    - pip install -q sphinx sphinx_rtd_theme recommonmark nbsphinx
+    - sphinx-build docs public
+  only:
+    - master
+  except:
+    - triggers
+
+pages:
+  <<: [*conda_configure, *docs]
   dependencies:
     - build-py36
   variables:
     <<: [*py36]
-  script:
-    - pip install -q sphinx sphinx_rtd_theme recommonmark
-    - sphinx-build docs public
   artifacts:
     paths:
     - public
@@ -101,7 +122,19 @@ test-docs:
 .deploy: &deploy
   stage: deploy
   script:
-    - anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u $CI_PROJECT_NAMESPACE --force
+    # Conda configure
+    - case "${PACKAGE_VERSION}" in
+      *dev*)
+        anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u ${CI_PROJECT_NAMESPACE} --label dev --force
+      ;;
+      *)
+        anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u ${CI_PROJECT_NAMESPACE}
+      ;;
+      esac
+  only:
+    - master
+  except:
+    - triggers
 
 deploy-py35:
   <<: *deploy
