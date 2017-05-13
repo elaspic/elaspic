@@ -94,12 +94,14 @@ test-py36:
 .docs: &docs
   stage: test
   script:
+    # Conda install
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" $CI_PROJECT_NAME >/dev/null
+    # Build docs
+    - conda install -yq nbconvert ipython ipykernel pandoc
     - pip install -q sphinx sphinx_rtd_theme recommonmark nbsphinx
     - sphinx-build docs public
-  only:
-    - master
-  except:
-    - triggers
 
 pages:
   <<: [*conda_configure, *docs]
@@ -107,6 +109,19 @@ pages:
     - build-py36
   variables:
     <<: [*py36]
+  except:
+    - master
+
+pages:
+  <<: [*conda_configure, *docs]
+  dependencies:
+    - build-py36
+  variables:
+    <<: [*py36]
+  only:
+    - master
+  except:
+    - triggers
   artifacts:
     paths:
     - public
