@@ -103,7 +103,7 @@ test-py36:
     - pip install -q sphinx sphinx_rtd_theme recommonmark nbsphinx
     - sphinx-build docs public
 
-pages-test:
+test-pages:
   <<: [*conda_configure, *docs]
   dependencies:
     - build-py36
