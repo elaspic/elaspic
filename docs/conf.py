@@ -141,7 +141,7 @@ pygments_style = 'sphinx'
 
 autodoc_mock_imports = [
     'numpy', 'scipy', 'matplotlib', 'modeller', 'Bio', 'Bio.PDB', 'Bio.Seq', 'sqlalchemy',
-    'sphinx.paramlinks', 'modeller.automodel', 'modeller.dope_loopmodel',
+    'sqlalchemy.ext', 'sphinx.paramlinks', 'modeller.automodel', 'modeller.dope_loopmodel',
 ]
 
 
