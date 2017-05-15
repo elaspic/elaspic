@@ -12,6 +12,7 @@ build:
 
 requirements:
   build:
+    - perl  # for modeller installation
     # Basic python
     - python
     - pyyaml
@@ -25,12 +26,13 @@ requirements:
     - scikit-learn
     - biopython
     - libfaketime
-    - modeller
+    - modeller >=9.16
     # Database access
     - sqlalchemy
     # - mysqlclient  # can use PyMYSQL instead...
     # Kimlab
-    - kmtools
+    - kmtools ==0.0.13
+    - icu  # required by lxml in kmtools < 0.0.18
   run:
     # Basic python
     - python
@@ -45,12 +47,13 @@ requirements:
     - scikit-learn
     - biopython
     - libfaketime
-    - modeller
+    - modeller >=9.16
     # Database access
     - sqlalchemy
     # - mysqlclient  # can use PyMYSQL instead...
     # Kimlab
-    - kmtools
+    - kmtools ==0.0.13
+    - icu  # required by lxml in kmtools < 0.0.18
     # Binary files
     - p7zip
     - blast
