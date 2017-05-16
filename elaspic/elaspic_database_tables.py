@@ -804,6 +804,7 @@ class UniprotDomainMutation(Base):
     mut_date_modified = sa.Column(
         sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
         nullable=False)
+    elaspic_version = sa.Column(sa.String(SHORT))
 
     # Relationships
     model = sa.orm.relationship(
@@ -1220,6 +1221,8 @@ class UniprotDomainPairMutation(Base):
     ddg = sa.Column(sa.Float, index=False)
     mut_date_modified = sa.Column(sa.DateTime, default=datetime.datetime.utcnow,
                                   onupdate=datetime.datetime.utcnow, nullable=False)
+    elaspic_version = sa.Column(sa.String(SHORT))
+
     # Relationships
     model = sa.orm.relationship(
         UniprotDomainPairModel, uselist=False, cascade='expunge', lazy='joined',
