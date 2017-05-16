@@ -289,6 +289,8 @@ class DomainMutation(Base):
 
     ddG = sa.Column('ddg', sa.Float)
 
+    elaspic_version = sa.Column(sa.String(SHORT))
+
     def getdomain(self, chain=1):
         return self.model
 
@@ -599,6 +601,7 @@ class InterfaceMutation(Base):
     provean_score = sa.Column(sa.Float)
 
     ddG = sa.Column('ddg', sa.Float)
+    elaspic_version = sa.Column(sa.String(SHORT))
 
     def getdomain(self, chain):
         return self.model.getdomain(chain)
