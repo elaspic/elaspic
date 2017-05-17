@@ -76,6 +76,7 @@ build-py36:
     - flake8
     - py.test
     - codecov -t $CODECOV_TOKEN
+  coverage: /^TOTAL.*(\d+\%)/
 
 test-py35:
   <<: [*conda_configure, *test]
