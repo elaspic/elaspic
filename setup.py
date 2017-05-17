@@ -34,7 +34,7 @@ class TrainPredictors(Command):
 
 setup(
     name='elaspic',
-    version='0.1.40',
+    version='0.1.41',
     description=(
         "Ensemble Learning Approach for Stability Prediction of "
         "Interface and Core mutations (ELASPIC)."),
