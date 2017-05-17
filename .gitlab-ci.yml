@@ -76,8 +76,11 @@ build-py36:
     - flake8
     - py.test
     - codecov -t $CODECOV_TOKEN
-    - conda env export -f $CI_PROJECT_DIR/conda-bld/environment-py${PYTHON_VERSION/./}.yml
+    - conda env export -f $CI_PROJECT_DIR/environment-py${PYTHON_VERSION/./}.yml
   coverage: /^TOTAL.*(\d+\%)/
+  artifacts:
+    paths:
+    - environment-py${PYTHON_VERSION/./}.yml
 
 test-py35:
   <<: [*conda_configure, *test]
@@ -124,6 +127,7 @@ pages:
     <<: [*py36]
   only:
     - master
+    - tags
   except:
     - triggers
   artifacts:
@@ -145,16 +149,6 @@ anaconda:
       esac
   only:
     - master
+    - tags
   except:
     - triggers
-
-# Tests
-
-.test_template: &test_job
-  <<: *install_conda_package
-  stage: test
-
-tools:
-  <<: *test_job
-  script:
-    - py.test tests/test_tools/
