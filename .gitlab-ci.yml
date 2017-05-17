@@ -76,6 +76,7 @@ build-py36:
     - flake8
     - py.test
     - codecov -t $CODECOV_TOKEN
+    - conda env export -f $CI_PROJECT_DIR/conda-bld/environment-py${PYTHON_VERSION/./}.yml
   coverage: /^TOTAL.*(\d+\%)/
 
 test-py35:
