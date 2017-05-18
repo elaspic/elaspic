@@ -9,6 +9,9 @@ stages:
 
 variables:
   PACKAGE_VERSION: 0.2.0
+  SRC_DIR: "${CI_PROJECT_DIR}"
+  SCRIPTS_DIR: "${CI_PROJECT_DIR}/devtools/travis-ci"
+  TEST_DIR: "${CI_PROJECT_DIR}/_tests"
 
 .py35: &py35
   PYTHON_VERSION: "3.5"
@@ -104,6 +107,8 @@ test-standalone:
     <<: [*py36]
   <<: [*conda_configure]
   script:
+    # Install yum packages
+    - yup update -y -q && yum install -y -q perl rsync.x86_64 wget.x86_64
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
