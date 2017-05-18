@@ -9,6 +9,11 @@ stages:
 
 variables:
   PACKAGE_VERSION: 0.2.0
+  SRC_DIR: "${CI_PROJECT_DIR}"
+  SCRIPTS_DIR: "${CI_PROJECT_DIR}/devtools/travis-ci"
+  TEST_DIR: "${CI_PROJECT_DIR}/_tests"
+  DB_BASEDIR: "/opt/conda/envs/elaspic"
+  DB_DATADIR: "${TEST_DIR}/db"
 
 .py35: &py35
   PYTHON_VERSION: "3.5"
@@ -89,6 +94,67 @@ test-py36:
     - build-py36
   variables:
     <<: [*py36]
+
+test-standalone:
+  stage: test
+  dependencies:
+    - build-py36
+  variables:
+    <<: [*py36]
+  <<: [*conda_configure]
+  script:
+    # Install yum packages
+    - yum update -y -q && yum install -y -q perl rsync.x86_64 wget.x86_64
+    # Conda install
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    # Run tests
+    - ./devtools/travis-ci/configure_tests.sh
+    - ./devtools/travis-ci/test_standalone_pipeline_1.sh
+
+test-database-1:
+  stage: test
+  dependencies:
+    - build-py36
+  variables:
+    <<: [*py36]
+  <<: [*conda_configure]
+  script:
+    # Conda install
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    # Start MySQL
+    - rm -rf ${DB_DATADIR}
+    - mkdir -p ${DB_BASEDIR} ${DB_DATADIR}
+    - mysqld --initialize --basedir=${DB_BASEDIR} --datadir=${DB_DATADIR}
+    - mysqld --secure-file-priv=/ --user=root --basedir=${DB_BASEDIR} --datadir=${DB_DATADIR}
+      --socket=${DB_BASEDIR}/mysql.sock --port=9333 --default_storage_engine=InnoDB
+      --init-file=${TEST_DIR}/mysql-init.sql &
+    # Run tests
+    - ./devtools/travis-ci/configure_tests.sh
+    - ./devtools/travis-ci/configure_database.sh
+    - ./devtools/travis-ci/test_database_pipeline_1.sh
+    # Cleanup
+    - kill %1  # stop mysqld
+
+test-database-2:
+  stage: test
+  dependencies:
+    - build-py36
+  variables:
+    <<: [*py36]
+  <<: [*conda_configure]
+  script:
+    # Conda install
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    # Run tests
+    - ./devtools/travis-ci/configure_tests.sh
+    - ./devtools/travis-ci/configure_database.sh
+    - ./devtools/travis-ci/test_database_pipeline_2.sh
 
 # === Pages ===
 
