@@ -57,7 +57,7 @@ requirements:
     # Binary files
     - p7zip
     - blast
-    - stride
+    - stride ==1.6.4
     - pops
     - msms
     - t_coffee
