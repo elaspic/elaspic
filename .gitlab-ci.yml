@@ -35,6 +35,7 @@ variables:
         conda config --append channels ostrokach;
       ;;
       esac
+    - conda config --append channels https://anaconda.org/t/$ANACONDA_TOKEN/ostrokach
 
 .build: &build
   stage: build
@@ -93,6 +94,56 @@ test-py36:
     - build-py36
   variables:
     <<: [*py36]
+
+test-standalone:
+  stage: test
+  dependencies:
+    - build-py36
+  variables:
+    <<: [*py36]
+  <<: [*conda_configure]
+  script:
+    # Conda install
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    # Run tests
+    - ./devtools/travis-ci/configure_tests.sh
+    - ./devtools/travis-ci/test_standalone_pipeline_1.sh
+
+test-database-1:
+  stage: test
+  dependencies:
+    - build-py36
+  variables:
+    <<: [*py36]
+  <<: [*conda_configure]
+  script:  script:
+    # Conda install
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    # Run tests
+    - ./devtools/travis-ci/configure_tests.sh
+    - ./devtools/travis-ci/configure_database.sh
+    - ./devtools/travis-ci/test_database_pipeline_1.sh
+
+test-database-2:
+  stage: test
+  dependencies:
+    - build-py36
+  variables:
+    <<: [*py36]
+  <<: [*conda_configure]
+  script:
+    # Conda install
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    # Run tests
+    - ./devtools/travis-ci/configure_tests.sh
+    - ./devtools/travis-ci/configure_database.sh
+    - ./devtools/travis-ci/test_database_pipeline_2.sh
 
 # === Pages ===
 
