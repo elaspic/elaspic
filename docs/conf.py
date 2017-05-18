@@ -76,6 +76,7 @@ def linkcode_resolve(domain, info):
     )
     return url
 
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 

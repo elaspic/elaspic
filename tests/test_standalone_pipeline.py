@@ -4,13 +4,15 @@
 
     - Test that the standalone pipeline folder is relocatable.
 """
+import logging
 import os
 import os.path as op
-import logging
 import shutil
+
 import pytest
-from elaspic import conf
+
 import helper_fns
+from elaspic import conf
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +49,11 @@ pdb_mutatations = {
         ]
     },
     # test_2; this one has three symetric chains
-    '1THJ': {
+    '1THJ': [
         # Chain B interacts with A & C
         # All of these mutations should had one core and two interface predictions
         # Mutation type 1
-        'B': [
+        ('B', [
             'P36A',
             'E37A',
             'P54A',
@@ -62,9 +64,9 @@ pdb_mutatations = {
             'P152A',
             'R153A',
             'G170A',
-        ],
+        ]),
         # Mutation type 2
-        'B': [
+        ('B', [
             'P37A',
             'E38A',
             'P55A',
@@ -75,9 +77,9 @@ pdb_mutatations = {
             'P153A',
             'R154A',
             'G171A',
-        ],
+        ]),
         # Mutation type 3
-        '2': [
+        ('2', [
             'P37A',
             'E38A',
             'P55A',
@@ -88,11 +90,11 @@ pdb_mutatations = {
             'P153A',
             'R154A',
             'G171A',
-        ],
-    },
+        ]),
+    ],
     # this one has two chains and DNA in it...
-    '3OS0': {
-        'A': [
+    '3OS0': [
+        ('A', [
             'K36A',  # surface, no interface
             'V58A',  # core
             'V89A',  # core
@@ -100,46 +102,46 @@ pdb_mutatations = {
             'Q250A',  # interface with B_S175
             'L251A',  # interface with B_S175
             'N275A',  # interface with B_I178
-        ],
-        'B': [
+        ]),
+        ('B', [
             'S175A',  # interface with A_P247, A_Q250, A_L251
             'I178A',  # interface with A_N275
-        ]
-    },
+        ])
+    ],
 }
 
 
 sequence_mutations = {
     ('2FOY', 'P23280'): {
         #  Mutation type 1
-        'A': [
+        ('A', [
             'Q15A',
             'N24A',
-        ],
+        ]),
         #  Mutation type 2
-        'A': [
+        ('A', [
             'H34A',
             'G43A',
-        ],
+        ]),
         #  Mutation type 3
-        '1': [
+        ('1', [
             'H34A',
             'G43A',
-        ],
+        ]),
     },
     ('2Z5Y', 'Q5NU32'): {
         # Mutation type 1 / 2
-        'A': [
+        ('A', [
             'H12A',
             'M13A',
-        ],
+        ]),
         #  Mutation type 3
-        '1': [
+        ('1', [
             'H12A',
             'M13A',
             'K30A',
             'L31A',
-        ]
+        ])
     },
 }
 

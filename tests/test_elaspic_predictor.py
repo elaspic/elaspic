@@ -1,8 +1,9 @@
 import os.path as op
-import pandas as pd
-import elaspic, elaspic.elaspic_predictor
-import pytest
 
+import pandas as pd
+
+import elaspic
+import elaspic.elaspic_predictor
 
 _foldx_core_features = [
     # FoldX
