@@ -2,6 +2,7 @@ import datetime
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative as sa_ext_declarative
 
+import elaspic
 from . import conf
 
 
@@ -804,7 +805,7 @@ class UniprotDomainMutation(Base):
     mut_date_modified = sa.Column(
         sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
         nullable=False)
-    elaspic_version = sa.Column(sa.String(SHORT))
+    elaspic_version = sa.Column(sa.String(SHORT), default=elaspic.__version__)
 
     # Relationships
     model = sa.orm.relationship(
@@ -1221,7 +1222,7 @@ class UniprotDomainPairMutation(Base):
     ddg = sa.Column(sa.Float, index=False)
     mut_date_modified = sa.Column(sa.DateTime, default=datetime.datetime.utcnow,
                                   onupdate=datetime.datetime.utcnow, nullable=False)
-    elaspic_version = sa.Column(sa.String(SHORT))
+    elaspic_version = sa.Column(sa.String(SHORT), default=elaspic.__version__)
 
     # Relationships
     model = sa.orm.relationship(
