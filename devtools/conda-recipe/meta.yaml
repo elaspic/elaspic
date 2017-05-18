@@ -29,7 +29,7 @@ requirements:
     - modeller >=9.16
     # Database access
     - sqlalchemy
-    # - mysqlclient  # can use PyMYSQL instead...
+    - mysqlclient
     # Kimlab
     - kmtools ==0.0.13
     - icu  # required by lxml in kmtools < 0.0.18
@@ -50,7 +50,7 @@ requirements:
     - modeller >=9.16
     # Database access
     - sqlalchemy
-    # - mysqlclient  # can use PyMYSQL instead...
+    - mysqlclient
     # Kimlab
     - kmtools ==0.0.13
     - icu  # required by lxml in kmtools < 0.0.18
