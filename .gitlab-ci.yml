@@ -21,8 +21,9 @@ variables:
 .conda_configure: &conda_configure
   before_script:
     # Conda configure
+    - conda config --add channels ostrokach-forge
     - conda config --append channels bioconda
-    - conda config --append channels ostrokach-forge
+    - conda config --append channels salilab
     - case "${PACKAGE_VERSION}" in
       *dev*)
         conda config --append channels kimlab/label/dev;
@@ -35,7 +36,7 @@ variables:
         conda config --append channels ostrokach;
       ;;
       esac
-    - conda config --append channels https://anaconda.org/t/$ANACONDA_TOKEN/ostrokach
+    - conda config --append channels https://conda.anaconda.org/t/$ANACONDA_TOKEN/ostrokach
 
 .build: &build
   stage: build
