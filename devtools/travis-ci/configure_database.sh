@@ -12,11 +12,11 @@ fi
 # Download external files
 wget --no-verbose -P "${TEST_DIR}" \
     -r --no-parent --reject "index.html*" --cut-dirs=4  \
-    http://elaspic.kimlab.org/static/download/current_release/Homo_sapiens_test/
+    http://elaspic.kimlab.org/static/download/2015-11-01/Homo_sapiens_test/
 wget --no-verbose -P "${TEST_DIR}/elaspic.kimlab.org" \
-    http://elaspic.kimlab.org/static/download/current_release/domain.tsv.gz
+    http://elaspic.kimlab.org/static/download/2015-11-01/domain.tsv.gz
 wget --no-verbose -P "${TEST_DIR}/elaspic.kimlab.org" \
-    http://elaspic.kimlab.org/static/download/current_release/domain_contact.tsv.gz
+    http://elaspic.kimlab.org/static/download/2015-11-01/domain_contact.tsv.gz
 
 ls "${TEST_DIR}"
 
