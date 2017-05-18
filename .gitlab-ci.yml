@@ -119,7 +119,7 @@ test-database-1:
   variables:
     <<: [*py36]
   <<: [*conda_configure]
-  script:  script:
+  script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
