@@ -1,11 +1,12 @@
 import os
 import os.path as op
-import logging
 import shutil
+
 import pytest
 from collections import OrderedDict
 from elaspic import conf
 import helper_fns
+from elaspic import conf
 
 logger = logging.getLogger(__name__)
 

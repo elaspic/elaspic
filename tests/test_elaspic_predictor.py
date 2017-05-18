@@ -4,6 +4,8 @@ import pandas as pd
 import elaspic
 import elaspic.elaspic_predictor
 
+import elaspic
+import elaspic.elaspic_predictor
 
 _foldx_core_features = [
     # FoldX
