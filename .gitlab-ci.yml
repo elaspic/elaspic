@@ -13,7 +13,7 @@ variables:
   SCRIPTS_DIR: "${CI_PROJECT_DIR}/_tests"
   TEST_DIR: "${CI_PROJECT_DIR}/_tests"
   DB_BASEDIR: "/opt/conda/"
-  DB_DATADIR: "${TEST_DIR}/db"
+  DB_DATADIR: "${CI_PROJECT_DIR}/_tests"
 
 # === Build ===
 
