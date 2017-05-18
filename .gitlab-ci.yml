@@ -68,7 +68,8 @@ build-py36:
   stage: test
   script:
     # Conda install
-    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/ ||
+      echo -e "\033[31mNo packages to copy!\e[0m"
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Test
