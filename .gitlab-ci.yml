@@ -10,9 +10,9 @@ stages:
 variables:
   PACKAGE_VERSION: 0.2.0
   SRC_DIR: "${CI_PROJECT_DIR}"
-  SCRIPTS_DIR: "${CI_PROJECT_DIR}/devtools/travis-ci"
+  SCRIPTS_DIR: "${CI_PROJECT_DIR}/_tests"
   TEST_DIR: "${CI_PROJECT_DIR}/_tests"
-  DB_BASEDIR: "/opt/conda/envs/elaspic"
+  DB_BASEDIR: "/opt/conda/"
   DB_DATADIR: "${TEST_DIR}/db"
 
 .py35: &py35
@@ -110,8 +110,8 @@ test-standalone:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Run tests
-    - ./devtools/travis-ci/configure_tests.sh
-    - ./devtools/travis-ci/test_standalone_pipeline_1.sh
+    - ./tests/configure_tests.sh
+    - ./tests/test_standalone_pipeline.sh
 
 test-database-1:
   stage: test
@@ -133,9 +133,9 @@ test-database-1:
       --socket=${DB_BASEDIR}/mysql.sock --port=9333 --default_storage_engine=InnoDB
       --init-file=${TEST_DIR}/mysql-init.sql &
     # Run tests
-    - ./devtools/travis-ci/configure_tests.sh
-    - ./devtools/travis-ci/configure_database.sh
-    - ./devtools/travis-ci/test_database_pipeline_1.sh
+    - ./tests/configure_tests.sh
+    - ./tests/configure_database.sh
+    - ./tests/test_database_pipeline.sh
     # Cleanup
     - kill %1  # stop mysqld
 
