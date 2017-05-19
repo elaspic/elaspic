@@ -57,7 +57,7 @@ build-py36:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Test
-    - pip install -q flake8 pytest pytest-cov codecov hypothesis
+    - pip install -q pytest pytest-cov pytest-logging flake8 codecov hypothesis
     - flake8
     - py.test
     - codecov -t $CODECOV_TOKEN
@@ -78,6 +78,7 @@ build-py36:
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Run tests
     # - ./tests/configure_tests.sh
+    - pip install -q pytest pytest-cov pytest-logging
     - py.test ./tests/test_standalone_pipeline.py
 
 .test-database: &test-database
@@ -94,6 +95,7 @@ build-py36:
     - ./devtools/gitlab-ci/fill-database.sh
     # Run tests
     # - ./tests/test_database_pipeline.sh
+    - pip install -q pytest pytest-cov pytest-logging
     - py.test ./tests/test_database_pipeline.py
     # Stop MySQL
     - ./devtools/gitlab-ci/stop-database.sh
