@@ -4,20 +4,24 @@ before sourcing this file, and should have an `engine` attribute.
 
 The `logger` should also be preconfigured if you want to see something.
 """
-import os.path as op
 import logging
+import os.path as op
 import shutil
+
 import pandas as pd
 
-from elaspic import (
-    conf, helper, elaspic_sequence, structure_tools, standalone_pipeline
-)
+from elaspic import (conf, elaspic_sequence, helper, standalone_pipeline,
+                     structure_tools)
 
 logger = logging.getLogger(__name__)
 
 
 # %% Functions
 PDB_URL = 'http://www.rcsb.org/pdb/files/{}.pdb'
+
+
+def underline(text):
+    return '\033[04m' + text + '\033[0m'
 
 
 def get_structure(pdb_id, input_folder, output_folder, use_remote=True):
@@ -106,7 +110,7 @@ def run_sequence_mutation_pipeline(pdb_id_sequence, sequence_mutations):
 def validate_mutation_1(uniprot_id, mutation):
     """Select Provean; assert length > 0
     """
-    logger.debug(helper.underline('Validating that we have provean...'))
+    logger.debug(underline('Validating that we have provean...'))
     sql_query = """\
 select 1
 from {db_schema}.provean
@@ -117,7 +121,7 @@ provean_supset_filename is not null;
     df1 = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
     logger.debug(df1.head(2))
     #
-    logger.debug(helper.underline('And that we have at least one domain with a template...'))
+    logger.debug(underline('And that we have at least one domain with a template...'))
     sql_query = """\
 select 1
 from {db_schema}.uniprot_domain
@@ -134,7 +138,7 @@ where uniprot_id = '{uniprot_id}';
 def validate_mutation_2(uniprot_id, mutation):
     """Select domains without models; assert length 0
     """
-    logger.debug(helper.underline('Validating that we have domain models...'))
+    logger.debug(underline('Validating that we have domain models...'))
     sql_query = """\
 select *
 from {db_schema}.uniprot_domain
@@ -146,14 +150,14 @@ model_errors is null;
 """.format(uniprot_id=uniprot_id, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
     df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
-    assert len(df) == 0
+    assert len(df) == 0, df
 
 
 @helper.retry_database
 def validate_mutation_3(uniprot_id, mutation):
     """Select interfaces without models; assert length 0
     """
-    logger.debug(helper.underline('Validating that we have domain pair models...'))
+    logger.debug(underline('Validating that we have domain pair models...'))
     sql_query = """\
 select *
 from {db_schema}.uniprot_domain_pair udp
@@ -166,14 +170,14 @@ model_filename is null and model_errors is null;
 """.format(uniprot_id=uniprot_id, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
     df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
-    assert len(df) == 0
+    assert len(df) == 0, df
 
 
 @helper.retry_database
 def validate_mutation_4(uniprot_id, mutation):
     """Select domains where we don't have mutatons even though we should; assert length 0
     """
-    logger.debug(helper.underline('Validating that we have domain mutations...'))
+    logger.debug(underline('Validating that we have domain mutations...'))
     sql_query = """\
 SELECT *
 FROM {db_schema}.uniprot_domain ud
@@ -189,14 +193,14 @@ model_filename_wt is null;
 """.format(uniprot_id=uniprot_id, mutation=mutation, db_schema=conf.CONFIGS['db_schema'])
     logger.debug(sql_query)
     df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
-    assert len(df) == 0
+    assert len(df) == 0, df
 
 
 @helper.retry_database
 def validate_mutation_5(uniprot_id, mutation):
     """Select domain pairs where we don't have mutatons even though we should; assert length 0
     """
-    logger.debug(helper.underline('Validating that we have domain pair mutations...'))
+    logger.debug(underline('Validating that we have domain pair mutations...'))
     sql_query = """\
 SELECT *
 FROM {db_schema}.uniprot_domain_pair udp
