@@ -19,7 +19,7 @@ variables:
 .conda_configure: &conda_configure
   before_script:
     # Install yum packages
-    - yum update -y -q && yum install -y -q perl rsync.x86_64 wget.x86_64
+    - yum update -y -q && yum install -y -q rsync.x86_64 wget.x86_64
     # Conda configure
     - ./devtools/gitlab-ci/configure-conda.sh
 

@@ -12,7 +12,6 @@ build:
 
 requirements:
   build:
-    - perl  # for modeller installation
     # Basic python
     - python
     - pyyaml
