@@ -56,8 +56,7 @@ build-py36:
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/ ||
       echo -e "\033[31mNo packages to copy!\e[0m"
     - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
-    - elaspic train
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Test
     - pip install -q flake8 pytest pytest-cov codecov hypothesis
     - flake8
