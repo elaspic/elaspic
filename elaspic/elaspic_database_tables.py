@@ -37,6 +37,8 @@ db_specific_properties = {
 
 if conf.CONFIGS.get('db_type') is None:
     print('The `DB_TYPE` has not been set. Do not know what database is being used!')
+    print('Assuming SQLite')
+    conf.CONFIGS['db_type'] = 'sqlite'
 
 
 def get_table_args(table_name, index_columns=[], db_specific_params=[]):

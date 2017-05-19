@@ -67,8 +67,8 @@ def get_sequence(uniprot_id, input_dir, output_dir, use_remote=True):
 # %% Local tests
 def run_pdb_mutation_pipeline(pdb_id, pdb_mutatations):
     pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['unique_temp_dir'])
-    for chain_id in pdb_mutatations[pdb_id]:
-        for mutation in pdb_mutatations[pdb_id][chain_id]:
+    for chain_id, mutations in pdb_mutatations:
+        for mutation in mutations:
             mutation_pdb = '{}_{}'.format(chain_id, mutation)
             lp = standalone_pipeline.StandalonePipeline(
                 pdb_file, mutations=mutation_pdb)
@@ -90,8 +90,8 @@ def run_sequence_mutation_pipeline(pdb_id_sequence, sequence_mutations):
     sequence_file = (
         elaspic_sequence.download_uniport_sequence(sequence_id, conf.CONFIGS['unique_temp_dir'])
     )
-    for chain_pos in sequence_mutations[pdb_id_sequence]:
-        for mutation in sequence_mutations[pdb_id_sequence][chain_pos]:
+    for chain_pos, mutations in sequence_mutations:
+        for mutation in mutations:
             mutation_sequence = '{}_{}'.format(chain_pos, mutation)
             lp = standalone_pipeline.StandalonePipeline(
                 pdb_file, sequence_file, mutations=mutation_sequence)

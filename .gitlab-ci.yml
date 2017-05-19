@@ -12,8 +12,6 @@ variables:
   SRC_DIR: "${CI_PROJECT_DIR}"
   SCRIPTS_DIR: "${CI_PROJECT_DIR}/_tests"
   TEST_DIR: "${CI_PROJECT_DIR}/_tests"
-  DB_BASEDIR: "/opt/conda/"
-  DB_DATADIR: "${CI_PROJECT_DIR}/_tests"
 
 # === Build ===
 
@@ -22,22 +20,7 @@ variables:
     # Install yum packages
     - yum update -y -q && yum install -y -q perl rsync.x86_64 wget.x86_64
     # Conda configure
-    - conda config --add channels ostrokach-forge
-    - conda config --append channels bioconda
-    - conda config --append channels salilab
-    - case "${PACKAGE_VERSION}" in
-      *dev*)
-        conda config --append channels kimlab/label/dev;
-        conda config --append channels kimlab;
-        conda config --append channels ostrokach/label/dev;
-        conda config --append channels ostrokach;
-      ;;
-      *)
-        conda config --append channels kimlab;
-        conda config --append channels ostrokach;
-      ;;
-      esac
-    - conda config --append channels https://conda.anaconda.org/t/$ANACONDA_TOKEN/ostrokach
+    - ./devtools/gitlab-ci/configure-conda.sh
 
 .build: &build
   stage: build
@@ -102,18 +85,14 @@ build-py36:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Start MySQL
-    - rm -rf ${DB_DATADIR}
-    - mkdir -p ${DB_BASEDIR} ${DB_DATADIR}
-    - mysqld --initialize --basedir=${DB_BASEDIR} --datadir=${DB_DATADIR}
-    - mysqld --secure-file-priv=/ --user=root --basedir=${DB_BASEDIR} --datadir=${DB_DATADIR}
-      --socket=${DB_BASEDIR}/mysql.sock --port=9333 --default_storage_engine=InnoDB
-      --init-file=${TEST_DIR}/mysql-init.sql &
+    - MYSQL_INIT_SCRIPT="$CI_PROJECT_DIR/devtools/gitlab-ci/mysql-init.sql"
+      $CI_PROJECT_DIR/devtools/gitlab-ci/start-database.sh
     # Run tests
     - ./tests/configure_tests.sh
     - ./tests/configure_database.sh
     - ./tests/test_database_pipeline.sh
-    # Cleanup
-    - kill %1  # stop mysqld
+    # Stop MySQL
+    - ps aux | grep mysql | grep -v grep | awk '{print $2}' | xargs -i{} kill {}
 
 test-unittest-py35:
   <<: [*conda_configure, *test-unittest]

@@ -3,30 +3,29 @@
 set -ev
 
 # Sanity checks
-if [[ -z ${SCRIPTS_DIR} ||
-      -z ${TEST_DIR} ]] ; then
+if [[ -z ${CI_PROJECT_DIR} ]] ; then
     echo 'Required environment variables have not been set!'
     exit 1
 fi
 
 # Download external files
-wget --no-verbose -P "${TEST_DIR}" \
+wget --no-verbose -P "${CI_PROJECT_DIR}/tmp" \
     -r --no-parent --reject "index.html*" --cut-dirs=4  \
     http://elaspic.kimlab.org/static/download/2015-11-01/Homo_sapiens_test/
-wget --no-verbose -P "${TEST_DIR}/elaspic.kimlab.org" \
+wget --no-verbose -P "${CI_PROJECT_DIR}/tmp/elaspic.kimlab.org" \
     http://elaspic.kimlab.org/static/download/2015-11-01/domain.tsv.gz
-wget --no-verbose -P "${TEST_DIR}/elaspic.kimlab.org" \
+wget --no-verbose -P "${CI_PROJECT_DIR}/tmp/elaspic.kimlab.org" \
     http://elaspic.kimlab.org/static/download/2015-11-01/domain_contact.tsv.gz
 
-ls "${TEST_DIR}"
+ls "${CI_PROJECT_DIR}"
 
 
 # Configure the database
-mysql -u root -e 'drop database if exists travis_test';
-mysql -u root -e 'create database travis_test';
-mysql -u root -e "grant all on travis_test.* to 'travis'@'127.0.0.1'";
-mysql -u root -e "set global max_allowed_packet=67108864;"
-mysql -u root travis_test <<'EOF'
+mysql -u root -Prootpass -e 'drop database if exists elaspic_test';
+mysql -u root -Prootpass -e 'create database elaspic_test';
+mysql -u root -Prootpass -e "grant all on elaspic_test.* to 'root'@'127.0.0.1'";
+mysql -u root -Prootpass -e "set global max_allowed_packet=67108864;"
+mysql -u root -Prootpass elaspic_test <<'EOF'
 DROP FUNCTION IF EXISTS MUTATION_IN_DOMAIN;
 DELIMITER $$
 CREATE FUNCTION `MUTATION_IN_DOMAIN`(
@@ -54,7 +53,7 @@ END$$
 DELIMITER ;
 EOF
 
-mysql -u root travis_test <<'EOF'
+mysql -u root -Prootpass elaspic_test <<'EOF'
 DROP FUNCTION IF EXISTS  MUTATION_IN_INTERFACE;
 DELIMITER $$
 CREATE FUNCTION `MUTATION_IN_INTERFACE`(
@@ -75,12 +74,12 @@ EOF
 
 
 # Load precalculated data to the database
-elaspic database -c "${SCRIPTS_DIR}/database_pipeline.ini" create
-elaspic database -c "${SCRIPTS_DIR}/database_pipeline.ini" load_data \
-    --data_folder "${TEST_DIR}/elaspic.kimlab.org"
+elaspic database -c "${CI_PROJECT_DIR}/test_database_pipeline.ini" create
+elaspic database -c "${CI_PROJECT_DIR}/test_database_pipeline.ini" load_data \
+    --data_folder "${CI_PROJECT_DIR}/tmp/elaspic.kimlab.org"
 
 
 # Remove some rows from the database, so that we have something to calculate in our tests
-mysql -u root travis_test -e "DELETE FROM provean LIMIT 20";
-mysql -u root travis_test -e "DELETE FROM uniprot_domain_model LIMIT 20";
-mysql -u root travis_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 20";
+mysql -u root -Prootpass elaspic_test -e "DELETE FROM provean LIMIT 20";
+mysql -u root -Prootpass elaspic_test -e "DELETE FROM uniprot_domain_model LIMIT 20";
+mysql -u root -Prootpass elaspic_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 20";

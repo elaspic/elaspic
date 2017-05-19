@@ -8,11 +8,10 @@ dist
 __pycache__
 *.egg-info
 
-# Hidden
-.*
-!.gitignore
-!.travis.yml
-!.gitlab-ci.yml
+# Hidden files
+.cache
+.coverage
+.index.json
 
 # Logs and backups
 *.log
