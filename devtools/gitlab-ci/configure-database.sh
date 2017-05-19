@@ -2,6 +2,9 @@
 
 set -ev
 
+DB_BASEDIR="$(conda env list | grep '*' | awk '{print $3}')"
+DB_SOCKET="${DB_BASEDIR}/mysql.sock"
+
 # Sanity checks
 if [[ -z ${CI_PROJECT_DIR} ]] ; then
     echo 'Required environment variables have not been set!'
@@ -21,11 +24,11 @@ ls "${CI_PROJECT_DIR}"
 
 
 # Configure the database
-mysql -u root -Prootpass -e 'drop database if exists elaspic_test';
-mysql -u root -Prootpass -e 'create database elaspic_test';
-mysql -u root -Prootpass -e "grant all on elaspic_test.* to 'root'@'127.0.0.1'";
-mysql -u root -Prootpass -e "set global max_allowed_packet=67108864;"
-mysql -u root -Prootpass elaspic_test <<'EOF'
+mysql -u root -prootpass -e 'drop database if exists elaspic_test';
+mysql -u root -prootpass -e 'create database elaspic_test';
+mysql -u root -prootpass -e "grant all on elaspic_test.* to 'root'@'localhost'";
+mysql -u root -prootpass -e "set global max_allowed_packet=67108864;"
+mysql -u root -prootpass elaspic_test <<'EOF'
 DROP FUNCTION IF EXISTS MUTATION_IN_DOMAIN;
 DELIMITER $$
 CREATE FUNCTION `MUTATION_IN_DOMAIN`(
@@ -53,7 +56,7 @@ END$$
 DELIMITER ;
 EOF
 
-mysql -u root -Prootpass elaspic_test <<'EOF'
+mysql -u root -prootpass elaspic_test <<'EOF'
 DROP FUNCTION IF EXISTS  MUTATION_IN_INTERFACE;
 DELIMITER $$
 CREATE FUNCTION `MUTATION_IN_INTERFACE`(
@@ -74,12 +77,12 @@ EOF
 
 
 # Load precalculated data to the database
-elaspic database -c "${CI_PROJECT_DIR}/test_database_pipeline.ini" create
-elaspic database -c "${CI_PROJECT_DIR}/test_database_pipeline.ini" load_data \
+elaspic database -c "${CI_PROJECT_DIR}/tests/test_database_pipeline.ini" create
+elaspic database -c "${CI_PROJECT_DIR}/tests/test_database_pipeline.ini" load_data \
     --data_folder "${CI_PROJECT_DIR}/tmp/elaspic.kimlab.org"
 
 
 # Remove some rows from the database, so that we have something to calculate in our tests
-mysql -u root -Prootpass elaspic_test -e "DELETE FROM provean LIMIT 20";
-mysql -u root -Prootpass elaspic_test -e "DELETE FROM uniprot_domain_model LIMIT 20";
-mysql -u root -Prootpass elaspic_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 20";
+mysql -u root -prootpass elaspic_test -e "DELETE FROM provean LIMIT 20";
+mysql -u root -prootpass elaspic_test -e "DELETE FROM uniprot_domain_model LIMIT 20";
+mysql -u root -prootpass elaspic_test -e "DELETE FROM uniprot_domain_pair_model LIMIT 20";
