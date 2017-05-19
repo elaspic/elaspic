@@ -91,7 +91,8 @@ test-standalone:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
+    - elaspic train
     # Run tests
     # - ./tests/configure_tests.sh
     - ./tests/test_standalone_pipeline.py
