@@ -98,7 +98,8 @@ class DatabasePipeline(Pipeline):
             logger.info('Warning! Uniprot {} has no pfam domains!'.format(self.uniprot_id))
 
         # Find provean
-        if self.run_type in ['1', '5', '6', 'sequence'] and self.uniprot_domains:
+        if ((self.run_type in ['1', '5', '6'] or 'sequence' in self.run_type) and
+                self.uniprot_domains):
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Computing provean...")
             self.get_sequence(self.uniprot_domains[0])
@@ -113,7 +114,7 @@ class DatabasePipeline(Pipeline):
             logger.info("Found {} interfaces.".format(len(self.uniprot_domain_pairs)))
 
         # Make models
-        if self.run_type in ['2', '4', '5', '6', 'model']:
+        if self.run_type in ['2', '4', '5', '6'] or 'model' in self.run_type:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Building models...")
             for d in self.uniprot_domains + self.uniprot_domain_pairs:
@@ -124,7 +125,7 @@ class DatabasePipeline(Pipeline):
             )
 
         # Analyse mutations
-        if self.run_type in ['3', '4', '5', 'mutation'] and self.mutations:
+        if self.run_type in ['3', '4', '5'] or 'mutation' in self.run_type:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Analyzing mutations...")
             for d in self.uniprot_domains + self.uniprot_domain_pairs:
