@@ -8,6 +8,7 @@ import shutil
 from contextlib import contextmanager
 import pandas as pd
 import sqlalchemy as sa
+import shlex
 from kmtools.db_tools import parse_connection_string, make_connection_string
 from . import helper, errors, conf
 from .elaspic_database_tables import (
@@ -235,10 +236,7 @@ class MyDatabase(object):
     def _run_create_table_system_command(self, system_command):
         if conf.CONFIGS['debug']:
             logger.debug(system_command)
-        result, error_message, return_code = helper.subprocess_check_output(system_command)
-        if return_code != 0:
-            logger.error(result)
-            raise Exception(error_message)
+        subprocess.run(shlex.split(system_command), check=True)
 
     def copy_table_to_db(self, table_name, table_folder):
         """Copy data from a ``.tsv`` file to a table in the database."""
