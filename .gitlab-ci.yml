@@ -75,8 +75,8 @@ build-py36:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Run tests
-    - ./tests/configure_tests.sh
-    - ./tests/test_standalone_pipeline.sh
+    # - ./tests/configure_tests.sh
+    - ./tests/test_standalone_pipeline.py
 
 .test-database: &test-database
   stage: test
@@ -90,7 +90,8 @@ build-py36:
     - ./devtools/gitlab-ci/configure-database.sh
     # Run tests
     - ./tests/configure_database.sh
-    - ./tests/test_database_pipeline.sh
+    # - ./tests/test_database_pipeline.sh
+    - ./tests/test_database_pipeline.py
     # Stop MySQL
     - ./devtools/gitlab-ci/stop-database.sh
 
@@ -116,21 +117,21 @@ test-standalone:
     PYTHON_VERSION: "3.6"
     TEST_NUMBER: "1"
 
-test-database-1:
+test-database:
   <<: [*conda_configure, *test-database]
   dependencies:
     - build-py36
   variables:
     PYTHON_VERSION: "3.6"
-    TEST_NUMBER: "1"
+    # TEST_NUMBER: "1"
 
-test-database-2:
-  <<: [*conda_configure, *test-database]
-  dependencies:
-    - build-py36
-  variables:
-    PYTHON_VERSION: "3.6"
-    TEST_NUMBER: "2"
+# test-database-2:
+#   <<: [*conda_configure, *test-database]
+#   dependencies:
+#     - build-py36
+#   variables:
+#     PYTHON_VERSION: "3.6"
+#     TEST_NUMBER: "2"
 
 # === Pages ===
 
