@@ -56,6 +56,9 @@ build-py36:
       echo -e "\033[31mNo packages to copy!\e[0m"
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    - which elaspic
+    - python -c "import elaspic; print(elaspic.__path__)"
+    - elaspic train  # not sure why have to do this again?!!
     # Test
     - pip install -q pytest pytest-cov pytest-logging flake8 codecov hypothesis
     - flake8
