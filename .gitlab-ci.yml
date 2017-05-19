@@ -91,8 +91,8 @@ test-standalone:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Run tests
-    - ./tests/configure_tests.sh
-    - ./tests/test_standalone_pipeline.sh
+    # - ./tests/configure_tests.sh
+    - ./tests/test_standalone_pipeline.py
 
 test-database-1:
   stage: test
@@ -111,7 +111,8 @@ test-database-1:
     - ./devtools/gitlab-ci/configure-database.sh
     # Run tests
     - ./tests/configure_database.sh
-    - ./tests/test_database_pipeline.sh
+    # - ./tests/test_database_pipeline.sh
+    - ./tests/test_database_pipeline.py
     # Stop MySQL
     - ./devtools/gitlab-ci/stop-database.sh
 
@@ -137,30 +138,21 @@ test-standalone:
     PYTHON_VERSION: "3.6"
     TEST_NUMBER: "1"
 
-test-database-1:
+test-database:
   <<: [*conda_configure, *test-database]
   dependencies:
     - build-py36
   variables:
     PYTHON_VERSION: "3.6"
-    TEST_NUMBER: "1"
+    # TEST_NUMBER: "1"
 
-test-database-2:
-  stage: test
-  dependencies:
-    - build-py36
-  variables:
-    <<: [*py36]
-  <<: [*conda_configure]
-  script:
-    # Conda install
-    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
-    - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
-    # Run tests
-    - ./devtools/travis-ci/configure_tests.sh
-    - ./devtools/travis-ci/configure_database.sh
-    - ./devtools/travis-ci/test_database_pipeline_2.sh
+# test-database-2:
+#   <<: [*conda_configure, *test-database]
+#   dependencies:
+#     - build-py36
+#   variables:
+#     PYTHON_VERSION: "3.6"
+#     TEST_NUMBER: "2"
 
 # === Pages ===
 
