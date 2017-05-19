@@ -87,9 +87,8 @@ build-py36:
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Start MySQL
     - ./devtools/gitlab-ci/start-database.sh
-    - ./devtools/gitlab-ci/configure-database.sh
+    - ./devtools/gitlab-ci/fill-database.sh
     # Run tests
-    - ./tests/configure_database.sh
     # - ./tests/test_database_pipeline.sh
     - ./tests/test_database_pipeline.py
     # Stop MySQL
