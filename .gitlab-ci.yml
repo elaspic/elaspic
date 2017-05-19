@@ -91,7 +91,7 @@ test-standalone:
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Run tests
     # - ./tests/configure_tests.sh
-    - ./tests/test_standalone_pipeline.py
+    - py.test ./tests/test_standalone_pipeline.py
 
 test-database-1:
   stage: test
@@ -107,7 +107,7 @@ test-database-1:
     - ./devtools/gitlab-ci/fill-database.sh
     # Run tests
     # - ./tests/test_database_pipeline.sh
-    - ./tests/test_database_pipeline.py
+    - py.test ./tests/test_database_pipeline.py
     # Stop MySQL
     - ./devtools/gitlab-ci/stop-database.sh
 
