@@ -12,6 +12,7 @@ variables:
   SRC_DIR: "${CI_PROJECT_DIR}"
   SCRIPTS_DIR: "${CI_PROJECT_DIR}/_tests"
   TEST_DIR: "${CI_PROJECT_DIR}/_tests"
+  MYSQL_INIT_SCRIPT: "$CI_PROJECT_DIR/devtools/gitlab-ci/mysql-init.sql"
 
 # === Build ===
 
@@ -29,7 +30,7 @@ variables:
     - cd $CI_PROJECT_DIR/devtools/conda-recipe
     - conda build --python $PYTHON_VERSION .
     # Save built packages as artifacts
-    - mkdir $CI_PROJECT_DIR/conda-bld
+    - mkdir /opt/conda/conda-bld
     - cp -r /opt/conda/conda-bld/{linux-64,noarch} $CI_PROJECT_DIR/conda-bld
   artifacts:
     paths:
@@ -85,14 +86,13 @@ build-py36:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Start MySQL
-    - MYSQL_INIT_SCRIPT="$CI_PROJECT_DIR/devtools/gitlab-ci/mysql-init.sql"
-      $CI_PROJECT_DIR/devtools/gitlab-ci/start-database.sh
+    - ./devtools/gitlab-ci/start-database.sh
+    - ./devtools/gitlab-ci/configure-database.sh
     # Run tests
-    - ./tests/configure_tests.sh
     - ./tests/configure_database.sh
     - ./tests/test_database_pipeline.sh
     # Stop MySQL
-    - ps aux | grep mysql | grep -v grep | awk '{print $2}' | xargs -i{} kill {}
+    - ./devtools/gitlab-ci/stop-database.sh
 
 test-unittest-py35:
   <<: [*conda_configure, *test-unittest]
