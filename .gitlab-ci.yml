@@ -30,7 +30,7 @@ variables:
     - cd $CI_PROJECT_DIR/devtools/conda-recipe
     - conda build --python $PYTHON_VERSION .
     # Save built packages as artifacts
-    - mkdir /opt/conda/conda-bld
+    - mkdir -p /opt/conda/conda-bld
     - cp -r /opt/conda/conda-bld/{linux-64,noarch} $CI_PROJECT_DIR/conda-bld
   artifacts:
     paths:
