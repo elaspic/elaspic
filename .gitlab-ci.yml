@@ -12,8 +12,6 @@ variables:
   SRC_DIR: "${CI_PROJECT_DIR}"
   SCRIPTS_DIR: "${CI_PROJECT_DIR}/_tests"
   TEST_DIR: "${CI_PROJECT_DIR}/_tests"
-  DB_BASEDIR: "/opt/conda/"
-  DB_DATADIR: "${CI_PROJECT_DIR}/_tests"
 
 .py35: &py35
   PYTHON_VERSION: "3.5"
@@ -26,20 +24,7 @@ variables:
 .conda_configure: &conda_configure
   before_script:
     # Conda configure
-    - conda config --append channels bioconda
-    - conda config --append channels ostrokach-forge
-    - case "${PACKAGE_VERSION}" in
-      *dev*)
-        conda config --append channels kimlab/label/dev;
-        conda config --append channels kimlab;
-        conda config --append channels ostrokach/label/dev;
-        conda config --append channels ostrokach;
-      ;;
-      *)
-        conda config --append channels kimlab;
-        conda config --append channels ostrokach;
-      ;;
-      esac
+    - ./devtools/gitlab-ci/configure-conda.sh
 
 .build: &build
   stage: build
@@ -127,18 +112,14 @@ test-database-1:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
     # Start MySQL
-    - rm -rf ${DB_DATADIR}
-    - mkdir -p ${DB_BASEDIR} ${DB_DATADIR}
-    - mysqld --initialize --basedir=${DB_BASEDIR} --datadir=${DB_DATADIR}
-    - mysqld --secure-file-priv=/ --user=root --basedir=${DB_BASEDIR} --datadir=${DB_DATADIR}
-      --socket=${DB_BASEDIR}/mysql.sock --port=9333 --default_storage_engine=InnoDB
-      --init-file=${TEST_DIR}/mysql-init.sql &
+    - MYSQL_INIT_SCRIPT="$CI_PROJECT_DIR/devtools/gitlab-ci/mysql-init.sql"
+      $CI_PROJECT_DIR/devtools/gitlab-ci/start-database.sh
     # Run tests
     - ./tests/configure_tests.sh
     - ./tests/configure_database.sh
     - ./tests/test_database_pipeline.sh
-    # Cleanup
-    - kill %1  # stop mysqld
+    # Stop MySQL
+    - ps aux | grep mysql | grep -v grep | awk '{print $2}' | xargs -i{} kill {}
 
 test-database-2:
   stage: test

@@ -9,13 +9,13 @@ logger = logging.getLogger(__name__)
 
 # Constants
 QUICK = False
-CONFIG_FILE = op.join(op.dirname(__file__), 'config_file_database.ini')
+CONFIG_FILE = op.join(op.dirname(__file__), 'test_database_pipeline.ini')
 
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
     CONFIG_FILE = pytest.config.getoption('--config-file') or CONFIG_FILE
 
-conf.read_configuration_file(CONFIG_FILE, unique_temp_dir=None)
+conf.read_configuration_file(CONFIG_FILE)
 assert conf.CONFIGS['db_type']
 
 logger.debug('Running quick: {}'.format(QUICK))
@@ -88,7 +88,7 @@ from {db_schema}.uniprot_domain ud
 join {db_schema}.uniprot_domain_template udt using (uniprot_domain_id)
 join {db_schema}.uniprot_domain_pair udp on (udp.uniprot_domain_id_1 = ud.uniprot_domain_id)
 join {db_schema}.uniprot_domain_pair_template udpt using (uniprot_domain_pair_id)
-join {db_schema_uniprot}.uniprot_sequence us using (uniprot_id)
+join {db_schema}.uniprot_sequence us using (uniprot_id)
 where uniprot_id not in
     (select uniprot_id from {db_schema}.provean)
 and uniprot_domain_id not in
@@ -98,9 +98,7 @@ and uniprot_domain_pair_id not in
 and CHAR_LENGTH(us.uniprot_sequence) < 1000
 and db = 'sp'
 limit 1000;
-""".format(
-    db_schema=conf.CONFIGS['db_schema'],
-    db_schema_uniprot=conf.CONFIGS['db_schema_uniprot'])
+""".format(db_schema=conf.CONFIGS['db_schema'])
 df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
 
 logger.debug("Everything is missing: {}".format(len(df)))
@@ -119,15 +117,13 @@ join {db_schema}.uniprot_domain_template using (uniprot_domain_id)
 join {db_schema}.uniprot_domain_model udm using (uniprot_domain_id)
 join {db_schema}.uniprot_domain_pair udp on (udp.uniprot_domain_id_1 = ud.uniprot_domain_id)
 join {db_schema}.uniprot_domain_pair_template using (uniprot_domain_pair_id)
-join {db_schema_uniprot}.uniprot_sequence us using (uniprot_id)
+join {db_schema}.uniprot_sequence us using (uniprot_id)
 where uniprot_domain_pair_id not in
     (select uniprot_domain_pair_id from {db_schema}.uniprot_domain_pair_model)
 and CHAR_LENGTH(us.uniprot_sequence) < 1000
 and db = 'sp'
 limit 1000;
-""".format(
-    db_schema=conf.CONFIGS['db_schema'],
-    db_schema_uniprot=conf.CONFIGS['db_schema_uniprot'])
+""".format(db_schema=conf.CONFIGS['db_schema'])
 df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
 
 logger.debug("Have provean and domain model but not interface model: {}".format(len(df)))
@@ -147,15 +143,13 @@ join {db_schema}.uniprot_domain_model using (uniprot_domain_id)
 join {db_schema}.uniprot_domain_pair udp on (udp.uniprot_domain_id_1 = ud.uniprot_domain_id)
 join {db_schema}.uniprot_domain_pair_template using (uniprot_domain_pair_id)
 join {db_schema}.uniprot_domain_pair_model udpm using (uniprot_domain_pair_id)
-join {db_schema_uniprot}.uniprot_sequence us using (uniprot_id)
+join {db_schema}.uniprot_sequence us using (uniprot_id)
 where CHAR_LENGTH(us.uniprot_sequence) < 1000
 and db = 'sp'
 and udpm.model_filename is not null
 and udpm.model_errors is null
 limit 1000;
-""".format(
-    db_schema=conf.CONFIGS['db_schema'],
-    db_schema_uniprot=conf.CONFIGS['db_schema_uniprot'])
+""".format(db_schema=conf.CONFIGS['db_schema'])
 df = pd.read_sql_query(sql_query, conf.CONFIGS['engine'])
 
 logger.debug("Have provean and all models: {}".format(len(df)))

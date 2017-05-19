@@ -10,6 +10,9 @@ from elaspic import conf
 
 logger = logging.getLogger(__name__)
 
+# Constants
+CONFIG_FILE = op.join(op.dirname(__file__), 'test_standalone_pipeline.ini')
+
 if hasattr(pytest, "config"):
     QUICK = pytest.config.getoption('--quick')
 else:
@@ -19,9 +22,9 @@ logger.info('Running quick: {}'.format(QUICK))
 
 
 # Source of good PDB stuctures: http://www.rcsb.org/pdb/101/motm_archive.do
-pdb_mutatations = OrderedDict([
+pdb_mutatations = [
     # This one was giving me trouble
-    ('1S1Q', OrderedDict([
+    ('1S1Q', [
         ('A', [
             'V43A',
             'F44A',
@@ -29,16 +32,16 @@ pdb_mutatations = OrderedDict([
             'D46A',
             'F88A',
         ]),
-    ])),
+    ]),
     # test_1; only one chain
-    ('3M7R', OrderedDict([
+    ('3M7R', [
         ('A', [
             'I271A',  # core
             'Y401A',  # core
         ])
-    ])),
+    ]),
     # test_2; this one has three symetric chains
-    ('1THJ', OrderedDict([
+    ('1THJ', [
         # Chain B interacts with A & C
         # All of these mutations should had one core and two interface predictions
         # Mutation type 1
@@ -80,9 +83,9 @@ pdb_mutatations = OrderedDict([
             'R154A',
             'G171A',
         ]),
-    ])),
+    ]),
     # this one has two chains and DNA in it...
-    ('3OS0', OrderedDict([
+    ('3OS0', [
         ('A', [
             'K36A',  # surface, no interface
             'V58A',  # core
@@ -96,12 +99,12 @@ pdb_mutatations = OrderedDict([
             'S175A',  # interface with A_P247, A_Q250, A_L251
             'I178A',  # interface with A_N275
         ])
-    ])),
-])
+    ])
+]
 
 
-sequence_mutations = OrderedDict([
-    (('2FOY', 'P23280'), OrderedDict([
+sequence_mutations = [
+    (('2FOY', 'P23280'), [
         #  Mutation type 1
         ('A', [
             'Q15A',
@@ -117,8 +120,8 @@ sequence_mutations = OrderedDict([
             'H34A',
             'G43A',
         ]),
-    ])),
-    (('2Z5Y', 'Q5NU32'), OrderedDict([
+    ]),
+    (('2Z5Y', 'Q5NU32'), [
         # Mutation type 1 / 2
         ('A', [
             'H12A',
@@ -131,46 +134,29 @@ sequence_mutations = OrderedDict([
             'K30A',
             'L31A',
         ])
-    ])),
-])
+    ]),
+]
 
 
 if QUICK:
-    # pdb_mutatations
-    for pdb_id in pdb_mutatations:
-        for chain_id in pdb_mutatations[pdb_id]:
-            mutations = pdb_mutatations[pdb_id][chain_id]
-            break
-        break
-    pdb_mutatations = {pdb_id: {chain_id: [mutations[0]]}}
-    # sequence_mutations
-    for key in sequence_mutations:
-        for chain_id in sequence_mutations[key]:
-            mutations = sequence_mutations[key][chain_id]
-            break
-        break
-    sequence_mutations = {key: {chain_id: [mutations[0]]}}
+    pdb_mutatations = [pdb_mutatations[0]]
+    sequence_mutations = [sequence_mutations[0]]
 
 
 # Fixtures
-@pytest.fixture(scope='session', params=list(pdb_mutatations.keys()))
-def pdb_id(request):
+@pytest.fixture(scope='session', params=pdb_mutatations)
+def pdb_id_mutations(request):
     return request.param
 
 
-@pytest.fixture(scope='session', params=list(sequence_mutations.keys()))
-def pdb_id_sequence(request):
+@pytest.fixture(scope='session', params=sequence_mutations)
+def model_id_mutations(request):
     return request.param
 
 
-def _get_unique_temp_dir(pdb_id):
-    return op.join(op.splitext(__file__)[0], pdb_id, '.elaspic')
-
-
-def test_pdb_mutation_pipeline(pdb_id):
-    """Canonical folder.
-    """
-    unique_temp_dir = _get_unique_temp_dir(pdb_id)
+def test_pdb_mutation_pipeline(pdb_id_mutations):
+    # Canonical folder
+    unique_temp_dir = op.join(op.splitext(__file__)[0], pdb_id_mutations[0], '.elaspic')
     os.makedirs(unique_temp_dir, exist_ok=True)
     conf.read_configuration_file(
         DEFAULT={
@@ -183,14 +169,14 @@ def test_pdb_mutation_pipeline(pdb_id):
         }
     )
     os.chdir(unique_temp_dir)
-    helper_fns.run_pdb_mutation_pipeline(pdb_id, pdb_mutatations)
+    helper_fns.run_pdb_mutation_pipeline(pdb_id_mutations[0], pdb_id_mutations[1])
 
 
-def test_pdb_mutation_pipeline_have_mutations(pdb_id):
-    """Make sure that we can copy folders with precalculated mutation(s).
-    """
-    unique_temp_dir_old = _get_unique_temp_dir(pdb_id)
-    unique_temp_dir = op.join(op.splitext(__file__)[0], pdb_id + '_have_mutations', '.elaspic')
+    # Precalculated sequence
+    logger.debug('\n\n' + '*' * 80 + 'Precalculated sequence\n')
+    working_dir = op.join(op.splitext(__file__)[0], pdb_id_mutations[0] + '_precalc_sequence')
+    unique_temp_dir = op.join(working_dir, '.elaspic')
+    os.makedirs(unique_temp_dir, exist_ok=True)
     try:
         shutil.copytree(
             op.join(unique_temp_dir_old),
@@ -206,19 +192,16 @@ def test_pdb_mutation_pipeline_have_mutations(pdb_id):
             }
         )
         os.chdir(unique_temp_dir)
-        helper_fns.run_pdb_mutation_pipeline(
-            pdb_id, pdb_mutatations, have_sequences=True, have_models=True, have_mutations=True)
+        helper_fns.run_pdb_mutation_pipeline(pdb_id_mutations[0], pdb_id_mutations[1])
     except:
         raise
     finally:
         shutil.rmtree(unique_temp_dir)
 
-
-def test_pdb_mutation_pipeline_have_models(pdb_id):
-    """Make sure that we can copy folders with precalculated homology model(s).
-    """
-    unique_temp_dir_old = _get_unique_temp_dir(pdb_id)
-    unique_temp_dir = op.join(op.splitext(__file__)[0], pdb_id + '_have_models', '.elaspic')
+    # Precalculated model
+    logger.debug('\n\n' + '*' * 80 + 'Precalculated model\n')
+    working_dir = op.join(op.splitext(__file__)[0], pdb_id_mutations[0] + '_precalc_model')
+    unique_temp_dir = op.join(working_dir, '.elaspic')
     os.makedirs(unique_temp_dir, exist_ok=True)
     try:
         shutil.copy2(
@@ -276,16 +259,16 @@ def test_pdb_mutation_pipeline_have_sequences(pdb_id):
             }
         )
         os.chdir(unique_temp_dir)
-        helper_fns.run_pdb_mutation_pipeline(
-            pdb_id, pdb_mutatations, have_sequences=True)
+        helper_fns.run_pdb_mutation_pipeline(pdb_id_mutations[1], pdb_mutatations)
     except:
         raise
     finally:
         shutil.rmtree(unique_temp_dir)
 
 
-def test_sequence_mutation_pipeline(pdb_id_sequence):
-    unique_temp_dir = op.join(op.splitext(__file__)[0], '.'.join(pdb_id_sequence), '.elaspic')
+def test_sequence_mutation_pipeline(model_id_mutations):
+    unique_temp_dir = op.join(
+        op.splitext(__file__)[0], '.'.join(model_id_mutations[0]), '.elaspic')
     os.makedirs(unique_temp_dir, exist_ok=True)
     conf.read_configuration_file(
         DEFAULT={
@@ -298,4 +281,4 @@ def test_sequence_mutation_pipeline(pdb_id_sequence):
         }
     )
     os.chdir(unique_temp_dir)
-    return helper_fns.run_sequence_mutation_pipeline(pdb_id_sequence, sequence_mutations,)
+    return helper_fns.run_sequence_mutation_pipeline(model_id_mutations[0], model_id_mutations[1])
