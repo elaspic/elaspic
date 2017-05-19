@@ -70,6 +70,8 @@ build-py36:
 
 .test-standalone: &test-standalone
   stage: test
+  tags:
+    - local
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
@@ -81,6 +83,8 @@ build-py36:
 
 .test-database: &test-database
   stage: test
+  tags:
+    - local
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
