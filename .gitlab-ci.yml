@@ -81,11 +81,8 @@ test-py36:
 
 test-standalone:
   stage: test
-  dependencies:
-    - build-py36
-  variables:
-    <<: [*py36]
-  <<: [*conda_configure]
+  tags:
+    - local
   script:
     # Install yum packages
     - yum update -y -q && yum install -y -q perl rsync.x86_64 wget.x86_64
@@ -99,11 +96,8 @@ test-standalone:
 
 test-database-1:
   stage: test
-  dependencies:
-    - build-py36
-  variables:
-    <<: [*py36]
-  <<: [*conda_configure]
+  tags:
+    - local
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
