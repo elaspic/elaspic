@@ -1,29 +1,13 @@
 import os.path as op
 import sys
 
-import numpy as np
 import pytest
 
-# Directories
-PROJECT_DIR = op.dirname(op.abspath(__file__))
-TESTS_DIR = op.join(PROJECT_DIR, 'tests')
-
-# Config files
-DEFAULT_LOCAL_CONFIG = op.join(TESTS_DIR, 'test_local_pipeline.ini')
-DEFAULT_DATABASE_CONFIG = op.join(TESTS_DIR, 'test_database_pipeline.ini')
-
-
 # Use the installed version of the package instead of the current directory
-sys.path.remove(PROJECT_DIR)
+sys.path.remove(op.dirname(op.abspath(__file__)))
 
 
-# Doctest
-@pytest.fixture(autouse=True)
-def add_np(doctest_namespace):
-    doctest_namespace['np'] = np
-
-
-# Pytest
+# PyTest
 def pytest_runtest_makereport(item, call):
     if "incremental" in item.keywords:
         if call.excinfo is not None:
