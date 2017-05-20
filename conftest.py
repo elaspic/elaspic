@@ -4,6 +4,7 @@ import sys
 import pytest
 
 # Use the installed version of the package instead of the current directory
+sys.path.remove('')
 sys.path.remove(op.dirname(op.abspath(__file__)))
 
 
