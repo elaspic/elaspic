@@ -1,4 +1,4 @@
-"""ELASPIC.
+__version__ = "0.1.42"
 
 .. autosummary::
    :toctree:

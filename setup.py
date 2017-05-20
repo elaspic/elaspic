@@ -42,10 +42,7 @@ class TrainPredictors(Command):
 
 setup(
     name='elaspic',
-    version='0.2.0',
-    author='kimlab',
-    author_email='alex.strokach@utoronto.ca',
-    url="https://github.com/kimlaborg/elaspic",
+    version='0.1.42',
     description=(
         "Ensemble Learning Approach for Stability Prediction of "
         "Interface and Core mutations (ELASPIC)."),

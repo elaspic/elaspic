@@ -1,6 +1,6 @@
 package:
   name: elaspic
-  version: 0.2.0
+  version: 0.1.42
 
 source:
   path: ../../
