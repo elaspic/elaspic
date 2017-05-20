@@ -4,7 +4,7 @@ _build
 dist
 __pycache__
 *.egg-info
-tests/tmp
+conda-bld
 
 # Hidden files
 .cache
