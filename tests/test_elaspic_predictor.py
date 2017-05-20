@@ -1,3 +1,4 @@
+import logging
 import os.path as op
 import pickle
 import pandas as pd
@@ -6,6 +7,10 @@ import elaspic.elaspic_predictor
 
 import elaspic
 import elaspic.elaspic_predictor
+
+logger = logging.getLogger(__name__)
+
+logger.info("Running elaspic from: %s", elaspic.__path__)
 
 _foldx_core_features = [
     # FoldX
