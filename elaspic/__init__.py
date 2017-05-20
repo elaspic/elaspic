@@ -1,4 +1,4 @@
-__version__ = "0.1.42.dev0"
+__version__ = "0.1.42"
 
 import os
 import os.path as op
