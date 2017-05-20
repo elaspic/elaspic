@@ -1,5 +1,6 @@
-import elaspic.elaspic_model
 import pytest
+
+import elaspic.elaspic_model
 
 
 @pytest.mark.parametrize("alignment, scores", [
