@@ -6,7 +6,10 @@ source:
   path: ../../
 
 build:
-  number: 0
+  number: 1
+  script:
+    - python setup.py train
+    - python setup.py install --single-version-externally-managed --record=record.txt
   entry_points:
     - elaspic = elaspic.__main__:main
 
