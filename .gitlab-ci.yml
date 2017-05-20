@@ -82,7 +82,7 @@ build-py36:
     # Run tests
     # - ./tests/configure_tests.sh
     - pip install -q pytest pytest-cov pytest-logging
-    - py.test ./tests/test_standalone_pipeline.py
+    - py.test --quick ./tests/test_standalone_pipeline.py
 
 .test-database: &test-database
   stage: test
@@ -99,7 +99,7 @@ build-py36:
     # Run tests
     # - ./tests/test_database_pipeline.sh
     - pip install -q pytest pytest-cov pytest-logging
-    - py.test ./tests/test_database_pipeline.py
+    - py.test --quick ./tests/test_database_pipeline.py
     # Stop MySQL
     - ./devtools/gitlab-ci/stop-database.sh
 
