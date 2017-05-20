@@ -95,7 +95,7 @@ test-standalone:
     # Run tests
     # - ./tests/configure_tests.sh
     - pip install -q pytest pytest-cov pytest-logging
-    - py.test ./tests/test_standalone_pipeline.py
+    - py.test --quick ./tests/test_standalone_pipeline.py
 
 test-database-1:
   stage: test
@@ -112,7 +112,7 @@ test-database-1:
     # Run tests
     # - ./tests/test_database_pipeline.sh
     - pip install -q pytest pytest-cov pytest-logging
-    - py.test ./tests/test_database_pipeline.py
+    - py.test --quick ./tests/test_database_pipeline.py
     # Stop MySQL
     - ./devtools/gitlab-ci/stop-database.sh
 
