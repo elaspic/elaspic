@@ -1,22 +1,13 @@
-import os
 import os.path as op
+import sys
+
 import pytest
 
-
-# %% Directories
-try:
-    TESTS_BASE_DIR = op.dirname(__file__)
-except NameError:
-    TESTS_BASE_DIR = os.getcwd()
-
-TESTS_DATA_DIR = op.join(TESTS_BASE_DIR, 'data')
-
-# Config files
-DEFAULT_LOCAL_CONFIG = op.join(TESTS_BASE_DIR, 'test_local_pipeline.ini')
-DEFAULT_DATABASE_CONFIG = op.join(TESTS_BASE_DIR, 'test_database_pipeline.ini')
+# Use the installed version of the package instead of the current directory
+sys.path.remove(op.dirname(op.abspath(__file__)))
 
 
-# %% Pytest
+# PyTest
 def pytest_runtest_makereport(item, call):
     if "incremental" in item.keywords:
         if call.excinfo is not None:
