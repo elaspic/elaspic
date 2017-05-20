@@ -56,11 +56,10 @@ build-py36:
       echo -e "\033[31mNo packages to copy!\e[0m"
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
-    # - rm -rf "${CI_PROJECT_NAME}"
     # Test
     - pip install -q pytest pytest-cov pytest-logging flake8 codecov hypothesis
     - flake8
-    - py.test -vvv
+    - py.test -vv
     - codecov -t $CODECOV_TOKEN
     - conda env export -f $CI_PROJECT_DIR/environment-py${PYTHON_VERSION/./}.yml
   coverage: /^TOTAL.*(\d+\%)/
