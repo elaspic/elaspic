@@ -101,7 +101,8 @@ class DatabasePipeline(elaspic.pipeline._Pipeline):
             return
 
         # Find provean
-        if 'sequence' in self.run_type:
+        if ((self.run_type in ['1', '5', '6'] or 'sequence' in self.run_type) and
+                self.uniprot_domains):
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Computing provean...")
             self.get_sequence(self.uniprot_domains[0])
@@ -116,7 +117,7 @@ class DatabasePipeline(elaspic.pipeline._Pipeline):
             logger.info("Found {} interfaces.".format(len(self.uniprot_domain_pairs)))
 
         # Make models
-        if 'model' in self.run_type:
+        if self.run_type in ['2', '4', '5', '6'] or 'model' in self.run_type:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Building models...")
             for d in self.uniprot_domains + self.uniprot_domain_pairs:
@@ -127,7 +128,7 @@ class DatabasePipeline(elaspic.pipeline._Pipeline):
             )
 
         # Analyse mutations
-        if 'mutation' in self.run_type and self.mutations:
+        if self.run_type in ['3', '4', '5'] or 'mutation' in self.run_type:
             logger.info('\n\n\n' + '*' * 110)
             logger.info("Analyzing mutations...")
             for d in self.uniprot_domains + self.uniprot_domain_pairs:
