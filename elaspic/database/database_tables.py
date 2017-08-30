@@ -7,6 +7,7 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
+import elaspic
 from .database_config import Base, get_binary_collation
 
 
@@ -289,7 +290,7 @@ class DomainMutation(Base):
 
     ddG = sa.Column('ddg', sa.Float)
 
-    elaspic_version = sa.Column(sa.String(SHORT))
+    elaspic_version = sa.Column(sa.String(SHORT), default=elaspic.__version__)
 
     def getdomain(self, chain=1):
         return self.model
@@ -601,7 +602,7 @@ class InterfaceMutation(Base):
     provean_score = sa.Column(sa.Float)
 
     ddG = sa.Column('ddg', sa.Float)
-    elaspic_version = sa.Column(sa.String(SHORT))
+    elaspic_version = sa.Column(sa.String(SHORT), default=elaspic.__version__)
 
     def getdomain(self, chain):
         return self.model.getdomain(chain)
