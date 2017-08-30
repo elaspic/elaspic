@@ -14,12 +14,6 @@ variables:
   TEST_DIR: "${CI_PROJECT_DIR}/_tests"
   MYSQL_INIT_SCRIPT: "$CI_PROJECT_DIR/devtools/gitlab-ci/mysql-init.sql"
 
-.py35: &py35
-  PYTHON_VERSION: "3.5"
-
-.py36: &py36
-  PYTHON_VERSION: "3.6"
-
 # === Build ===
 
 .conda_configure: &conda_configure
@@ -120,6 +114,36 @@ test-database-1:
     - ./tests/test_database_pipeline.sh
     # Stop MySQL
     - ./devtools/gitlab-ci/stop-database.sh
+
+test-unittest-py35:
+  <<: [*conda_configure, *test-unittest]
+  dependencies:
+    - build-py35
+  variables:
+    PYTHON_VERSION: "3.5"
+
+test-unittest-py36:
+  <<: [*conda_configure, *test-unittest]
+  dependencies:
+    - build-py36
+  variables:
+    PYTHON_VERSION: "3.6"
+
+test-standalone:
+  <<: [*conda_configure, *test-standalone]
+  dependencies:
+    - build-py36
+  variables:
+    PYTHON_VERSION: "3.6"
+    TEST_NUMBER: "1"
+
+test-database-1:
+  <<: [*conda_configure, *test-database]
+  dependencies:
+    - build-py36
+  variables:
+    PYTHON_VERSION: "3.6"
+    TEST_NUMBER: "1"
 
 test-database-2:
   stage: test
