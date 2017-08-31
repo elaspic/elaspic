@@ -46,7 +46,9 @@ build-py36:
   variables:
     PYTHON_VERSION: "3.6"
 
-# === Test ===
+###############################################################################
+# Test
+###############################################################################
 
 .test-unittest: &test-unittest
   stage: test
@@ -138,7 +140,9 @@ test-database:
 #     PYTHON_VERSION: "3.6"
 #     TEST_NUMBER: "2"
 
-# === Pages ===
+###############################################################################
+# Pages
+###############################################################################
 
 .docs: &docs
   stage: test
@@ -177,20 +181,14 @@ pages:
     paths:
     - public
 
-# === Deploy ===
+###############################################################################
+# Deploy
+###############################################################################
 
 .deploy: &deploy
   stage: deploy
   script:
-    # Conda configure
-    - case "${PACKAGE_VERSION}" in
-      *dev*)
-        anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u ${CI_PROJECT_NAMESPACE} --label dev --force
-      ;;
-      *)
-        anaconda -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 -u ${CI_PROJECT_NAMESPACE}
-      ;;
-      esac
+    - ./devtools/gitlab-ci/deploy.sh
   only:
     - master
     - tags
