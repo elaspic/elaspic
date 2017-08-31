@@ -1,9 +1,14 @@
-# ELASPIC
+# ELASPIC v2
 
 [![anaconda](https://anaconda.org/kimlab/elaspic/badges/version.svg?style=flat-square)](https://anaconda.org/kimlab/elaspic)
 [![docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square&?version=latest)](http://kimlaborg.github.io/elaspic)
 [![travis](https://img.shields.io/travis/kimlaborg/elaspic.svg?style=flat-square)](https://travis-ci.org/kimlaborg/elaspic)
 [![codecov](https://img.shields.io/codecov/c/github/kimlaborb/elaspic.svg?style=flat-square)](https://codecov.io/gh/kimlaborg/elaspic)
+
+
+## Note
+
+Development of ELASPIC v2 is continuing in the [ELAPSAM] repository.
 
 
 ## Introduction
@@ -13,11 +18,6 @@ Welcome to the ELASPIC code repository!
 Complete documentation is available on [ReadTheDocs](http://elaspic.readthedocs.io).
 
 For a small number of mutations, you can try running ELASPIC using our [webserver](http://elaspic.kimlab.org).
-
-
-## Development
-
-- Use the issue tracker to discuss changes.
 
 
 ## References
@@ -32,3 +32,7 @@ Berliner N, Teyra J, Çolak R, Garcia Lopez S, Kim PM (2014) *Combining Structur
 
 MIT
 
+
+<!-- links -->
+
+[elapsam]: https://gitlab.com/kimlab/elapsam
