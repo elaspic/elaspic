@@ -24,4 +24,3 @@ case "${PACKAGE_VERSION}" in
   ;;
   esac
 conda config --append channels https://conda.anaconda.org/t/$ANACONDA_TOKEN/ostrokach
-conda install -y -q requests==2.11
