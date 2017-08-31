@@ -8,6 +8,7 @@ if [[ -z ${PACKAGE_VERSION} || \
     exit -1
 fi
 
+# Add conda channels
 conda config --add channels ostrokach-forge
 conda config --append channels bioconda
 conda config --append channels salilab
@@ -24,3 +25,6 @@ case "${PACKAGE_VERSION}" in
   ;;
   esac
 conda config --append channels https://conda.anaconda.org/t/$ANACONDA_TOKEN/ostrokach
+
+# Update conda and conda-build
+conda update conda conda-build
