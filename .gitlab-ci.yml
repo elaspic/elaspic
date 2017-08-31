@@ -5,7 +5,9 @@ stages:
   - test
   - deploy
 
-# === Variables ===
+###############################################################################
+# Variables
+###############################################################################
 
 variables:
   PACKAGE_VERSION: 0.1.43.dev0
@@ -14,7 +16,9 @@ variables:
   TEST_DIR: "${CI_PROJECT_DIR}/_tests"
   MYSQL_INIT_SCRIPT: "$CI_PROJECT_DIR/devtools/gitlab-ci/mysql-init.sql"
 
-# === Build ===
+###############################################################################
+# Build
+###############################################################################
 
 .conda_configure: &conda_configure
   before_script:
@@ -30,7 +34,7 @@ variables:
     - cd $CI_PROJECT_DIR/devtools/conda-recipe
     - conda build --python $PYTHON_VERSION .
     # Save built packages as artifacts
-    - mkdir -p /opt/conda/conda-bld
+    - mkdir -p /opt/conda/conda-bld ./conda-bld
     - cp -r /opt/conda/conda-bld/{linux-64,noarch} $CI_PROJECT_DIR/conda-bld
   artifacts:
     paths:
