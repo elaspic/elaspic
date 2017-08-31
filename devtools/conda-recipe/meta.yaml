@@ -33,8 +33,7 @@ requirements:
     - sqlalchemy
     - mysqlclient
     # Kimlab
-    - kmtools ==0.0.13
-    - icu  # required by lxml in kmtools < 0.0.18
+    - kmtools ==0.0.21
   run:
     # Basic python
     - python
@@ -54,8 +53,7 @@ requirements:
     - sqlalchemy
     - mysqlclient
     # Kimlab
-    - kmtools ==0.0.13
-    - icu  # required by lxml in kmtools < 0.0.18
+    - kmtools ==0.0.21
     # Binary files
     - p7zip
     - blast
@@ -65,7 +63,7 @@ requirements:
     - t_coffee
     - cd-hit
     - provean  # can't install fake_provean for tests if this is installed...
-    - foldx  # private only and breaks readthedocs
+    - foldx
 
 test:
   requires:
