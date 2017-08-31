@@ -62,7 +62,7 @@ build-py36:
     - py.test -vv
     - codecov -t $CODECOV_TOKEN
     - conda env export -f $CI_PROJECT_DIR/environment-py${PYTHON_VERSION/./}.yml
-  coverage: /^TOTAL.*(\d+\%)/
+  coverage: /^TOTAL.* (\d+\%)/
   artifacts:
     paths:
     - environment-py${PYTHON_VERSION/./}.yml
