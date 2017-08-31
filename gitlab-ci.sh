@@ -7,7 +7,6 @@ if [[ -z $ANACONDA_TOKEN || \
   exit -1
 fi
 
-rm -rf conda-bld
 mkdir -p conda-bld/linux-64 conda-bld/noarch
 chmod ugo+rwX -R conda-bld
 
