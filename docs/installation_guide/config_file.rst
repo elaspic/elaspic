@@ -10,10 +10,7 @@ Edit the ELASPIC configuration file `./config/config_file.ini`_ to match your sy
 
   #. Settings in the :ref:`[DEFAULT]` and :ref:`[MODEL]` may be left unchanged, since the default values are good enough in most cases.
 
-
-.. _`./config/config_file.ini`: https://github.com/ostrokach/elaspic/blob/master/config/config_file.ini
-
-
+.. _`./config/config_file.ini`: https://gitlab.com/kimlab/elaspic/blob/develop/tests/config_file.ini
 
 ---------------------------------------------------------------------------------------------------
 
@@ -155,14 +152,25 @@ Configuration options
     Location of all pdb structures, equivalent to the "data/data/structures/divided/pdb/" folder in the PDB ftp site. Optional.
 
 
-
 Environmental variables
-------------------------
+-----------------------
 
-.. envvar:: PATH
+.. envvar:: ELASPIC_DB_STRING
 
-  A colon-separated list of paths where ELASPIC should look for required programs, such as BLAST, T-coffee, Modeller, and cd-hit.
+    URL of the ELASPIC database in the format that can be `undrstood by SQLAlchemy <http://docs.sqlalchemy.org/en/latest/core/engines.html>`_. For example, :ref:`ELASPIC_DB_STRING` for a SQLite file ``elaspic.db`` in your home folder would look like: ``sqlite:///${HOME}/elaspic.db``.
+
+.. envvar:: ELASPIC_ARCHIVE_DIR
+
+    Folder where to look for and store previously calculated data. A good place for the ELASPIC archive may be ``${HOME}/elaspic``.
+
+.. envvar:: BLAST_DB_DIR
+
+    Location of the local mirror of the `BLAST *nr* database <ftp://ftp.ncbi.nlm.nih.gov/blast/db/>`_.
+
+.. envvar:: PDB_DIR
+
+    Location of the local mirror of the `wwPDB ftp repository <ftp://ftp.wwpdb.org/pub/pdb/data/>`_.
 
 .. envvar:: TMPDIR
 
-  Location to store all temporary files and folders.
+    Location where to create all temporary files and folders. Defaults to ``/tmp``.

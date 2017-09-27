@@ -17,8 +17,6 @@ Table of Contents
    introduction/index.rst
    installation_guide/index.rst
    elaspic_cli/index.rst
-   benchmarks/index.rst
-   statistics/index.rst
    database/index.rst
    modules/index.rst
 
