@@ -1,20 +1,21 @@
-import os.path as op
 import gzip
-import string
 import logging
-import urllib.request
+import os.path as op
 import re
+import string
+import urllib.request
+from collections import OrderedDict, defaultdict
 from functools import wraps
 from tempfile import NamedTemporaryFile
-from collections import defaultdict, OrderedDict
-import six
-import numpy as np
+
 import Bio
-from Bio.PDB import PDBIO, Select, NeighborSearch
-from Bio.PDB.PDBParser import PDBParser
-from Bio.PDB.MMCIFParser import MMCIFParser
-from Bio.PDB.Polypeptide import PPBuilder
+import numpy as np
+import six
 from Bio.Alphabet import IUPAC
+from Bio.PDB import PDBIO, NeighborSearch, Select
+from Bio.PDB.MMCIFParser import MMCIFParser
+from Bio.PDB.PDBParser import PDBParser
+from Bio.PDB.Polypeptide import PPBuilder
 from Bio.Seq import Seq
 
 from . import errors
@@ -22,11 +23,33 @@ from . import errors
 logger = logging.getLogger(__name__)
 
 A_DICT = {
-    'A': 'ALA', 'R': 'ARG', 'N': 'ASN', 'D': 'ASP', 'C': 'CYS', 'E': 'GLU',
-    'Q': 'GLN', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE', 'L': 'LEU', 'K': 'LYS',
-    'M': 'MET', 'F': 'PHE', 'P': 'PRO', 'S': 'SER', 'T': 'THR', 'W': 'TRP',
-    'Y': 'TYR', 'V': 'VAL', 'U': 'SEC', 'O': 'PYL',
-    'B': 'ASX', 'Z': 'GLX', 'J': 'XLE', 'X': 'XAA', '*': 'TER'
+    'A': 'ALA',
+    'R': 'ARG',
+    'N': 'ASN',
+    'D': 'ASP',
+    'C': 'CYS',
+    'E': 'GLU',
+    'Q': 'GLN',
+    'G': 'GLY',
+    'H': 'HIS',
+    'I': 'ILE',
+    'L': 'LEU',
+    'K': 'LYS',
+    'M': 'MET',
+    'F': 'PHE',
+    'P': 'PRO',
+    'S': 'SER',
+    'T': 'THR',
+    'W': 'TRP',
+    'Y': 'TYR',
+    'V': 'VAL',
+    'U': 'SEC',
+    'O': 'PYL',
+    'B': 'ASX',
+    'Z': 'GLX',
+    'J': 'XLE',
+    'X': 'XAA',
+    '*': 'TER'
 }
 AAA_DICT = dict([(value, key) for key, value in list(A_DICT.items())])
 AAA_DICT['UNK'] = 'X'
@@ -50,6 +73,7 @@ LYSINE_ATOMS = ['N', 'CA', 'CB', 'CG', 'CD', 'CE', 'NZ', 'C', 'O']
 
 # %% Functions for downloading and parsing pdb files
 class MMCIFParserMod(MMCIFParser):
+
     def __init__(self, temp_dir):
         self.temp_dir = temp_dir
 
@@ -78,25 +102,19 @@ def get_pdb_file(pdb_id, pdb_database_dir, pdb_type='ent'):
         # Original PDB structure.
         prefix = 'pdb'
         suffix = '.ent.gz'
-        relative_pdb_file = (
-            pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
-        )
+        relative_pdb_file = (pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix)
     elif pdb_type == 'cif':
         # mmCIF pdb structure.
         prefix = ''
         suffix = '.cif.gz'
         relative_pdb_file = (
-            '../mmCIF/' +
-            pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
-        )
+            '../mmCIF/' + pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix)
     elif pdb_type == 'pdb':
         # The first biological unit.
         prefix = ''
         suffix = '.pdb1.gz'
-        relative_pdb_file = (
-            '../../../biounit/coordinates/divided/' +
-            pdb_id[1:3].lower() + '/' + prefix + pdb_id.lower() + suffix
-        )
+        relative_pdb_file = ('../../../biounit/coordinates/divided/' + pdb_id[1:3].lower() + '/' +
+                             prefix + pdb_id.lower() + suffix)
     elif pdb_type == 'raw':
         # Just a PDB file in some folder.
         relative_pdb_file = ''
@@ -179,8 +197,7 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
     cutoff : float, optional
         The maximum distance allowable between two points.
     """
-    if ((type(atom_1) == type(atom_2) == list) or
-            (type(atom_1) == type(atom_2) == tuple)):
+    if ((type(atom_1) == type(atom_2) == list) or (type(atom_1) == type(atom_2) == tuple)):
         a = atom_1
         b = atom_2
     elif hasattr(atom_1, 'coord') and hasattr(atom_2, 'coord'):
@@ -189,7 +206,7 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
     else:
         raise Exception('Unsupported format {} {}'.format(type(atom_1), type(atom_2)))
 
-    assert(len(a) == 3 and len(b) == 3)
+    assert (len(a) == 3 and len(b) == 3)
     if cutoff is None or all(abs(p - q) <= cutoff for p, q in zip(a, b)):
         return euclidean_distance(a, b)
 
@@ -253,8 +270,7 @@ def convert_position_to_resid(chain, positions, domain_def_tuple=None):
     In mutation_modeller, the first amino acid in a chain may start
     with something other than 1.
     """
-    __, chain_numbering = get_chain_sequence_and_numbering(
-        chain, domain_def_tuple)
+    __, chain_numbering = get_chain_sequence_and_numbering(chain, domain_def_tuple)
     logger.debug('chain_numbering: {}'.format(chain_numbering))
     logger.debug('positions: {}'.format(positions))
     return [chain_numbering[p - 1] for p in positions]
@@ -278,9 +294,8 @@ def get_structure_sequences(file_or_structure, seqres_sequence=False):
     elif isinstance(file_or_structure, Bio.PDB.Chain.Chain):
         model = [file_or_structure]
     else:
-        raise Exception(
-            'Unexpected type {} for input ``file_or_structure`` {}!'
-            .format(file_or_structure, type(file_or_structure)))
+        raise Exception('Unexpected type {} for input ``file_or_structure`` {}!'
+                        .format(file_or_structure, type(file_or_structure)))
 
     chain_sequences = defaultdict(list)
     for chain in model:
@@ -293,6 +308,7 @@ def get_structure_sequences(file_or_structure, seqres_sequence=False):
 
 
 def suppress_logger(fn):
+
     @wraps(fn)
     def fn_quiet(*args, **kwargs):
         level = logger.level
@@ -301,6 +317,7 @@ def suppress_logger(fn):
             return fn(*args, **kwargs)
         finally:
             logger.setLevel(level)
+
     return fn_quiet
 
 
@@ -340,9 +357,8 @@ def get_interactions(model, chain_id, r_cutoff=6):
     for chain_id_2, chain_2 in model.child_dict.items():
         if chain_id == chain_id_2:
             continue
-        interactions[chain_id_2] = (
-            get_interactions_between_chains(model, chain_id, chain_id_2, r_cutoff)
-        )
+        interactions[chain_id_2] = (get_interactions_between_chains(model, chain_id, chain_id_2,
+                                                                    r_cutoff))
     return {k: v for (k, v) in interactions.items() if v}
 
 
@@ -424,8 +440,8 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
         if child.id == pdb_chain_2:
             chain_2 = child
     if chain_1 is None or chain_2 is None:
-        raise Exception(
-            'Chains %s and %s were not found in the model' % (pdb_chain_1, pdb_chain_2))
+        raise Exception('Chains %s and %s were not found in the model' % (pdb_chain_1,
+                                                                          pdb_chain_2))
 
     interactions_between_chains = OrderedDict()
     for idx, residue_1 in enumerate(chain_1):
@@ -466,11 +482,8 @@ def chain_is_hetatm(chain):
     else:
         # Something went wrong.
         sequence, numbering = get_chain_sequence_and_numbering(chain)
-        message = (
-            'Some but not all residues in chain {} are hetatms!\n'.format(chain.id) +
-            'sequence: {}\n'.format(sequence) +
-            'numbering: {}\n'.format(numbering)
-        )
+        message = ('Some but not all residues in chain {} are hetatms!\n'.format(chain.id) +
+                   'sequence: {}\n'.format(sequence) + 'numbering: {}\n'.format(numbering))
         logger.debug(message)
         False
 
@@ -520,10 +533,8 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
     # Chain 1
     for chain_1_idx, chain_1 in enumerate(model):
         if skip_hetatm_chains and chain_is_hetatm(chain_1):
-            message = (
-                "Skipping chain_1 with idx {} because it contains only hetatms."
-                .format(chain_1_idx)
-            )
+            message = ("Skipping chain_1 with idx {} because it contains only hetatms."
+                       .format(chain_1_idx))
             logger.debug(message)
             continue
         chain_1_residue_ids = get_aa_residues(chain_1)
@@ -532,10 +543,8 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
         for j, chain_2 in enumerate(model.child_list[chain_1_idx + 1:]):
             chain_2_idx = chain_1_idx + 1 + j
             if skip_hetatm_chains and chain_is_hetatm(chain_2):
-                message = (
-                    "Skipping chain_2 with idx {} because it contains only hetatms."
-                    .format(chain_2_idx)
-                )
+                message = ("Skipping chain_2 with idx {} because it contains only hetatms."
+                           .format(chain_2_idx))
                 logger.debug(message)
                 continue
             chain_2_residue_ids = get_aa_residues(chain_2)
@@ -549,9 +558,8 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
                     continue
                 residue_1_resnum = str(residue_1.id[1]) + residue_1.id[2].strip()
                 residue_1_aa = convert_aa(residue_1.resname, quiet=True)
-                residue_1_key = (
-                    chain_1_idx, chain_1.id, residue_1_idx, residue_1_resnum, residue_1_aa
-                )
+                residue_1_key = (chain_1_idx, chain_1.id, residue_1_idx, residue_1_resnum,
+                                 residue_1_aa)
                 interacting_residues = set()
                 for atom_1 in residue_1:
                     interacting_residues.update(ns.search(atom_1.get_coord(), r_cutoff, 'R'))
@@ -565,9 +573,8 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
                         continue
                     residue_2_resnum = str(residue_2.id[1]) + residue_2.id[2].strip()
                     residue_2_aa = convert_aa(residue_2.get_resname(), quiet=True)
-                    residue_2_key = (
-                        chain_2_idx, chain_2.id, residue_2_idx, residue_2_resnum, residue_2_aa
-                    )
+                    residue_2_key = (chain_2_idx, chain_2.id, residue_2_idx, residue_2_resnum,
+                                     residue_2_aa)
                     interacting_residue_ids.append(residue_2_key)
                 if interacting_residue_ids:
                     interactions_between_chains\
@@ -663,8 +670,7 @@ class StructureParser:
         self.domain_boundaries = []
         for domain_def in domain_defs:
             self.domain_boundaries.append(
-                decode_domain_def(domain_def, merge=False, return_string=True)
-            )
+                decode_domain_def(domain_def, merge=False, return_string=True))
 
         self.unique_id = ('pdb_id: {}, chain_ids: {}'.format(self.pdb_id, self.chain_ids))
 
@@ -696,12 +702,9 @@ class StructureParser:
             chain = model[chain_id]
 
             chain_numbering, domain_start_idxs, domain_end_idxs = (
-                self._get_domain_def_idxs_for_chain(chain, chain_idx)
-            )
-            logger.debug(
-                'domain_def: {}, domain_start_idxs: {}, domain_end_idxs: {}'.format(
-                    self.domain_boundaries, domain_start_idxs, domain_end_idxs)
-            )
+                self._get_domain_def_idxs_for_chain(chain, chain_idx))
+            logger.debug('domain_def: {}, domain_start_idxs: {}, domain_end_idxs: {}'.format(
+                self.domain_boundaries, domain_start_idxs, domain_end_idxs))
 
             res_idx = 0
             while res_idx < len(chain):
@@ -718,8 +721,8 @@ class StructureParser:
 #                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=True)
 #                    continue
 
-                # Now treating all unusual amino acids as hetatms
-                # Convert methylated lysines to regular lysines
+# Now treating all unusual amino acids as hetatms
+# Convert methylated lysines to regular lysines
                 if res.resname in METHYLATED_LYSINES:
                     self._correct_methylated_lysines(res)
 
@@ -729,10 +732,8 @@ class StructureParser:
                     continue
 
                 # Cut each chain to domain boundaries
-                residue_is_outside_domain = (
-                    self._residue_outside_domain(
-                        chain, chain_numbering, domain_start_idxs, domain_end_idxs, res)
-                )
+                residue_is_outside_domain = (self._residue_outside_domain(
+                    chain, chain_numbering, domain_start_idxs, domain_end_idxs, res))
                 if residue_is_outside_domain:
                     chain.detach_child(original_res_id)
                     continue
@@ -765,20 +766,17 @@ class StructureParser:
         self.structure = new_structure
         logger.debug('PDB {} extracted successfully.'.format(self.pdb_id))
 
-        self.interactions_between_chains = (
-            get_interacting_residues(self.structure[0], self.r_cutoff, True)
-        )
+        self.interactions_between_chains = (get_interacting_residues(self.structure[0],
+                                                                     self.r_cutoff, True))
 
-        self.interacting_chain_ids = {
-            (key[1], value[1])
-            for (key, values) in self.interactions_between_chains.items()
-            for value in values
-        }
-        self.interacting_chain_idxs = {
-            (key[0], value[0])
-            for (key, values) in self.interactions_between_chains.items()
-            for value in values
-        }
+        self.interacting_chain_ids = {(key[1], value[1])
+                                      for (key,
+                                           values) in self.interactions_between_chains.items()
+                                      for value in values}
+        self.interacting_chain_idxs = {(key[0], value[0])
+                                       for (key,
+                                            values) in self.interactions_between_chains.items()
+                                       for value in values}
 
     def get_chain_sequence_and_numbering(self, chain_id, *args, **varargs):
         """Call ``get_chain_sequence_and_numbering`` using chain with id ``chain_id``."""
@@ -810,26 +808,26 @@ class StructureParser:
                     outFile = op.join(output_dir, self.pdb_id + chain_id + '.pdb')
                     atom_list = [atom for atom in self.structure[0][chain_id].get_atoms()]
                     hetatm_chain_ns = NeighborSearch(atom_list)
-                    select = SelectChains(
-                        chain_id, self.hetatm_chain_id, hetatm_chain_ns, self.r_cutoff)
+                    select = SelectChains(chain_id, self.hetatm_chain_id, hetatm_chain_ns,
+                                          self.r_cutoff)
                     io.save(outFile, select=select)
             if len(self.chain_ids) > 2:
                 # Save each interacting chain pair.
                 for chain_ids in self.interacting_chain_ids:
                     outFile = op.join(output_dir, self.pdb_id + ''.join(chain_ids) + '.pdb')
                     atom_list = [
-                        atom for atom
-                        in self.structure[0][chain_id].get_atoms()
+                        atom
+                        for atom in self.structure[0][chain_id].get_atoms()
                         for chain_id in chain_ids
                     ]
                     hetatm_chain_ns = NeighborSearch(atom_list)
-                    select = SelectChains(
-                        chain_ids, self.hetatm_chain_id, hetatm_chain_ns, self.r_cutoff)
+                    select = SelectChains(chain_ids, self.hetatm_chain_id, hetatm_chain_ns,
+                                          self.r_cutoff)
                     io.save(outFile, select=select)
 
         except AttributeError as e:
             if remove_disordered:
-                raise(e)
+                raise (e)
             self.save_structure(output_dir=output_dir, remove_disordered=True)
 
     def save_sequences(self, output_dir=''):
@@ -837,8 +835,7 @@ class StructureParser:
         self.chain_sequence_dict = {}
         for chain_id in self.chain_ids:
             chain_sequence, chain_numbering_extended = (
-                self.get_chain_sequence_and_numbering(chain_id)
-            )
+                self.get_chain_sequence_and_numbering(chain_id))
             self.chain_numbering_extended_dict[chain_id] = chain_numbering_extended
             self.chain_sequence_dict[chain_id] = chain_sequence
             with open(op.join(output_dir, self.pdb_id + chain_id + '.fasta'), 'w') as f:
@@ -854,7 +851,8 @@ class StructureParser:
         try:
             domain_start_idxs, domain_end_idxs = [
                 tuple(chain_numbering.index(resid) for resid in resids)
-                for resids in zip(*self.domain_boundaries[chain_idx])]
+                for resids in zip(*self.domain_boundaries[chain_idx])
+            ]
         except Exception as e:
             print(str(e))
             raise errors.PDBDomainDefsError(self.unique_id)
@@ -864,9 +862,8 @@ class StructureParser:
     def _correct_methylated_lysines(self, res):
         new_resname = 'LYS'
         new_resid = (' ', res.id[1], res.id[2])
-        logger.debug(
-            'Renaming residue {} {} to {} {}'
-            .format(res.resname, res.id, new_resname, new_resid))
+        logger.debug('Renaming residue {} {} to {} {}'
+                     .format(res.resname, res.id, new_resname, new_resid))
         res.resname = new_resname
         res.id = new_resid
         atom_idx = 0
@@ -874,8 +871,7 @@ class StructureParser:
             atom_id = res.child_list[atom_idx].id
             if atom_id not in LYSINE_ATOMS:
                 logger.debug(
-                    'Removing atom {} from residue {} {}.'.format(atom_id, res.resname, res.id)
-                )
+                    'Removing atom {} from residue {} {}.'.format(atom_id, res.resname, res.id))
                 res.detach_child(atom_id)
             else:
                 atom_idx += 1
@@ -886,11 +882,11 @@ class StructureParser:
         #     .format(res.resname, res.id))
         chain.detach_child(res.id)
         hetatm_res = res
-        hetatm_res.id = (hetatm_res.id[0], len(hetatm_chain) + 1, hetatm_res.id[2], )
+        hetatm_res.id = (hetatm_res.id[0], len(hetatm_chain) + 1, hetatm_res.id[2],)
         hetatm_chain.add(hetatm_res)
 
-    def _residue_outside_domain(
-            self, chain, chain_numbering, domain_start_idxs, domain_end_idxs, res):
+    def _residue_outside_domain(self, chain, chain_numbering, domain_start_idxs, domain_end_idxs,
+                                res):
         """Return `True` if residue ``res`` is outside the domain."""
         if domain_start_idxs is None or domain_end_idxs is None:
             return False
@@ -908,8 +904,8 @@ class StructureParser:
     def _remove_distant_hatatms(self, new_model, hetatm_chain):
         """Detach hetatms that are more than ``self.r_cutoff`` away from the main chain(s)."""
         ns = NeighborSearch(list(new_model.get_atoms()))
-        hetatm_chain.id = [
-            c for c in reversed(string.ascii_uppercase) if c not in self.chain_ids][0]
+        hetatm_chain.id = [c for c in reversed(string.ascii_uppercase)
+                           if c not in self.chain_ids][0]
         res_idx = 0
         while res_idx < len(hetatm_chain):
             res_1 = hetatm_chain.child_list[res_idx]
@@ -936,13 +932,11 @@ class StructureParser:
             for c in m:
                 for r in c:
                     if r.is_disordered() or r.disordered:
-                        logger.debug(
-                            'Changing disordered_flag on residue {} from {} to 0'
-                            .format(r, r.disordered))
+                        logger.debug('Changing disordered_flag on residue {} from {} to 0'
+                                     .format(r, r.disordered))
                         r.disordered = 0
                     for a in r:
                         if a.is_disordered() or a.disordered_flag:
-                            logger.debug(
-                                'Changing disordered_flag on atom {} from {} to 0'
-                                .format(a, a.disordered_flag))
+                            logger.debug('Changing disordered_flag on atom {} from {} to 0'
+                                         .format(a, a.disordered_flag))
                             a.disordered_flag = 0

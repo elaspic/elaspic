@@ -1,7 +1,7 @@
+import json
+import logging
 import os.path as op
 import pickle
-import logging
-import json
 
 import numpy as np
 import pandas as pd
@@ -33,15 +33,12 @@ def _get_foldx_features(core_or_interface):
     if core_or_interface in [False, 0, 'core']:
         feature_columns += call_foldx.names_stability_wt
         feature_columns += [
-            c[:-4] + '_change'
-            for c in call_foldx.names_stability_mut
-            if c.endswith('_mut')
+            c[:-4] + '_change' for c in call_foldx.names_stability_mut if c.endswith('_mut')
         ]
     else:
         feature_columns += call_foldx.names_stability_complex_wt
         feature_columns += [
-            c[:-4] + '_change'
-            for c in call_foldx.names_stability_complex_mut
+            c[:-4] + '_change' for c in call_foldx.names_stability_complex_mut
             if c.endswith('_mut')
         ]
     return feature_columns
@@ -64,7 +61,8 @@ def _get_remaining_features():
     feature_columns += ['provean_score', 'secondary_structure_wt', 'secondary_structure_change']
     # Alignment
     feature_columns += [
-        'alignment_identity', 'alignment_coverage', 'alignment_score', 'matrix_score']
+        'alignment_identity', 'alignment_coverage', 'alignment_score', 'matrix_score'
+    ]
     # Model
     feature_columns += ['norm_dope']
     # Structure
@@ -73,22 +71,17 @@ def _get_remaining_features():
 
 
 FEATURE_COLUMNS_CORE = (
-    _get_foldx_features('core') + _get_physicochem_features() + _get_remaining_features()
-)
-
+    _get_foldx_features('core') + _get_physicochem_features() + _get_remaining_features())
 
 FEATURE_COLUMNS_INTERFACE = (
-    _get_foldx_features('interface') + _get_physicochem_features() + _get_remaining_features()
-)
+    _get_foldx_features('interface') + _get_physicochem_features() + _get_remaining_features())
 
 
 def _split_foldx_features(df, foldx_column_name, foldx_feature_names):
     df = df.copy()
     for column_index, column_name in enumerate(foldx_feature_names):
-        df[column_name] = [
-            (float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
-            for x in df[foldx_column_name].values
-        ]
+        df[column_name] = [(float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
+                           for x in df[foldx_column_name].values]
     del df[foldx_column_name]
     return df
 
@@ -119,20 +112,16 @@ def format_mutation_features(df):
     for column_index, column_name in enumerate(names_phys_chem):
         df[column_name + '_wt'] = (
             df['physchem_wt']
-            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
-        )
+            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan))
         df[column_name + '_self_wt'] = (
             df['physchem_wt_ownchain']
-            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
-        )
+            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan))
         df[column_name + '_mut'] = (
             df['physchem_mut']
-            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
-        )
+            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan))
         df[column_name + '_self_mut'] = (
             df['physchem_mut_ownchain']
-            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan)
-        )
+            .apply(lambda x: float(x.split(',')[column_index]) if pd.notnull(x) else np.nan))
     del df['physchem_wt']
     del df['physchem_wt_ownchain']
     del df['physchem_mut']
@@ -141,10 +130,8 @@ def format_mutation_features(df):
     # Secondary structure
     for col in df.columns:
         if 'secondary_structure' in col:
-            df[col] = (
-                df[col]
-                .apply(lambda x: float(secondary_structure_to_int[x]) if pd.notnull(x) else np.nan)
-            )
+            df[col] = (df[col].apply(
+                lambda x: float(secondary_structure_to_int[x]) if pd.notnull(x) else np.nan))
 
     # FoldX
     result = []
@@ -158,14 +145,10 @@ def format_mutation_features(df):
 
         # Parse FoldX interface features
         df_interface = df[df[(foldx_interface_column_name + '_wt')].notnull()]
-        df_interface = _split_foldx_features(
-            df_interface,
-            foldx_interface_column_name + '_wt',
-            call_foldx.names_stability_complex_wt)
-        df_interface = _split_foldx_features(
-            df_interface,
-            foldx_interface_column_name + '_mut',
-            call_foldx.names_stability_complex_mut)
+        df_interface = _split_foldx_features(df_interface, foldx_interface_column_name + '_wt',
+                                             call_foldx.names_stability_complex_wt)
+        df_interface = _split_foldx_features(df_interface, foldx_interface_column_name + '_mut',
+                                             call_foldx.names_stability_complex_mut)
         result.append(df_interface)
 
         df_core = df[df[(foldx_interface_column_name + '_wt')].isnull()]
@@ -174,14 +157,10 @@ def format_mutation_features(df):
         df_core = df
 
     # Parse FoldX core features
-    df_core = _split_foldx_features(
-        df_core,
-        foldx_core_column_name + '_wt',
-        call_foldx.names_stability_wt)
-    df_core = _split_foldx_features(
-        df_core,
-        foldx_core_column_name + '_mut',
-        call_foldx.names_stability_mut)
+    df_core = _split_foldx_features(df_core, foldx_core_column_name + '_wt',
+                                    call_foldx.names_stability_wt)
+    df_core = _split_foldx_features(df_core, foldx_core_column_name + '_mut',
+                                    call_foldx.names_stability_mut)
     result.append(df_core)
 
     result_df = pd.concat(result, ignore_index=True)
@@ -199,8 +178,7 @@ def convert_features_to_differences(df, keep_mut=False):
     """
     column_list = []
     for column_name, column in df.iteritems():
-        if ('_mut' in column_name and
-                column_name.replace('_mut', '_wt') in df.columns and
+        if ('_mut' in column_name and column_name.replace('_mut', '_wt') in df.columns and
                 df[column_name].dtype != object):
             if keep_mut:
                 column_list.append(column)
@@ -216,9 +194,7 @@ def convert_features_to_differences(df, keep_mut=False):
 
 
 def get_core_mutations(df, engine, schema_name='elaspic'):
-    values = (
-        ("('" + df['uniprot_id'] + "', '" + df['uniprot_mutation'] + "')")
-    )
+    values = (("('" + df['uniprot_id'] + "', '" + df['uniprot_mutation'] + "')"))
     sql_query = """\
 SELECT *
 FROM {schema_name}.uniprot_domain
@@ -226,7 +202,8 @@ JOIN {schema_name}.uniprot_domain_template USING (uniprot_domain_id)
 JOIN {schema_name}.uniprot_domain_model USING (uniprot_domain_id)
 JOIN {schema_name}.uniprot_domain_mutation mut USING (uniprot_domain_id)
 WHERE (mut.uniprot_id, mut.mutation) in ({values})
-""".format(schema_name=schema_name, values=', '.join(values))
+""".format(
+        schema_name=schema_name, values=', '.join(values))
 
     results_df = pd.read_sql_query(sql_query, engine)
 
@@ -239,9 +216,7 @@ WHERE (mut.uniprot_id, mut.mutation) in ({values})
 
 
 def get_interface_mutations(df, engine, schema_name='elaspic'):
-    values = (
-        ("('" + df['uniprot_id'] + "', '" + df['uniprot_mutation'] + "')")
-    )
+    values = (("('" + df['uniprot_id'] + "', '" + df['uniprot_mutation'] + "')"))
     sql_query = """\
 SELECT *
 FROM {schema_name}.uniprot_domain_pair
@@ -249,19 +224,16 @@ JOIN {schema_name}.uniprot_domain_pair_template USING (uniprot_domain_pair_id)
 JOIN {schema_name}.uniprot_domain_pair_model USING (uniprot_domain_pair_id)
 JOIN {schema_name}.uniprot_domain_pair_mutation mut USING (uniprot_domain_pair_id)
 WHERE (mut.uniprot_id, mut.mutation) in ({values})
-""".format(schema_name=schema_name, values=', '.join(values))
+""".format(
+        schema_name=schema_name, values=', '.join(values))
 
     # Format alignment features
     results_df = pd.read_sql_query(sql_query, engine)
-    results_df['alignment_identity'] = (
-        np.sqrt(results_df['identical_1'] * results_df['identical_2'])
-    )
-    results_df['alignment_coverage'] = (
-        np.sqrt(results_df['coverage_1'] * results_df['coverage_2'])
-    )
-    results_df['alignment_score'] = (
-        np.sqrt(results_df['score_1'] * results_df['score_2'])
-    )
+    results_df['alignment_identity'] = (np.sqrt(
+        results_df['identical_1'] * results_df['identical_2']))
+    results_df['alignment_coverage'] = (np.sqrt(
+        results_df['coverage_1'] * results_df['coverage_2']))
+    results_df['alignment_score'] = (np.sqrt(results_df['score_1'] * results_df['score_2']))
 
     # Format predictor features
     results_df = format_mutation_features(results_df)

@@ -4,19 +4,17 @@ TODO: The model object has two serialization steps:
     1. Inside the modeller class to save modeller results.
     2. In the local_pipeline to save all results.
 """
-import os.path as op
-import logging
 import json
+import logging
+import os.path as op
 
 import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-from . import (
-    CACHE_DIR, conf, helper, errors, structure_tools, elaspic_sequence,
-    elaspic_model, elaspic_predictor
-)
+from . import (CACHE_DIR, conf, elaspic_model, elaspic_predictor, elaspic_sequence, errors, helper,
+               structure_tools)
 from .pipeline import Pipeline, execute_and_remember
 
 logger = logging.getLogger(__name__)
@@ -50,9 +48,13 @@ class StandalonePipeline(Pipeline):
     .. todo:: Add an option to store provean results based on sequence hash.
     """
 
-    def __init__(
-            self, structure_file, sequence_file=None, mutations=None, configurations=None,
-            mutation_format=None, run_type='5'):
+    def __init__(self,
+                 structure_file,
+                 sequence_file=None,
+                 mutations=None,
+                 configurations=None,
+                 mutation_format=None,
+                 run_type='5'):
         super().__init__(configurations)
 
         # Input parameters
@@ -99,8 +101,7 @@ class StandalonePipeline(Pipeline):
         if len(self.sp.chain_ids) != len(self.seqrecords):
             logger.warning(
                 'The number of chain ids ({}) does not match the number of sequences ({})!'
-                .format(len(self.sp.chain_ids), len(self.seqrecords))
-            )
+                .format(len(self.sp.chain_ids), len(self.seqrecords)))
 
     def parse_mutations(self, mutations, mutation_format):
         # Parse mutations
@@ -122,9 +123,8 @@ class StandalonePipeline(Pipeline):
                     break
                 except (IndexError, ValueError, errors.MutationMismatchError) as e:
                     error_message = (
-                        "Error parsing mutations '{}' using mutation_format '{}':\n{} {}"
-                        .format(mutations, mutation_format, type(e), e)
-                    )
+                        "Error parsing mutations '{}' using mutation_format '{}':\n{} {}".format(
+                            mutations, mutation_format, type(e), e))
                     logger.error(error_message)
                     continue
             if not parsed_mutations:
@@ -154,20 +154,16 @@ class StandalonePipeline(Pipeline):
             if mutation_format in ['1']:
                 # Converting mutation from PDB to sequence coordinates
                 resnum = int(''.join(n for n in mutation_residue[1:-1] if n.isdigit()))
-                resnum_suffix = (
-                    ''.join(n for n in mutation_residue[1:-1] if not n.isdigit()).upper()
-                )
+                resnum_suffix = (''.join(n for n in mutation_residue[1:-1]
+                                         if not n.isdigit()).upper())
                 mutation_id = (' ', resnum, resnum_suffix or ' ')
                 chain_aa_residues = (
-                    structure_tools.get_aa_residues(self.sp.structure[0][mutation_chain])
-                )
+                    structure_tools.get_aa_residues(self.sp.structure[0][mutation_chain]))
                 mutation_pos = chain_aa_residues.index(mutation_id) + 1
                 mutation = mutation_residue[0] + str(mutation_pos) + mutation_residue[-1]
                 # Validation
-                mutation_expected_aa = (
-                    structure_tools.AAA_DICT
-                    [self.sp.structure[0][mutation_chain][mutation_id].resname]
-                )
+                mutation_expected_aa = (structure_tools.AAA_DICT[self.sp.structure[0][
+                    mutation_chain][mutation_id].resname])
                 if mutation_residue[0] != mutation_expected_aa:
                     raise errors.MutationMismatchError()
             elif mutation_format in ['2', '3']:
@@ -175,8 +171,7 @@ class StandalonePipeline(Pipeline):
                 mutation = mutation_residue
                 # Validation
                 mutation_expected_aa = (
-                    str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1]) - 1]
-                )
+                    str(self.seqrecords[mutation_idx].seq)[int(mutation[1:-1]) - 1])
                 if mutation[0] != mutation_expected_aa:
                     raise errors.MutationMismatchError()
                 mutations_out[(mutation_idx, mutation,)] = mutation_in
@@ -228,10 +223,8 @@ class StandalonePipeline(Pipeline):
             model_results.append(model_result)
         for idxs in self.sp.interacting_chain_idxs:
             if not all(i in range(len(self.seqrecords)) for i in idxs):
-                warning = (
-                    "Skipping idxs: '{}' because we lack the corresponding seqrecord!"
-                    .format(idxs)
-                )
+                warning = ("Skipping idxs: '{}' because we lack the corresponding seqrecord!"
+                           .format(idxs))
                 logger.warning(warning)
                 continue
             model = self.get_model(idxs)
@@ -244,21 +237,15 @@ class StandalonePipeline(Pipeline):
             json.dump(model_results, ofh)
 
     def run_all_mutations(self):
-        handled_errors = (
-            errors.ChainsNotInteractingError,
-            errors.MutationOutsideDomainError,
-            errors.MutationOutsideInterfaceError,
-        )
+        handled_errors = (errors.ChainsNotInteractingError, errors.MutationOutsideDomainError,
+                          errors.MutationOutsideInterfaceError,)
         for (mutation_idx, mutation), mutation_in in self.mutations.items():
             mutation_results = []
-            mutation_results_file = op.join(
-                conf.CONFIGS['unique_temp_dir'], 'mutation_{}.json'.format(mutation_in)
-            )
+            mutation_results_file = op.join(conf.CONFIGS['unique_temp_dir'],
+                                            'mutation_{}.json'.format(mutation_in))
             if op.isfile(mutation_results_file):
-                logger.debug(
-                    'Results file for mutation {} already exists: {}'
-                    .format(mutation_in, mutation_results_file)
-                )
+                logger.debug('Results file for mutation {} already exists: {}'
+                             .format(mutation_in, mutation_results_file))
                 continue
             try:
                 mutation_result = self.get_mutation_score(mutation_idx, mutation_idx, mutation)
@@ -269,10 +256,8 @@ class StandalonePipeline(Pipeline):
             mutation_results.append(mutation_result)
             for idxs in self.sp.interacting_chain_idxs:
                 if not all(i in range(len(self.seqrecords)) for i in idxs):
-                    warning = (
-                        "Skipping idxs: '{}' because we lack the corresponding seqrecord!"
-                        .format(idxs)
-                    )
+                    warning = ("Skipping idxs: '{}' because we lack the corresponding seqrecord!"
+                               .format(idxs))
                     logger.warning(warning)
                     continue
                 if mutation_idx in idxs:
@@ -316,9 +301,7 @@ class StandalonePipeline(Pipeline):
     def _get_chain_idx(self, chain_id):
         """chain_id -> chain_idx."""
         chain_idx = [
-            i for (i, chain)
-            in enumerate(self.sp.structure[0].child_list)
-            if chain.id == chain_id
+            i for (i, chain) in enumerate(self.sp.structure[0].child_list) if chain.id == chain_id
         ]
         if len(chain_idx) == 0:
             raise errors.PDBChainError(
@@ -357,9 +340,8 @@ class PrepareSequence:
         return True
 
     def __enter__(self):
-        sequence_file = op.join(
-            conf.CONFIGS['sequence_dir'],
-            helper.slugify(self.seqrecord.id + '.fasta'))
+        sequence_file = op.join(conf.CONFIGS['sequence_dir'],
+                                helper.slugify(self.seqrecord.id + '.fasta'))
         with open(sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecord, ofh, 'fasta')
         self.sequence_file = sequence_file
@@ -407,27 +389,22 @@ class PrepareModel:
         # Target sequence file
         self.sequence_file = op.join(
             conf.CONFIGS['model_dir'],
-            helper.slugify('_'.join(seqrec.id for seqrec in self.seqrecords) + '.fasta')
-        )
+            helper.slugify('_'.join(seqrec.id for seqrec in self.seqrecords) + '.fasta'))
         with open(self.sequence_file, 'w') as ofh:
             SeqIO.write(self.seqrecords, ofh, 'fasta')
         assert op.isfile(self.sequence_file)
 
         # Template structure file
         chain_string = ''.join(self.sp.structure[0].child_list[pos].id for pos in self.positions)
-        self.structure_file = op.join(
-            conf.CONFIGS['unique_temp_dir'],
-            helper.slugify(self.sp.pdb_id + chain_string + '.pdb')
-        )
+        self.structure_file = op.join(conf.CONFIGS['unique_temp_dir'],
+                                      helper.slugify(self.sp.pdb_id + chain_string + '.pdb'))
         assert op.isfile(self.structure_file)
 
     def run(self):
         self.model = elaspic_model.Model(self.sequence_file, self.structure_file)
 
     def __exit__(self, exc_type, exc_value, traceback):
-        handled_errors = (
-            errors.ChainsNotInteractingError,
-        )
+        handled_errors = (errors.ChainsNotInteractingError,)
         if exc_type in handled_errors:
             logger.debug("Caught the following error: '{}'".format(exc_type))
             return True
@@ -481,11 +458,9 @@ class PrepareMutation:
         results = self.model.mutate(self.mutation_idx, self.mutation)
 
         features['norm_dope'] = self.model.modeller_results['norm_dope']
-        (features['alignment_identity'],
-         features['alignment_coverage'],
+        (features['alignment_identity'], features['alignment_coverage'],
          features['alignment_score']) = (
-             self.model.modeller_results['alignment_stats'][self.mutation_idx]
-        )
+             self.model.modeller_results['alignment_stats'][self.mutation_idx])
         assert features['alignment_identity'] > 0.01 and features['alignment_identity'] <= 1
         assert features['alignment_coverage'] > 0.01 and features['alignment_coverage'] <= 1
 
@@ -495,18 +470,11 @@ class PrepareMutation:
         features['stability_energy_wt'] = results['stability_energy_wt']
         features['stability_energy_mut'] = results['stability_energy_mut']
 
-        features['physchem_wt'] = (
-            '{},{},{},{}'.format(*results['physchem_wt'])
-        )
-        features['physchem_wt_ownchain'] = (
-            '{},{},{},{}'.format(*results['physchem_ownchain_wt'])
-        )
-        features['physchem_mut'] = (
-            '{},{},{},{}'.format(*results['physchem_mut'])
-        )
+        features['physchem_wt'] = ('{},{},{},{}'.format(*results['physchem_wt']))
+        features['physchem_wt_ownchain'] = ('{},{},{},{}'.format(*results['physchem_ownchain_wt']))
+        features['physchem_mut'] = ('{},{},{},{}'.format(*results['physchem_mut']))
         features['physchem_mut_ownchain'] = (
-            '{},{},{},{}'.format(*results['physchem_ownchain_mut'])
-        )
+            '{},{},{},{}'.format(*results['physchem_ownchain_mut']))
 
         features['secondary_structure_wt'] = results['secondary_structure_wt']
         features['solvent_accessibility_wt'] = results['solvent_accessibility_wt']

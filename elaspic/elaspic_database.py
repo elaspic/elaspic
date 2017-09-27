@@ -1,22 +1,21 @@
+import datetime
+import logging
 import os
 import os.path as op
-import subprocess
-import datetime
-import six
-import logging
-import shutil
-from contextlib import contextmanager
-import pandas as pd
-import sqlalchemy as sa
 import shlex
-from kmtools.db_tools import parse_connection_string, make_connection_string
-from . import helper, errors, conf
-from .elaspic_database_tables import (
-    Base,
-    UniprotDomain, UniprotDomainModel, UniprotDomainMutation,
-    UniprotDomainPair, UniprotDomainPairModel,
-    UniprotDomainPairMutation,
-)
+import shutil
+import subprocess
+from contextlib import contextmanager
+
+import pandas as pd
+import six
+import sqlalchemy as sa
+
+from elaspic import conf, errors, helper
+from elaspic.elaspic_database_tables import (Base, UniprotDomain, UniprotDomainModel,
+                                             UniprotDomainMutation, UniprotDomainPair,
+                                             UniprotDomainPairModel, UniprotDomainPairMutation)
+from elaspic.kmtools_legacy import make_connection_string, parse_connection_string
 
 logger = logging.getLogger(__name__)
 
@@ -27,22 +26,26 @@ def enable_sqlite_foreign_key_checks(engine):
     # Enable foreign key contraints
     def _fk_pragma_on_connect(dbapi_con, con_record):
         dbapi_con.execute('pragma foreign_keys=ON')
+
     event.listen(engine, 'connect', _fk_pragma_on_connect)
 
     # Enable the write-ahead lock so that reads can occur simultaneously with writes
     def _fk_pragma_on_connect(dbapi_con, con_record):
         dbapi_con.execute('PRAGMA journal_mode=WAL')
+
     event.listen(engine, 'connect', _fk_pragma_on_connect)
 
     # Set a longer timeout duration
     def _fk_pragma_on_connect(dbapi_con, con_record):
         dbapi_con.execute('pragma busy_timeout=60000')  # 60 sec
+
     event.listen(engine, 'connect', _fk_pragma_on_connect)
 
 
 # Get the session that will be used for all future queries.
 # `expire_on_commit` so that you keep all the table objects even after the session closes.
 Session = sa.orm.sessionmaker(expire_on_commit=False)
+
 # Session = sa.orm.scoped_session(sa.orm.sessionmaker(expire_on_commit=False))
 
 
@@ -54,10 +57,8 @@ class MyDatabase(object):
         self.engine = self.get_engine(echo=echo)
         self.configure_session()
 
-        logger.info(
-            "Using precalculated data from the following folder: '{archive_dir}'"
-            .format(**conf.CONFIGS)
-        )
+        logger.info("Using precalculated data from the following folder: '{archive_dir}'"
+                    .format(**conf.CONFIGS))
 
     def get_engine(self, echo=False):
         """Get an SQLAlchemy engine that can be used to connect to the database."""
@@ -123,7 +124,8 @@ class MyDatabase(object):
         # Create engine without a default schema
         engine = sa.create_engine(
             make_connection_string(**{
-                **parse_connection_string(conf.CONFIGS['connection_string']),
+                **
+                parse_connection_string(conf.CONFIGS['connection_string']),
                 'db_schema': '',
             }))
         sql_command = "CREATE SCHEMA IF NOT EXISTS `{}`;".format(db_schema)
@@ -135,7 +137,8 @@ class MyDatabase(object):
         # Create engine without a default schema
         engine = sa.create_engine(
             make_connection_string(**{
-                **parse_connection_string(conf.CONFIGS['connection_string']),
+                **
+                parse_connection_string(conf.CONFIGS['connection_string']),
                 'db_schema': '',
             }))
         sql_command = "DROP SCHEMA IF EXISTS {};".format(db_schema)
@@ -185,9 +188,7 @@ class MyDatabase(object):
                 os.remove(conf.CONFIGS['db_schema'])
             else:
                 self.engine.execute('drop schema {db_schema};'.format(**conf.CONFIGS))
-            logger.info(
-                "Successfully removed database schema: {db_schema}"
-                .format(**conf.CONFIGS))
+            logger.info("Successfully removed database schema: {db_schema}".format(**conf.CONFIGS))
             return
 
         # Remove tables one by one
@@ -202,33 +203,29 @@ class MyDatabase(object):
     # %%
     mysql_load_table_template = (
         r"""mysql --local-infile --host={db_url} --user={db_username} --password={db_password} """
-        r"""{table_db_schema} -e "{sql_command}" """
-    )
+        r"""{table_db_schema} -e "{sql_command}" """)
 
     psql_load_table_template = (
         r"""PGPASSWORD={db_password} psql -h {db_url} -p {db_port} -U {db_username} """
-        r"""-d {db_database} -c "{sql_command}" """
-    )
+        r"""-d {db_database} -c "{sql_command}" """)
 
     # Need to double up on '\\'
     mysql_command_template = (
         r"""load data local infile '{table_folder}/{table_name}.tsv' """
         r"""into table {table_db_schema}.{table_name} """
-        r"""fields terminated by '\t' escaped by '\\\\' lines terminated by '\n'; """
-    )
+        r"""fields terminated by '\t' escaped by '\\\\' lines terminated by '\n'; """)
 
-    psql_command_template = (
-        r"""\\copy {table_db_schema}.{table_name} """
-        r"""from '{table_folder}/{table_name}.tsv' """
-        r"""with csv delimiter E'\t' null '\N' escape '\\'; """
-    )
+    psql_command_template = (r"""\\copy {table_db_schema}.{table_name} """
+                             r"""from '{table_folder}/{table_name}.tsv' """
+                             r"""with csv delimiter E'\t' null '\N' escape '\\'; """)
 
     sqlite_table_filename = '{table_folder}/{table_name}.tsv'
 
     def _load_data_into_sqlite(self, configs):
         table_df = pd.read_csv(
             self.sqlite_table_filename.format(**configs),
-            sep='\t', na_values='\\N',
+            sep='\t',
+            na_values='\\N',
             # escapechar='\\', # escapes the `na_values` character and causes problems
             names=Base.metadata.tables[configs['table_name']].columns.keys())
         table_df.to_sql(configs['table_name'], self.engine, index=False, if_exists='append')
@@ -268,31 +265,23 @@ class MyDatabase(object):
         """Get the rows from the table `row_object` identified by keys `row_object_identifiers`."""
         with self.session_scope() as session:
             if len(row_object_identifiers) != len(row_object_identifier_values):
-                raise Exception(
-                    'The number of identifiers and the number of identifier '
-                    'values must be the same.')
+                raise Exception('The number of identifiers and the number of identifier '
+                                'values must be the same.')
             if len(row_object_identifiers) > 3:
-                raise Exception(
-                    'Too many identifiers provied. The function is hard-coded '
-                    'to handle at most three identifiers.')
+                raise Exception('Too many identifiers provied. The function is hard-coded '
+                                'to handle at most three identifiers.')
             if len(row_object_identifiers) == 1:
-                row_instances = (
-                    session.query(row_object)
-                    .filter(row_object_identifiers[0] == row_object_identifier_values[0])
-                    .all())
+                row_instances = (session.query(row_object).filter(
+                    row_object_identifiers[0] == row_object_identifier_values[0]).all())
             if len(row_object_identifiers) == 2:
-                row_instances = (
-                    session.query(row_object)
-                    .filter(row_object_identifiers[0] == row_object_identifier_values[0])
-                    .filter(row_object_identifiers[1] == row_object_identifier_values[1])
-                    .all())
+                row_instances = (session.query(row_object).filter(
+                    row_object_identifiers[0] == row_object_identifier_values[0]).filter(
+                        row_object_identifiers[1] == row_object_identifier_values[1]).all())
             if len(row_object_identifiers) == 3:
-                row_instances = (
-                    session.query(row_object)
-                    .filter(row_object_identifiers[0] == row_object_identifier_values[0])
-                    .filter(row_object_identifiers[1] == row_object_identifier_values[1])
-                    .filter(row_object_identifiers[2] == row_object_identifier_values[2])
-                    .all())
+                row_instances = (session.query(row_object).filter(
+                    row_object_identifiers[0] == row_object_identifier_values[0]).filter(
+                        row_object_identifiers[1] == row_object_identifier_values[1]).filter(
+                            row_object_identifiers[2] == row_object_identifier_values[2]).all())
             return row_instances
 
     @helper.retry_database
@@ -301,14 +290,10 @@ class MyDatabase(object):
         """
         with self.session_scope() as session:
             uniprot_domains = (
-                session
-                .query(UniprotDomain)
-                .filter(UniprotDomain.uniprot_id == uniprot_id)
+                session.query(UniprotDomain).filter(UniprotDomain.uniprot_id == uniprot_id)
                 # .options(sa.orm.joinedload('template').joinedload('model'))
                 # .options(sa.orm.joinedload('template', innerjoin=True))
-                .limit(100)
-                .all()
-            )
+                .limit(100).all())
 
         archive_dir = conf.CONFIGS['archive_dir']
         archive_type = conf.CONFIGS['archive_type']
@@ -316,17 +301,14 @@ class MyDatabase(object):
         while d_idx < len(uniprot_domains):
             d = uniprot_domains[d_idx]
             if not d.template:
-                logger.debug(
-                    'Skipping uniprot domain with id {} because it does not '
-                    'have a structural template...'
-                    .format(d.uniprot_domain_id))
+                logger.debug('Skipping uniprot domain with id {} because it does not '
+                             'have a structural template...'.format(d.uniprot_domain_id))
                 del uniprot_domains[d_idx]
                 continue
             # Copy precalculated Provean data
             if copy_data:
                 try:
-                    self._copy_provean(
-                        d, archive_dir, archive_type)
+                    self._copy_provean(d, archive_dir, archive_type)
                 except subprocess.CalledProcessError as e:
                     logger.error(e)
                     logger.error('Failed to copy provean supporting set!')
@@ -334,8 +316,7 @@ class MyDatabase(object):
             # Copy precalculated homology models
             if copy_data:
                 try:
-                    self._copy_uniprot_domain_data(
-                        d, d.path_to_data, archive_dir, archive_type)
+                    self._copy_uniprot_domain_data(d, d.path_to_data, archive_dir, archive_type)
                 except subprocess.CalledProcessError as e:
                     logger.error(e)
                     logger.error('Failed to copy the domain alignment and / or homology model!')
@@ -350,17 +331,13 @@ class MyDatabase(object):
         """
         """
         with self.session_scope() as session:
-            uniprot_domain_pairs_query = (
-                session.query(UniprotDomainPair)
-                .filter(sa.or_(
+            uniprot_domain_pairs_query = (session.query(UniprotDomainPair).filter(
+                sa.or_(
                     sa.text("uniprot_id_1='{}'".format(uniprot_id)),
-                    sa.text("uniprot_id_2='{}'".format(uniprot_id))))
-            )
+                    sa.text("uniprot_id_2='{}'".format(uniprot_id)))))
             if uniprot_domain_pair_ids:
-                uniprot_domain_pairs_query = (
-                    uniprot_domain_pairs_query
-                    .filter(UniprotDomainPair.uniprot_domain_pair_id.in_(uniprot_domain_pair_ids))
-                )
+                uniprot_domain_pairs_query = (uniprot_domain_pairs_query.filter(
+                    UniprotDomainPair.uniprot_domain_pair_id.in_(uniprot_domain_pair_ids)))
             uniprot_domain_pairs = (
                 uniprot_domain_pairs_query
                 # .options(sa.orm.joinedload('template', innerjoin=True).joinedload('model'))
@@ -374,8 +351,7 @@ class MyDatabase(object):
         _seen = set()
         uniprot_domain_pairs = [
             d for d in uniprot_domain_pairs
-            if d.uniprot_domain_pair_id not in _seen and
-            not _seen.add(d.uniprot_domain_pair_id)
+            if d.uniprot_domain_pair_id not in _seen and not _seen.add(d.uniprot_domain_pair_id)
         ]
         #
         archive_dir = conf.CONFIGS['archive_dir']
@@ -384,10 +360,8 @@ class MyDatabase(object):
         while d_idx < len(uniprot_domain_pairs):
             d = uniprot_domain_pairs[d_idx]
             if not d.template:
-                logger.debug(
-                    'Skipping uniprot domain pair with id {} because it does not '
-                    'have a structural template...'
-                    .format(d.uniprot_domain_pair_id))
+                logger.debug('Skipping uniprot domain pair with id {} because it does not '
+                             'have a structural template...'.format(d.uniprot_domain_pair_id))
                 del uniprot_domain_pairs[d_idx]
                 continue
             # Copy precalculated Provean data
@@ -405,8 +379,8 @@ class MyDatabase(object):
             # Copy precalculated homology models
             if copy_data:
                 try:
-                    self._copy_uniprot_domain_pair_data(
-                        d, d.path_to_data, archive_dir, archive_type)
+                    self._copy_uniprot_domain_pair_data(d, d.path_to_data, archive_dir,
+                                                        archive_type)
                 except subprocess.CalledProcessError as e:
                     logger.error(e)
                     logger.error('Failed to copy domain pair alignments and / or homology model!')
@@ -421,9 +395,7 @@ class MyDatabase(object):
         if path_to_data is None:
             logger.error('Cannot copy uniprot domain data because `path_to_data` is None')
             return
-        if (d.template and
-                d.template.model and
-                d.template.model.alignment_filename and
+        if (d.template and d.template.model and d.template.model.alignment_filename and
                 d.template.model.model_filename):
             try:
                 tmp_save_path = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
@@ -431,16 +403,13 @@ class MyDatabase(object):
                 args = [tmp_save_path] + d.template.model.alignment_filename.split('/')[:-1]
                 path_to_alignment = op.join(*args)
                 subprocess.check_call(
-                    "umask ugo=rwx; mkdir -m 777 -p '{}'"
-                    .format(path_to_alignment), shell=True)
+                    "umask ugo=rwx; mkdir -m 777 -p '{}'".format(path_to_alignment), shell=True)
                 shutil.copyfile(
                     op.join(archive_save_path, d.template.model.alignment_filename),
-                    op.join(tmp_save_path, d.template.model.alignment_filename),
-                )
+                    op.join(tmp_save_path, d.template.model.alignment_filename),)
                 shutil.copyfile(
                     op.join(archive_save_path, d.template.model.model_filename),
-                    op.join(tmp_save_path, d.template.model.model_filename),
-                )
+                    op.join(tmp_save_path, d.template.model.model_filename),)
             except FileNotFoundError:
                 if archive_type != '7zip':
                     raise
@@ -449,31 +418,22 @@ class MyDatabase(object):
                     op.join(path_to_data, d.template.model.alignment_filename),
                     op.join(path_to_data, d.template.model.model_filename),
                 ]
-                path_to_7z = os.path.join(
-                    archive_dir,
-                    'uniprot_domain',
-                    'uniprot_domain.7z'
-                )
+                path_to_7z = os.path.join(archive_dir, 'uniprot_domain', 'uniprot_domain.7z')
                 self._extract_files_from_7zip(path_to_7z, filenames)
 
     def _copy_uniprot_domain_pair_data(self, d, path_to_data, archive_dir, archive_type):
         if path_to_data is None:
             logger.error('Cannot copy uniprot domain pair data because `path_to_data` is None')
             return
-        if (d.template and
-                d.template.model and
-                d.template.model.alignment_filename_1 and
-                d.template.model.alignment_filename_2 and
-                d.template.model.model_filename):
+        if (d.template and d.template.model and d.template.model.alignment_filename_1 and
+                d.template.model.alignment_filename_2 and d.template.model.model_filename):
             try:
                 tmp_save_path = op.join(conf.CONFIGS['archive_temp_dir'], path_to_data)
                 archive_save_path = op.join(archive_dir, path_to_data)
                 path_to_alignment_1 = op.join(
-                    tmp_save_path,
-                    *d.template.model.alignment_filename_1.split('/')[:-1])
+                    tmp_save_path, *d.template.model.alignment_filename_1.split('/')[:-1])
                 path_to_alignment_2 = op.join(
-                    tmp_save_path,
-                    *d.template.model.alignment_filename_2.split('/')[:-1])
+                    tmp_save_path, *d.template.model.alignment_filename_2.split('/')[:-1])
                 os.makedirs(path_to_alignment_1, exist_ok=True)
                 os.makedirs(path_to_alignment_2, exist_ok=True)
                 shutil.copyfile(
@@ -494,16 +454,12 @@ class MyDatabase(object):
                     op.join(path_to_data, d.template.model.alignment_filename_2),
                     op.join(path_to_data, d.template.model.model_filename),
                 ]
-                path_to_7zip = os.path.join(
-                    archive_dir,
-                    'uniprot_domain_pair',
-                    'uniprot_domain_pair.7z'
-                )
+                path_to_7zip = os.path.join(archive_dir, 'uniprot_domain_pair',
+                                            'uniprot_domain_pair.7z')
                 self._extract_files_from_7zip(path_to_7zip, filenames)
 
     def _copy_provean(self, ud, archive_dir, archive_type):
-        if not (ud.uniprot_sequence and
-                ud.uniprot_sequence.provean and
+        if not (ud.uniprot_sequence and ud.uniprot_sequence.provean and
                 ud.uniprot_sequence.provean.provean_supset_filename):
             logger.warning('Provean supset is missing for domain: {}'.format(ud.uniprot_domain_id))
             return
@@ -511,30 +467,25 @@ class MyDatabase(object):
         try:
             # archive_type != '7zip' or extraction failed
             os.makedirs(
-                op.dirname(op.join(
-                    conf.CONFIGS['archive_temp_dir'],
-                    get_uniprot_base_path(ud),
-                    ud.uniprot_sequence.provean.provean_supset_filename)),
-                exist_ok=True
-            )
+                op.dirname(
+                    op.join(conf.CONFIGS['archive_temp_dir'],
+                            get_uniprot_base_path(ud),
+                            ud.uniprot_sequence.provean.provean_supset_filename)),
+                exist_ok=True)
             shutil.copyfile(
-                op.join(
-                    archive_dir,
-                    get_uniprot_base_path(ud),
-                    ud.uniprot_sequence.provean.provean_supset_filename),
-                op.join(
-                    conf.CONFIGS['archive_temp_dir'],
-                    get_uniprot_base_path(ud),
-                    ud.uniprot_sequence.provean.provean_supset_filename))
+                op.join(archive_dir,
+                        get_uniprot_base_path(ud),
+                        ud.uniprot_sequence.provean.provean_supset_filename),
+                op.join(conf.CONFIGS['archive_temp_dir'],
+                        get_uniprot_base_path(ud),
+                        ud.uniprot_sequence.provean.provean_supset_filename))
             shutil.copyfile(
-                op.join(
-                    archive_dir,
-                    get_uniprot_base_path(ud),
-                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
-                op.join(
-                    conf.CONFIGS['archive_temp_dir'],
-                    get_uniprot_base_path(ud),
-                    ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'))
+                op.join(archive_dir,
+                        get_uniprot_base_path(ud),
+                        ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
+                op.join(conf.CONFIGS['archive_temp_dir'],
+                        get_uniprot_base_path(ud),
+                        ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'))
         except FileNotFoundError:
             if archive_type != '7zip':
                 raise
@@ -546,38 +497,29 @@ class MyDatabase(object):
                     get_uniprot_base_path(ud),
                     ud.uniprot_sequence.provean.provean_supset_filename + '.fasta'),
             ]
-            path_to_7zip = os.path.join(
-                archive_dir,
-                'provean',
-                'provean.7z'
-            )
+            path_to_7zip = os.path.join(archive_dir, 'provean', 'provean.7z')
             logger.debug('path_to_7zip: {}'.format(path_to_7zip))
             try:
                 self._extract_files_from_7zip(path_to_7zip, filenames)
                 return
             except errors.Archive7zipFileNotFoundError as e:
                 logger.debug(e)
-                logger.debug(
-                    "Could not extract these files: {} from this archive: {}\n"
-                    "Checking if they are in the archive directory..."
-                    .format(filenames, path_to_7zip)
-                )
+                logger.debug("Could not extract these files: {} from this archive: {}\n"
+                             "Checking if they are in the archive directory...".format(
+                                 filenames, path_to_7zip))
 
     @helper.retry_archive
     def _extract_files_from_7zip(self, path_to_7zip, filenames_in):
         """Extract files to `config['archive_temp_dir']`."""
         logger.debug("Extracting the following files: {}".format(filenames_in))
         filenames = [
-            f for f in filenames_in
-            if not op.isfile(op.join(conf.CONFIGS['archive_temp_dir'], f))
+            f for f in filenames_in if not op.isfile(op.join(conf.CONFIGS['archive_temp_dir'], f))
         ]
         if not filenames:
             logger.debug("All files already been extracted. Done!")
             return
         system_command = "7za x '{path_to_7zip}' '{files}' -y".format(
-            path_to_7zip=path_to_7zip,
-            files="' '".join(filenames)
-        )
+            path_to_7zip=path_to_7zip, files="' '".join(filenames))
         logger.debug('System command:\n{}'.format(system_command))
         p = helper.run(system_command, cwd=conf.CONFIGS['archive_temp_dir'])
         if 'No files to process' in p.stdout:
@@ -593,30 +535,23 @@ class MyDatabase(object):
             with self.session_scope() as session:
                 uniprot_mutation = (
                     session.query(UniprotDomainMutation)
-                    .filter(
-                        (UniprotDomainMutation.uniprot_domain_id == d.uniprot_domain_id) &
-                        (UniprotDomainMutation.mutation == mutation))
-                    .scalar())
+                    .filter((UniprotDomainMutation.uniprot_domain_id == d.uniprot_domain_id) &
+                            (UniprotDomainMutation.mutation == mutation)).scalar())
         elif isinstance(d, UniprotDomainPair) and isinstance(uniprot_id, six.string_types):
             with self.session_scope() as session:
-                uniprot_mutation = (
-                    session.query(UniprotDomainPairMutation)
-                    .filter(
-                        (UniprotDomainPairMutation.uniprot_id == uniprot_id) &
-                        (UniprotDomainPairMutation.uniprot_domain_pair_id ==
-                         d.uniprot_domain_pair_id) &
-                        (UniprotDomainPairMutation.mutation == mutation))
-                    .scalar())
+                uniprot_mutation = (session.query(UniprotDomainPairMutation).filter(
+                    (UniprotDomainPairMutation.uniprot_id == uniprot_id) &
+                    (UniprotDomainPairMutation.uniprot_domain_pair_id == d.uniprot_domain_pair_id)
+                    & (UniprotDomainPairMutation.mutation == mutation)).scalar())
         else:
             logger.debug('d: {}\td type: {}'.format(d, type(d)))
             raise Exception('Not enough arguments, or the argument types are incorrect!')
 
         if copy_data:
             try:
-                self._copy_mutation_data(
-                    uniprot_mutation, d.path_to_data, conf.CONFIGS['archive_dir'])
-            except (subprocess.CalledProcessError,
-                    errors.Archive7zipError,
+                self._copy_mutation_data(uniprot_mutation, d.path_to_data,
+                                         conf.CONFIGS['archive_dir'])
+            except (subprocess.CalledProcessError, errors.Archive7zipError,
                     errors.Archive7zipFileNotFoundError) as e:
                 logger.error(e)
                 uniprot_mutation.model_filename_wt = None
@@ -687,9 +622,8 @@ class MyDatabase(object):
         assert op.isfile(provean_supset_file + '.fasta')
 
         archive_dir = conf.CONFIGS['archive_dir']
-        logger.debug(
-            'Moving provean supset to the output folder: {}'
-            .format(op.join(archive_dir, path_to_data)))
+        logger.debug('Moving provean supset to the output folder: {}'
+                     .format(op.join(archive_dir, path_to_data)))
         helper.makedirs(op.join(archive_dir, path_to_data), mode=0o777)
         helper.copyfile(
             provean_supset_file,
@@ -714,25 +648,21 @@ class MyDatabase(object):
                     helper.copyfile(
                         files_dict['alignment_files'][0],
                         op.join(archive_save_path, d.template.model.alignment_filename),
-                        mode=0o666
-                    )
+                        mode=0o666)
                 elif isinstance(d.template.model, UniprotDomainPairModel):
                     helper.copyfile(
                         files_dict['alignment_files'][0],
                         op.join(archive_save_path, d.template.model.alignment_filename_1),
-                        mode=0o666
-                    )
+                        mode=0o666)
                     helper.copyfile(
                         files_dict['alignment_files'][1],
                         op.join(archive_save_path, d.template.model.alignment_filename_2),
-                        mode=0o666
-                    )
+                        mode=0o666)
                 # Save the modelled structure
                 helper.copyfile(
                     files_dict['model_file'],
                     op.join(archive_save_path, d.template.model.model_filename),
-                    mode=0o666
-                )
+                    mode=0o666)
         self.merge_row(d.template.model)
 
     def merge_mutation(self, mut, path_to_data=False):
@@ -745,18 +675,15 @@ class MyDatabase(object):
             # Save Foldx structures
             if mut.model_filename_wt and mut.model_filename_mut:
                 helper.makedirs(
-                    op.dirname(op.join(archive_save_dir, mut.model_filename_wt)),
-                    mode=0o777)
+                    op.dirname(op.join(archive_save_dir, mut.model_filename_wt)), mode=0o777)
                 helper.copyfile(
                     op.join(archive_temp_save_dir, mut.model_filename_wt),
                     op.join(archive_save_dir, mut.model_filename_wt),
-                    mode=0o666
-                )
+                    mode=0o666)
                 helper.copyfile(
                     op.join(archive_temp_save_dir, mut.model_filename_mut),
                     op.join(archive_save_dir, mut.model_filename_mut),
-                    mode=0o666
-                )
+                    mode=0o666)
         self.merge_row(mut)
 
 
@@ -780,8 +707,7 @@ def get_uniprot_base_path(d=None, uniprot_name=None, uniprot_id=None):
 
     # TODO: Screw the splitting of uniprot ids!
     uniprot_base_path = (
-        '{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/'
-        .format(
+        '{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/'.format(
             organism_name=uniprot_name.split('_')[-1].lower(),
             uniprot_id_part_1=uniprot_id[:3],
             uniprot_id_part_2=uniprot_id[3:5],
@@ -822,19 +748,13 @@ def get_uniprot_domain_path(d=None, **vargs):
 
     if 'pfam_clan' in vargs:
         vargs['alignment_def'] = vargs['alignment_def'].replace(':', '-')
-        uniprot_domain_path = (
-            '{pfam_clan:.36}.{alignment_def}/'
-            .format(**vargs)
-        )
+        uniprot_domain_path = ('{pfam_clan:.36}.{alignment_def}/'.format(**vargs))
     elif 'pfam_clan_1' in vargs:
         vargs['alignment_def_1'] = vargs['alignment_def_1'].replace(':', '-')
         vargs['alignment_def_2'] = vargs['alignment_def_2'].replace(':', '-')
-        uniprot_domain_path = (
-            '{pfam_clan_1:.36}.{alignment_def_1}/'
-            '{pfam_clan_2:.36}.{alignment_def_2}/'
-            '{uniprot_id_2}/'
-            .format(**vargs)
-        )
+        uniprot_domain_path = ('{pfam_clan_1:.36}.{alignment_def_1}/'
+                               '{pfam_clan_2:.36}.{alignment_def_2}/'
+                               '{uniprot_id_2}/'.format(**vargs))
     else:
         raise Exception
 

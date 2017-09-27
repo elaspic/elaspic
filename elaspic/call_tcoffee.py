@@ -1,9 +1,11 @@
-import os.path as op
-from os import environ
-import time
 import logging
+import os.path as op
 import shutil
+import time
+from os import environ
+
 from Bio import SeqIO
+
 from . import conf, errors, helper, structure_tools
 
 logger = logging.getLogger(__name__)
@@ -16,23 +18,21 @@ class TCoffee(object):
         """
         """
         self.alignment_id = op.splitext(op.basename(alignment_fasta_file))[0]
-        self.alignment_fasta_file = op.join(
-            conf.CONFIGS['tcoffee_dir'], self.alignment_id + '.fasta')
+        self.alignment_fasta_file = op.join(conf.CONFIGS['tcoffee_dir'],
+                                            self.alignment_id + '.fasta')
         if alignment_fasta_file != self.alignment_fasta_file:
             shutil.copy(alignment_fasta_file, self.alignment_fasta_file)
 
         self.target_seqrecord, self.template_seqrecord = (
-            list(SeqIO.parse(self.alignment_fasta_file, 'fasta'))
-        )
+            list(SeqIO.parse(self.alignment_fasta_file, 'fasta')))
         self.mode = mode
 
         if pdb_file is not None:
             self.pdb_id, self.pdb_file = self._clean_pdb(pdb_file)
 
             # Write a template file for the sequences to be aligned
-            self.alignment_template_file = (
-                op.join(conf.CONFIGS['tcoffee_dir'], '{}.template_list'.format(self.alignment_id))
-            )
+            self.alignment_template_file = (op.join(conf.CONFIGS['tcoffee_dir'],
+                                                    '{}.template_list'.format(self.alignment_id)))
             with open(self.alignment_template_file, 'w') as fh:
                 fh.writelines([
                     ">" + self.target_seqrecord.id + " _P_ " + self.pdb_id.upper() + "\n"
@@ -41,18 +41,14 @@ class TCoffee(object):
 
     def _clean_pdb(self, pdb_file):
         """Write a template PDB file in a format that is compatible with t_coffee."""
-        message = (
-            "Cleaning pdb {} to serve as a template for t_coffee...".format(pdb_file)
-        )
+        message = ("Cleaning pdb {} to serve as a template for t_coffee...".format(pdb_file))
         logger.debug(message)
 
         pdb_id = structure_tools.get_pdb_id(pdb_file)
-        pdb_file_new = op.join(
-            conf.CONFIGS['tcoffee_dir'], pdb_id + '.pdb')
+        pdb_file_new = op.join(conf.CONFIGS['tcoffee_dir'], pdb_id + '.pdb')
 
-        system_command = (
-            "t_coffee -other_pg extract_from_pdb {} > {}".format(pdb_file, pdb_file_new)
-        )
+        system_command = ("t_coffee -other_pg extract_from_pdb {} > {}".format(
+            pdb_file, pdb_file_new))
         p = helper.run(system_command, cwd=conf.CONFIGS['tcoffee_dir'])
         if p.returncode != 0:
             logger.error("Error cleaning pdb!")
@@ -62,8 +58,8 @@ class TCoffee(object):
         time.sleep(0.2)
         return pdb_id, pdb_file_new
 
-    def _get_tcoffee_system_command(
-            self, alignment_fasta_file, alignment_template_file, alignment_output_file, mode):
+    def _get_tcoffee_system_command(self, alignment_fasta_file, alignment_template_file,
+                                    alignment_output_file, mode):
         """.
 
         Parameters
@@ -95,9 +91,8 @@ class TCoffee(object):
         tcoffee_env['TMP_4_TCOFFEE'] = op.join(conf.CONFIGS['tcoffee_dir'], 'tmp')
         tcoffee_env['CACHE_4_TCOFFEE'] = op.join(conf.CONFIGS['tcoffee_dir'], 'cache')
         tcoffee_env['LOCKDIR_4_TCOFFEE'] = op.join(conf.CONFIGS['tcoffee_dir'], 'lck')
-        tcoffee_env['ERRORFILE_4_TCOFFEE'] = (
-            op.join(conf.CONFIGS['tcoffee_dir'], 't_coffee.ErrorReport')
-        )
+        tcoffee_env['ERRORFILE_4_TCOFFEE'] = (op.join(conf.CONFIGS['tcoffee_dir'],
+                                                      't_coffee.ErrorReport'))
         tcoffee_env['BLASTDB'] = conf.CONFIGS['blast_db_dir']
         tcoffee_env['PDB_DIR'] = conf.CONFIGS['pdb_dir']
         tcoffee_env['NO_REMOTE_PDB_DIR'] = '1'
@@ -105,14 +100,14 @@ class TCoffee(object):
         # Print a command that can be used to set environmental variables
         t_coffee_environment_variables = [
             'HOME_4_TCOFFEE', 'TMP_4_TCOFFEE', 'CACHE_4_TCOFFEE', 'LOCKDIR_4_TCOFFEE',
-            'ERRORFILE_4_TCOFFEE', 'BLASTDB', 'PDB_DIR', 'NO_REMOTE_PDB_DIR']
+            'ERRORFILE_4_TCOFFEE', 'BLASTDB', 'PDB_DIR', 'NO_REMOTE_PDB_DIR'
+        ]
         exports = [
             'export {}={}'.format(x, tcoffee_env.get(x, '$' + x))
             for x in t_coffee_environment_variables
         ]
         message = (
-            "\nSystem command for setting environmental variables:\n" + ' && '.join(exports)
-        )
+            "\nSystem command for setting environmental variables:\n" + ' && '.join(exports))
         logger.debug(message)
 
         # ### System command
@@ -125,78 +120,46 @@ class TCoffee(object):
         # -output fasta_aln -outfile tcoffee_output.aln -seq seqfiles.fasta
         # -pdb_min_sim=20 -template_file seqfiles.template '
 
-        multi_core_option = (
-            '{}'.format(conf.CONFIGS['n_cores'])
-            if conf.CONFIGS['n_cores'] and int(conf.CONFIGS['n_cores']) > 1 else 'no'
-        )
+        multi_core_option = ('{}'.format(conf.CONFIGS['n_cores']) if conf.CONFIGS['n_cores'] and
+                             int(conf.CONFIGS['n_cores']) > 1 else 'no')
         n_core_option = '{}'.format(conf.CONFIGS['n_cores']) if conf.CONFIGS['n_cores'] else '1'
         protein_db = op.join(conf.CONFIGS['blast_db_dir'], 'nr')
         pdb_db = op.join(conf.CONFIGS['blast_db_dir'], 'pdbaa')
         if mode == '3dcoffee':
             system_command = (
-                "t_coffee " +
-                " -seq " + alignment_fasta_file +
-                " -method=sap_pair,mustang_pair,TMalign_pair " +
-                " -blast_server=LOCAL " +
-                " -protein_db=" + protein_db +
-                " -pdb_db=" + pdb_db +
-                " -outorder=input" +
-                " -output=fasta_aln" +
-                " -pdb_min_sim=30" +
+                "t_coffee " + " -seq " + alignment_fasta_file +
+                " -method=sap_pair,mustang_pair,TMalign_pair " + " -blast_server=LOCAL " +
+                " -protein_db=" + protein_db + " -pdb_db=" + pdb_db + " -outorder=input" +
+                " -output=fasta_aln" + " -pdb_min_sim=30" +
                 # " -quiet" +
                 # " -no_warning" +
-                " -outfile=" + alignment_output_file +
-                " -multi_core=no" +
-                " -n_core=" + n_core_option +
-                " -template_file=" + alignment_template_file
-            )
+                " -outfile=" + alignment_output_file + " -multi_core=no" + " -n_core=" +
+                n_core_option + " -template_file=" + alignment_template_file)
         if mode == 'expresso':
             system_command = (
-                't_coffee' +
-                ' -mode expresso' +
-                ' -method sap_pair' +
-                ' -seq ' + alignment_fasta_file +
-                ' -blast_server=LOCAL' +
-                " -protein_db=" + protein_db +
-                " -pdb_db=" + pdb_db +
-                ' -outorder=input' +
-                ' -output fasta_aln' +
-                ' -quiet -no_warning' +
-                ' -outfile=' + alignment_output_file +
-                ' -cache ignore ' +
+                't_coffee' + ' -mode expresso' + ' -method sap_pair' + ' -seq ' +
+                alignment_fasta_file + ' -blast_server=LOCAL' + " -protein_db=" + protein_db +
+                " -pdb_db=" + pdb_db + ' -outorder=input' + ' -output fasta_aln' +
+                ' -quiet -no_warning' + ' -outfile=' + alignment_output_file + ' -cache ignore ' +
                 ' -multi_core ' + multi_core_option +  # AS changed !!!
                 ' -n_core ' + n_core_option  # AS changed !!!
             )
         if mode == 't_coffee':
             system_command = (
-                't_coffee' +
-                ' -mode expresso' +
-                ' -method clustalw_pair,slow_pair' +
-                ' -seq ' + alignment_fasta_file +
-                ' -blast_server=LOCAL' +
-                " -protein_db=" + protein_db +
-                " -pdb_db=" + pdb_db +
-                ' -outorder=input' +
-                ' -output fasta_aln' +
-                ' -quiet -no_warning' +
-                ' -outfile=' + alignment_output_file +
-                ' -multi_core ' + multi_core_option +  # AS changed !!!
+                't_coffee' + ' -mode expresso' + ' -method clustalw_pair,slow_pair' + ' -seq ' +
+                alignment_fasta_file + ' -blast_server=LOCAL' + " -protein_db=" + protein_db +
+                " -pdb_db=" + pdb_db + ' -outorder=input' + ' -output fasta_aln' +
+                ' -quiet -no_warning' + ' -outfile=' + alignment_output_file + ' -multi_core ' +
+                multi_core_option +  # AS changed !!!
                 ' -n_core ' + n_core_option  # AS changed !!!
             )
         if mode == 'quick':
             system_command = (
-                't_coffee' +
-                ' -mode quickaln' +
-                ' -method clustalw_pair,slow_pair' +
-                ' -seq ' + alignment_fasta_file +
-                ' -blast_server=LOCAL' +
-                " -protein_db=" + protein_db +
-                " -pdb_db=" + pdb_db +
-                ' -outorder=input' +
-                ' -output fasta_aln' +
-                ' -quiet -no_warning' +
-                ' -outfile=' + alignment_output_file +
-                ' -multi_core ' + multi_core_option +  # AS changed !!!
+                't_coffee' + ' -mode quickaln' + ' -method clustalw_pair,slow_pair' + ' -seq ' +
+                alignment_fasta_file + ' -blast_server=LOCAL' + " -protein_db=" + protein_db +
+                " -pdb_db=" + pdb_db + ' -outorder=input' + ' -output fasta_aln' +
+                ' -quiet -no_warning' + ' -outfile=' + alignment_output_file + ' -multi_core ' +
+                multi_core_option +  # AS changed !!!
                 ' -n_core ' + n_core_option  # AS changed !!!
             )
         return system_command, tcoffee_env
@@ -256,5 +219,5 @@ class TCoffee(object):
                 return alignment_output_file
             else:
                 logger.error('Even quickaln didn\'t work. Cannot create an alignment. Giving up.')
-                raise errors.TcoffeeError(
-                    p.stdout, p.stderr, self.alignment_fasta_file, system_command)
+                raise errors.TcoffeeError(p.stdout, p.stderr, self.alignment_fasta_file,
+                                          system_command)
