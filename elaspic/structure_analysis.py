@@ -1,6 +1,6 @@
+import logging
 import os
 import os.path as op
-import logging
 import tempfile
 
 import pandas as pd
@@ -8,7 +8,6 @@ import pandas as pd
 from . import errors, helper, structure_tools
 
 logger = logging.getLogger(__name__)
-
 
 # CONSTANTS
 #: Standard accessibilities for a ALA-X-ALA tripeptide (obtained from NACCESS)
@@ -35,9 +34,8 @@ ATOM S   2  VAL  151.44   0.0 114.28   0.0   0.00   0.0 114.28   0.0  37.16   0.
 ATOM S   2  TRP  249.36   0.0 187.67   0.0  23.60   0.0 211.26   0.0  38.10   0.0 189.67   0.0  59.69   0.0
 ATOM S   2  TYR  212.76   0.0 135.35   0.0  42.03   0.0 177.38   0.0  35.38   0.0 136.50   0.0  76.26   0.0
 """  # noqa
-STANDARD_SASA_ALL = [
-    [l.strip() for l in line.split()] for line in STANDARD_DATA.strip().split('\n')[1:]
-]
+STANDARD_SASA_ALL = [[l.strip() for l in line.split()]
+                     for line in STANDARD_DATA.strip().split('\n')[1:]]
 STANDARD_SASA = {x[3]: float(x[4]) for x in STANDARD_SASA_ALL}
 
 
@@ -70,25 +68,19 @@ class AnalyzeStructure:
     def __call__(self, chain_id, mutation, chain_id_other=None):
         """Calculate all properties."""
         # Solvent accessibility
-        (seasa_by_chain_together, seasa_by_chain_separately,
-         seasa_by_residue_together, seasa_by_residue_separately) = self.get_seasa()
-        seasa_info = (
-            seasa_by_residue_separately[
-                (seasa_by_residue_separately['pdb_chain'] == chain_id) &
-                (seasa_by_residue_separately['res_num'] == mutation[1:-1])
-            ].iloc[0]
-        )
+        (seasa_by_chain_together, seasa_by_chain_separately, seasa_by_residue_together,
+         seasa_by_residue_separately) = self.get_seasa()
+        seasa_info = (seasa_by_residue_separately[
+            (seasa_by_residue_separately['pdb_chain'] == chain_id) &
+            (seasa_by_residue_separately['res_num'] == mutation[1:-1])].iloc[0])
         self._validate_mutation(seasa_info['res_name'], mutation)
         solvent_accessibility = seasa_info['rel_sasa']
 
         # Secondary structure
         secondary_structure_df = self.get_secondary_structure()
         secondary_structure_df = (
-            secondary_structure_df[
-                (secondary_structure_df.chain == chain_id) &
-                (secondary_structure_df.resnum == mutation[1:-1])
-            ]
-        )
+            secondary_structure_df[(secondary_structure_df.chain == chain_id) &
+                                   (secondary_structure_df.resnum == mutation[1:-1])])
         assert len(secondary_structure_df) == 1
         secondary_structure_df = secondary_structure_df.iloc[0]
         self._validate_mutation(seasa_info['res_name'], mutation)
@@ -100,15 +92,13 @@ class AnalyzeStructure:
             try:
                 contact_distance = self.get_interchain_distances(chain_id, mutation)
                 contact_distance = contact_distance[chain_id][chain_id_other]
-                logger.debug(
-                    'The shortest interchain distance between chain {} and chain {} is {}'
-                    .format(chain_id, chain_id_other, contact_distance))
+                logger.debug('The shortest interchain distance between chain {} and chain {} is {}'
+                             .format(chain_id, chain_id_other, contact_distance))
                 if not contact_distance:
                     raise ValueError()
             except (IndexError, KeyError, ValueError) as e:
                 logger.warning(
-                    'Could not calculate the shortest contact distance between two chains!'
-                )
+                    'Could not calculate the shortest contact distance between two chains!')
                 logger.warning(e)
                 logger.warning(contact_distance)
                 raise
@@ -122,8 +112,7 @@ class AnalyzeStructure:
             secondary_structure=secondary_structure,
             contact_distance=contact_distance,
             physchem=physchem,
-            physchem_ownchain=physchem_ownchain,
-        )
+            physchem_ownchain=physchem_ownchain,)
         return results
 
     def get_structure_file(self, chains, ext='.pdb'):
@@ -162,36 +151,40 @@ class AnalyzeStructure:
             'equal_charge': [],
             'opposite_charge': [],
             'h_bond': [],
-            'carbon_contact': []}
+            'carbon_contact': []
+        }
         for opposite_chain in opposite_chains:
             for partner_residue in opposite_chain:
-                self._increment_vector(
-                    mutated_residue, mutated_atoms, partner_residue, opposite_chain_contacts)
+                self._increment_vector(mutated_residue, mutated_atoms, partner_residue,
+                                       opposite_chain_contacts)
 
         # Go through each atom in each residue in the mutated chain...
         same_chain_contacts = {
             'equal_charge': [],
             'opposite_charge': [],
             'h_bond': [],
-            'carbon_contact': []}
+            'carbon_contact': []
+        }
         for partner_residue in mutated_chain:
             # Skipping the mutated residue...
             if partner_residue == mutated_residue:
                 continue
-            self._increment_vector(
-                mutated_residue, mutated_atoms, partner_residue, same_chain_contacts)
+            self._increment_vector(mutated_residue, mutated_atoms, partner_residue,
+                                   same_chain_contacts)
 
         opposite_chain_contact_vector = [
             len(opposite_chain_contacts['equal_charge']),
             len(opposite_chain_contacts['opposite_charge']),
             len(opposite_chain_contacts['h_bond']),
-            len(set(opposite_chain_contacts['carbon_contact']))]
+            len(set(opposite_chain_contacts['carbon_contact']))
+        ]
 
         same_chain_contact_vector = [
             len(same_chain_contacts['equal_charge']),
             len(same_chain_contacts['opposite_charge']),
             len(same_chain_contacts['h_bond']),
-            len(set(same_chain_contacts['carbon_contact']))]
+            len(set(same_chain_contacts['carbon_contact']))
+        ]
 
         return opposite_chain_contact_vector, same_chain_contact_vector
 
@@ -203,15 +196,15 @@ class AnalyzeStructure:
             logger.warning(structure_tools.AAA_DICT[resname])
             raise errors.MutationMismatchError()
 
-    def _increment_vector(
-            self, mutated_residue, mutated_atoms, partner_residue, contact_features_dict):
+    def _increment_vector(self, mutated_residue, mutated_atoms, partner_residue,
+                          contact_features_dict):
         # For each residue each atom of the mutated residue has to be checked
         for mutated_atom in mutated_atoms:
             mutated_atom_type = self._get_atom_type(mutated_residue.resname, mutated_atom)
             # And each partner residue and partner atom
             for partner_atom in partner_residue:
-                r = structure_tools.calculate_distance(
-                    mutated_atom, partner_atom, self.vdw_distance)
+                r = structure_tools.calculate_distance(mutated_atom, partner_atom,
+                                                       self.vdw_distance)
                 if r is not None:
                     partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
                     if partner_atom_type == 'ignore':
@@ -221,13 +214,11 @@ class AnalyzeStructure:
                         # nonredundant. Thus, the atomic coordinates are
                         # used to keep track of which interactions where
                         # already counted. Does not matter as much for others.
-                        contact_features_dict['carbon_contact'].append(
-                            tuple(partner_atom.coord))
+                        contact_features_dict['carbon_contact'].append(tuple(partner_atom.coord))
                     if r <= self.min_contact_distance:
                         if (mutated_atom_type == 'charged_plus' and
                                 partner_atom_type == 'charged_plus'):
-                            contact_features_dict['equal_charge'].append(
-                                tuple(mutated_atom.coord))
+                            contact_features_dict['equal_charge'].append(tuple(mutated_atom.coord))
                         if (mutated_atom_type == 'charged_minus' and
                                 partner_atom_type == 'charged_plus'):
                             contact_features_dict['opposite_charge'].append(
@@ -238,20 +229,13 @@ class AnalyzeStructure:
                                 tuple(mutated_atom.coord))
                         if (mutated_atom_type == 'charged_minus' and
                                 partner_atom_type == 'charged_minus'):
-                            contact_features_dict['equal_charge'].append(
-                                tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'charged' and
-                                partner_atom_type == 'polar'):
-                            contact_features_dict['h_bond'].append(
-                                tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'polar' and
-                                partner_atom_type == 'charged'):
-                            contact_features_dict['h_bond'].append(
-                                tuple(mutated_atom.coord))
-                        if (mutated_atom_type == 'polar' and
-                                partner_atom_type == 'polar'):
-                            contact_features_dict['h_bond'].append(
-                                tuple(mutated_atom.coord))
+                            contact_features_dict['equal_charge'].append(tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'charged' and partner_atom_type == 'polar'):
+                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'polar' and partner_atom_type == 'charged'):
+                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
+                        if (mutated_atom_type == 'polar' and partner_atom_type == 'polar'):
+                            contact_features_dict['h_bond'].append(tuple(mutated_atom.coord))
 
     def _get_atom_type(self, residue, atom):
         """Get the type of atom we are dealing with (i.e. charged, polar, carbon).
@@ -268,8 +252,8 @@ class AnalyzeStructure:
         charged_minus = ['OD1', 'OD2', 'OE1', 'OE2']
         # Label of polar atoms
         polar = [
-            'OG', 'OG1', 'OD1', 'OD2', 'ND1', 'OE1', 'NE', 'NE1', 'NE2', 'ND1', 'ND2', 'SG',
-            'OH', 'O', 'N'
+            'OG', 'OG1', 'OD1', 'OD2', 'ND1', 'OE1', 'NE', 'NE1', 'NE2', 'ND1', 'ND2', 'SG', 'OH',
+            'O', 'N'
         ]
 
         if residue.upper() in ['ARG', 'R', 'LYS', 'K']:
@@ -318,7 +302,7 @@ class AnalyzeStructure:
         base_filename = op.splitext(filename)[0]
 
         # Convert pdb to xyz coordiates
-        assert(os.path.isfile(op.join(self.working_dir, filename)))
+        assert (os.path.isfile(op.join(self.working_dir, filename)))
 
         system_command = 'pdb_to_xyzrn {0}.pdb'.format(op.join(self.working_dir, base_filename))
         logger.debug('msms system command 1: %s' % system_command)
@@ -361,9 +345,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         # Read and parse the output
         with open(op.join(self.working_dir, base_filename + '.area'), 'r') as fh:
             file_data = fh.readlines()
-        file_data = [
-            [l.strip() for l in line.split()] for line in file_data
-        ]
+        file_data = [[l.strip() for l in line.split()] for line in file_data]
         del file_data[0]
 
         msms_columns = [
@@ -372,11 +354,10 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
 
         def msms_parse_row(row):
             parsed_row = [
-                int(row[0]), float(row[1]), float(row[2]),
-                row[3].split('_')[0].strip(),
-                row[3].split('_')[1].strip(),
-                row[3].split('_')[2],
-                row[3].split('_')[3]
+                int(row[0]),
+                float(row[1]),
+                float(row[2]), row[3].split('_')[0].strip(), row[3].split('_')[1].strip(),
+                row[3].split('_')[2], row[3].split('_')[3]
             ]
             return parsed_row
 
@@ -401,8 +382,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         structure_file = self.get_structure_file(''.join(self.chain_ids))
         stride_results_file = op.join(
             op.dirname(structure_file),
-            structure_tools.get_pdb_id(structure_file) + '_stride_results.txt'
-        )
+            structure_tools.get_pdb_id(structure_file) + '_stride_results.txt')
         system_command = 'stride {} -f{}'.format(structure_file, stride_results_file)
         logger.debug('stride system command: %s' % system_command)
         p = helper.run(system_command, cwd=self.working_dir)
@@ -412,9 +392,13 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         # collect results
         with open(stride_results_file) as fh:
             file_data_df = pd.DataFrame(
-                [[structure_tools.AAA_DICT[row.split()[1]], row.split()[2],
-                  row.split()[3], int(row.split()[4]), row.split()[5]]
-                 for row in fh.readlines() if row[:3] == 'ASG'],
+                [[
+                    structure_tools.AAA_DICT[row.split()[1]],
+                    row.split()[2],
+                    row.split()[3],
+                    int(row.split()[4]),
+                    row.split()[5]
+                ] for row in fh.readlines() if row[:3] == 'ASG'],
                 columns=['amino_acid', 'chain', 'resnum', 'idx', 'ss_code'])
         return file_data_df
 
@@ -449,10 +433,9 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
                         if pdb_mutation:
                             if str(residue_2.id[1]) != pdb_mutation[1:-1]:
                                 continue
-                            if ((structure_tools.convert_aa(residue_2.resname) !=
-                                    pdb_mutation[0]) and (
-                                    structure_tools.convert_aa(residue_2.resname) !=
-                                    pdb_mutation[-1])):
+                            if ((structure_tools.convert_aa(residue_2.resname) != pdb_mutation[0])
+                                    and (structure_tools.convert_aa(residue_2.resname) !=
+                                         pdb_mutation[-1])):
                                 logger.debug(pdb_mutation)
                                 logger.debug(structure_tools.convert_aa(residue_2.resname))
                                 logger.debug(residue_2.id)
@@ -470,8 +453,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         if not shortest_interchain_distances:
             logger.warning(
                 'get_interchain_distances({pdb_chain}, {pdb_mutation}, {cutoff}) failed!'
-                .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff)
-            )
+                .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff))
             raise Exception()
 
         _shortest_interchain_distances_complement = {}
@@ -481,25 +463,24 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         shortest_interchain_distances.update(_shortest_interchain_distances_complement)
 
         all_chains = {key for key in shortest_interchain_distances}
-        all_chains.update(
-            {key_2 for key in shortest_interchain_distances
-             for key_2 in shortest_interchain_distances[key]}
-        )
+        all_chains.update({
+            key_2
+            for key in shortest_interchain_distances
+            for key_2 in shortest_interchain_distances[key]
+        })
 
         if set(all_chains) != set(self.sp.chain_ids):
             logger.warning(
                 'get_interchain_distances({pdb_chain}, {pdb_mutation}, {cutoff}) failed!'
-                .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff)
-            )
+                .format(pdb_chain=pdb_chain, pdb_mutation=pdb_mutation, cutoff=cutoff))
             logger.warning('Did not calculate chain distances for all chain pairs!')
             logger.warning('all_chains: {}'.format(all_chains))
             logger.warning('self.sp.chain_ids: {}'.format(self.sp.chain_ids))
             raise Exception()
 
         for key_1, value_1 in shortest_interchain_distances.items():
-            logger.debug(
-                'Calculated interchain distances between chain {} and chains {}.'
-                .format(key_1, ', '.join(list(value_1.keys()))))
+            logger.debug('Calculated interchain distances between chain {} and chains {}.'
+                         .format(key_1, ', '.join(list(value_1.keys()))))
 
         return shortest_interchain_distances
 
@@ -578,10 +559,8 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         return sasa
 
     def __run_pops_area(self, full_filename):
-        system_command = (
-            'pops --chainOut'
-            ' --pdb ' + full_filename +
-            ' --popsOut ' + full_filename + '.out')
+        system_command = ('pops --chainOut'
+                          ' --pdb ' + full_filename + ' --popsOut ' + full_filename + '.out')
         p = helper.run(system_command, cwd=self.working_dir)
         # The returncode can be non zero even if pops calculated the surface
         # area. In that case it is indicated by "clean termination" written
@@ -589,8 +568,8 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         # if output[-1] == 'Clean termination' the run should be OK
         output = [line for line in p.stdout.split('\n') if line != '']
         logger.debug(system_command)
-#        logger.debug('pops result: %s' % result) # Prints the entire POPs output
-#        logger.debug('pops error: %s' % e)
+        #        logger.debug('pops result: %s' % result) # Prints the entire POPs output
+        #        logger.debug('pops error: %s' % e)
         error_message_1 = 'Warning: Atom distance too short! Probably incorrect POPS results!'
         if error_message_1 in p.stderr:
             logger.warning(error_message_1)
@@ -614,9 +593,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
             result = [
                 x.split(' ') for x in pops.readlines() if x != '' and x.split(' ')[0] in keep
             ]
-            result = [
-                [x.strip() for x in item if x != ''] for item in result
-            ]
+            result = [[x.strip() for x in item if x != ''] for item in result]
         if not result or len(result) != 3:
             result = self.__read_pops_area_new(filename)
         return result
@@ -640,8 +617,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
                     continue
                 if use_next_line:
                     row = line.strip().split()
-                    result = [
-                        ['hydrophobic:', row[0]], ['hydrophilic:', row[1]], ['total:', row[2]]
-                    ]
+                    result = [['hydrophobic:', row[0]], ['hydrophilic:', row[1]],
+                              ['total:', row[2]]]
                     break
         return result

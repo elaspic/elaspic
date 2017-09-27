@@ -1,12 +1,12 @@
+import functools
+import json
+import logging
 import os
-import sys
 import shlex
 import shutil
-import subprocess
-import logging
-import json
 import string
-import functools
+import subprocess
+import sys
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,10 @@ def run(system_command, **vargs):
     if not isinstance(system_command, (list, tuple)):
         system_command = shlex.split(system_command)
     p = subprocess.run(
-        system_command, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        system_command,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         preexec_fn=lambda: _set_process_group(os.getpgrp()),
         **vargs)
     p.stdout = p.stdout.strip()
@@ -96,8 +99,7 @@ def retry_database(fn):
     from retrying import retry
     import sqlalchemy as sa
     r = retry(
-        retry_on_exception=lambda exc:
-            _check_exception(exc, valid_exc=sa.exc.OperationalError),
+        retry_on_exception=lambda exc: _check_exception(exc, valid_exc=sa.exc.OperationalError),
         wait_exponential_multiplier=1000,
         wait_exponential_max=60000,
         stop_max_attempt_number=7)
@@ -109,8 +111,7 @@ def retry_archive(fn):
     from retrying import retry
     from elaspic import errors
     r = retry(
-        retry_on_exception=lambda exc:
-            _check_exception(exc, valid_exc=errors.Archive7zipError),
+        retry_on_exception=lambda exc: _check_exception(exc, valid_exc=errors.Archive7zipError),
         wait_fixed=2000,
         stop_max_attempt_number=2)
     return r(fn)
@@ -137,6 +138,7 @@ def makedirs(path, mode=None, exist_ok=True):
 # Locks
 def lock(fn):
     """Allow only a single instance of function `fn`, and save results to a lock file."""
+
     @functools.wraps(fn)
     def locked_fn(self, *args, **kwargs):
         """.
@@ -163,18 +165,15 @@ def lock(fn):
         except FileExistsError:
             try:
                 results = json.load(open(lock_filename, 'r'))
-                info_message = (
-                    "Results have already been calculated and are in file: '{}'.\n"
-                    .format(lock_filename, results)
-                )
+                info_message = ("Results have already been calculated and are in file: '{}'.\n"
+                                .format(lock_filename, results))
                 logger.info(info_message)
                 return lock_filename, results
             except ValueError:
                 info_message = (
                     "Another process is currently running this function.\n"
                     "If you believe this is an error, delete lock file '{}' and try again."
-                    .format(lock_filename)
-                )
+                    .format(lock_filename))
                 logger.info(info_message)
                 return lock_filename, None
 
@@ -188,4 +187,5 @@ def lock(fn):
             lock.close()
             os.remove(lock.name)
             raise
+
     return locked_fn

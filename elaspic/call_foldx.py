@@ -1,7 +1,7 @@
+import logging
 import os
 import os.path as op
 import shutil
-import logging
 
 from . import conf, errors, helper
 
@@ -33,22 +33,20 @@ names_rows_stability = [
     ['number_of_residues', 23]
 ]
 names_stability_wt = (
-    [name + '_wt' for name in list(zip(*names_rows_stability))[0][:-1]] +
-    ['number_of_residues'])
+    [name + '_wt' for name in list(zip(*names_rows_stability))[0][:-1]] + ['number_of_residues'])
 names_stability_mut = (
-    [name + '_mut' for name in list(zip(*names_rows_stability))[0][:-1]] +
-    ['number_of_residues'])
+    [name + '_mut' for name in list(zip(*names_rows_stability))[0][:-1]] + ['number_of_residues'])
 
-names_rows_stability_complex = (
-    [['intraclashes_energy_1', 3], ['intraclashes_energy_2', 4], ] +
-    [[x[0], x[1] + 4] for x in names_rows_stability]
-)
+names_rows_stability_complex = ([
+    ['intraclashes_energy_1', 3],
+    ['intraclashes_energy_2', 4],
+] + [[x[0], x[1] + 4] for x in names_rows_stability])
 names_stability_complex_wt = (
-    [name + '_wt' for name in list(zip(*names_rows_stability_complex))[0][:-1]] +
-    ['number_of_residues'])
+    [name + '_wt'
+     for name in list(zip(*names_rows_stability_complex))[0][:-1]] + ['number_of_residues'])
 names_stability_complex_mut = (
-    [name + '_mut' for name in list(zip(*names_rows_stability_complex))[0][:-1]] +
-    ['number_of_residues'])
+    [name + '_mut'
+     for name in list(zip(*names_rows_stability_complex))[0][:-1]] + ['number_of_residues'])
 
 
 class FoldX(object):
@@ -86,15 +84,18 @@ class FoldX(object):
             return self.__read_result(
                 op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'), whatToRun)
         elif whatToRun == 'Stability':
-            return self.__read_result(
-                op.join(self.foldx_dir, 'Stability.txt'), whatToRun)
+            return self.__read_result(op.join(self.foldx_dir, 'Stability.txt'), whatToRun)
         elif whatToRun == 'RepairPDB':
             return op.join(self.foldx_dir, 'RepairPDB_' + self.pdb_filename)
         elif whatToRun == 'BuildModel':
             # see the FoldX manual for the naming of the generated structures
             if conf.CONFIGS['foldx_num_of_runs'] == 1:
-                mutants = [op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1.pdb'), ]
-                wiltype = [op.join(self.foldx_dir, 'WT_' + self.pdb_filename[:-4] + '_1.pdb'), ]
+                mutants = [
+                    op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1.pdb'),
+                ]
+                wiltype = [
+                    op.join(self.foldx_dir, 'WT_' + self.pdb_filename[:-4] + '_1.pdb'),
+                ]
                 results = [wiltype, mutants]
             else:
                 mutants = [
@@ -102,9 +103,8 @@ class FoldX(object):
                     for x in range(0, conf.CONFIGS['foldx_num_of_runs'])
                 ]
                 wiltype = [
-                    op.join(
-                        self.foldx_dir,
-                        'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
+                    op.join(self.foldx_dir,
+                            'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
                     for x in range(0, conf.CONFIGS['foldx_num_of_runs'])
                 ]
                 results = [wiltype, mutants]
@@ -134,34 +134,33 @@ class FoldX(object):
                 .format(file_with_mutations=file_with_mutations)
             output_pdb = 'true'
 
-        foldX_runfile = (
-            '<TITLE>FOLDX_runscript;\n'
-            '<JOBSTART>#;\n'
-            '<PDBS>{pdbFile};\n'
-            '<BATCH>#;\n'
-            '<COMMANDS>FOLDX_commandfile;\n'
-            '{command_line}\n'
-            '<END>#;\n'
-            '<OPTIONS>FOLDX_optionfile;\n'
-            '<Temperature>298;\n'
-            '<R>#;\n'
-            '<pH>7;\n'
-            '<IonStrength>0.050;\n'
-            '<numberOfRuns>{buildModel_runs};\n'
-            '<water>{water};\n'
-            '<metal>-CRYSTAL;\n'
-            '<VdWDesign>2;\n'
-            '<pdb_waters>false;\n'
-            '<OutPDB>{output_pdb};\n'
-            '<pdb_hydrogens>false;\n'
-            '<END>#;\n'
-            '<JOBEND>#;\n'
-            '<ENDFILE>#;\n').replace(' ', '').format(
-                pdbFile=pdbFile,
-                command_line=command_line,
-                buildModel_runs=conf.CONFIGS['foldx_num_of_runs'],
-                water=conf.CONFIGS['foldx_water'],
-                output_pdb=output_pdb)
+        foldX_runfile = ('<TITLE>FOLDX_runscript;\n'
+                         '<JOBSTART>#;\n'
+                         '<PDBS>{pdbFile};\n'
+                         '<BATCH>#;\n'
+                         '<COMMANDS>FOLDX_commandfile;\n'
+                         '{command_line}\n'
+                         '<END>#;\n'
+                         '<OPTIONS>FOLDX_optionfile;\n'
+                         '<Temperature>298;\n'
+                         '<R>#;\n'
+                         '<pH>7;\n'
+                         '<IonStrength>0.050;\n'
+                         '<numberOfRuns>{buildModel_runs};\n'
+                         '<water>{water};\n'
+                         '<metal>-CRYSTAL;\n'
+                         '<VdWDesign>2;\n'
+                         '<pdb_waters>false;\n'
+                         '<OutPDB>{output_pdb};\n'
+                         '<pdb_hydrogens>false;\n'
+                         '<END>#;\n'
+                         '<JOBEND>#;\n'
+                         '<ENDFILE>#;\n').replace(' ', '').format(
+                             pdbFile=pdbFile,
+                             command_line=command_line,
+                             buildModel_runs=conf.CONFIGS['foldx_num_of_runs'],
+                             water=conf.CONFIGS['foldx_water'],
+                             output_pdb=output_pdb)
 
         # This just makes copies of the runfiles for debugging...
         with open(self.foldx_runfile, 'w') as f:
@@ -200,9 +199,7 @@ class FoldX(object):
                 total_energy_difference = line[1]
                 return total_energy_difference
             if whatToRead == 'Stability':
-                stability_values = [
-                    line[x[1]].strip() for x in names_rows_stability
-                ]
+                stability_values = [line[x[1]].strip() for x in names_rows_stability]
                 return stability_values
             if whatToRead == 'AnalyseComplex':
                 complex_stability_values = [

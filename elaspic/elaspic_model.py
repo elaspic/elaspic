@@ -1,18 +1,19 @@
+import json
+import logging
 import os
 import os.path as op
-import logging
 import shutil
-import json
 import subprocess
-from Bio import SeqIO, AlignIO
+
+from Bio import AlignIO, SeqIO
+from Bio.PDB import PDBIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from Bio.PDB import PDBIO
-from kmtools.system_tools import switch_paths
-from . import (
-    conf, errors, structure_tools, structure_analysis,
-    call_modeller, call_tcoffee, call_foldx
-)
+
+from elaspic.kmtools_legacy import switch_paths
+
+from . import (call_foldx, call_modeller, call_tcoffee, conf, errors, structure_analysis,
+               structure_tools)
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +51,8 @@ class Model:
             SeqRecord(
                 id='{}{}'.format(self.structure_id, chain.id),
                 seq=Seq(
-                    structure_tools
-                    .get_chain_sequence_and_numbering(chain, include_hetatms=True)[0])
-            ) for chain in self.structure[0].child_list
+                    structure_tools.get_chain_sequence_and_numbering(chain, include_hetatms=True)[
+                        0])) for chain in self.structure[0].child_list
         ]
         self.chain_ids = [chain.id for chain in self.structure.child_list[0].child_list]
         logger.debug('structure_seqrecords: {}'.format(self.structure_seqrecords))
@@ -66,16 +66,12 @@ class Model:
         self.modeller_results_file = op.join(conf.CONFIGS['model_dir'], self.model_id + '.json')
         if (modeller_results_file is not None and
                 modeller_results_file != self.modeller_results_file):
-            logger.debug(
-                'Copying precalculated modeller results file from {} to {}...'
-                .format(modeller_results_file, self.modeller_results_file)
-            )
+            logger.debug('Copying precalculated modeller results file from {} to {}...'
+                         .format(modeller_results_file, self.modeller_results_file))
             shutil.copy(modeller_results_file, self.modeller_results_file)
         if op.isfile(self.modeller_results_file):
-            logger.debug(
-                'Loading precalculated modeller results from file: {}'
-                .format(self.modeller_results_file)
-            )
+            logger.debug('Loading precalculated modeller results from file: {}'
+                         .format(self.modeller_results_file))
             with open(self.modeller_results_file) as ifh:
                 self.modeller_results = json.load(ifh)
         else:
@@ -86,13 +82,9 @@ class Model:
                 json.dump(self.modeller_results, ofh)
 
         # Get interacting amino acids and interface area
-        self.modeller_structure = (
-            structure_tools.get_pdb_structure(
-                op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']))
-        )
-        self.modeller_chain_ids = [
-            chain.id for chain in self.modeller_structure[0]
-        ]
+        self.modeller_structure = (structure_tools.get_pdb_structure(
+            op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file'])))
+        self.modeller_chain_ids = [chain.id for chain in self.modeller_structure[0]]
         self._analyse_core()
         if len(self.sequence_seqrecords) > 1:
             self._analyse_interface()
@@ -112,15 +104,12 @@ class Model:
             message = (
                 "ELASPIC is designed to predict the effect of mutations on the folding "
                 "of a single domain or the interaction between two domains. It cannot predict "
-                "the effect of mutations on the interaction between more than two domains. "
-            )
+                "the effect of mutations on the interaction between more than two domains. ")
             logger.warning(message)
 
     def _align_with_tcoffee(self, sequence_seqrec, structure_seqrec):
-        alignment_fasta_file = op.join(
-            conf.CONFIGS['tcoffee_dir'],
-            '{}-{}.fasta'.format(sequence_seqrec.id, structure_seqrec.id)
-        )
+        alignment_fasta_file = op.join(conf.CONFIGS['tcoffee_dir'], '{}-{}.fasta'.format(
+            sequence_seqrec.id, structure_seqrec.id))
         with open(alignment_fasta_file, 'w') as ofh:
             SeqIO.write([sequence_seqrec, structure_seqrec], ofh, 'fasta')
         tc = call_tcoffee.TCoffee(
@@ -131,14 +120,10 @@ class Model:
     def _create_pir_alignment(self):
         pir_alignment_file = op.join(conf.CONFIGS['model_dir'], self.model_id + '.pir')
         with open(pir_alignment_file, 'w') as ofh:
-            write_to_pir_alignment(
-                ofh, 'sequence', self.sequence_id,
-                '/'.join(str(seqrec.seq) for seqrec in self.sequence_seqrecords_aligned)
-            )
-            write_to_pir_alignment(
-                ofh, 'structure', self.structure_id,
-                '/'.join(str(seqrec.seq) for seqrec in self.structure_seqrecords_aligned)
-            )
+            write_to_pir_alignment(ofh, 'sequence', self.sequence_id, '/'.join(
+                str(seqrec.seq) for seqrec in self.sequence_seqrecords_aligned))
+            write_to_pir_alignment(ofh, 'structure', self.structure_id, '/'.join(
+                str(seqrec.seq) for seqrec in self.structure_seqrecords_aligned))
         return pir_alignment_file
 
     def _create_alignments_and_model(self):
@@ -148,8 +133,8 @@ class Model:
         model_domain_defs = []
         alignment_stats = []
         self.sequence_seqrecords_aligned, self.structure_seqrecords_aligned = [], []
-        for sequence_seqrec, structure_seqrec in zip(
-                self.sequence_seqrecords, self.structure_seqrecords):
+        for sequence_seqrec, structure_seqrec in zip(self.sequence_seqrecords,
+                                                     self.structure_seqrecords):
             if str(sequence_seqrec.seq) != str(structure_seqrec.seq):
                 # Sequence and structure are different, so perform alignment
                 alignment_output_file = self._align_with_tcoffee(sequence_seqrec, structure_seqrec)
@@ -165,36 +150,28 @@ class Model:
                 if any(domain_def_offset):
                     logger.debug(
                         'Shortening uniprot domain sequence because the alignment had large '
-                        'overhangs... (domain_def_offset: {})'.format(domain_def_offset)
-                    )
+                        'overhangs... (domain_def_offset: {})'.format(domain_def_offset))
                     cut_from_start = domain_def_offset[0] if domain_def_offset[0] else None
                     cut_from_end = -domain_def_offset[1] if domain_def_offset[1] else None
                     sequence_seqrec.seq = (
-                        Seq(str(sequence_seqrec.seq)[cut_from_start:cut_from_end])
-                    )
-                    alignment_output_file = (
-                        self._align_with_tcoffee(sequence_seqrec, structure_seqrec)
-                    )
+                        Seq(str(sequence_seqrec.seq)[cut_from_start:cut_from_end]))
+                    alignment_output_file = (self._align_with_tcoffee(
+                        sequence_seqrec, structure_seqrec))
                     alignment = AlignIO.read(alignment_output_file, 'fasta')
                     assert len(alignment) == 2
                 # Analyse the quality of the alignment
                 alignment_identity, alignment_coverage, __, __ = analyze_alignment(alignment)
                 alignment_score = score_alignment(alignment_identity, alignment_coverage)
                 # Save results
-                alignment_stats.append(
-                    (alignment_identity, alignment_coverage, alignment_score)
-                )
+                alignment_stats.append((alignment_identity, alignment_coverage, alignment_score))
                 alignment_files.append(alignment_output_file)
                 self.sequence_seqrecords_aligned.append(alignment[0])
                 self.structure_seqrecords_aligned.append(alignment[1])
             else:
                 # Sequence and structure are the same; no need for alignment. Save dummy results.
                 alignment_stats.append((1.0, 1.0, 1.0,))
-                alignment_output_file = (
-                    op.join(
-                        conf.CONFIGS['model_dir'],
-                        '{}-{}.aln'.format(sequence_seqrec.id, structure_seqrec.id))
-                )
+                alignment_output_file = (op.join(conf.CONFIGS['model_dir'], '{}-{}.aln'.format(
+                    sequence_seqrec.id, structure_seqrec.id)))
                 with open(alignment_output_file, 'w') as ofh:
                     SeqIO.write([sequence_seqrec, structure_seqrec], ofh, 'clustal')
                 alignment_files.append(alignment_output_file)
@@ -203,10 +180,8 @@ class Model:
                 self.structure_seqrecords_aligned.append(structure_seqrec)
             # either way
             domain_def_offsets.append(domain_def_offset)
-            model_domain_def = (
-                (domain_def_offset[0] + 1,
-                 domain_def_offset[0] + 1 + len(sequence_seqrec), )
-            )
+            model_domain_def = ((domain_def_offset[0] + 1,
+                                 domain_def_offset[0] + 1 + len(sequence_seqrec),))
             model_domain_defs.append(model_domain_def)
 
         # Add the HETATM chain if necesasry.
@@ -222,14 +197,15 @@ class Model:
 
         # Run modeller.
         self.modeller_results = run_modeller(
-            self.pir_alignment_file, self.sequence_id, self.structure_id,
-            new_chains=''.join(self.chain_ids)
-        )
+            self.pir_alignment_file,
+            self.sequence_id,
+            self.structure_id,
+            new_chains=''.join(self.chain_ids))
 
         # Save additional alignment info
         self.modeller_results['alignment_files'] = [
-            op.relpath(f, conf.CONFIGS['unique_temp_dir'])
-            for f in alignment_files]
+            op.relpath(f, conf.CONFIGS['unique_temp_dir']) for f in alignment_files
+        ]
         assert len(domain_def_offsets) <= 2
         self.modeller_results['domain_def_offsets'] = domain_def_offsets
         assert len(model_domain_defs) <= 2
@@ -241,19 +217,14 @@ class Model:
         # per atom and per residue SASA values
         analyze_structure = structure_analysis.AnalyzeStructure(
             op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
-            conf.CONFIGS['modeller_dir']
-        )
+            conf.CONFIGS['modeller_dir'])
         __, seasa_by_chain_separately, __, seasa_by_residue_separately = (
-            analyze_structure.get_seasa()
-        )
+            analyze_structure.get_seasa())
 
         # Get SASA only for amino acids in the chain of interest
         def _filter_df(df, chain_id, resname, resnum):
-            df2 = df[
-                (df['pdb_chain'] == chain_id) &
-                (df['res_name'] == resname) &
-                (df['res_num'] == resnum)
-            ]
+            df2 = df[(df['pdb_chain'] == chain_id) & (df['res_name'] == resname) &
+                     (df['res_num'] == resnum)]
             return df2.iloc[0]['rel_sasa']
 
         self.relative_sasa_scores = {}
@@ -266,22 +237,18 @@ class Model:
                         seasa_by_residue_separately,
                         chain_id=chain_id,
                         resname=residue.resname,
-                        resnum=(str(residue.id[1]) + residue.id[2].strip())
-                    )
+                        resnum=(str(residue.id[1]) + residue.id[2].strip()))
                     self.relative_sasa_scores[chain_id].append(relative_sasa_score)
             number_of_aa = len(structure_tools.get_chain_sequence_and_numbering(chain)[0])
             if (number_of_aa != len(self.relative_sasa_scores[chain_id])):
-                logger.error(
-                    'Chain has {} non-hetatm AA, but we have SASA score for only {} AA.'
-                    .format(number_of_aa, len(self.relative_sasa_scores[chain_id]))
-                )
+                logger.error('Chain has {} non-hetatm AA, but we have SASA score for only {} AA.'
+                             .format(number_of_aa, len(self.relative_sasa_scores[chain_id])))
                 raise errors.MSMSError()
 
     def _analyse_interface(self):
         # Get a dictionary of interacting residues
-        interacting_residues = (
-            structure_tools.get_interacting_residues(self.modeller_structure[0], r_cutoff=6.0)
-        )
+        interacting_residues = (structure_tools.get_interacting_residues(
+            self.modeller_structure[0], r_cutoff=6.0))
         _interacting_residues_complement = dict()
         for key, values in interacting_residues.items():
             for value in values:
@@ -312,14 +279,10 @@ class Model:
 
         def _validate_a2b_contacts(a2b_contacts, chain_idx):
             logger.debug('Validating chain {} interacting AA...'.format(chain_idx))
-            interface_aa_a = ''.join([
-                i[2] for i in a2b_contacts
-            ])
+            interface_aa_a = ''.join([i[2] for i in a2b_contacts])
             try:
-                interface_aa_b = ''.join([
-                    str(self.sequence_seqrecords[chain_idx].seq)[i[0]]
-                    for i in a2b_contacts
-                ])
+                interface_aa_b = ''.join(
+                    [str(self.sequence_seqrecords[chain_idx].seq)[i[0]] for i in a2b_contacts])
             except IndexError as e:
                 logger.error('{}: {}'.format(type(e), e))
                 interface_aa_b = None
@@ -327,10 +290,8 @@ class Model:
             logger.debug('interface_aa_a: {}'.format(interface_aa_a))
             logger.debug('interface_aa_b: {}'.format(interface_aa_b))
             logger.debug('a2b_contacts: {}'.format(a2b_contacts))
-            logger.debug(
-                'self.sequence_seqrecords[chain_idx].seq: {}'
-                .format(self.sequence_seqrecords[chain_idx].seq)
-            )
+            logger.debug('self.sequence_seqrecords[chain_idx].seq: {}'
+                         .format(self.sequence_seqrecords[chain_idx].seq))
             logger.debug(
                 "domain_def_offsets: {}".format(self.modeller_results['domain_def_offsets']))
             if interface_aa_a != interface_aa_b:
@@ -348,13 +309,10 @@ class Model:
         # Interface area
         analyze_structure = structure_analysis.AnalyzeStructure(
             op.join(conf.CONFIGS['unique_temp_dir'], self.modeller_results['model_file']),
-            conf.CONFIGS['modeller_dir']
-        )
-        (self.interface_area_hydrophobic,
-         self.interface_area_hydrophilic,
+            conf.CONFIGS['modeller_dir'])
+        (self.interface_area_hydrophobic, self.interface_area_hydrophilic,
          self.interface_area_total) = (
-             analyze_structure.get_interface_area(self.modeller_chain_ids[:2])
-        )
+             analyze_structure.get_interface_area(self.modeller_chain_ids[:2]))
 
     def mutate(self, sequence_idx, mutation):
         """Introduce mutation into model.
@@ -380,19 +338,14 @@ class Model:
 
         # Domain definitions, in case not the entire sequence was modelled
         domain_def_offset = self.modeller_results['domain_def_offsets'][sequence_idx]
-        domain_def = (
-            domain_def_offset[0],
-            len(self.sequence_seqrecords[sequence_idx].seq) - domain_def_offset[1]
-        )
+        domain_def = (domain_def_offset[0],
+                      len(self.sequence_seqrecords[sequence_idx].seq) - domain_def_offset[1])
         mutation_pos = int(mutation[1:-1])
         if mutation_pos > (domain_def[1] - domain_def[0] + 1):
             raise errors.MutationOutsideDomainError()
 
-        position_modeller = (
-            structure_tools.convert_position_to_resid(
-                self.modeller_structure[0][chain_id],
-                [mutation_pos])[0]
-        )
+        position_modeller = (structure_tools.convert_position_to_resid(
+            self.modeller_structure[0][chain_id], [mutation_pos])[0])
         mutation_modeller = (mutation[0] + str(position_modeller) + mutation[-1])
         logger.debug('mutation: {}'.format(mutation))
         logger.debug('position_modeller: {}'.format(position_modeller))
@@ -409,8 +362,7 @@ class Model:
             ][0]
             partner_protein_id = self.sequence_seqrecords[partner_chain_idx].id
             partner_chain_id = (
-                self.modeller_structure.child_list[0].child_list[partner_chain_idx].id
-            )
+                self.modeller_structure.child_list[0].child_list[partner_chain_idx].id)
             logger.debug('sequence_idx: {}'.format(sequence_idx))
             logger.debug('partner_chain_idx: {}'.format(partner_chain_idx))
             if sequence_idx == 0:
@@ -424,8 +376,7 @@ class Model:
             else:
                 logger.warning(
                     "Can't make sure that a mutation is inside an interface if there are only "
-                    "two chains!"
-                )
+                    "two chains!")
 
         mutation_id = '{}-{}-{}'.format(protein_id, partner_protein_id, mutation)
 
@@ -437,8 +388,7 @@ class Model:
                 partner_chain_id=partner_chain_id,
                 mutation_id=mutation_id,
                 mutation_domain=mutation,
-                mutation_errors=mutation_errors,
-            )
+                mutation_errors=mutation_errors,)
             self.mutations[(sequence_idx, mutation)] = results
             return results
 
@@ -468,7 +418,9 @@ class Model:
 
         #######################################################################
         # 3rd: introduce the mutation using FoldX
-        mutCodes = [mutation_modeller[0] + chain_id + mutation_modeller[1:], ]
+        mutCodes = [
+            mutation_modeller[0] + chain_id + mutation_modeller[1:],
+        ]
         logger.debug('Mutcodes for foldx: {}'.format(mutCodes))
 
         # Introduce the mutation using foldX
@@ -503,41 +455,35 @@ class Model:
         #######################################################################
         # 5th: Calculate energies
         assert len(fX_wt_list) == 1
-        stability_values_wt = ','.join(
-            '{}'.format(f) for f in fX_wt_list[0]('Stability')
-        )
+        stability_values_wt = ','.join('{}'.format(f) for f in fX_wt_list[0]('Stability'))
         assert len(fX_wt_list) == 1
-        stability_values_mut = ','.join(
-            '{}'.format(f) for f in fX_mut_list[0]('Stability')
-        )
+        stability_values_mut = ','.join('{}'.format(f) for f in fX_mut_list[0]('Stability'))
 
         if len(self.sequence_seqrecords) == 1:
             complex_stability_values_wt = None
             complex_stability_values_mut = None
         else:
             assert len(fX_wt_list) == 1
-            complex_stability_values_wt = ','.join(
-                '{}'.format(f) for f in fX_wt_list[0]('AnalyseComplex')
-            )
+            complex_stability_values_wt = ','.join('{}'.format(f)
+                                                   for f in fX_wt_list[0]('AnalyseComplex'))
             assert len(fX_mut_list) == 1
-            complex_stability_values_mut = ','.join(
-                '{}'.format(f) for f in fX_mut_list[0]('AnalyseComplex')
-            )
+            complex_stability_values_mut = ','.join('{}'.format(f)
+                                                    for f in fX_mut_list[0]('AnalyseComplex'))
 
         #######################################################################
         # 6: Calculate all other relevant properties
         # (This also verifies that mutations match mutated residues in pdb structures).
         analyze_structure_wt = structure_analysis.AnalyzeStructure(
-            repairedPDB_wt_list[0], mutation_dir,
-        )
-        analyze_structure_results_wt = analyze_structure_wt(
-            chain_id, mutation_modeller, partner_chain_id)
+            repairedPDB_wt_list[0],
+            mutation_dir,)
+        analyze_structure_results_wt = analyze_structure_wt(chain_id, mutation_modeller,
+                                                            partner_chain_id)
 
         analyze_structure_mut = structure_analysis.AnalyzeStructure(
-            repairedPDB_mut_list[0], mutation_dir,
-        )
-        analyze_structure_results_mut = analyze_structure_mut(
-            chain_id, mutation_modeller, partner_chain_id)
+            repairedPDB_mut_list[0],
+            mutation_dir,)
+        analyze_structure_results_mut = analyze_structure_mut(chain_id, mutation_modeller,
+                                                              partner_chain_id)
 
         logger.debug('analyze_structure_results_wt: {}'.format(analyze_structure_results_wt))
         logger.debug('analyze_structure_results_mut: {}'.format(analyze_structure_results_mut))
@@ -561,8 +507,7 @@ class Model:
             stability_energy_wt=stability_values_wt,
             stability_energy_mut=stability_values_mut,
             analyse_complex_energy_wt=complex_stability_values_wt,
-            analyse_complex_energy_mut=complex_stability_values_mut,
-        )
+            analyse_complex_energy_mut=complex_stability_values_mut,)
         for key, value in analyze_structure_results_wt.items():
             results[key + '_wt'] = value
         for key, value in analyze_structure_results_mut.items():
@@ -582,12 +527,11 @@ class Model:
             sequence_id=self.sequence_id,
             chain_ids=tuple(self.chain_ids),
             mutations=self.mutations,
-            modeller_results_file=op.relpath(
-                self.modeller_results_file, conf.CONFIGS['unique_temp_dir']),
+            modeller_results_file=op.relpath(self.modeller_results_file,
+                                             conf.CONFIGS['unique_temp_dir']),
             modeller_chain_ids=tuple(self.modeller_chain_ids),
             relative_sasa_scores=self.relative_sasa_scores,
-            core_or_interface=self.core_or_interface,
-        )
+            core_or_interface=self.core_or_interface,)
         # Dump modeller resutls
         for key, value in self.modeller_results.items():
             result[key] = value
@@ -598,8 +542,7 @@ class Model:
                 interacting_aa_2=self.interacting_aa_2,
                 interface_area_hydrophobic=self.interface_area_hydrophobic,
                 interface_area_hydrophilic=self.interface_area_hydrophilic,
-                interface_area_total=self.interface_area_total,
-            )
+                interface_area_total=self.interface_area_total,)
             result.update(result_interface)
         return result
 
@@ -614,9 +557,8 @@ def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data
         mode,
         logger,
     ]
-    logger.debug(
-        "Calling t_coffee with parameters:\n" +
-        ', '.join(['{}'.format(x) for x in t_coffee_parameters]))
+    logger.debug("Calling t_coffee with parameters:\n" + ', '.join(
+        ['{}'.format(x) for x in t_coffee_parameters]))
     tcoffee = call_tcoffee.tcoffee_alignment(*t_coffee_parameters)
     alignments = tcoffee.align()
     assert len(alignments) == 1
@@ -626,15 +568,16 @@ def perform_alignment(self, uniprot_seqrecord, pdb_seqrecord, mode, path_to_data
     logger.debug(alignment)
     alignment_filename = alignment[0].id + '_' + alignment[1].id + '.aln'
     try:
-        AlignIO.write(
-            alignment, self.unique_temp_folder + 'tcoffee/' + alignment_filename, 'clustal')
+        AlignIO.write(alignment, self.unique_temp_folder + 'tcoffee/' + alignment_filename,
+                      'clustal')
     except IndexError as e:
         raise errors.EmptyPDBSequenceError('{}: {}'.format(type(e), e))
     temp_save_path = self.temp_archive_path + path_to_data
     subprocess.check_call("mkdir -p '{}'".format(temp_save_path), shell=True)
-    subprocess.check_call("cp -f '{}' '{}'".format(
-        self.unique_temp_folder + 'tcoffee/' + alignment_filename,
-        temp_save_path + alignment_filename), shell=True)
+    subprocess.check_call(
+        "cp -f '{}' '{}'".format(self.unique_temp_folder + 'tcoffee/' + alignment_filename,
+                                 temp_save_path + alignment_filename),
+        shell=True)
 
     return alignment, alignment_filename
 
@@ -744,18 +687,17 @@ def write_to_pir_alignment(pir_alignment_filehandle, seq_type, seq_name, seq):
     pir_alignment_filehandle.write('\n\n')
 
 
-def run_modeller(
-        pir_alignment_file, target_id, template_id, new_chains='ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
+def run_modeller(pir_alignment_file,
+                 target_id,
+                 template_id,
+                 new_chains='ABCDEFGHIJKLMNOPQRSTUVWXYZ'):
     """
     """
-    logger.debug(
-        "Calling modeller with parameters:\n" +
-        'pir_alignment_file: {}\n'.format([pir_alignment_file]) +
-        'target_id: {}\n'.format(target_id) +
-        'template_id: {}\n'.format(template_id)
-    )
-    modeller = call_modeller.Modeller(
-        [pir_alignment_file], target_id, template_id, conf.CONFIGS['unique_temp_dir'])
+    logger.debug("Calling modeller with parameters:\n" + 'pir_alignment_file: {}\n'.format([
+        pir_alignment_file
+    ]) + 'target_id: {}\n'.format(target_id) + 'template_id: {}\n'.format(template_id))
+    modeller = call_modeller.Modeller([pir_alignment_file], target_id, template_id,
+                                      conf.CONFIGS['unique_temp_dir'])
 
     with switch_paths(conf.CONFIGS['modeller_dir']):
         norm_dope, pdb_filename = modeller.run()

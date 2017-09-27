@@ -1,10 +1,11 @@
 import datetime
+
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative as sa_ext_declarative
 
 import elaspic
-from . import conf
 
+from . import conf
 
 # Default sizes for creating varchar fields
 SHORT = 15
@@ -55,10 +56,8 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
         if 'index_name' in kwargs:
             index_name = kwargs.pop('index_name')
         else:
-            index_name = (
-                'ix_{table_name}_{column_0_name}'
-                .format(table_name=table_name, column_0_name=column_names[0])[:255]
-            )
+            index_name = ('ix_{table_name}_{column_0_name}'.format(
+                table_name=table_name, column_0_name=column_names[0])[:255])
         table_args.append(sa.Index(index_name, *column_names, **kwargs))
     # Other table parameters, such as schemas, etc.
     for db_specific_param in db_specific_params:
@@ -106,24 +105,25 @@ class Domain(Base):
         # MySQL can't handle long indexes
         _indexes = [
             ['pdb_id', 'pdb_chain'],
-            (['pdb_pdbfam_name'], {'mysql_length': 255}),
+            (['pdb_pdbfam_name'], {
+                'mysql_length': 255
+            }),
         ]
     else:
-        _indexes = [
-            (['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], {'unique': True}),
-            (['pdb_pdbfam_name'], {'mysql_length': 255})
-        ]
+        _indexes = [(['pdb_id', 'pdb_chain', 'pdb_pdbfam_name', 'pdb_pdbfam_idx'], {
+            'unique': True
+        }), (['pdb_pdbfam_name'], {
+            'mysql_length': 255
+        })]
     __table_args__ = get_table_args(__tablename__, _indexes, [])
     cath_id = sa.Column(
         sa.String(
-            SHORT,
-            collation=db_specific_properties[conf.CONFIGS['db_type']]['BINARY_COLLATION']),
+            SHORT, collation=db_specific_properties[conf.CONFIGS['db_type']]['BINARY_COLLATION']),
         primary_key=True)
     pdb_id = sa.Column(sa.String(SHORT), nullable=False)
     pdb_chain = sa.Column(
         sa.String(
-            SHORT,
-            collation=db_specific_properties[conf.CONFIGS['db_type']]['BINARY_COLLATION']),
+            SHORT, collation=db_specific_properties[conf.CONFIGS['db_type']]['BINARY_COLLATION']),
         nullable=False)
     pdb_domain_def = sa.Column(sa.String(MEDIUM), nullable=False)
     pdb_pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
@@ -189,21 +189,27 @@ class DomainContact(Base):
 
     __tablename__ = 'domain_contact'
     _indexes = [
-        (['cath_id_1', 'cath_id_2'], {'unique': True}),
-        (['cath_id_2', 'cath_id_1'], {'unique': True}),
+        (['cath_id_1', 'cath_id_2'], {
+            'unique': True
+        }),
+        (['cath_id_2', 'cath_id_1'], {
+            'unique': True
+        }),
     ]
     __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     domain_contact_id = sa.Column(sa.Integer, primary_key=True)
     cath_id_1 = sa.Column(
-        None, sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
+        None,
+        sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
         nullable=False)
     cath_id_2 = sa.Column(
-        None, sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
+        None,
+        sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
         nullable=False)
-#    cath_id_2 = sa.Column(
-#        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')),
-#        nullable=False)
+    #    cath_id_2 = sa.Column(
+    #        sa.String(SHORT, collation=get_db_specific_param('BINARY_COLLATION')),
+    #        nullable=False)
     min_interchain_distance = sa.Column(sa.Float)
     contact_volume = sa.Column(sa.Float)
     contact_surface_area = sa.Column(sa.Float)
@@ -316,20 +322,24 @@ class Provean(Base):
     __table_args__ = get_table_args(__tablename__, [], [])
 
     uniprot_id = sa.Column(
-        None, sa.ForeignKey(
-            UniprotSequence.uniprot_id,
-            onupdate='cascade', ondelete='cascade'),
+        None,
+        sa.ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
         primary_key=True)
     provean_supset_filename = sa.Column(sa.String(MEDIUM))
     provean_supset_length = sa.Column(sa.Integer)
     provean_errors = sa.Column(sa.Text)
     provean_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
+        sa.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
         nullable=False)
 
     # Relationships
     uniprot_sequence = sa.orm.relationship(
-        UniprotSequence, uselist=False, cascade='expunge', lazy='joined',
+        UniprotSequence,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
         backref=sa.orm.backref('provean', uselist=False, cascade='expunge', lazy='joined'))
 
 
@@ -381,9 +391,8 @@ class UniprotDomain(Base):
 
     uniprot_domain_id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = sa.Column(
-        None, sa.ForeignKey(
-            UniprotSequence.uniprot_id,
-            onupdate='cascade', ondelete='cascade'),
+        None,
+        sa.ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
         nullable=False)
     pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
     pdbfam_idx = sa.Column(sa.Integer, nullable=False)
@@ -398,23 +407,36 @@ class UniprotDomain(Base):
         # because we want to make homology models at different sequence identities.
         max_seq_identity = sa.Column(sa.Integer, index=True)
         _indexes = [
-            (['uniprot_id', 'alignment_def', 'max_seq_identity'],
-             {'unique': True, 'index_name': 'ix_uniprot_id_unique'}),
-            (['pdbfam_name'], {'mysql_length': 255}),
-            (['uniprot_id', 'uniprot_domain_id'],
-             {'unique': True, 'index_name': 'ix_uniprot_id_uniprot_domain_id'}),
+            (['uniprot_id', 'alignment_def', 'max_seq_identity'], {
+                'unique': True,
+                'index_name': 'ix_uniprot_id_unique'
+            }),
+            (['pdbfam_name'], {
+                'mysql_length': 255
+            }),
+            (['uniprot_id', 'uniprot_domain_id'], {
+                'unique': True,
+                'index_name': 'ix_uniprot_id_uniprot_domain_id'
+            }),
         ]
     else:
         _indexes = [
-            (['pdbfam_name'], {'mysql_length': 255}),
-            (['uniprot_id', 'uniprot_domain_id'],
-             {'unique': True, 'index_name': 'ix_uniprot_id_uniprot_domain_id'}),
+            (['pdbfam_name'], {
+                'mysql_length': 255
+            }),
+            (['uniprot_id', 'uniprot_domain_id'], {
+                'unique': True,
+                'index_name': 'ix_uniprot_id_uniprot_domain_id'
+            }),
         ]
     __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     # Relationships
     uniprot_sequence = sa.orm.relationship(
-        UniprotSequence, uselist=False, cascade='expunge', lazy='joined',
+        UniprotSequence,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
         backref=sa.orm.backref('uniprot_domain', cascade='expunge'))  # many to one
 
 
@@ -449,14 +471,12 @@ class UniprotDomainPair(Base):
 
     uniprot_domain_pair_id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
     uniprot_domain_id_1 = sa.Column(
-        None, sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id,
-            onupdate='cascade', ondelete='cascade'),
+        None,
+        sa.ForeignKey(UniprotDomain.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
         nullable=False)
     uniprot_domain_id_2 = sa.Column(
-        None, sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id,
-            onupdate='cascade', ondelete='cascade'),
+        None,
+        sa.ForeignKey(UniprotDomain.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
         nullable=False)
     rigids = sa.Column(sa.Text)  # Interaction references from iRefsa.Index
     domain_contact_ids = sa.Column(sa.Text)  # interaction references from the PDB
@@ -479,8 +499,12 @@ class UniprotDomainPair(Base):
         _indexes = [
             (['uniprot_id_1', 'uniprot_id_2']),
             (['uniprot_id_2', 'uniprot_id_1']),
-            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {'unique': True}),
-            (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {'unique': True}),
+            (['uniprot_domain_id_1', 'uniprot_domain_id_2'], {
+                'unique': True
+            }),
+            (['uniprot_domain_id_2', 'uniprot_domain_id_1'], {
+                'unique': True
+            }),
         ]
     __table_args__ = get_table_args(__tablename__, _indexes, [])
 
@@ -488,11 +512,13 @@ class UniprotDomainPair(Base):
     uniprot_domain_1 = sa.orm.relationship(
         UniprotDomain,
         primaryjoin=uniprot_domain_id_1 == UniprotDomain.uniprot_domain_id,
-        cascade='expunge', lazy='joined')  # many to one
+        cascade='expunge',
+        lazy='joined')  # many to one
     uniprot_domain_2 = sa.orm.relationship(
         UniprotDomain,
         primaryjoin=uniprot_domain_id_2 == UniprotDomain.uniprot_domain_id,
-        cascade='expunge', lazy='joined')  # many to one
+        cascade='expunge',
+        lazy='joined')  # many to one
 
 
 class UniprotDomainTemplate(Base):
@@ -550,16 +576,16 @@ class UniprotDomainTemplate(Base):
     __table_args__ = get_table_args(__tablename__, [], [])
 
     uniprot_domain_id = sa.Column(
-        None, sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id,
-            onupdate='cascade', ondelete='cascade'),
-        nullable=False, primary_key=True)
+        None,
+        sa.ForeignKey(UniprotDomain.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
+        nullable=False,
+        primary_key=True)
     template_errors = sa.Column(sa.Text)
     cath_id = sa.Column(
-        None, sa.ForeignKey(
-            Domain.cath_id,
-            onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False)
+        None,
+        sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
+        index=True,
+        nullable=False)
     domain_start = sa.Column(sa.Integer, index=True)
     domain_end = sa.Column(sa.Integer, index=True)
     domain_def = sa.Column(sa.String(MEDIUM))
@@ -567,16 +593,26 @@ class UniprotDomainTemplate(Base):
     alignment_coverage = sa.Column(sa.Float, sa.CheckConstraint('alignment_coverage <= 1'))
     alignment_score = sa.Column(sa.Float, sa.CheckConstraint('alignment_score <= 1'))
     t_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
+        sa.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
         nullable=False)
 
     # Relationships
     uniprot_domain = sa.orm.relationship(
-        UniprotDomain, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
+        UniprotDomain,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
+        innerjoin=True,
         backref=sa.orm.backref(
             'template', uselist=False, cascade='expunge', innerjoin=True, lazy='joined'))
     domain = sa.orm.relationship(
-        Domain, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
+        Domain,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
+        innerjoin=True,
         backref=sa.orm.backref('uniprot_domain', cascade='expunge'))
 
 
@@ -626,10 +662,12 @@ class UniprotDomainModel(Base):
     __table_args__ = get_table_args(__tablename__, [], [])
 
     uniprot_domain_id = sa.Column(
-        None, sa.ForeignKey(
-            UniprotDomainTemplate.uniprot_domain_id,
-            onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False, primary_key=True)
+        None,
+        sa.ForeignKey(
+            UniprotDomainTemplate.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
+        index=True,
+        nullable=False,
+        primary_key=True)
     model_errors = sa.Column(sa.Text)
     alignment_filename = sa.Column(sa.String(MEDIUM))
     model_filename = sa.Column(sa.String(MEDIUM))
@@ -637,14 +675,19 @@ class UniprotDomainModel(Base):
     norm_dope = sa.Column(sa.Float)
     sasa_score = sa.Column(sa.Text)
     m_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
+        sa.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
         nullable=False)
     model_domain_def = sa.Column(sa.String(MEDIUM))
 
     # Relationships
     # one to one
     template = sa.orm.relationship(
-        UniprotDomainTemplate, uselist=False, cascade='expunge', lazy='joined',
+        UniprotDomainTemplate,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
         backref=sa.orm.backref('model', uselist=False, cascade='expunge', lazy='joined'))
 
 
@@ -776,15 +819,17 @@ class UniprotDomainMutation(Base):
     __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     uniprot_id = sa.Column(
-        None, sa.ForeignKey(
-            UniprotSequence.uniprot_id,
-            onupdate='cascade', ondelete='cascade'),
-        nullable=False, primary_key=True)
+        None,
+        sa.ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
+        nullable=False,
+        primary_key=True)
     uniprot_domain_id = sa.Column(
-        None, sa.ForeignKey(
-            UniprotDomainModel.uniprot_domain_id,
-            onupdate='cascade', ondelete='cascade'),
-        nullable=False, primary_key=True, index=True)
+        None,
+        sa.ForeignKey(
+            UniprotDomainModel.uniprot_domain_id, onupdate='cascade', ondelete='cascade'),
+        nullable=False,
+        primary_key=True,
+        index=True)
     mutation = sa.Column(sa.String(SHORT), index=True, nullable=False, primary_key=True)
     mutation_errors = sa.Column(sa.Text)
     model_filename_wt = sa.Column(sa.String(MEDIUM))
@@ -805,13 +850,18 @@ class UniprotDomainMutation(Base):
     provean_score = sa.Column(sa.Float)
     ddg = sa.Column(sa.Float, index=True)
     mut_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
+        sa.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
         nullable=False)
     elaspic_version = sa.Column(sa.String(SHORT), default=elaspic.__version__)
 
     # Relationships
     model = sa.orm.relationship(
-        UniprotDomainModel, cascade='expunge', uselist=False, lazy='joined',
+        UniprotDomainModel,
+        cascade='expunge',
+        uselist=False,
+        lazy='joined',
         backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one
 
 
@@ -921,10 +971,12 @@ class UniprotDomainPairTemplate(Base):
     __table_args__ = get_table_args(__tablename__, _indexes, [])
 
     uniprot_domain_pair_id = sa.Column(
-        None, sa.ForeignKey(
-            UniprotDomainPair.uniprot_domain_pair_id,
-            onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False, primary_key=True)
+        None,
+        sa.ForeignKey(
+            UniprotDomainPair.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
+        index=True,
+        nullable=False,
+        primary_key=True)
     # domain_contact_id = sa.Column(
     #     None, sa.ForeignKey(
     #         DomainContact.domain_contact_id,
@@ -934,14 +986,12 @@ class UniprotDomainPairTemplate(Base):
     # we may not have correct `domain_contact_id`
     domain_contact_id = sa.Column(sa.Integer, nullable=True)
     cath_id_1 = sa.Column(
-        None, sa.ForeignKey(
-            Domain.cath_id,
-            onupdate='cascade', ondelete='cascade'),
+        None,
+        sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
         nullable=False)
     cath_id_2 = sa.Column(
-        None, sa.ForeignKey(
-            Domain.cath_id,
-            onupdate='cascade', ondelete='cascade'),
+        None,
+        sa.ForeignKey(Domain.cath_id, onupdate='cascade', ondelete='cascade'),
         nullable=False)
 
     identical_1 = sa.Column(sa.Float, sa.CheckConstraint('identical_1 <= 1'))
@@ -969,24 +1019,36 @@ class UniprotDomainPairTemplate(Base):
     score_overall = sa.Column(sa.Float, sa.CheckConstraint('score_overall <= 1'))
 
     t_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow,
-        onupdate=datetime.datetime.utcnow, nullable=False)
+        sa.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+        nullable=False)
     template_errors = sa.Column(sa.Text)
 
     # Relationships
     # one to one
     domain_pair = sa.orm.relationship(
-        UniprotDomainPair, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
+        UniprotDomainPair,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
+        innerjoin=True,
         backref=sa.orm.backref(
             'template', uselist=False, cascade='expunge', lazy='joined', innerjoin=True))
     # domain_contact = sa.orm.relationship(
     #     DomainContact, uselist=False, cascade='expunge', lazy='joined', innerjoin=True,
     #     backref=sa.orm.backref('uniprot', cascade='expunge'))  # one to one
     domain_1 = sa.orm.relationship(
-        Domain, uselist=False, cascade='expunge', lazy='joined',
+        Domain,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
         primaryjoin=(cath_id_1 == Domain.cath_id))  # many to one
     domain_2 = sa.orm.relationship(
-        Domain, uselist=False, cascade='expunge', lazy='joined',
+        Domain,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
         primaryjoin=(cath_id_2 == Domain.cath_id))  # many to one
 
 
@@ -1061,10 +1123,14 @@ class UniprotDomainPairModel(Base):
     __table_args__ = get_table_args(__tablename__, [], [])
 
     uniprot_domain_pair_id = sa.Column(
-        None, sa.ForeignKey(
+        None,
+        sa.ForeignKey(
             UniprotDomainPairTemplate.uniprot_domain_pair_id,
-            onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False, primary_key=True)
+            onupdate='cascade',
+            ondelete='cascade'),
+        index=True,
+        nullable=False,
+        primary_key=True)
     model_errors = sa.Column(sa.Text)
     alignment_filename_1 = sa.Column(sa.String(MEDIUM))
     alignment_filename_2 = sa.Column(sa.String(MEDIUM))
@@ -1079,7 +1145,9 @@ class UniprotDomainPairModel(Base):
     interacting_aa_1 = sa.Column(sa.Text)
     interacting_aa_2 = sa.Column(sa.Text)
     m_date_modified = sa.Column(
-        sa.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow,
+        sa.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
         nullable=False)
     model_domain_def_1 = sa.Column(sa.String(MEDIUM))
     model_domain_def_2 = sa.Column(sa.String(MEDIUM))
@@ -1087,7 +1155,10 @@ class UniprotDomainPairModel(Base):
     # Relationships
     # one to one
     template = sa.orm.relationship(
-        UniprotDomainPairTemplate, uselist=False, cascade='expunge', lazy='joined',
+        UniprotDomainPairTemplate,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
         backref=sa.orm.backref('model', uselist=False, cascade='expunge', lazy='joined'))
 
 
@@ -1193,12 +1264,18 @@ class UniprotDomainPairMutation(Base):
     ]
     __table_args__ = get_table_args(__tablename__, _indexes, [])
 
-    uniprot_id = sa.Column(None, sa.ForeignKey(
-        UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
-        nullable=False, primary_key=True)
-    uniprot_domain_pair_id = sa.Column(None, sa.ForeignKey(
-        UniprotDomainPairModel.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
-        index=True, nullable=False, primary_key=True)
+    uniprot_id = sa.Column(
+        None,
+        sa.ForeignKey(UniprotSequence.uniprot_id, onupdate='cascade', ondelete='cascade'),
+        nullable=False,
+        primary_key=True)
+    uniprot_domain_pair_id = sa.Column(
+        None,
+        sa.ForeignKey(
+            UniprotDomainPairModel.uniprot_domain_pair_id, onupdate='cascade', ondelete='cascade'),
+        index=True,
+        nullable=False,
+        primary_key=True)
     mutation = sa.Column(sa.String(SHORT), nullable=False, primary_key=True)
     mutation_errors = sa.Column(sa.Text)
     model_filename_wt = sa.Column(sa.String(MEDIUM))
@@ -1222,11 +1299,17 @@ class UniprotDomainPairMutation(Base):
     contact_distance_mut = sa.Column(sa.Float)
     provean_score = sa.Column(sa.Float)
     ddg = sa.Column(sa.Float, index=False)
-    mut_date_modified = sa.Column(sa.DateTime, default=datetime.datetime.utcnow,
-                                  onupdate=datetime.datetime.utcnow, nullable=False)
+    mut_date_modified = sa.Column(
+        sa.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+        nullable=False)
     elaspic_version = sa.Column(sa.String(SHORT), default=elaspic.__version__)
 
     # Relationships
     model = sa.orm.relationship(
-        UniprotDomainPairModel, uselist=False, cascade='expunge', lazy='joined',
+        UniprotDomainPairModel,
+        uselist=False,
+        cascade='expunge',
+        lazy='joined',
         backref=sa.orm.backref('mutations', cascade='expunge'))  # many to one

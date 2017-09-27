@@ -8,15 +8,16 @@
 
     Deprecate configuration files and do everything from the command line?
 """
-import os
-import os.path as op
-import tempfile
+import configparser
 import logging
 import logging.config
+import os
+import os.path as op
 import re
-import configparser
-from kmtools.db_tools import parse_connection_string, make_connection_string
+import tempfile
+
 from elaspic import DATA_DIR, helper
+from elaspic.kmtools_legacy import make_connection_string, parse_connection_string
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,9 @@ def read_configuration_file(config_file=None, **kwargs):
         if category not in config:
             config[category] = {}
         if category in kwargs:
-            opts = {k: str(v) for k, v in kwargs.pop(category).items()}
+            opts = {k: str(v) for k, v in kwargs.pop(category).items() if v is not None}
             config[category].update(opts)
+        print("{}: {}".format(category, dict(config[category])))
         config_parser(category)(config[category])
 
     assert not kwargs
@@ -75,15 +77,12 @@ def read_default_configs(config):
     for key in DEFAULT.keys():
         CONFIGS[key] = config.get(key)
     CONFIGS['look_for_interactions'] = (
-        _parse_look_for_interactions(CONFIGS['look_for_interactions'])
-    )
+        _parse_look_for_interactions(CONFIGS['look_for_interactions']))
     CONFIGS['temp_dir'] = get_temp_dir('elaspic')
 
     # Temporary directories
     CONFIGS['unique_temp_dir'] = config.get(
-        'unique_temp_dir',
-        fallback=tempfile.mkdtemp(prefix='', dir=CONFIGS['temp_dir'])
-    )
+        'unique_temp_dir', fallback=tempfile.mkdtemp(prefix='', dir=CONFIGS['temp_dir']))
     CONFIGS['unique'] = op.basename(CONFIGS['unique_temp_dir'])
     CONFIGS['data_dir'] = config.get('data_dir', fallback=DATA_DIR)
 
@@ -91,22 +90,22 @@ def read_default_configs(config):
 def read_sequence_configs(config):
     """[EXTERNAL_DIRS]."""
     CONFIGS['sequence_dir'] = config.get(
-        'sequence_dir',
-        fallback=op.join(CONFIGS['unique_temp_dir'], 'sequence')
-    )
+        'sequence_dir', fallback=op.join(CONFIGS['unique_temp_dir'], 'sequence'))
     CONFIGS['provean_temp_dir'] = op.join(CONFIGS['sequence_dir'], 'provean_temp')
     _validate_provean_temp_dir(config, CONFIGS)
 
     CONFIGS['pdb_dir'] = config.get('pdb_dir')
     CONFIGS['blast_db_dir'] = config.get('blast_db_dir')
-    CONFIGS['blast_db_dir_fallback'] = (
-        config.get('blast_db_dir_fallback', fallback=''))
+    CONFIGS['blast_db_dir_fallback'] = (config.get('blast_db_dir_fallback', fallback=''))
     _validate_blast_db_dir(CONFIGS)
 
     CONFIGS['archive_dir'] = config.get('archive_dir')
+    print(CONFIGS['archive_dir'])
+    print(CONFIGS['archive_dir'] is None)
     # Supported archive types are 'directory' and '7zip'
     if CONFIGS['archive_dir'] is None:
         CONFIGS['archive_type'] = None
+        print('here')
     elif op.splitext(CONFIGS['archive_dir'])[-1] in ['.7z', '.7zip']:
         assert op.isfile(CONFIGS['archive_dir'])
         CONFIGS['archive_type'] = '7zip'
@@ -129,10 +128,8 @@ def _validate_provean_temp_dir(config, configs):
         try:
             configs['provean_temp_dir'] = config.get('provean_temp_dir')
         except config.NoOptionError:
-            message = (
-                "The 'provean_temp_dir' option is required "
-                "if you are running on one of hte bc nodes!"
-            )
+            message = ("The 'provean_temp_dir' option is required "
+                       "if you are running on one of hte bc nodes!")
             logger.error(message)
             raise
 
@@ -150,8 +147,7 @@ def read_database_configs(config):
         CONFIGS['db_password'] = config.get('db_password')
         CONFIGS['db_url'] = config.get('db_url')
         CONFIGS['db_port'] = config.get('db_port')
-        CONFIGS['db_socket'] = _get_db_socket(
-            config, CONFIGS['db_type'], CONFIGS['db_url'])
+        CONFIGS['db_socket'] = _get_db_socket(config, CONFIGS['db_type'], CONFIGS['db_url'])
         CONFIGS['connection_string'] = make_connection_string(**CONFIGS)
     CONFIGS['db_is_immutable'] = config.get('db_is_immutable', fallback=False)
 
@@ -182,9 +178,7 @@ def _get_db_socket(config, db_type, db_url):
 def read_model_configs(config):
     """[MODEL]."""
     CONFIGS['model_dir'] = config.get(
-        'model_dir',
-        fallback=op.join(CONFIGS['unique_temp_dir'], 'model')
-    )
+        'model_dir', fallback=op.join(CONFIGS['unique_temp_dir'], 'model'))
     CONFIGS['tcoffee_dir'] = op.join(CONFIGS['model_dir'], 'tcoffee')
 
     # Modeller
@@ -211,8 +205,7 @@ def read_logger_configs(config):
         'disable_existing_loggers': False,
         'formatters': {
             'default': {
-                'format':
-                    config.get('format', fallback=default_format)
+                'format': config.get('format', fallback=default_format)
             },
         },
         'handlers': {
@@ -248,27 +241,24 @@ def _validate_blast_db_dir(configs):
 
     .. todo:: Get rid of 'blast_db_dir_fallback'; it just complicates things.
     """
+
     def blast_db_dir_isvalid(blast_db_dir):
         return op.isdir(blast_db_dir) and op.isfile(op.join(blast_db_dir, 'nr.pal'))
 
     if configs['blast_db_dir'] is None or blast_db_dir_isvalid(configs['blast_db_dir']):
         pass
     elif blast_db_dir_isvalid(configs['blast_db_dir_fallback']):
-        message = (
-            "Using 'blast_db_dir_fallback' because 'blast_db_dir' is not valid!\n"
-            "blast_db_dir: {}\n"
-            "blast_db_dir_fallback: {}"
-            .format(configs['blast_db_dir'], configs['blast_db_dir_fallback'])
-        )
+        message = ("Using 'blast_db_dir_fallback' because 'blast_db_dir' is not valid!\n"
+                   "blast_db_dir: {}\n"
+                   "blast_db_dir_fallback: {}".format(configs['blast_db_dir'],
+                                                      configs['blast_db_dir_fallback']))
         logger.info(message)
         configs['blast_db_dir'] = configs['blast_db_dir_fallback']
     else:
-        message = (
-            "Both 'blast_db_dir' and 'blast_db_dir_fallback' are not valid!"
-            "blast_db_dir: {}\n"
-            "blast_db_dir_fallback: {}"
-            .format(configs['blast_db_dir'], configs['blast_db_dir_fallback'])
-        )
+        message = ("Both 'blast_db_dir' and 'blast_db_dir_fallback' are not valid!"
+                   "blast_db_dir: {}\n"
+                   "blast_db_dir_fallback: {}".format(configs['blast_db_dir'],
+                                                      configs['blast_db_dir_fallback']))
         logger.error(message)
 
 

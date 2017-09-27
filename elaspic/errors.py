@@ -7,10 +7,8 @@ class ParameterError(Exception):
 class TcoffeeError(Exception):
 
     def __init__(self, result, error, alignInFile, system_command):
-        message = (
-            'tcoffee blast error for file: {0}, with error message: {1}, '
-            'when trying to run command: {2}'
-            .format(alignInFile, error, system_command))
+        message = ('tcoffee blast error for file: {0}, with error message: {1}, '
+                   'when trying to run command: {2}'.format(alignInFile, error, system_command))
         Exception.__init__(self, message)
         self.result = result
 
@@ -21,6 +19,7 @@ class ProveanError(Exception):
 
 
 class ProveanResourceError(Exception):
+
     def __init__(self, message, child_process_group_id):
         Exception.__init__(self, message)
         self.child_process_group_id = child_process_group_id
@@ -100,6 +99,7 @@ class MutationOutsideInterfaceError(Exception):
 
 # Database
 class Archive7zipError(Exception):
+
     def __init__(self, result, error_message, return_code):
         super(Archive7zipError, self).__init__(result)
         self.error_message = error_message

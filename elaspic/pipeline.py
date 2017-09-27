@@ -1,9 +1,10 @@
-import os
-import six
-import logging
 import functools
+import logging
+import os
+
 import Bio.Seq
 import Bio.SeqRecord
+import six
 
 from . import conf, errors
 
@@ -112,6 +113,7 @@ def execute_and_remember(f, _instances={}):
 
         Does not consider ``kwargs``!!!
     """
+
     @functools.wraps(f)
     def f_new(*args, **kwargs):
         key = tuple([f, *args])
@@ -124,4 +126,5 @@ def execute_and_remember(f, _instances={}):
                     instance.run()
             _instances[key] = instance
             return _instances[key].result
+
     return f_new

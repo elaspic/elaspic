@@ -1,7 +1,9 @@
 """Homology modeling by the automodel class."""
 import logging
-from modeller import ModellerError, log, environ, physical
-from modeller.automodel import automodel, dope_loopmodel, assess, refine, autosched
+
+from modeller import ModellerError, environ, log, physical
+from modeller.automodel import assess, automodel, autosched, dope_loopmodel, refine
+
 from . import conf, errors, helper
 
 logger = logging.getLogger(__name__)
@@ -98,7 +100,9 @@ class Modeller(object):
         env = environ()  # create a new MODELLER environment to build this model in
 
         # Directories for input atom files
-        env.io.atom_files_directory = [str(self.filePath.rstrip('/')), ]
+        env.io.atom_files_directory = [
+            str(self.filePath.rstrip('/')),
+        ]
         env.schedule_scale = physical.values(default=1.0, soft_sphere=0.7)
 
         # Selected atoms do not feel the neighborhood
@@ -106,10 +110,8 @@ class Modeller(object):
         env.io.hetatm = True  # read in HETATM records from template PDBs
         env.io.water = True  # read in WATER records (including waters marked as HETATMs)
 
-        logger.debug(
-            'Performing loop refinement in addition to regular modelling: {}'
-            .format(loopRefinement)
-        )
+        logger.debug('Performing loop refinement in addition to regular modelling: {}'
+                     .format(loopRefinement))
         if not loopRefinement:
             a = automodel(
                 env,
@@ -120,8 +122,7 @@ class Modeller(object):
                 # code of the target
                 sequence=str(self.seqID),
                 # wich method for validation should be calculated
-                assess_methods=(assess.DOPE, assess.normalized_dope)
-            )
+                assess_methods=(assess.DOPE, assess.normalized_dope))
         else:
             a = dope_loopmodel(
                 env,
@@ -133,8 +134,7 @@ class Modeller(object):
                 sequence=str(self.seqID),
                 # wich method for validation should be calculated
                 assess_methods=(assess.DOPE, assess.normalized_dope),
-                loop_assess_methods=(assess.DOPE, assess.normalized_dope)
-            )
+                loop_assess_methods=(assess.DOPE, assess.normalized_dope))
             # index of the first loop model
             a.loop.starting_model = self.loopStart
             # index of the last loop model
@@ -175,9 +175,8 @@ class Modeller(object):
             if not a.outputs[i]['failure']:
                 model_filename = a.outputs[i]['name']
                 model_dope_score = a.outputs[i]['Normalized DOPE score']
-                logger.debug(
-                    'Success! model_filename: {}, model_dope_score: {}'
-                    .format(model_filename, model_dope_score))
+                logger.debug('Success! model_filename: {}, model_dope_score: {}'
+                             .format(model_filename, model_dope_score))
                 result.append((model_filename, model_dope_score))
             else:
                 failure = a.outputs[i]['failure']
@@ -191,9 +190,8 @@ class Modeller(object):
                 if not a.loop.outputs[i]['failure']:
                     model_filename = a.loop.outputs[i]['name']
                     model_dope_score = a.loop.outputs[i]['Normalized DOPE score']
-                    logger.debug(
-                        'Success! model_filename: {}, model_dope_score: {}'
-                        .format(model_filename, model_dope_score))
+                    logger.debug('Success! model_filename: {}, model_dope_score: {}'
+                                 .format(model_filename, model_dope_score))
                     result.append((model_filename, model_dope_score))
                     loop = True
                 else:
