@@ -32,8 +32,6 @@ requirements:
     # Database access
     - sqlalchemy
     - mysqlclient
-    # Kimlab
-    - kmtools ==0.0.21
   run:
     # Basic python
     - python
@@ -52,8 +50,6 @@ requirements:
     # Database access
     - sqlalchemy
     - mysqlclient
-    # Kimlab
-    - kmtools ==0.0.21
     # Binary files
     - p7zip
     - blast
