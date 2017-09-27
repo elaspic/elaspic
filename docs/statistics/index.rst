@@ -1,4 +1,0 @@
-Statistics
-==========
-
-Work in progres...
