@@ -710,7 +710,8 @@ def run_modeller(pir_alignment_file,
     chains = structure[0].child_list
     logger.debug('Modeller chain ids: ' + ', '.join(chain.id for chain in chains))
     for i in range(len(chains)):
-        chains[i].id = new_chains[i]
+        if chains[i].id != new_chains[i]:
+            chains[i].id = new_chains[i]
     logger.debug('Corrected chain ids: ' + ', '.join(chain.id for chain in chains))
     io.set_structure(structure)
     model_file = op.splitext(pir_alignment_file)[0] + '.pdb'
