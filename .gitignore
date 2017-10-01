@@ -17,6 +17,7 @@ conda-bld
 # Logs and backups
 *.log
 *.bak
+*.ipynb_checkpoints
 
 # Configuration files with private information
 config/*.ini
@@ -36,4 +37,3 @@ _tests
 # Documentation
 /public
 docs/modules/_*
-
