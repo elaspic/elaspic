@@ -39,7 +39,7 @@ One of '-u' ('--uniprot_id') or '-p' ('--structure_file') must be specified!""")
         raise Exception("""\
 When using the database pipeline, \
 you must either provide a configuration file ('-c', '--config_file') or \
-'--pdb_dir', '--blast_db_dir', and '--archive_dir'.""")
+'--blast_db_dir' and '--archive_dir'.""")
 
     if args.sequence_file and not args.structure_file:
         raise Exception("""\
