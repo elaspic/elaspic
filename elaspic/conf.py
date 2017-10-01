@@ -28,7 +28,7 @@ DEFAULT = {
     'remake_provean_supset': 'False',
     'n_cores': '1',
     'copy_data': 'True',
-    'allow_internet': 'False',
+    'allow_internet': 'True',
     'testing': 'False',
 }
 

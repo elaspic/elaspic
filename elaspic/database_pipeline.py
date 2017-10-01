@@ -539,9 +539,12 @@ class _PrepareModel:
 
     def _write_domain_structure_file(self, pdb_id, pdb_chains, pdb_domain_defs):
         """Write a pdb file containing template domain chains (cut to domain bounaries)."""
-        pdb_file = structure_tools.get_pdb_file(pdb_id, conf.CONFIGS['pdb_dir'], 'ent')
-        if not op.isfile(pdb_file) and conf.CONFIGS['allow_internet']:
-            pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['pdb_dir'])
+        if conf.CONFIGS['pdb_dir'] is not None:
+            pdb_file = structure_tools.get_pdb_file(pdb_id, conf.CONFIGS['pdb_dir'], 'ent')
+        elif conf.CONFIGS['allow_internet']:
+            pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS['unique_temp_dir'])
+        else:
+            raise Exception
         sp = structure_tools.StructureParser(pdb_file, pdb_chains, pdb_domain_defs)
         sp.extract()
         sp.save_structure(conf.CONFIGS['unique_temp_dir'])
