@@ -4,7 +4,7 @@ Introduction
 ============
 
 .. figure:: elaspic_flowchart.png
-   :target: /_downloads/elaspic_flowchart.pdf
+   :target: ../_downloads/elaspic_flowchart.pdf
    :align: center
    :figclass: align-center
 
@@ -23,7 +23,7 @@ Database pipeline
    .. sidebar:: Database pipeline flowchart.
 
       .. image:: elaspic_flowchart_database.*
-         :target: /_downloads/elaspic_flowchart_database.pdf
+         :target: ../_downloads/elaspic_flowchart_database.pdf
          :width: 150 px
          :align: center
 
@@ -48,7 +48,7 @@ Local pipeline
    .. sidebar:: Local pipeline flowchart.
 
       .. image:: elaspic_flowchart_local.*
-         :target: /_downloads/elaspic_flowchart_local.pdf
+         :target: ../_downloads/elaspic_flowchart_local.pdf
          :width: 100 px
          :align: center
 

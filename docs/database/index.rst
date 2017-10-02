@@ -7,7 +7,7 @@ Database schema
 ---------------
 
 .. image:: elaspic_schema.*
-   :target: /_downloads/elaspic_schema.png
+   :target: ../_downloads/elaspic_schema.png
 
 .. only:: html
 
