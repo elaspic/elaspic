@@ -16,6 +16,7 @@ import os.path as op
 import re
 import tempfile
 
+import coloredlogs
 from elaspic import DATA_DIR, helper
 from elaspic.kmtools_legacy import make_connection_string, parse_connection_string
 
@@ -48,7 +49,6 @@ def read_configuration_file(config_file=None, **kwargs):
         if category in kwargs:
             opts = {k: str(v) for k, v in kwargs.pop(category).items() if v is not None}
             config[category].update(opts)
-        print("{}: {}".format(category, dict(config[category])))
         config_parser(category)(config[category])
 
     assert not kwargs
@@ -100,17 +100,14 @@ def read_sequence_configs(config):
     _validate_blast_db_dir(CONFIGS)
 
     CONFIGS['archive_dir'] = config.get('archive_dir')
-    print(CONFIGS['archive_dir'])
-    print(CONFIGS['archive_dir'] is None)
     # Supported archive types are 'directory' and '7zip'
     if CONFIGS['archive_dir'] is None:
         CONFIGS['archive_type'] = None
-        print('here')
     elif op.splitext(CONFIGS['archive_dir'])[-1] in ['.7z', '.7zip']:
         assert op.isfile(CONFIGS['archive_dir'])
         CONFIGS['archive_type'] = '7zip'
     else:
-        assert op.isdir(CONFIGS['archive_dir'])
+        os.makedirs(CONFIGS['archive_dir'], exist_ok=True)
         CONFIGS['archive_type'] = 'directory'
     CONFIGS['archive_temp_dir'] = op.join(CONFIGS['temp_dir'], 'archive')
 
@@ -198,32 +195,12 @@ def read_logger_configs(config):
 
     .. todo:: This needs a cleanup.
     """
-    # default_format = '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    default_format = '%(message)s'
-    LOGGING_CONFIGS = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'default': {
-                'format': config.get('format', fallback=default_format)
-            },
-        },
-        'handlers': {
-            'default': {
-                'level': config.get('level', 'ERROR'),
-                'class': 'logging.StreamHandler',
-                'formatter': 'default',
-            },
-        },
-        'loggers': {
-            '': {
-                'handlers': ['default'],
-                'level': 'DEBUG',
-                'propagate': True
-            }
-        }
-    }
-    logging.config.dictConfig(LOGGING_CONFIGS)
+    default_format = '%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s'
+    coloredlogs.install(
+        logger=logging.getLogger('elaspic'),
+        level=config.get('level', 'ERROR'),
+        fmt=config.get('format', fallback=default_format)
+    )
 
 
 def _prepare_temp_folders(configs):
@@ -242,23 +219,22 @@ def _validate_blast_db_dir(configs):
     .. todo:: Get rid of 'blast_db_dir_fallback'; it just complicates things.
     """
 
-    def blast_db_dir_isvalid(blast_db_dir):
-        return op.isdir(blast_db_dir) and op.isfile(op.join(blast_db_dir, 'nr.pal'))
+    def validate_blast_db(blast_db_dir):
+        return (blast_db_dir is not None and op.isdir(blast_db_dir) and
+                op.isfile(op.join(blast_db_dir, 'nr.pal')))
 
-    if configs['blast_db_dir'] is None or blast_db_dir_isvalid(configs['blast_db_dir']):
+    if validate_blast_db(configs['blast_db_dir']):
         pass
-    elif blast_db_dir_isvalid(configs['blast_db_dir_fallback']):
-        message = ("Using 'blast_db_dir_fallback' because 'blast_db_dir' is not valid!\n"
-                   "blast_db_dir: {}\n"
-                   "blast_db_dir_fallback: {}".format(configs['blast_db_dir'],
-                                                      configs['blast_db_dir_fallback']))
+    elif validate_blast_db(configs['blast_db_dir_fallback']):
+        message = ("Using 'blast_db_dir_fallback' because 'blast_db_dir' is not valid!\n" +
+                   "blast_db_dir: {}\n".format(configs['blast_db_dir']) +
+                   "blast_db_dir_fallback: {}".format(configs['blast_db_dir_fallback']))
         logger.info(message)
         configs['blast_db_dir'] = configs['blast_db_dir_fallback']
     else:
-        message = ("Both 'blast_db_dir' and 'blast_db_dir_fallback' are not valid!"
-                   "blast_db_dir: {}\n"
-                   "blast_db_dir_fallback: {}".format(configs['blast_db_dir'],
-                                                      configs['blast_db_dir_fallback']))
+        message = ("Both 'blast_db_dir' and 'blast_db_dir_fallback' are not valid!" +
+                   "blast_db_dir: {}\n".format(configs['blast_db_dir']) +
+                   "blast_db_dir_fallback: {}".format(configs['blast_db_dir_fallback']))
         logger.error(message)
 
 
