@@ -111,8 +111,9 @@ def elaspic(args):
 
 
 def configure_run_parser(sub_parsers):
-    help = dedent("""
-        Run ELASPIC.
+    help = "Run ELASPIC"
+    description = help + dedent("""\
+
 
         examples:
         $ elaspic run -p 4DKL.pdb -m A_M6A -n 1 \\
@@ -125,8 +126,7 @@ def configure_run_parser(sub_parsers):
             --pdb_dir=/home/pdb/data/data/structures/divided/pdb \\
             --blast_db_dir=/home/ncbi/blast/db \\
             --archive_dir=/home/elaspic
-        """)
-    description = help
+    """)
     parser = sub_parsers.add_parser(
         'run', help=help, description=description, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
