@@ -4,7 +4,7 @@ Introduction
 ============
 
 .. figure:: elaspic_flowchart.png
-   :target: _downloads/elaspic_flowchart.pdf
+   :target: /_downloads/elaspic_flowchart.pdf
    :align: center
    :figclass: align-center
 
