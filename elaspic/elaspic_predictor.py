@@ -2,6 +2,7 @@ import json
 import logging
 import os.path as op
 import pickle
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -253,13 +254,13 @@ def get_final_predictor(data, features, options):
     clf_options = {k: v for (k, v) in options.items() if k in accepted_options}
     if clf_options != options:
         extra_options = {k: v for (k, v) in options.items() if k not in accepted_options}
-        print("Warning, unknown options provided:\n{}".format(extra_options))
+        warnings.warn("Warning, unknown options provided:\n{}".format(extra_options))
 
     # Remove rows with NULLs
     data_usable = data[features + ['ddg_exp']].dropna()
     if len(data) != len(data_usable):
-        print('Warning, {} rows in the provided data contained null!'
-              .format(len(data) - len(data_usable)))
+        warnings.warn('Warning, {} rows in the provided data contained null!'
+                      .format(len(data) - len(data_usable)))
     data = data_usable
 
     # Train predictor

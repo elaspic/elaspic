@@ -1,4 +1,5 @@
 import datetime
+import warnings
 
 import sqlalchemy as sa
 import sqlalchemy.ext.declarative as sa_ext_declarative
@@ -37,8 +38,8 @@ db_specific_properties = {
 }
 
 if conf.CONFIGS.get('db_type') is None:
-    print('The `DB_TYPE` has not been set. Do not know what database is being used!')
-    print('Assuming SQLite')
+    warnings.warn('The `DB_TYPE` has not been set. Do not know what database is being used! '
+                  'Assuming SQLite...')
     conf.CONFIGS['db_type'] = 'sqlite'
 
 
