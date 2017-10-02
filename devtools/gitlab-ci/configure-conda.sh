@@ -16,12 +16,9 @@ case "${PACKAGE_VERSION}" in
   *dev*)
     conda config --append channels kimlab/label/dev;
     conda config --append channels kimlab;
-    conda config --append channels ostrokach/label/dev;
-    conda config --append channels ostrokach;
   ;;
   *)
     conda config --append channels kimlab;
-    conda config --append channels ostrokach;
   ;;
   esac
 conda config --append channels https://conda.anaconda.org/t/$ANACONDA_TOKEN/ostrokach

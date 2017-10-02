@@ -1,6 +1,6 @@
 package:
   name: elaspic
-  version: 0.1.43.dev0
+  version: 0.1.43
 
 source:
   path: ../../
@@ -59,7 +59,6 @@ requirements:
     - t_coffee
     - cd-hit
     - provean  # can't install fake_provean for tests if this is installed...
-    - foldx
 
 test:
   requires:
