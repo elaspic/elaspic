@@ -18,6 +18,7 @@ conda-bld
 *.log
 *.bak
 *.ipynb_checkpoints
+.elaspic
 
 # Configuration files with private information
 config/*.ini

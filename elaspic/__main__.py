@@ -25,26 +25,28 @@ LOGGING_LEVELS = {
 # #################################################################################################
 # ELASPIC RUN
 def validate_args(args):
-    print(args)
     if args.config_file and not os.path.isfile(args.config_file):
         raise Exception('The configuration file {} does not exist!'.format(args.config_file))
 
     if ((args.uniprot_id is None and args.structure_file is None) or
         (args.uniprot_id is not None and args.structure_file is not None)):
-        raise Exception("""\
-One of '-u' ('--uniprot_id') or '-p' ('--structure_file') must be specified!""")
+        raise Exception(
+            dedent("""\
+            One of '-u' ('--uniprot_id') or '-p' ('--structure_file') must be specified!"""))
 
     if (args.uniprot_id and ((args.config_file is None) and
                              (args.blast_db_dir is None or args.archive_dir is None))):
-        raise Exception("""\
-When using the database pipeline, \
-you must either provide a configuration file ('-c', '--config_file') or \
-'--blast_db_dir' and '--archive_dir'.""")
+        raise Exception(
+            dedent("""\
+            When using the database pipeline, \
+            you must either provide a configuration file ('-c', '--config_file') or \
+            '--blast_db_dir' and '--archive_dir'."""))
 
     if args.sequence_file and not args.structure_file:
-        raise Exception("""\
-A template PDB file must be specified using the '--structure_file' option, \
-when you specify a target sequence using the '--sequence_file' option!""")
+        raise Exception(
+            dedent("""\
+            A template PDB file must be specified using the '--structure_file' option, \
+            when you specify a target sequence using the '--sequence_file' option!"""))
 
 
 def elaspic(args):
@@ -98,7 +100,6 @@ def elaspic(args):
             uniprot_domain_pair_ids=uniprot_domain_pair_ids_asint)
         pipeline.run()
     elif args.structure_file:
-        print(LOGGING_LEVELS[args.verbose])
         # Run local pipeline
         from elaspic import standalone_pipeline
         pipeline = standalone_pipeline.StandalonePipeline(
@@ -284,7 +285,6 @@ def elaspic_database(args):
         conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
     else:
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
-    print("Running function '{}'...".format(args.func.__name__))
 
 
 def create_database(args):
@@ -314,18 +314,19 @@ def load_data_to_database(args):
     dirpath, dirnames, filenames = next(os.walk(args.data_folder))
     for table in elaspic_database.Base.metadata.sorted_tables:
         if table_names is not None and table.name not in table_names:
-            print("Skipping table '{}' because it was not included in the 'table_names' list..."
-                  .format(table.name))
+            logger.warning(
+                "Skipping table '{}' because it was not included in the 'table_names' list..."
+                .format(table.name))
             continue
         if '{}.tsv'.format(table.name) in filenames:
             db.copy_table_to_db(table.name, args.data_folder)
-            print("Successfully loaded data from file '{}' to table '{}'"
-                  .format('{}.tsv'.format(table.name), table.name))
+            logger.info("Successfully loaded data from file '{}' to table '{}'"
+                        .format('{}.tsv'.format(table.name), table.name))
         elif '{}.tsv.gz'.format(table.name) in filenames:
             with decompress(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
                 db.copy_table_to_db(table.name, args.data_folder.rstrip('/'))
-            print("Successfully loaded data from file '{}' to table '{}'"
-                  .format('{}.tsv.gz'.format(table.name), table.name))
+            logger.info("Successfully loaded data from file '{}' to table '{}'"
+                        .format('{}.tsv.gz'.format(table.name), table.name))
 
 
 def test_database(args):

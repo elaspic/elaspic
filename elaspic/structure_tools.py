@@ -854,7 +854,7 @@ class StructureParser:
                 for resids in zip(*self.domain_boundaries[chain_idx])
             ]
         except Exception as e:
-            print(str(e))
+            logger.error(str(e))
             raise errors.PDBDomainDefsError(self.unique_id)
 
         return chain_numbering, domain_start_idxs, domain_end_idxs

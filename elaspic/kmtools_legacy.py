@@ -19,15 +19,15 @@ logger = logging.getLogger(__name__)
 def decompress(filename):
     """Temporarly decompress a file."""
     try:
-        print("Gunzipping file '{}'...".format(filename))
+        logger.info("Gunzipping file '{}'...".format(filename))
         subprocess.check_call(shlex.split("gunzip '{}'".format(filename)))
     except Exception as e:
-        print('Unzipping the file failed with an error: {}'.format(e))
+        logger.error('Unzipping the file failed with an error: {}'.format(e))
         raise e
     else:
         yield op.splitext(filename)[0]
     finally:
-        print("Gzipping the file back again...")
+        logger.info("Gzipping the file back again...")
         subprocess.check_call(shlex.split("gzip '{}'".format(filename.rstrip('.gz'))))
 
 
