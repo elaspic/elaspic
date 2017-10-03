@@ -1,9 +1,14 @@
 import logging
 import os
 import os.path as op
+import shlex
 import shutil
+import subprocess
 
-from . import conf, errors, helper
+import faketime.config
+import pandas as pd
+
+from elaspic import conf, errors, helper
 
 logger = logging.getLogger(__name__)
 
@@ -49,160 +54,185 @@ names_stability_complex_mut = (
      for name in list(zip(*names_rows_stability_complex))[0][:-1]] + ['number_of_residues'])
 
 
-class FoldX(object):
+class FoldX:
+    """FoldX
+
+    Examples
+    --------
+    >>> import os
+    >>> import tempfile
+    >>> from elaspic.structure_tools import download_pdb_file
+    >>> tmp_dir = tempfile.mkdtemp()
+    >>> pdb_file = download_pdb_file('3zml', tmp_dir)
+    >>> foldx = FoldX(pdb_file, 'A', tmp_dir)
+    >>> structure_file_wt, structure_file_mut, stability_values_wt, stability_values_mut = \
+            foldx.build_model('QA93A')
+
+    # >>> stability_values_wt_2 = foldx.stability(structure_file_wt)
+    # >>> stability_values_mut_2 = foldx.stability(structure_file_mut)
+    # >>> assert stability_values_wt == stability_values_wt_2
+    # >>> assert stability_values_mut == stability_values_mut_2
+    # >>> foldx.analyze_complex(structure_file_wt)
+    # >>> foldx.analyze_complex(structure_file_mut)
+    """
 
     def __init__(self, pdb_file, chain_id, foldx_dir=None):
-        """
-        """
-        self.pdb_filename = op.basename(pdb_file)
+        """Initialize class for calling FoldX."""
+        pdb_file = op.abspath(pdb_file)
+        self._tempdir = op.abspath(foldx_dir or conf.CONFIGS['foldx_dir'])
+        self._foldx_rotabase = self._find_rotabase()
+        try:
+            pdb_file = shutil.copy(pdb_file, op.join(self._tempdir, op.basename(pdb_file)))
+        except shutil.SameFileError:
+            pass
+        self.structure_file = self._repair_pdb(op.abspath(pdb_file))
         self.chain_id = chain_id
-        if foldx_dir is None:
-            self.foldx_dir = conf.CONFIGS['foldx_dir']
-        else:
-            self.foldx_dir = foldx_dir
-        self.foldx_runfile = op.join(self.foldx_dir, 'runfile_FoldX.txt')
 
-    def __call__(self, whatToRun, mutCodes=[]):
-        """
-        Select which action should be performed by FoldX by setting `whatToRun`.
+    def _find_rotabase(self):
+        system_command = 'which rotabase.txt'
+        process = subprocess.run(
+            shlex.split(system_command),
+            stdout=subprocess.PIPE,
+            universal_newlines=True,
+            check=True)
+        return process.stdout.strip()
 
-        Possible values are:
-
-            - AnalyseComplex
-            - Stability
-            - RepairPDB
-            - BuildModel
-
-        See the `FoldX manual`_ for an explanation on what they do.
-
-        .. _FoldX manual: http://foldx.crg.es/manual3.jsp
-        """
-        logger.debug('Running FoldX {}'.format(whatToRun))
-        self.__write_runfile(self.pdb_filename, self.chain_id, whatToRun, mutCodes)
-        self.__run_runfile()
-        if whatToRun == 'AnalyseComplex':
-            return self.__read_result(
-                op.join(self.foldx_dir, 'Interaction_AnalyseComplex_resultFile.txt'), whatToRun)
-        elif whatToRun == 'Stability':
-            return self.__read_result(op.join(self.foldx_dir, 'Stability.txt'), whatToRun)
-        elif whatToRun == 'RepairPDB':
-            return op.join(self.foldx_dir, 'RepairPDB_' + self.pdb_filename)
-        elif whatToRun == 'BuildModel':
-            # see the FoldX manual for the naming of the generated structures
-            if conf.CONFIGS['foldx_num_of_runs'] == 1:
-                mutants = [
-                    op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1.pdb'),
-                ]
-                wiltype = [
-                    op.join(self.foldx_dir, 'WT_' + self.pdb_filename[:-4] + '_1.pdb'),
-                ]
-                results = [wiltype, mutants]
-            else:
-                mutants = [
-                    op.join(self.foldx_dir, self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
-                    for x in range(0, conf.CONFIGS['foldx_num_of_runs'])
-                ]
-                wiltype = [
-                    op.join(self.foldx_dir,
-                            'WT_' + self.pdb_filename[:-4] + '_1_' + str(x) + '.pdb')
-                    for x in range(0, conf.CONFIGS['foldx_num_of_runs'])
-                ]
-                results = [wiltype, mutants]
-            return results
-
-    def __write_runfile(self, pdbFile, chainID, whatToRun, mutCodes):
-        if whatToRun == 'AnalyseComplex':
-            copy_filename = 'run-analyseComplex.txt'
-            command_line = '<AnalyseComplex>AnalyseComplex_resultFile.txt,{chainID};'\
-                .format(chainID=chainID)
-            output_pdb = 'false'
-        elif whatToRun == 'Stability':
-            copy_filename = 'run-stability.txt'
-            command_line = '<Stability>Stability.txt;'
-            output_pdb = 'false'
-        elif whatToRun == 'RepairPDB':
-            copy_filename = 'run-repair.txt'
-            command_line = '<RepairPDB>#;'
-            output_pdb = 'true'
-        elif whatToRun == 'BuildModel':
-            copy_filename = 'run-build.txt'
-            # file_with_mutations = 'mutant_file.txt'
-            file_with_mutations = 'individual_list.txt'
-            with open(op.join(self.foldx_dir, file_with_mutations), 'w') as fh:
-                fh.writelines(','.join(mutCodes) + ';\n')
-            command_line = '<BuildModel>BuildModel,{file_with_mutations};'\
-                .format(file_with_mutations=file_with_mutations)
-            output_pdb = 'true'
-
-        foldX_runfile = ('<TITLE>FOLDX_runscript;\n'
-                         '<JOBSTART>#;\n'
-                         '<PDBS>{pdbFile};\n'
-                         '<BATCH>#;\n'
-                         '<COMMANDS>FOLDX_commandfile;\n'
-                         '{command_line}\n'
-                         '<END>#;\n'
-                         '<OPTIONS>FOLDX_optionfile;\n'
-                         '<Temperature>298;\n'
-                         '<R>#;\n'
-                         '<pH>7;\n'
-                         '<IonStrength>0.050;\n'
-                         '<numberOfRuns>{buildModel_runs};\n'
-                         '<water>{water};\n'
-                         '<metal>-CRYSTAL;\n'
-                         '<VdWDesign>2;\n'
-                         '<pdb_waters>false;\n'
-                         '<OutPDB>{output_pdb};\n'
-                         '<pdb_hydrogens>false;\n'
-                         '<END>#;\n'
-                         '<JOBEND>#;\n'
-                         '<ENDFILE>#;\n').replace(' ', '').format(
-                             pdbFile=pdbFile,
-                             command_line=command_line,
-                             buildModel_runs=conf.CONFIGS['foldx_num_of_runs'],
-                             water=conf.CONFIGS['foldx_water'],
-                             output_pdb=output_pdb)
-
-        # This just makes copies of the runfiles for debugging...
-        with open(self.foldx_runfile, 'w') as f:
-            f.write(foldX_runfile)
-        shutil.copy(self.foldx_runfile, op.join(self.foldx_dir, copy_filename))
-
-    def __run_runfile(self):
-        """.
-
-        .. todo:: Add a fallback plan using libfaketime.
-        """
-        import faketime.config
-
-        # system_command = './FoldX.linux64 -runfile ' + self.foldx_runfile
-        system_command = "foldx -runfile '{}'".format(self.foldx_runfile)
-        logger.debug("FoldX system command: '{}'".format(system_command))
+    def _run(self, system_command, cwd):
         env = os.environ.copy()
         env['LD_PRELOAD'] = faketime.config.libfaketime_so_file
         env['FAKETIME'] = '2015-12-26 00:00:00'
-        p = helper.run(system_command, cwd=self.foldx_dir, env=env)
-        if p.stderr.strip():
-            logger.debug('foldx result:\n{}'.format(p.stdout.strip()))
-            logger.error('foldx error message:\n{}'.format(p.stderr.strip()))
-            if 'Cannot allocate memory' in p.stderr:
-                raise errors.ResourceError(p.stderr)
-        if 'There was a problem' in p.stdout:
-            logger.error('foldx result:\n{}'.format(p.stdout.strip()))
-            if 'Specified residue not found.' in p.stdout:
+        logger.debug(system_command)
+        process = subprocess.run(
+            shlex.split(system_command),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            cwd=cwd,
+            env=env)
+        if process.stderr.strip():
+            logger.debug('foldx result:\n{}'.format(process.stdout.strip()))
+            logger.error('foldx error message:\n{}'.format(process.stderr.strip()))
+            if 'Cannot allocate memory' in process.stderr:
+                raise errors.ResourceError(process.stderr.strip())
+        if 'There was a problem' in process.stdout:
+            logger.error('foldx result:\n{}'.format(process.stdout.strip()))
+            if 'Specified residue not found.' in process.stdout:
                 raise errors.MutationMismatchError()
+        if process.returncode != 0:
+            logger.error("Command finished with return code %s", process.returncode)
+            logger.error(process.stdout.strip())
+            logger.error(process.stderr.strip())
+            raise subprocess.CalledProcessError(
+                returncode=process.returncode,
+                cmd=system_command,
+                output=process.stdout.strip(),
+                stderr=process.stderr.strip())
 
-    def __read_result(self, outFile, whatToRead):
-        with open(outFile, 'r') as f:
-            lines = f.readlines()
-            line = lines[-1].split('\t')
-            if whatToRead == 'BuildModel':
-                total_energy_difference = line[1]
-                return total_energy_difference
-            if whatToRead == 'Stability':
-                stability_values = [line[x[1]].strip() for x in names_rows_stability]
-                return stability_values
-            if whatToRead == 'AnalyseComplex':
-                complex_stability_values = [
-                    line[x[1]].strip() for x in names_rows_stability_complex
-                ]
-                return complex_stability_values
+    def _repair_pdb(self, structure_file):
+        """Run FoldX ``RepairPDB``."""
+        # Run FoldX
+        system_command = (f"foldx --rotabaseLocation {self._foldx_rotabase} --command=RepairPDB "
+                          f"--pdb='{op.basename(structure_file)}'")
+        self._run(system_command, op.dirname(structure_file))
+
+        # Read results
+        repaired_structure_file = shutil.move(
+            op.splitext(structure_file)[0] + '_Repair.pdb',
+            op.splitext(structure_file)[0] + '-foldx.pdb')
+        return repaired_structure_file
+
+    def build_model(self, foldx_mutation):
+        """Run FoldX ``BuildModel``."""
+        pdb_id = op.basename(op.splitext(self.structure_file)[0])
+        cwd = op.dirname(self.structure_file)
+        mutation_file = self._get_mutation_file(foldx_mutation, cwd)
+
+        # Run FoldX
+        system_command = (f"foldx --rotabaseLocation {self._foldx_rotabase} --command=BuildModel "
+                          f"--pdb='{op.basename(self.structure_file)}' "
+                          f"--mutant-file='{mutation_file}'")
+        self._run(system_command, cwd)
+
+        # Copy FoldX results
+        wt_pdb_id = f'WT_{pdb_id}_1.pdb'
+        mut_pdb_id = f'{pdb_id}_1.pdb'
+        structure_file_wt = shutil.move(
+            op.join(cwd, wt_pdb_id), op.join(cwd, f'{pdb_id}-{foldx_mutation}-wt.pdb'))
+        structure_file_mut = shutil.move(
+            op.join(cwd, mut_pdb_id), op.join(cwd, f'{pdb_id}-{foldx_mutation}-mut.pdb'))
+
+        # Read results
+        output_file = op.join(cwd, f'Raw_{pdb_id}.fxout')
+        df = pd.read_csv(output_file, sep='\t', skiprows=8)
+        os.remove(output_file)
+
+        # Format dataframes
+        df.columns = df.rename(columns=str.lower)
+        df_wt = df.loc[df['pdb'] == wt_pdb_id, :].drop('pdb', axis=1)
+        df_mut = df.loc[df['pdb'] == mut_pdb_id, :].drop('pdb', axis=1)
+        assert df_wt.shape[0] == 1 and df_mut.shape[0] == 1
+
+        # Compile results
+        stability_values_wt = df_wt.iloc[0].tolist()
+        stability_values_mut = df_mut.iloc[0].tolist()
+        return structure_file_wt, structure_file_mut, stability_values_wt, stability_values_mut
+
+    def stability(self, structure_file) -> dict:
+        """Run FoldX ``Stability``.
+
+        .. deprecated:: `FoldX._build_model` already gives you the same information.
+        """
+        pdb_id = op.basename(op.splitext(structure_file)[0])
+        cwd = op.dirname(structure_file)
+
+        # Run FoldX
+        system_command = (f"foldx --rotabaseLocation {self._foldx_rotabase} --command=Stability "
+                          f"--pdb='{op.basename(structure_file)}'")
+        self._run(system_command, cwd=cwd)
+
+        # Read results
+        output_file = op.join(cwd, f'{pdb_id}_0_ST.fxout')
+        df = pd.read_csv(output_file, sep='\t', skiprows=8)
+        os.remove(output_file)
+
+        # Format dataframe
+        df.columns = df.rename(columns=str.lower)
+        df.drop('pdb', axis=1, inplace=True)
+        assert df.shape[0] == 1
+        return df.iloc[0].to_dict()
+
+    def analyse_complex(self, structure_file, chain_ids):
+        """Run FoldX ``AnalyseComplex``."""
+        pdb_id = op.basename(op.splitext(structure_file)[0])
+        chain_id_1, chain_id_2 = chain_ids
+
+        # Run FoldX
+        system_command = (
+            f"foldx --rotabaseLocation {self._foldx_rotabase} --command=AnalyseComplex "
+            f"--pdb='{op.basename(structure_file)}' "
+            f"--analyseComplexChains={chain_id_1},{chain_id_2}")
+        self._run(system_command, cwd=op.dirname(structure_file))
+
+        # Read results
+        output_file = op.join(self._tempdir, f'Interaction_{pdb_id}_AC.fxout')
+        df = pd.read_csv(output_file, sep='\t', skiprows=8)
+        os.remove(output_file)
+
+        # Format dataframe
+        df.columns = df.rename(columns=str.lower)
+        df.drop('pdb', axis=1, inplace=True)
+        assert df.shape[0] == 1
+        return df.iloc[0].to_dict()
+
+    def _get_mutation_file(self, foldx_mutation, cwd) -> str:
+        """
+        Parameters
+        ----------
+        foldx_mutation:
+            Mutation specified in the following format:
+            {mutation.residue_wt}{chain_id}{residue_id}{mutation.residue_mut}
+        """
+        mutation_file = op.join(cwd, f'individual_list_{foldx_mutation}.txt')
+        with open(mutation_file, 'wt') as fout:
+            fout.write(f'{foldx_mutation};\n')
+        return mutation_file
