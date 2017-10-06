@@ -67,8 +67,8 @@ class FoldX:
             foldx.build_model('QA93A')
     >>> stability_values_wt_2 = foldx.stability(structure_file_wt)
     >>> stability_values_mut_2 = foldx.stability(structure_file_mut)
-    >>> assert stability_values_wt == stability_values_wt_2
-    >>> assert stability_values_mut == stability_values_mut_2
+    >>> assert stability_values_wt == stability_values_wt_2[:-1]
+    >>> assert stability_values_mut == stability_values_mut_2[:-1]
     >>> foldx.analyze_complex(structure_file_wt)
     >>> foldx.analyze_complex(structure_file_mut)
     """
