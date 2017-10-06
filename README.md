@@ -22,7 +22,7 @@ For a small number of mutations, you can try running ELASPIC using our [webserve
 
 ## References
 
-Strokach, A., Kim, P.M. (2016) *Predicting the Effect of Mutations on a Genome-Wide Scale.* [MSc Thesis](https://github.com/ostrokach/msc_thesis/blob/master/msc_thesis.pdf), University of Toronto.
+Strokach, A., Kim, P.M. (2016) [*Predicting the Effect of Mutations on a Genome-Wide Scale.*](https://github.com/ostrokach/msc_thesis/blob/master/msc_thesis.pdf) MSc Thesis, University of Toronto.
 
 Witvliet, D., Strokach, A., Giraldo-Forero, A.F., Teyra, J., Colak, R., and Kim, P.M. (2016)
 *ELASPIC web-server: proteome-wide structure based prediction of mutation effects on protein stability and binding affinity.* Bioinformatics 32(10): 1589-1591. doi: [10.1093/bioinformatics/btw031](https://doi.org/10.1093/bioinformatics/btw031).
