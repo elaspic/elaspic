@@ -413,74 +413,55 @@ class Model:
 
         #######################################################################
         # 2nd: use the 'Repair' feature of FoldX to optimise the structure
-        fX = call_foldx.FoldX(model_file, chain_id, mutation_dir)
-        repairedPDB_wt = fX('RepairPDB')
+        foldx = call_foldx.FoldX(model_file, chain_id, mutation_dir)
 
         #######################################################################
         # 3rd: introduce the mutation using FoldX
-        mutCodes = [
-            mutation_modeller[0] + chain_id + mutation_modeller[1:],
-        ]
-        logger.debug('Mutcodes for foldx: {}'.format(mutCodes))
+        foldx_mutation = mutation_modeller[0] + chain_id + mutation_modeller[1:]
+        logger.debug('FoldX mutation: %s', foldx_mutation)
 
         # Introduce the mutation using foldX
-        fX_wt = call_foldx.FoldX(repairedPDB_wt, chain_id, mutation_dir)
-        repairedPDB_wt_list, repairedPDB_mut_list = fX_wt('BuildModel', mutCodes)
+        structure_file_wt, structure_file_mut, stability_values_wt, stability_values_mut = \
+            foldx.build_model(foldx_mutation)
+        logger.debug('structure_file_wt: %s', structure_file_wt)
+        logger.debug('structure_file_mut: %s', structure_file_mut)
 
-        logger.debug('repairedPDB_wt_list: %s' % str(repairedPDB_wt_list))
-        logger.debug('repairedPDB_mut_list: %s' % str(repairedPDB_mut_list))
-
-        wt_chain_sequences = structure_tools.get_structure_sequences(repairedPDB_wt_list[0])
-        mut_chain_sequences = structure_tools.get_structure_sequences(repairedPDB_mut_list[0])
-
+        wt_chain_sequences = structure_tools.get_structure_sequences(structure_file_wt)
+        mut_chain_sequences = structure_tools.get_structure_sequences(structure_file_mut)
         logger.debug('wt_chain_sequences: %s' % str(wt_chain_sequences))
         logger.debug('mut_chain_sequences: %s' % str(mut_chain_sequences))
 
         # Copy the foldX wildtype and mutant pdb files (use the first model if there are multiple)
         model_file_wt = op.join(mutation_dir, mutation_id + '-wt.pdb')
         model_file_mut = op.join(mutation_dir, mutation_id + '-mut.pdb')
-        shutil.copy(repairedPDB_wt_list[0], model_file_wt)
-        shutil.copy(repairedPDB_mut_list[0], model_file_mut)
-
-        #######################################################################
-        # 4th: set up the classes for the wildtype and the mutant structures
-        fX_wt_list = list()
-        for wPDB in repairedPDB_wt_list:
-            fX_wt_list.append(call_foldx.FoldX(wPDB, chain_id, mutation_dir))
-
-        fX_mut_list = list()
-        for mPDB in repairedPDB_mut_list:
-            fX_mut_list.append(call_foldx.FoldX(mPDB, chain_id, mutation_dir))
+        shutil.copy(structure_file_wt, model_file_wt)
+        shutil.copy(structure_file_mut, model_file_mut)
 
         #######################################################################
         # 5th: Calculate energies
-        assert len(fX_wt_list) == 1
-        stability_values_wt = ','.join('{}'.format(f) for f in fX_wt_list[0]('Stability'))
-        assert len(fX_wt_list) == 1
-        stability_values_mut = ','.join('{}'.format(f) for f in fX_mut_list[0]('Stability'))
+        stability_values_wt = ','.join('{}'.format(f) for f in foldx.stability(structure_file_wt))
+        stability_values_mut = ','.join('{}'.format(f) for f in foldx.stability(structure_file_mut))
 
         if len(self.sequence_seqrecords) == 1:
             complex_stability_values_wt = None
             complex_stability_values_mut = None
         else:
-            assert len(fX_wt_list) == 1
-            complex_stability_values_wt = ','.join('{}'.format(f)
-                                                   for f in fX_wt_list[0]('AnalyseComplex'))
-            assert len(fX_mut_list) == 1
-            complex_stability_values_mut = ','.join('{}'.format(f)
-                                                    for f in fX_mut_list[0]('AnalyseComplex'))
+            complex_stability_values_wt = ','.join(
+                '{}'.format(f) for f in foldx.analyse_complex(structure_file_wt))
+            complex_stability_values_mut = ','.join(
+                '{}'.format(f) for f in foldx.analyse_complex(structure_file_mut))
 
         #######################################################################
         # 6: Calculate all other relevant properties
         # (This also verifies that mutations match mutated residues in pdb structures).
         analyze_structure_wt = structure_analysis.AnalyzeStructure(
-            repairedPDB_wt_list[0],
+            structure_file_wt,
             mutation_dir,)
         analyze_structure_results_wt = analyze_structure_wt(chain_id, mutation_modeller,
                                                             partner_chain_id)
 
         analyze_structure_mut = structure_analysis.AnalyzeStructure(
-            repairedPDB_mut_list[0],
+            structure_file_mut,
             mutation_dir,)
         analyze_structure_results_mut = analyze_structure_mut(chain_id, mutation_modeller,
                                                               partner_chain_id)
@@ -501,7 +482,7 @@ class Model:
             #
             mutation_dir=mutation_dir,
             mutation_modeller=mutation_modeller,
-            mutation_foldx=','.join(mutCodes),
+            mutation_foldx=foldx_mutation,
             model_file_wt=model_file_wt,
             model_file_mut=model_file_mut,
             stability_energy_wt=stability_values_wt,
