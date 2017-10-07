@@ -69,8 +69,8 @@ class FoldX:
     >>> stability_values_mut_2 = foldx.stability(structure_file_mut)
     >>> assert stability_values_wt == stability_values_wt_2[:-1]
     >>> assert stability_values_mut == stability_values_mut_2[:-1]
-    >>> foldx.analyze_complex(structure_file_wt)
-    >>> foldx.analyze_complex(structure_file_mut)
+    >>> foldx.analyse_complex(structure_file_wt)
+    >>> foldx.analyse_complex(structure_file_mut)
     """
 
     def __init__(self, pdb_file, chain_id, foldx_dir=None):
@@ -140,7 +140,13 @@ class FoldX:
         return repaired_structure_file
 
     def build_model(self, foldx_mutation):
-        """Run FoldX ``BuildModel``."""
+        """Run FoldX ``BuildModel``.
+
+        .. note::
+
+            For some reason, the results of ``BuildModel``
+            do not include ``number_of_residues``.
+        """
         pdb_id = op.basename(op.splitext(self.structure_file)[0])
         cwd = op.dirname(self.structure_file)
         mutation_file = self._get_mutation_file(foldx_mutation, cwd)
