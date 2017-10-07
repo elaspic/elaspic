@@ -1,4 +1,5 @@
 import argparse
+import functools
 import json
 import logging
 import logging.config
@@ -175,9 +176,7 @@ def configure_run_parser(sub_parsers):
         '-v',
         '--verbose',
         action='count',
-        help=dedent("""\
-            Increase verbosity level. Can be specified multiple times.
-        """))
+        help="Increase verbosity level. Can be specified multiple times.")
     parser.add_argument(
         '-u',
         '--uniprot_id',
@@ -296,11 +295,21 @@ def create_database(args):
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     from elaspic import elaspic_database
     db = elaspic_database.MyDatabase()
-    db.create_database_tables(args.drop_schema)
+    db.create_database_tables(drop_schema=True)
     logger.info('Done!')
 
 
-def load_data_to_database(args):
+def load_table_to_database(table_name, table_url, engine):
+    logger.info("Loading table {} from {} into database...".format(table_name, table_url))
+    engine.execute('DELETE FROM {}'.format(table_name))
+    df_header = pd.read_sql_query('select * from {} limit 0'.format(table_name), engine)
+    csv_file = op.join(table_url, table_name + '.tsv.gz')
+    for chunk in pd.read_csv(
+            csv_file, chunksize=100000, na_values=['\\N'], names=df_header.columns):
+        chunk.to_sql(table_name, engine, if_exists='append', index=False)
+
+
+def load_data_to_database(args, tables=None):
     if args.config_file:
         conf.read_configuration_file(args.config_file)
     elif args.connection_string:
@@ -309,6 +318,17 @@ def load_data_to_database(args):
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     from elaspic import elaspic_database
     db = elaspic_database.MyDatabase()
+
+    if args.tables:
+        tables = args.tables.split(',')
+    else:
+        assert tables is not None
+
+    for table_name in tables:
+        load_table_to_database(table_name, args.url, db.engine)
+
+    return
+    # This code tries to load tables faster by directly reading from CSVs
     args.data_folder = args.data_folder.rstrip('/')
     table_names = args.data_files.split(',') if args.data_files else None
     dirpath, dirnames, filenames = next(os.walk(args.data_folder))
@@ -329,10 +349,6 @@ def load_data_to_database(args):
                         .format('{}.tsv.gz'.format(table.name), table.name))
 
 
-def test_database(args):
-    raise NotImplementedError
-
-
 def delete_database(args):
     if args.config_file:
         conf.read_configuration_file(args.config_file)
@@ -342,35 +358,51 @@ def delete_database(args):
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     from elaspic import elaspic_database
     db = elaspic_database.MyDatabase()
-    db.delete_database_tables(args.drop_schema, args.drop_uniprot_sequence)
+    if db.engine == 'sqlite':
+        os.remove(db.engine.database)
+    else:
+        db.delete_database_tables(args.drop_schema, args.drop_uniprot_sequence)
     logger.info('Done!')
 
 
 def configure_database_parser(sub_parsers):
     help = "Perform database maintenance tasks"
-    description = help + """
-"""
-    example = """
-Examples:
+    description = help + '\n'
+    example = dedent("""\
+    Examples:
 
-    elaspic database -c config_file.ini create
+        elaspic database -c config_file.ini create
 
-"""
+    """)
     parser = sub_parsers.add_parser(
         'database',
         help=help,
         description=description,
-        epilog=example,)
-
+        epilog=example)
     parser.add_argument(
         '-c', '--config_file', nargs='?', type=str, help='ELASPIC configuration file.')
     parser.add_argument(
         '--connection_string',
         nargs='?',
         type=str,
-        help=('SQLAlchemy formatted string describing the connection to the database.'))
-    subparsers = parser.add_subparsers(title='tasks', help='Maintenance tasks to perform')
-    # parser.set_defaults(func=elaspic_database)
+        default=os.getenv('ELASPIC_DB_STRING'),
+        help=dedent("""\
+            SQLAlchemy formatted string describing the connection to the
+            database. Can also be specified using the 'ELASPIC_DB_STRING'
+            environment variable.
+        """))
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='count',
+        help="Increase verbosity level. Can be specified multiple times.")
+    parser.add_argument(
+        'action',
+        choices=['create', 'load_basic', 'load_complete', 'delete'],
+        help='Action to perform'
+    )
+    parser.set_defaults(func=elaspic_database)
+
 
     # Create an empty database schema
     parser_create = subparsers.add_parser(name='create', description='Create an empty database')
@@ -385,44 +417,39 @@ Examples:
 
     # Load data to the database
     parser_load_data = subparsers.add_parser(
-        name='load_data', description='Load data from text files to the database.')
+        name='load_basic', description='Load data from text files to the database.')
     parser_load_data.add_argument(
-        '--data_folder', default='.', help='Location of text files to be loaded to the database.')
+        'url', help='Location of text files to be loaded to the database.')
     parser_load_data.add_argument(
-        '--data_files',
-        default=None,
-        help=("Names of text files to be loaded to the database. \n"
-              "``all`` : load all tables found in the location specified by ``data_folder``."))
-    parser_load_data.set_defaults(func=load_data_to_database)
+        '--tables', type=str, default="", help="Comma-separated list of tables to load")
+    parser_load_data.set_defaults(func=functools.partial(
+        load_data_to_database,
+        tables=[
+            'domain', 'domain_contact', 'uniprot_sequence', 'provean', 'uniprot_domain',
+            'uniprot_domain_template', 'uniprot_domain_pair', 'uniprot_domain_pair_template'
+        ]))
 
-    # Test the created database by running several mutations
-    parser_test = subparsers.add_parser(
-        name='test', description='Test the database by running some mutations. ')
-    parser_test.add_argument(
-        '--mutation_type',
-        choices=['domain', 'interface', 'both'],
-        default='both',
-        help="The type of mutatation that you want to test. \n"
-        "``domain`` : Test the impact of a mutation on the folding of a domain.\n"
-        "``interface`` : Test the impact of a mutation on the interaction "
-        "between two domains. \n"
-        "``both`` : Test both a domain mutation and an interface mutation (DEFAULT) ")
-    parser_test.add_argument(
-        '--do_provean',
-        type=bool,
-        default=True,
-        help="Whether or not to run Provean when testing the database (DEFAULT True)")
-    parser_test.add_argument(
-        '--uniprot_domain_id',
-        type=int,
-        default=None,
-        help="Unique ID identifying the domain that you want to mutate. ")
-    parser_test.add_argument(
-        '--uniprot_domain_pair_id',
-        type=int,
-        default=True,
-        help="Unique ID identifying the domain pair that you want to mutate. ")
-    parser_test.set_defaults(func=test_database)
+    # Load data to the database
+    parser_load_data = subparsers.add_parser(
+        name='load_complete', description='Load data from text files to the database.')
+    parser_load_data.add_argument(
+        'url', help='Location of text files to be loaded to the database.')
+    parser_load_data.add_argument(
+        '--tables', type=str, default="", help="Comma-separated list of tables to load")
+    parser_load_data.set_defaults(func=functools.partial(
+        load_data_to_database,
+        tables=[
+            'domain',
+            'domain_contact',
+            'uniprot_sequence',
+            'provean',
+            'uniprot_domain',
+            'uniprot_domain_template',
+            'uniprot_domain_pair',
+            'uniprot_domain_pair_template',
+            'uniprot_domain_model',
+            'uniprot_domain_pair_model',
+        ]))
 
     # Delete database
     parser_delete = subparsers.add_parser(

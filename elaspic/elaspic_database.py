@@ -64,14 +64,15 @@ class MyDatabase(object):
         """Get an SQLAlchemy engine that can be used to connect to the database."""
         sa_opts = {
             'echo': echo,
-            'pool_size': 1,
         }
         if conf.CONFIGS['db_type'] == 'sqlite':
             sa_opts['isolation_level'] = 'READ UNCOMMITTED'
         elif conf.CONFIGS['db_type'] == 'mysql':
             sa_opts['isolation_level'] = 'READ UNCOMMITTED'
+            sa_opts['pool_size'] = 1
             sa_opts['pool_recycle'] = 3600
         elif conf.CONFIGS['db_type'] == 'postgresql':
+            sa_opts['pool_size'] = 1
             sa_opts['pool_recycle'] = 3600
         else:
             raise Exception("Unsupported 'db_type': '{}'!".format(conf.CONFIGS['db_type']))
@@ -163,10 +164,11 @@ class MyDatabase(object):
             Whether or not to keep the `uniprot_sequence` table.
             Only relevant if `clear_schema` is `True`.
         """
-        if drop_schema:
+        if drop_schema and self.engine.name != 'sqlite':
             self.drop_database_schema(conf.CONFIGS['db_schema'])
 
-        self.create_database_schema(conf.CONFIGS['db_schema'])
+        if self.engine.name != 'sqlite':
+            self.create_database_schema(conf.CONFIGS['db_schema'])
 
         # Create all tables, creating schema as neccessary
         for table in Base.metadata.sorted_tables:
@@ -185,7 +187,7 @@ class MyDatabase(object):
         """
         if drop_schema:
             if conf.CONFIGS['db_type'] == 'sqlite':
-                os.remove(conf.CONFIGS['db_schema'])
+                os.remove(self.engine.url.database)
             else:
                 self.engine.execute('drop schema {db_schema};'.format(**conf.CONFIGS))
             logger.info("Successfully removed database schema: {db_schema}".format(**conf.CONFIGS))
@@ -194,11 +196,10 @@ class MyDatabase(object):
         # Remove tables one by one
         for table in reversed(Base.metadata.sorted_tables):
             if table.name != 'uniprot_sequence' or drop_uniprot_sequence:
-                conf.CONFIGS['table_name'] = table.name
-                self.engine.execute(
-                    'drop table if exists {db_schema}.{table_name};'.format(**conf.CONFIGS))
-                self.engine.execute(
-                    'drop table if exists {db_schema}.{table_name};'.format(**conf.CONFIGS))
+                # conf.CONFIGS['table_name'] = table.name
+                # table.drop()
+                self.engine.execute('DROP TABLE IF EXISTS {};'.format(table.name))
+                self.engine.execute('DROP TABLE IF EXISTS {};'.format(table.name))
 
     # %%
     mysql_load_table_template = (
