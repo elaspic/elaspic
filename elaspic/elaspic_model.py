@@ -440,16 +440,19 @@ class Model:
         #######################################################################
         # 5th: Calculate energies
         stability_values_wt = ','.join('{}'.format(f) for f in foldx.stability(structure_file_wt))
-        stability_values_mut = ','.join('{}'.format(f) for f in foldx.stability(structure_file_mut))
+        stability_values_mut = ','.join('{}'.format(f)
+                                        for f in foldx.stability(structure_file_mut))
 
         if len(self.sequence_seqrecords) == 1:
             complex_stability_values_wt = None
             complex_stability_values_mut = None
         else:
             complex_stability_values_wt = ','.join(
-                '{}'.format(f) for f in foldx.analyse_complex(structure_file_wt))
+                '{}'.format(f)
+                for f in foldx.analyse_complex(structure_file_wt, [chain_id, partner_chain_id]))
             complex_stability_values_mut = ','.join(
-                '{}'.format(f) for f in foldx.analyse_complex(structure_file_mut))
+                '{}'.format(f)
+                for f in foldx.analyse_complex(structure_file_mut, [chain_id, partner_chain_id]))
 
         #######################################################################
         # 6: Calculate all other relevant properties

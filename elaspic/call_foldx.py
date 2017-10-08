@@ -52,39 +52,48 @@ names_stability_complex_wt = [name + '_wt' for name in names_stability_complex]
 names_stability_complex_mut = [name + '_mut' for name in names_stability_complex]
 
 
+def read_build_model(output_file, wt_pdb_id, mut_pdb_id):
+    df = pd.read_csv(output_file, sep='\t', skiprows=8)
+    # Format dataframes
+    df = df.rename(columns=str.lower)
+    logger.debug(df.head())
+    logger.info(df.head())
+    df_wt = df.loc[df['pdb'] == wt_pdb_id, :].drop('pdb', axis=1)
+    df_mut = df.loc[df['pdb'] == mut_pdb_id, :].drop('pdb', axis=1)
+    assert df_wt.shape[0] == 1 and df_mut.shape[0] == 1
+    # Compile results
+    stability_values_wt = df_wt.iloc[0].tolist()
+    stability_values_mut = df_mut.iloc[0].tolist()
+    return stability_values_wt, stability_values_mut
+
+
+def read_stability(output_file):
+    df = pd.read_csv(output_file, sep='\t', names=['pdb'] + names_stability, index_col=False)
+    # Format dataframe
+    df = df.rename(columns=str.lower)
+    logger.debug(df.head())
+    assert df.shape[0] == 1
+    result = df.drop('pdb', axis=1).iloc[0].tolist()
+    return result
+
+
+def read_analyse_complex(output_file):
+    df = pd.read_csv(output_file, sep='\t', index_col=False, skiprows=8)
+    # Format dataframe
+    df = df.rename(columns=lambda s: s.lower().replace(' ', '_'))
+    logger.debug(df.head())
+    assert df.shape[0] == 1
+    result = df.drop(pd.Index(['pdb', 'group1', 'group2']), axis=1).iloc[0].tolist()
+    return result
+
+
 class FoldX:
-    """FoldX
 
-    Examples
-    --------
-    >>> import os
-    >>> import tempfile
-    >>> from elaspic.structure_tools import download_pdb_file
-    >>> tmp_dir = tempfile.mkdtemp()
-    >>> pdb_file = download_pdb_file('3zml', tmp_dir)
-    >>> foldx = FoldX(pdb_file, 'A', tmp_dir)
-    >>> structure_file_wt, structure_file_mut, stability_values_wt, stability_values_mut = \
-            foldx.build_model('QA93A')
-    >>> stability_values_wt_2 = foldx.stability(structure_file_wt)
-    >>> stability_values_mut_2 = foldx.stability(structure_file_mut)
-    >>> assert stability_values_wt == stability_values_wt_2[:-1]
-    >>> assert stability_values_mut == stability_values_mut_2[:-1]
-    >>> foldx.analyse_complex(structure_file_wt)
-    >>> foldx.analyse_complex(structure_file_mut)
-    """
-
-    def __init__(self, pdb_file, chain_id, foldx_dir=None):
-        """Initialize class for calling FoldX."""
+    def __init__(self, foldx_dir=None):
         self._tempdir = op.abspath(foldx_dir or conf.CONFIGS['foldx_dir'])
-        logger.debug("tempdir: %s", self._tempdir)
+        logger.debug("FoldX._tempdir: %s", self._tempdir)
         self._foldx_rotabase = self._find_rotabase()
-        pdb_file = op.abspath(pdb_file)
-        try:
-            pdb_file = shutil.copy(pdb_file, op.join(self._tempdir, op.basename(pdb_file)))
-        except shutil.SameFileError:
-            pass
-        self.structure_file = self._repair_pdb(op.abspath(pdb_file))
-        self.chain_id = chain_id
+        logger.debug("FoldX._foldx_rotabase: %s", self._foldx_rotabase)
 
     def _find_rotabase(self):
         system_command = 'which rotabase.txt'
@@ -139,7 +148,7 @@ class FoldX:
             op.splitext(structure_file)[0] + '-foldx.pdb')
         return repaired_structure_file
 
-    def build_model(self, foldx_mutation):
+    def build_model(self, pdb_file, foldx_mutation):
         """Run FoldX ``BuildModel``.
 
         .. note::
@@ -147,13 +156,20 @@ class FoldX:
             For some reason, the results of ``BuildModel``
             do not include ``number_of_residues``.
         """
-        pdb_id = op.basename(op.splitext(self.structure_file)[0])
-        cwd = op.dirname(self.structure_file)
+        pdb_file = op.abspath(pdb_file)
+        try:
+            pdb_file = shutil.copy(pdb_file, op.join(self._tempdir, op.basename(pdb_file)))
+        except shutil.SameFileError:
+            pass
+        structure_file = self._repair_pdb(op.abspath(pdb_file))
+
+        pdb_id = op.basename(op.splitext(structure_file)[0])
+        cwd = op.dirname(structure_file)
         mutation_file = self._get_mutation_file(foldx_mutation, cwd)
 
         # Run FoldX
         system_command = (f"foldx --rotabaseLocation {self._foldx_rotabase} --command=BuildModel "
-                          f"--pdb='{op.basename(self.structure_file)}' "
+                          f"--pdb='{op.basename(structure_file)}' "
                           f"--mutant-file='{mutation_file}'")
         self._run(system_command, cwd)
 
@@ -167,24 +183,8 @@ class FoldX:
 
         # Read results
         output_file = op.join(cwd, f'Raw_{pdb_id}.fxout')
-        df = pd.read_csv(output_file, sep='\t', skiprows=8)
-        os.remove(output_file)
-
-        # Format dataframes
-        df = df.rename(columns=str.lower)
-        logger.info(df.head())
-        df_wt = df.loc[df['pdb'] == wt_pdb_id, :].drop('pdb', axis=1)
-        df_mut = df.loc[df['pdb'] == mut_pdb_id, :].drop('pdb', axis=1)
-        assert df_wt.shape[0] == 1 and df_mut.shape[0] == 1
-
-        # Compile results
-        stability_values_wt = df_wt.iloc[0].tolist()
-        stability_values_mut = df_mut.iloc[0].tolist()
-
-        logger.debug("build_model structure_file_wt: %s", structure_file_wt)
-        logger.debug("build_model structure_file_mut: %s", structure_file_mut)
-        logger.debug("build_model stability_values_wt: %s", stability_values_wt)
-        logger.debug("build_model stability_values_mut: %s", stability_values_mut)
+        stability_values_wt, stability_values_mut = read_build_model(output_file, wt_pdb_id,
+                                                                     mut_pdb_id)
         return structure_file_wt, structure_file_mut, stability_values_wt, stability_values_mut
 
     def stability(self, structure_file) -> dict:
@@ -202,15 +202,7 @@ class FoldX:
 
         # Read results
         output_file = op.join(cwd, f'{pdb_id}_0_ST.fxout')
-        df = pd.read_csv(output_file, sep='\t', names=['pdb'] + names_stability, index_col=False)
-        os.remove(output_file)
-
-        # Format dataframe
-        df = df.rename(columns=str.lower)
-        logger.debug(df.head())
-        assert df.shape[0] == 1
-        result = df.drop('pdb', axis=1).iloc[0].tolist()
-        logger.debug("stability result: %s", result)
+        result = read_stability(output_file)
         return result
 
     def analyse_complex(self, structure_file, chain_ids):
@@ -227,16 +219,7 @@ class FoldX:
 
         # Read results
         output_file = op.join(self._tempdir, f'Interaction_{pdb_id}_AC.fxout')
-        df = pd.read_csv(
-            output_file, sep='\t', names=['pdb'] + names_stability_complex, index_col=False)
-        os.remove(output_file)
-
-        # Format dataframe
-        df = df.rename(columns=str.lower)
-        logger.debug(df.head())
-        assert df.shape[0] == 1
-        result = df.drop('pdb', axis=1).iloc[0].tolist()
-        logger.debug("analyse_complex result: %s", result)
+        result = read_analyse_complex(output_file)
         return result
 
     def _get_mutation_file(self, foldx_mutation, cwd) -> str:
