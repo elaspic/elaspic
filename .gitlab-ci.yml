@@ -106,7 +106,7 @@ test-sqlite-database:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
   script:
-    - export=ELASPIC_DB_STRING="sqlite:///${HOME}/elaspic.db"
+    - export ELASPIC_DB_STRING="sqlite:///${HOME}/elaspic.db"
     - elaspic database create
     - elaspic database load_basic http://elaspic.kimlab.org/static/download/latest/homo_sapiens_test/
     - elaspic database load_complete http://elaspic.kimlab.org/static/download/latest/homo_sapiens_test/
