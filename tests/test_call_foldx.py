@@ -68,7 +68,7 @@ def test_foldx(test_data, tmpdir):
         test_data['pdb_mutation'][0] + test_data['pdb_chain'] + test_data['pdb_mutation'][1:])
     foldx = FoldX(tmp_dir)
     structure_file_wt, structure_file_mut = _test_build_model(pdb_file, foldx_mutation, foldx,
-                                                              test_data['stability_results_'][:-1])
+                                                              test_data['stability_results_'])
     _test_stability(structure_file_wt, structure_file_mut, foldx, test_data['stability_results_'])
     _test_analyse_complex(structure_file_wt, structure_file_mut, pdb_chains, foldx,
                           test_data['analyze_complex_results_'])
