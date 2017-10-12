@@ -138,8 +138,9 @@ class FoldX:
     def _repair_pdb(self, structure_file):
         """Run FoldX ``RepairPDB``."""
         # Run FoldX
-        system_command = (f"foldx --rotabaseLocation {self._foldx_rotabase} --command=RepairPDB "
-                          f"--pdb='{op.basename(structure_file)}'")
+        system_command = (
+            "foldx --rotabaseLocation {} --command=RepairPDB ".format(self._foldx_rotabase) +
+            "--pdb='{}'".format(op.basename(structure_file)))
         self._run(system_command, op.dirname(structure_file))
 
         # Read results
@@ -168,21 +169,22 @@ class FoldX:
         mutation_file = self._get_mutation_file(foldx_mutation, cwd)
 
         # Run FoldX
-        system_command = (f"foldx --rotabaseLocation {self._foldx_rotabase} --command=BuildModel "
-                          f"--pdb='{op.basename(structure_file)}' "
-                          f"--mutant-file='{mutation_file}'")
+        system_command = (
+            "foldx --rotabaseLocation {} --command=BuildModel ".format(self._foldx_rotabase) +
+            "--pdb='{}' ".format(op.basename(structure_file)) +
+            "--mutant-file='{}'".format(mutation_file))
         self._run(system_command, cwd)
 
         # Copy FoldX results
-        wt_pdb_id = f'WT_{pdb_id}_1.pdb'
-        mut_pdb_id = f'{pdb_id}_1.pdb'
+        wt_pdb_id = 'WT_{}_1.pdb'.format(pdb_id)
+        mut_pdb_id = '{}_1.pdb'.format(pdb_id)
         structure_file_wt = shutil.move(
-            op.join(cwd, wt_pdb_id), op.join(cwd, f'{pdb_id}-{foldx_mutation}-wt.pdb'))
+            op.join(cwd, wt_pdb_id), op.join(cwd, '{}-{}-wt.pdb'.format(pdb_id, foldx_mutation)))
         structure_file_mut = shutil.move(
-            op.join(cwd, mut_pdb_id), op.join(cwd, f'{pdb_id}-{foldx_mutation}-mut.pdb'))
+            op.join(cwd, mut_pdb_id), op.join(cwd, '{}-{}-mut.pdb'.format(pdb_id, foldx_mutation)))
 
         # Read results
-        output_file = op.join(cwd, f'Raw_{pdb_id}.fxout')
+        output_file = op.join(cwd, 'Raw_{}.fxout'.format(pdb_id))
         stability_values_wt, stability_values_mut = read_build_model(output_file, wt_pdb_id,
                                                                      mut_pdb_id)
         return structure_file_wt, structure_file_mut, stability_values_wt, stability_values_mut
@@ -196,12 +198,13 @@ class FoldX:
         cwd = op.dirname(structure_file)
 
         # Run FoldX
-        system_command = (f"foldx --rotabaseLocation {self._foldx_rotabase} --command=Stability "
-                          f"--pdb='{op.basename(structure_file)}'")
+        system_command = (
+            "foldx --rotabaseLocation {} --command=Stability ".format(self._foldx_rotabase) +
+            "--pdb='{}'".format(op.basename(structure_file)))
         self._run(system_command, cwd=cwd)
 
         # Read results
-        output_file = op.join(cwd, f'{pdb_id}_0_ST.fxout')
+        output_file = op.join(cwd, '{}_0_ST.fxout'.format(pdb_id))
         result = read_stability(output_file)
         return result
 
@@ -212,13 +215,13 @@ class FoldX:
 
         # Run FoldX
         system_command = (
-            f"foldx --rotabaseLocation {self._foldx_rotabase} --command=AnalyseComplex "
-            f"--pdb='{op.basename(structure_file)}' "
-            f"--analyseComplexChains={chain_id_1},{chain_id_2}")
+            "foldx --rotabaseLocation {} --command=AnalyseComplex ".format(self._foldx_rotabase) +
+            "--pdb='{}' ".format(op.basename(structure_file)) +
+            "--analyseComplexChains={},{}".format(chain_id_1, chain_id_2))
         self._run(system_command, cwd=op.dirname(structure_file))
 
         # Read results
-        output_file = op.join(self._tempdir, f'Interaction_{pdb_id}_AC.fxout')
+        output_file = op.join(self._tempdir, 'Interaction_{}_AC.fxout'.format(pdb_id))
         result = read_analyse_complex(output_file)
         return result
 
@@ -230,7 +233,7 @@ class FoldX:
             Mutation specified in the following format:
             {mutation.residue_wt}{chain_id}{residue_id}{mutation.residue_mut}
         """
-        mutation_file = op.join(cwd, f'individual_list_{foldx_mutation}.txt')
+        mutation_file = op.join(cwd, 'individual_list_{}.txt'.format(foldx_mutation))
         with open(mutation_file, 'wt') as fout:
-            fout.write(f'{foldx_mutation};\n')
+            fout.write('{};\n'.format(foldx_mutation))
         return mutation_file
