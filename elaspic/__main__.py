@@ -22,35 +22,11 @@ LOGGING_LEVELS = {
     3: 'DEBUG',  # -vvv
 }
 
-
 # #################################################################################################
 # ELASPIC RUN
-def validate_args(args):
-    if args.config_file and not os.path.isfile(args.config_file):
-        raise Exception('The configuration file {} does not exist!'.format(args.config_file))
-
-    if ((args.uniprot_id is None and args.structure_file is None) or
-        (args.uniprot_id is not None and args.structure_file is not None)):
-        raise Exception(
-            dedent("""\
-            One of '-u' ('--uniprot_id') or '-p' ('--structure_file') must be specified!"""))
-
-    if (args.uniprot_id and ((args.config_file is None) and
-                             (args.blast_db_dir is None or args.archive_dir is None))):
-        raise Exception(
-            dedent("""\
-            When using the database pipeline, \
-            you must either provide a configuration file ('-c', '--config_file') or \
-            '--blast_db_dir' and '--archive_dir'."""))
-
-    if args.sequence_file and not args.structure_file:
-        raise Exception(
-            dedent("""\
-            A template PDB file must be specified using the '--structure_file' option, \
-            when you specify a target sequence using the '--sequence_file' option!"""))
 
 
-def elaspic(args):
+def elaspic_cli(args):
     validate_args(args)
 
     # Read configurations
@@ -110,6 +86,31 @@ def elaspic(args):
             mutation_format=args.mutation_format,
             run_type=args.run_type,)
         pipeline.run()
+
+
+def validate_args(args):
+    if args.config_file and not os.path.isfile(args.config_file):
+        raise Exception('The configuration file {} does not exist!'.format(args.config_file))
+
+    if ((args.uniprot_id is None and args.structure_file is None) or
+        (args.uniprot_id is not None and args.structure_file is not None)):
+        raise Exception(
+            dedent("""\
+            One of '-u' ('--uniprot_id') or '-p' ('--structure_file') must be specified!"""))
+
+    if (args.uniprot_id and ((args.config_file is None) and
+                             (args.blast_db_dir is None or args.archive_dir is None))):
+        raise Exception(
+            dedent("""\
+            When using the database pipeline, \
+            you must either provide a configuration file ('-c', '--config_file') or \
+            '--blast_db_dir' and '--archive_dir'."""))
+
+    if args.sequence_file and not args.structure_file:
+        raise Exception(
+            dedent("""\
+            A template PDB file must be specified using the '--structure_file' option, \
+            when you specify a target sequence using the '--sequence_file' option!"""))
 
 
 def configure_run_parser(sub_parsers):
@@ -270,33 +271,87 @@ def configure_run_parser(sub_parsers):
                 Precalculate Provean supporting sets and homology models.
         """.format(pipeline.Pipeline._valid_run_types)))
 
-    parser.set_defaults(func=elaspic)
+    parser.set_defaults(func=elaspic_cli)
 
 
 # #################################################################################################
 # ELASPIC DATABASE
 
 
-def elaspic_database(args):
+def elaspic_database_cli(args):
     if args.config_file:
         conf.read_configuration_file(args.config_file)
     elif args.connection_string:
-        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
+        conf.read_configuration_file(
+            DATABASE={'connection_string': args.connection_string},
+            LOGGER={'level': LOGGING_LEVELS[args.verbose]},)
     else:
         raise Exception("Either 'config_file' or 'connection_string' must be specified!")
+
+    tables_basic = [
+        'domain', 'domain_contact', 'uniprot_sequence', 'provean', 'uniprot_domain',
+        'uniprot_domain_template', 'uniprot_domain_pair', 'uniprot_domain_pair_template'
+    ]
+    tables_complete = [
+        'domain',
+        'domain_contact',
+        'uniprot_sequence',
+        'provean',
+        'uniprot_domain',
+        'uniprot_domain_template',
+        'uniprot_domain_pair',
+        'uniprot_domain_pair_template',
+        'uniprot_domain_model',
+        'uniprot_domain_pair_model',
+    ]
+
+    if args.action == 'create':
+        create_database(args)
+    elif args.action == 'load_basic':
+        load_data_to_database(args, tables_basic)
+    elif args.action == 'load_complete':
+        load_data_to_database(args, tables_complete)
+    elif args.action == 'delete':
+        delete_database(args)
+    else:
+        raise Exception("Unsupported action: {}".format(args.action))
 
 
 def create_database(args):
-    if args.config_file:
-        conf.read_configuration_file(args.config_file)
-    elif args.connection_string:
-        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
-    else:
-        raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     from elaspic import elaspic_database
     db = elaspic_database.MyDatabase()
     db.create_database_tables(drop_schema=True)
     logger.info('Done!')
+
+
+def load_data_to_database(args, tables):
+    if not args.url:
+        raise Exception("URL argument was not provided; don't know where to load the data from!")
+    from elaspic import elaspic_database
+    db = elaspic_database.MyDatabase()
+
+    for table_name in tables:
+        load_table_to_database(table_name, args.url, db.engine)
+
+    # # This code tries to load tables faster by directly reading from CSVs
+    # args.data_folder = args.data_folder.rstrip('/')
+    # table_names = args.data_files.split(',') if args.data_files else None
+    # dirpath, dirnames, filenames = next(os.walk(args.data_folder))
+    # for table in elaspic_database.Base.metadata.sorted_tables:
+    #     if table_names is not None and table.name not in table_names:
+    #         logger.warning(
+    #             "Skipping table '{}' because it was not included in the 'table_names' list..."
+    #             .format(table.name))
+    #         continue
+    #     if '{}.tsv'.format(table.name) in filenames:
+    #         db.copy_table_to_db(table.name, args.data_folder)
+    #         logger.info("Successfully loaded data from file '{}' to table '{}'"
+    #                     .format('{}.tsv'.format(table.name), table.name))
+    #     elif '{}.tsv.gz'.format(table.name) in filenames:
+    #         with decompress(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
+    #             db.copy_table_to_db(table.name, args.data_folder.rstrip('/'))
+    #         logger.info("Successfully loaded data from file '{}' to table '{}'"
+    #                     .format('{}.tsv.gz'.format(table.name), table.name))
 
 
 def load_table_to_database(table_name, table_url, engine):
@@ -309,59 +364,13 @@ def load_table_to_database(table_name, table_url, engine):
         chunk.to_sql(table_name, engine, if_exists='append', index=False)
 
 
-def load_data_to_database(args, tables=None):
-    if args.config_file:
-        conf.read_configuration_file(args.config_file)
-    elif args.connection_string:
-        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
-    else:
-        raise Exception("Either 'config_file' or 'connection_string' must be specified!")
-    from elaspic import elaspic_database
-    db = elaspic_database.MyDatabase()
-
-    if args.tables:
-        tables = args.tables.split(',')
-    else:
-        assert tables is not None
-
-    for table_name in tables:
-        load_table_to_database(table_name, args.url, db.engine)
-
-    return
-    # This code tries to load tables faster by directly reading from CSVs
-    args.data_folder = args.data_folder.rstrip('/')
-    table_names = args.data_files.split(',') if args.data_files else None
-    dirpath, dirnames, filenames = next(os.walk(args.data_folder))
-    for table in elaspic_database.Base.metadata.sorted_tables:
-        if table_names is not None and table.name not in table_names:
-            logger.warning(
-                "Skipping table '{}' because it was not included in the 'table_names' list..."
-                .format(table.name))
-            continue
-        if '{}.tsv'.format(table.name) in filenames:
-            db.copy_table_to_db(table.name, args.data_folder)
-            logger.info("Successfully loaded data from file '{}' to table '{}'"
-                        .format('{}.tsv'.format(table.name), table.name))
-        elif '{}.tsv.gz'.format(table.name) in filenames:
-            with decompress(os.path.join(args.data_folder, '{}.tsv.gz'.format(table.name))):
-                db.copy_table_to_db(table.name, args.data_folder.rstrip('/'))
-            logger.info("Successfully loaded data from file '{}' to table '{}'"
-                        .format('{}.tsv.gz'.format(table.name), table.name))
-
-
 def delete_database(args):
-    if args.config_file:
-        conf.read_configuration_file(args.config_file)
-    elif args.connection_string:
-        conf.read_configuration_file(DATABASE={'connection_string': args.connection_string})
-    else:
-        raise Exception("Either 'config_file' or 'connection_string' must be specified!")
     from elaspic import elaspic_database
     db = elaspic_database.MyDatabase()
     if db.engine == 'sqlite':
         os.remove(db.engine.database)
     else:
-        db.delete_database_tables(args.drop_schema, args.drop_uniprot_sequence)
+        db.delete_database_tables(drop_schema=True, drop_uniprot_sequence=True)
     logger.info('Done!')
 
 
@@ -374,11 +383,7 @@ def configure_database_parser(sub_parsers):
         elaspic database -c config_file.ini create
 
     """)
-    parser = sub_parsers.add_parser(
-        'database',
-        help=help,
-        description=description,
-        epilog=example)
+    parser = sub_parsers.add_parser('database', help=help, description=description, epilog=example)
     parser.add_argument(
         '-c', '--config_file', nargs='?', type=str, help='ELASPIC configuration file.')
     parser.add_argument(
@@ -399,75 +404,13 @@ def configure_database_parser(sub_parsers):
     parser.add_argument(
         'action',
         choices=['create', 'load_basic', 'load_complete', 'delete'],
-        help='Action to perform'
-    )
-    parser.set_defaults(func=elaspic_database)
+        help='Action to perform')
+    parser.add_argument('url', nargs='?', help='URL (or file path) from which to load data.')
+    parser.set_defaults(func=elaspic_database_cli)
 
 
-    # Create an empty database schema
-    parser_create = subparsers.add_parser(name='create', description='Create an empty database')
-    parser_create.add_argument(
-        '--drop_schema',
-        action='store_true',
-        default=False,
-        help=('Whether or not to first drop all existing tables from the database schema. \n'
-              'WARNING: Choosing `True` will remove all existing data from the schema specified '
-              'in your configuration file!!!'))
-    parser_create.set_defaults(func=create_database)
-
-    # Load data to the database
-    parser_load_data = subparsers.add_parser(
-        name='load_basic', description='Load data from text files to the database.')
-    parser_load_data.add_argument(
-        'url', help='Location of text files to be loaded to the database.')
-    parser_load_data.add_argument(
-        '--tables', type=str, default="", help="Comma-separated list of tables to load")
-    parser_load_data.set_defaults(func=functools.partial(
-        load_data_to_database,
-        tables=[
-            'domain', 'domain_contact', 'uniprot_sequence', 'provean', 'uniprot_domain',
-            'uniprot_domain_template', 'uniprot_domain_pair', 'uniprot_domain_pair_template'
-        ]))
-
-    # Load data to the database
-    parser_load_data = subparsers.add_parser(
-        name='load_complete', description='Load data from text files to the database.')
-    parser_load_data.add_argument(
-        'url', help='Location of text files to be loaded to the database.')
-    parser_load_data.add_argument(
-        '--tables', type=str, default="", help="Comma-separated list of tables to load")
-    parser_load_data.set_defaults(func=functools.partial(
-        load_data_to_database,
-        tables=[
-            'domain',
-            'domain_contact',
-            'uniprot_sequence',
-            'provean',
-            'uniprot_domain',
-            'uniprot_domain_template',
-            'uniprot_domain_pair',
-            'uniprot_domain_pair_template',
-            'uniprot_domain_model',
-            'uniprot_domain_pair_model',
-        ]))
-
-    # Delete database
-    parser_delete = subparsers.add_parser(
-        name='delete', description='Delete the database specified in the configuration file.')
-    parser_delete.add_argument(
-        '--drop_schema',
-        action='store_true',
-        default=False,
-        help=('Whether or not to first drop all existing tables from the database schema. \n'
-              'WARNING: Choosing `True` will remove all existing data from the schema specified '
-              'in your configuration file!!!'))
-    parser_delete.add_argument(
-        '--drop_uniprot_sequence',
-        action='store_true',
-        default=False,
-        help="Whether or not to leave the 'uniprot_sequence' table untouched when clearing "
-        "the schema. Only applicable if '--clear_schema' is set to 'True'.")
-    parser_delete.set_defaults(func=delete_database)
+# #################################################################################################
+# ELASPIC TRAIN
 
 
 def elaspic_train(args):
@@ -494,20 +437,24 @@ def elaspic_train(args):
 
 def configure_train_parser(sub_parsers):
     help = "Train the ELASPIC classifiers"
-    description = help + """
-"""
-    example = """
-Examples:
+    description = help + "\n"
+    example = dedent("""\
 
-    elaspic train
+    Examples:
 
-"""
+        elaspic train
+
+    """)
     parser = sub_parsers.add_parser(
         'train',
         help=help,
         description=description,
         epilog=example,)
     parser.set_defaults(func=elaspic_train)
+
+
+# #################################################################################################
+# MAIN
 
 
 def main():
