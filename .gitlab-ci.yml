@@ -87,6 +87,29 @@ test-unittest-py36:
   variables:
     PYTHON_VERSION: "3.6"
 
+
+###############################################################################
+# Test SQLite database
+###############################################################################
+
+test-sqlite-database:
+  stage: test
+  dependencies:
+    - build-py36
+  before_script:
+    # Configure conda
+    - ./devtools/gitlab-ci/configure-conda.sh
+    # Install prebuilt package
+    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
+    - conda index /opt/conda/conda-bld/
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+  script:
+    - export=ELASPIC_DB_STRING="sqlite:///${HOME}/elaspic.db"
+    - elaspic database create
+    - elaspic database load_basic http://elaspic.kimlab.org/static/download/latest/homo_sapiens_test/
+    - elaspic database load_complete http://elaspic.kimlab.org/static/download/latest/homo_sapiens_test/
+    - elaspic database delete
+
 ###############################################################################
 # Test standalone
 ###############################################################################
