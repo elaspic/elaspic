@@ -232,7 +232,7 @@ def _validate_blast_db_dir(configs):
         logger.info(message)
         configs['blast_db_dir'] = configs['blast_db_dir_fallback']
     else:
-        message = ("Both 'blast_db_dir' and 'blast_db_dir_fallback' are not valid!" +
+        message = ("Both 'blast_db_dir' and 'blast_db_dir_fallback' are not valid!\n" +
                    "blast_db_dir: {}\n".format(configs['blast_db_dir']) +
                    "blast_db_dir_fallback: {}".format(configs['blast_db_dir_fallback']))
         logger.error(message)
