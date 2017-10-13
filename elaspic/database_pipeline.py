@@ -193,6 +193,7 @@ class _PrepareSequence:
     def run(self):
         self.sequence = elaspic_sequence.Sequence(self.sequence_file, self.provean_supset_file)
 
+
 #            if provean:
 #                if self.run_type == 1:
 #                    logger.info('Finished run_type {}'.format(self.run_type))
@@ -222,15 +223,21 @@ class _PrepareSequence:
     def result(self):
         return self.sequence
 
-PrepareSequence = execute_and_remember(_PrepareSequence)
-
 
 class _PrepareModel:
 
-    handled_errors = (errors.ModellerError, errors.ChainsNotInteractingError,
-                      errors.MutationOutsideDomainError, errors.MutationOutsideInterfaceError,)
-    bad_errors = (errors.PDBChainError, errors.PDBEmptySequenceError, errors.PDBNotFoundError,
-                  errors.NoSequenceFound, errors.TcoffeeError, errors.InterfaceMismatchError,)
+    handled_errors = (
+        errors.ModellerError,
+        errors.ChainsNotInteractingError,
+        errors.MutationOutsideDomainError,
+        errors.MutationOutsideInterfaceError,)
+    bad_errors = (
+        errors.PDBChainError,
+        errors.PDBEmptySequenceError,
+        errors.PDBNotFoundError,
+        errors.NoSequenceFound,
+        errors.TcoffeeError,
+        errors.InterfaceMismatchError,)
 
     def __init__(self, d, db, new_model=False):
         """
@@ -572,14 +579,13 @@ class _PrepareModel:
         return self.model
 
 
-PrepareModel = execute_and_remember(_PrepareModel)
-
-
-# %%
 class _PrepareMutation:
 
-    handled_exceptions = (errors.PDBError, errors.FoldxError, errors.ResourceError,
-                          errors.FoldXAAMismatchError,)
+    handled_exceptions = (
+        errors.PDBError,
+        errors.FoldxError,
+        errors.ResourceError,
+        errors.FoldXAAMismatchError,)
 
     def __init__(self, d, mutation, uniprot_id, sequence, model, db):
         print_header(d)
@@ -914,6 +920,8 @@ class _PrepareMutation:
         return self
 
 
+PrepareSequence = execute_and_remember(_PrepareSequence)
+PrepareModel = execute_and_remember(_PrepareModel)
 PrepareMutation = execute_and_remember(_PrepareMutation)
 
 

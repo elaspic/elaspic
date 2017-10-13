@@ -1,5 +1,4 @@
 import argparse
-import functools
 import json
 import logging
 import logging.config
@@ -10,7 +9,6 @@ from textwrap import dedent
 import pandas as pd
 
 from elaspic import CACHE_DIR, DATA_DIR, conf, elaspic_predictor, pipeline
-from elaspic.kmtools_legacy import decompress
 
 logger = logging.getLogger(__name__)
 
