@@ -83,7 +83,8 @@ def _test_build_model(pdb_file, foldx_mutation, foldx, stability_results_):
     logger.debug("stability_values_mut: %s", stability_values_mut)
     logger.debug("stability_results: %s", stability_results)
     logger.debug("stability_results_: %s", stability_results_)
-    assert np.allclose(stability_results, stability_results_)
+    stability_results = [round(f, 3) for f in stability_results]
+    assert stability_results == stability_results_
     return structure_file_wt, structure_file_mut
 
 
@@ -96,7 +97,8 @@ def _test_stability(structure_file_wt, structure_file_mut, foldx, stability_resu
     logger.debug("stability_values_mut: %s", stability_values_mut)
     logger.debug("stability_results: %s", stability_results)
     logger.debug("stability_results_: %s", stability_results_)
-    assert np.allclose(stability_results, stability_results_)
+    stability_results = [round(f, 3) for f in stability_results]
+    assert stability_results == stability_results_
 
 
 def _test_analyse_complex(structure_file_wt, structure_file_mut, pdb_chains, foldx,
@@ -111,4 +113,5 @@ def _test_analyse_complex(structure_file_wt, structure_file_mut, pdb_chains, fol
     logger.debug("analyze_complex_values_mut: %s", analyze_complex_values_mut)
     logger.debug("analyze_complex_results: %s", analyze_complex_results)
     logger.debug("analyze_complex_results: %s", analyze_complex_results_)
-    assert np.allclose(analyze_complex_results, analyze_complex_results_)
+    analyze_complex_results = [round(f, 3) for f in analyze_complex_results]
+    assert analyze_complex_results == analyze_complex_results_
