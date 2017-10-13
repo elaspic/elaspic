@@ -84,7 +84,7 @@ def _test_build_model(pdb_file, foldx_mutation, foldx, stability_results_):
     logger.debug("stability_results: %s", stability_results)
     logger.debug("stability_results_: %s", stability_results_)
     stability_results = [round(f, 3) for f in stability_results]
-    assert stability_results == stability_results_
+    assert stability_results == stability_results_[:-1]
     return structure_file_wt, structure_file_mut
 
 
