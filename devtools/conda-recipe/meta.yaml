@@ -33,6 +33,7 @@ requirements:
     # Database access
     - sqlalchemy
     - mysqlclient
+    - psycopg2
   run:
     # Basic python
     - python
@@ -52,6 +53,7 @@ requirements:
     # Database access
     - sqlalchemy
     - mysqlclient
+    - psycopg2
     # Binary files
     - p7zip
     - blast
