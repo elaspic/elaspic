@@ -37,7 +37,7 @@ names_rows_stability = [
     ['entropy_complex', 22],
     ['number_of_residues', 23]
 ]
-names_stability = next(zip(*names_rows_stability))
+names_stability = list(next(zip(*names_rows_stability)))
 names_stability_wt = [name + '_wt' for name in names_stability[:-1]] + ['number_of_residues']
 names_stability_mut = [name + '_mut' for name in names_stability[:-1]] + ['number_of_residues']
 
@@ -45,7 +45,7 @@ names_rows_stability_complex = ([
     ['intraclashes_energy_1', 3],
     ['intraclashes_energy_2', 4],
 ] + [[x[0], x[1] + 4] for x in names_rows_stability])
-names_stability_complex = next(zip(*names_rows_stability_complex))
+names_stability_complex = list(next(zip(*names_rows_stability_complex)))
 names_stability_complex_wt = [name + '_wt'
                               for name in names_stability_complex[:-1]] + ['number_of_residues']
 names_stability_complex_mut = [name + '_mut'
