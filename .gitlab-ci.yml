@@ -61,7 +61,7 @@ build-py36:
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/ ||
       echo -e "\033[31mNo packages to copy!\e[0m"
     - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local foldx "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx
     # Test
     - pip install -q pytest pytest-cov pytest-logging flake8 codecov hypothesis
     - flake8
@@ -104,7 +104,7 @@ test-sqlite-database:
     # Install prebuilt package
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
   script:
     - export ELASPIC_DB_STRING="sqlite:///${HOME}/elaspic.db"
     - elaspic database create
@@ -124,7 +124,7 @@ test-sqlite-database:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx
     # Run tests
     # - ./tests/configure_tests.sh
     - pip install -q pytest pytest-cov pytest-logging
@@ -150,7 +150,7 @@ test-standalone:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} >/dev/null
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx
     # Start MySQL
     - ./devtools/gitlab-ci/start-database.sh
     - ./devtools/gitlab-ci/fill-database.sh
@@ -187,7 +187,7 @@ test-database:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" $CI_PROJECT_NAME >/dev/null
+    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
     # Build docs
     - conda install -yq nbconvert ipython ipykernel pandoc
     - pip install -q sphinx sphinx_rtd_theme recommonmark nbsphinx
