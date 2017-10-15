@@ -2,7 +2,7 @@ image: condaforge/linux-anvil:latest
 
 stages:
   - build
-  - test-unittest
+  - test-basic
   - test-comprehensive
   - deploy
 
@@ -56,7 +56,7 @@ build-py36:
 ###############################################################################
 
 .test-unittest: &test-unittest
-  stage: test-unittest
+  stage: test-basic
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/ ||
@@ -94,7 +94,7 @@ test-unittest-py36:
 ###############################################################################
 
 .test-unittest-database: &test-unittest-database
-  stage: test-unittest
+  stage: test-basic
   before_script:
     - echo ${HOME}  # To see where to store SQLite database
     # Configure conda
@@ -146,7 +146,7 @@ test-unittest-postgresql:
 # Test standalone pipeline
 ###############################################################################
 
-.test-standalone: &test-standalone
+.test-standalone-pipeline: &test-standalone-pipeline
   stage: test-comprehensive
   tags:
     - local  # Don't want to download the blast NR database...
@@ -160,8 +160,8 @@ test-unittest-postgresql:
     - pip install -q pytest pytest-cov pytest-logging
     - py.test --quick ./tests/test_standalone_pipeline.py
 
-test-standalone:
-  <<: [*conda_configure, *test-standalone]
+test-standalone-pipeline:
+  <<: [*conda_configure, *test-standalone-pipeline]
   dependencies:
     - build-py36
   variables:
@@ -172,29 +172,22 @@ test-standalone:
 # Test database pipeline
 ###############################################################################
 
-.test-database: &test-database
+.test-database-pipeline: &test-database-pipeline
   stage: test-comprehensive
   tags:
     - local  # Don't want to download the blast NR database...
-  services:
-    - mysql:5.7
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx
-    # Start MySQL
-    - ./devtools/gitlab-ci/start-database.sh
-    - ./devtools/gitlab-ci/fill-database.sh
     # Run tests
     # - ./tests/test_database_pipeline.sh
     - pip install -q pytest pytest-cov pytest-logging
     - py.test --quick ./tests/test_database_pipeline.py
-    # Stop MySQL
-    - ./devtools/gitlab-ci/stop-database.sh
 
-test-database:
-  <<: [*conda_configure, *test-database]
+test-database-pipeline:
+  <<: [*conda_configure, *test-database-pipeline]
   dependencies:
     - build-py36
   variables:
@@ -214,7 +207,7 @@ test-database:
 ###############################################################################
 
 .docs: &docs
-  stage: test
+  stage: test-basic
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
