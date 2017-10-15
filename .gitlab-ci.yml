@@ -2,7 +2,8 @@ image: condaforge/linux-anvil:latest
 
 stages:
   - build
-  - test
+  - test-unittest
+  - test-comprehensive
   - deploy
 
 ###############################################################################
@@ -55,7 +56,7 @@ build-py36:
 ###############################################################################
 
 .test-unittest: &test-unittest
-  stage: test
+  stage: test-unittest
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/ ||
@@ -92,13 +93,10 @@ test-unittest-py36:
 # Test SQLite database
 ###############################################################################
 
-test-sqlite-database:
-  stage: test
-  variables:
-    PYTHON_VERSION: "3.6"
-  dependencies:
-    - build-py36
+.test-unittest-database: &test-unittest-database
+  stage: test-unittest
   before_script:
+    - echo ${HOME}  # To see where to store SQLite database
     # Configure conda
     - ./devtools/gitlab-ci/configure-conda.sh
     # Install prebuilt package
@@ -106,20 +104,52 @@ test-sqlite-database:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
   script:
-    - export ELASPIC_DB_STRING="sqlite:///${HOME}/elaspic.db"
     - elaspic database create
     - elaspic database load_basic http://elaspic.kimlab.org/static/download/latest/homo_sapiens_test/
     - elaspic database load_complete http://elaspic.kimlab.org/static/download/latest/homo_sapiens_test/
     - elaspic database delete
 
+test-unittest-sqlite:
+  <<: [*test-unittest-database]
+  dependencies:
+    - build-py36
+  variables:
+    PYTHON_VERSION: "3.6"
+    ELASPIC_DB_STRING: "sqlite:///${HOME}/elaspic.db"
+
+test-unittest-mysql:
+  <<: [*test-unittest-database]
+  dependencies:
+    - build-py36
+  services:
+    - "mysql:5.7"
+  variables:
+    PYTHON_VERSION: "3.6"
+    MYSQL_DATABASE: "elaspic"
+    MYSQL_ROOT_PASSWORD: "rootpass"
+    ELASPIC_DB_STRING: "mysql://root:rootpass@mysql/elaspic"
+
+test-unittest-postgresql:
+  <<: [*test-unittest-database]
+  dependencies:
+    - build-py36
+  services:
+    - "postgres:9.6"
+  variables:
+    PYTHON_VERSION: "3.6"
+    POSTGRES_DB: "elaspic"
+    POSTGRES_USER: "root"
+    POSTGRES_PASSWORD: "rootpass"
+    ELASPIC_DB_STRING: "postgresql://root:rootpass@postgres/elaspic"
+
 ###############################################################################
-# Test standalone
+# Test standalone pipeline
 ###############################################################################
 
 .test-standalone: &test-standalone
-  stage: test
+  stage: test-comprehensive
   tags:
-    - local
+    - local  # Don't want to download the blast NR database...
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
@@ -139,13 +169,15 @@ test-standalone:
     TEST_NUMBER: "1"
 
 ###############################################################################
-# Test database
+# Test database pipeline
 ###############################################################################
 
 .test-database: &test-database
-  stage: test
+  stage: test-comprehensive
   tags:
-    - local
+    - local  # Don't want to download the blast NR database...
+  services:
+    - mysql:5.7
   script:
     # Conda install
     - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
