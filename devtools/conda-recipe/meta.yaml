@@ -65,14 +65,6 @@ requirements:
     - provean  # can't install fake_provean for tests if this is installed...
 
 test:
-  requires:
-    - pytest
-    - pytest-runner
-    - pytest-cov
-    - pep8
-    - flake8
-    - provean ==1.0.3.mock
-    - foldx ==3.0.6.mock
   imports:
     - elaspic
   commands:
