@@ -164,10 +164,8 @@ class MyDatabase(object):
             Whether or not to keep the `uniprot_sequence` table.
             Only relevant if `clear_schema` is `True`.
         """
-        if drop_schema and self.engine.name != 'sqlite':
+        if drop_schema and self.engine.name in ['mysql']:
             self.drop_database_schema(conf.CONFIGS['db_schema'])
-
-        if self.engine.name != 'sqlite':
             self.create_database_schema(conf.CONFIGS['db_schema'])
 
         # Create all tables, creating schema as neccessary
@@ -185,21 +183,24 @@ class MyDatabase(object):
         keep_uniprot_sequence : bool
             Wheter or not to keep the table (and schema) containing uniprot sequences.
         """
-        if drop_schema:
-            if conf.CONFIGS['db_type'] == 'sqlite':
-                os.remove(self.engine.url.database)
-            else:
-                self.engine.execute('drop schema {db_schema};'.format(**conf.CONFIGS))
+        if drop_schema and conf.CONFIGS['db_type'] == 'sqlite':
+            os.remove(self.engine.url.database)
             logger.info("Successfully removed database schema: {db_schema}".format(**conf.CONFIGS))
-            return
-
-        # Remove tables one by one
-        for table in reversed(Base.metadata.sorted_tables):
-            if table.name != 'uniprot_sequence' or drop_uniprot_sequence:
-                # conf.CONFIGS['table_name'] = table.name
-                # table.drop()
-                self.engine.execute('DROP TABLE IF EXISTS {};'.format(table.name))
-                self.engine.execute('DROP TABLE IF EXISTS {};'.format(table.name))
+        elif drop_schema and conf.CONFIGS['db_type'] == 'mysql':
+            self.engine.execute('drop schema {db_schema};'.format(**conf.CONFIGS))
+            logger.info("Successfully removed database schema: {db_schema}".format(**conf.CONFIGS))
+        else:
+            if drop_schema:
+                logger.info("Drop schema is not supported for %s database...",
+                            conf.CONFIGS['db_type'])
+            # Remove tables one by one
+            for table in reversed(Base.metadata.sorted_tables):
+                if table.name != 'uniprot_sequence' or drop_uniprot_sequence:
+                    # conf.CONFIGS['table_name'] = table.name
+                    # table.drop()
+                    logger.debug("Dropping table %s...", table.name)
+                    self.engine.execute('DROP TABLE IF EXISTS {};'.format(table.name))
+                    self.engine.execute('DROP TABLE IF EXISTS {};'.format(table.name))
 
     # %%
     mysql_load_table_template = (
