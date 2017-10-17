@@ -61,7 +61,7 @@ def test_read_analyse_model():
 
 @pytest.mark.parametrize("test_data", FOLDX_TEST_DATA)
 def test_foldx(test_data, tmpdir):
-    tmp_dir = tmpdir.mkdtemp()
+    tmp_dir = str(tmpdir.mkdtemp())
     pdb_file = download_pdb_file(test_data['pdb_id'], tmp_dir)
     pdb_chains = (test_data['pdb_chain'], test_data['pdb_partner_chain'])
     foldx_mutation = (
