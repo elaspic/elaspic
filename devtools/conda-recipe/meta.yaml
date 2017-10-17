@@ -28,7 +28,7 @@ requirements:
     - pandas
     - scikit-learn
     - biopython
-    - libfaketime
+    # - libfaketime
     - modeller >=9.16
     # Database access
     - sqlalchemy
@@ -48,7 +48,7 @@ requirements:
     - pandas
     - scikit-learn
     - biopython
-    - libfaketime
+    # - libfaketime
     - modeller >=9.16
     # Database access
     - sqlalchemy
