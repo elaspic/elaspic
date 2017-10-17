@@ -5,7 +5,7 @@ import shlex
 import shutil
 import subprocess
 
-import faketime.config
+# import faketime.config
 import pandas as pd
 
 from elaspic import conf, errors
@@ -106,8 +106,8 @@ class FoldX:
 
     def _run(self, system_command, cwd):
         env = os.environ.copy()
-        env['LD_PRELOAD'] = faketime.config.libfaketime_so_file
-        env['FAKETIME'] = '2015-12-26 00:00:00'
+        # env['LD_PRELOAD'] = faketime.config.libfaketime_so_file
+        # env['FAKETIME'] = '2015-12-26 00:00:00'
         logger.debug(system_command)
         process = subprocess.run(
             shlex.split(system_command),
