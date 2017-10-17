@@ -3,7 +3,6 @@
 [![anaconda](https://anaconda.org/kimlab/elaspic/badges/version.svg?style=flat-square)](https://anaconda.org/kimlab/elaspic)
 [![docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square&?version=latest)](http://kimlaborg.github.io/elaspic)
 [![travis](https://img.shields.io/travis/kimlaborg/elaspic.svg?style=flat-square)](https://travis-ci.org/kimlaborg/elaspic)
-[![codecov](https://img.shields.io/codecov/c/github/kimlaborb/elaspic.svg?style=flat-square)](https://codecov.io/gh/kimlaborg/elaspic)
 
 
 ## Introduction

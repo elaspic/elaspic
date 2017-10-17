@@ -64,10 +64,9 @@ build-py36:
     - conda index /opt/conda/conda-bld/
     - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} "foldx=4"
     # Test
-    - pip install -q pytest pytest-cov pytest-logging flake8 codecov hypothesis
+    - pip install -q pytest pytest-cov pytest-logging flake8 hypothesis
     - flake8
     - py.test -vv
-    - codecov -t ${CODECOV_TOKEN}
     - conda env export -f $CI_PROJECT_DIR/environment-py${PYTHON_VERSION/./}.yml
   coverage: /^TOTAL.* (\d+\%)/
   artifacts:
