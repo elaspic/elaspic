@@ -11,7 +11,7 @@ stages:
 ###############################################################################
 
 variables:
-  PACKAGE_VERSION: 0.1.44
+  PACKAGE_VERSION: 0.1.45
   SRC_DIR: "${CI_PROJECT_DIR}"
   SCRIPTS_DIR: "${CI_PROJECT_DIR}/_tests"
   TEST_DIR: "${CI_PROJECT_DIR}/_tests"
