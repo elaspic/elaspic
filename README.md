@@ -1,7 +1,7 @@
 # ELASPIC
 
 [![anaconda](https://anaconda.org/kimlab/elaspic/badges/version.svg?style=flat-square)](https://anaconda.org/kimlab/elaspic)
-[![docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square&?version=latest)](http://kimlaborg.github.io/elaspic)
+[![docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square&?version=latest)](http://kimlab.gitlab.io/elaspic)
 [![travis](https://img.shields.io/travis/kimlaborg/elaspic.svg?style=flat-square)](https://travis-ci.org/kimlaborg/elaspic)
 
 
