@@ -11,7 +11,6 @@ from tempfile import NamedTemporaryFile
 import Bio
 import numpy as np
 import six
-from Bio.Alphabet import IUPAC
 from Bio.PDB import PDBIO, NeighborSearch, Select
 from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB.PDBParser import PDBParser
@@ -224,7 +223,7 @@ def get_chain_seqres_sequence(chain, aa_only=False):
         If aa_only is set to `False`, selenomethionines will be included in the sequence.
         See: http://biopython.org/DIST/docs/api/Bio.PDB.Polypeptide-module.html.
     """
-    sequence = Seq('', IUPAC.protein)
+    sequence = Seq('')
     for pb in PPBuilder().build_peptides(chain, aa_only=aa_only):
         sequence += sequence + pb.get_sequence()
     return sequence
