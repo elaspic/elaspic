@@ -174,7 +174,9 @@ class FoldX:
 
         # Run FoldX
         system_command = (
-            "foldx --rotabaseLocation {} --command=BuildModel ".format(self._foldx_rotabase)
+            (
+                "faketime '2015-12-26 00:00:00' foldx --rotabaseLocation {} --command=BuildModel "
+            ).format(self._foldx_rotabase)
             + "--pdb='{}' ".format(op.basename(structure_file))
             + "--mutant-file='{}'".format(mutation_file)
         )
@@ -213,9 +215,9 @@ class FoldX:
         cwd = op.dirname(structure_file)
 
         # Run FoldX
-        system_command = "foldx --rotabaseLocation {} --command=Stability ".format(
-            self._foldx_rotabase
-        ) + "--pdb='{}'".format(op.basename(structure_file))
+        system_command = (
+            "faketime '2015-12-26 00:00:00' foldx --rotabaseLocation {} --command=Stability "
+        ).format(self._foldx_rotabase) + "--pdb='{}'".format(op.basename(structure_file))
         self._run(system_command, cwd=cwd)
 
         # Read results
@@ -230,7 +232,10 @@ class FoldX:
 
         # Run FoldX
         system_command = (
-            "foldx --rotabaseLocation {} --command=AnalyseComplex ".format(self._foldx_rotabase)
+            (
+                "faketime '2015-12-26 00:00:00' foldx --rotabaseLocation {} "
+                "--command=AnalyseComplex "
+            ).format(self._foldx_rotabase)
             + "--pdb='{}' ".format(op.basename(structure_file))
             + "--analyseComplexChains={},{}".format(chain_id_1, chain_id_2)
         )
