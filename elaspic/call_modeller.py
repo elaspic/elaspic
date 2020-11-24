@@ -62,9 +62,7 @@ class Modeller(object):
                 # without loop refinement. Worst thing that could happen is that
                 # the model is bad
                 try:
-                    result, loop, failures = self.__run_modeller(
-                        aln, self.loopRefinement
-                    )
+                    result, loop, failures = self.__run_modeller(aln, self.loopRefinement)
                 except Exception as e:
                     logger.error("Loop refinement failed with an error: {}".format(e))
                     try:
@@ -114,14 +112,10 @@ class Modeller(object):
         # Selected atoms do not feel the neighborhood
         # env.edat.nonbonded_sel_atoms = 2
         env.io.hetatm = True  # read in HETATM records from template PDBs
-        env.io.water = (
-            True  # read in WATER records (including waters marked as HETATMs)
-        )
+        env.io.water = True  # read in WATER records (including waters marked as HETATMs)
 
         logger.debug(
-            "Performing loop refinement in addition to regular modelling: {}".format(
-                loopRefinement
-            )
+            "Performing loop refinement in addition to regular modelling: {}".format(loopRefinement)
         )
         if not loopRefinement:
             a = automodel(

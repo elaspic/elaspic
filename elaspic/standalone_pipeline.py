@@ -154,9 +154,7 @@ class StandalonePipeline(Pipeline):
         or the {mutation_pos}_{mutation} naming scheme (fallback for when `pdb_chain`
         is not found in the structure).
         """
-        logger.debug(
-            "Parsing mutations using mutation_format: '{}'".format(mutation_format)
-        )
+        logger.debug("Parsing mutations using mutation_format: '{}'".format(mutation_format))
         mutations_out = dict()
         for mutation_in in mutations:
             mutation_chain, mutation_residue = mutation_in.split("_")
@@ -179,9 +177,7 @@ class StandalonePipeline(Pipeline):
                     self.sp.structure[0][mutation_chain]
                 )
                 mutation_pos = chain_aa_residues.index(mutation_id) + 1
-                mutation = (
-                    mutation_residue[0] + str(mutation_pos) + mutation_residue[-1]
-                )
+                mutation = mutation_residue[0] + str(mutation_pos) + mutation_residue[-1]
                 # Validation
                 mutation_expected_aa = structure_tools.AAA_DICT[
                     self.sp.structure[0][mutation_chain][mutation_id].resname
@@ -224,14 +220,10 @@ class StandalonePipeline(Pipeline):
 
     def run_all_sequences(self):
         sequence_results = []
-        sequence_results_file = op.join(
-            conf.CONFIGS["unique_temp_dir"], "sequence.json"
-        )
+        sequence_results_file = op.join(conf.CONFIGS["unique_temp_dir"], "sequence.json")
         if op.isfile(sequence_results_file):
             logger.debug(
-                "Results file for sequence already exists: {}".format(
-                    sequence_results_file
-                )
+                "Results file for sequence already exists: {}".format(sequence_results_file)
             )
             return
         for chain_id, _ in zip(self.sp.chain_ids, self.seqrecords):
@@ -249,9 +241,7 @@ class StandalonePipeline(Pipeline):
         model_results = []
         model_results_file = op.join(conf.CONFIGS["unique_temp_dir"], "model.json")
         if op.isfile(model_results_file):
-            logger.debug(
-                "Results file for model already exists: {}".format(model_results_file)
-            )
+            logger.debug("Results file for model already exists: {}".format(model_results_file))
             return
         for chain_id, _ in zip(self.sp.chain_ids, self.seqrecords):
             if chain_id == self.sp.hetatm_chain_id:
@@ -296,9 +286,7 @@ class StandalonePipeline(Pipeline):
                 )
                 continue
             try:
-                mutation_result = self.get_mutation_score(
-                    mutation_idx, mutation_idx, mutation
-                )
+                mutation_result = self.get_mutation_score(mutation_idx, mutation_idx, mutation)
             except handled_errors as e:
                 logger.error(e)
                 continue
@@ -313,9 +301,7 @@ class StandalonePipeline(Pipeline):
                     continue
                 if mutation_idx in idxs:
                     try:
-                        mutation_result = self.get_mutation_score(
-                            idxs, mutation_idx, mutation
-                        )
+                        mutation_result = self.get_mutation_score(idxs, mutation_idx, mutation)
                     except handled_errors as e:
                         logger.error(e)
                         continue
@@ -342,9 +328,7 @@ class StandalonePipeline(Pipeline):
 
     def get_mutation_score(self, idxs, mutation_idx, mutation):
         logger.debug("-" * 80)
-        logger.debug(
-            "get_mutation_score({}, {}, {})".format(idxs, mutation_idx, mutation)
-        )
+        logger.debug("get_mutation_score({}, {}, {})".format(idxs, mutation_idx, mutation))
         idxs = self._sort_chain_idxs(idxs)
         sequence = self.get_sequence(mutation_idx)
         model = self.get_model(idxs)
@@ -355,9 +339,7 @@ class StandalonePipeline(Pipeline):
     def _get_chain_idx(self, chain_id):
         """chain_id -> chain_idx."""
         chain_idx = [
-            i
-            for (i, chain) in enumerate(self.sp.structure[0].child_list)
-            if chain.id == chain_id
+            i for (i, chain) in enumerate(self.sp.structure[0].child_list) if chain.id == chain_id
         ]
         if len(chain_idx) == 0:
             raise errors.PDBChainError(
@@ -365,9 +347,7 @@ class StandalonePipeline(Pipeline):
             )
         elif len(chain_idx) > 1:
             raise errors.PDBChainError(
-                "Chain {} was found more than once in PDB {}!".format(
-                    chain_id, self.sp.pdb_file
-                )
+                "Chain {} was found more than once in PDB {}!".format(chain_id, self.sp.pdb_file)
             )
         return chain_idx[0]
 
@@ -408,9 +388,7 @@ class PrepareSequence:
         self.sequence_file = sequence_file
 
     def run(self):
-        self.sequence = elaspic_sequence.Sequence(
-            self.sequence_file, self.provean_supset_file
-        )
+        self.sequence = elaspic_sequence.Sequence(self.sequence_file, self.provean_supset_file)
 
     def __exit__(self, exc_type, exc_value, traceback):
         return False
@@ -452,18 +430,14 @@ class PrepareModel:
         # Target sequence file
         self.sequence_file = op.join(
             conf.CONFIGS["model_dir"],
-            helper.slugify(
-                "_".join(seqrec.id for seqrec in self.seqrecords) + ".fasta"
-            ),
+            helper.slugify("_".join(seqrec.id for seqrec in self.seqrecords) + ".fasta"),
         )
         with open(self.sequence_file, "w") as ofh:
             SeqIO.write(self.seqrecords, ofh, "fasta")
         assert op.isfile(self.sequence_file)
 
         # Template structure file
-        chain_string = "".join(
-            self.sp.structure[0].child_list[pos].id for pos in self.positions
-        )
+        chain_string = "".join(self.sp.structure[0].child_list[pos].id for pos in self.positions)
         self.structure_file = op.join(
             conf.CONFIGS["unique_temp_dir"],
             helper.slugify(self.sp.pdb_id + chain_string + ".pdb"),
@@ -533,14 +507,8 @@ class PrepareMutation:
             features["alignment_coverage"],
             features["alignment_score"],
         ) = self.model.modeller_results["alignment_stats"][self.mutation_idx]
-        assert (
-            features["alignment_identity"] > 0.01
-            and features["alignment_identity"] <= 1
-        )
-        assert (
-            features["alignment_coverage"] > 0.01
-            and features["alignment_coverage"] <= 1
-        )
+        assert features["alignment_identity"] > 0.01 and features["alignment_identity"] <= 1
+        assert features["alignment_coverage"] > 0.01 and features["alignment_coverage"] <= 1
 
         features["model_file_wt"] = results["model_file_wt"]
         features["model_file_mut"] = results["model_file_mut"]
@@ -549,13 +517,9 @@ class PrepareMutation:
         features["stability_energy_mut"] = results["stability_energy_mut"]
 
         features["physchem_wt"] = "{},{},{},{}".format(*results["physchem_wt"])
-        features["physchem_wt_ownchain"] = "{},{},{},{}".format(
-            *results["physchem_ownchain_wt"]
-        )
+        features["physchem_wt_ownchain"] = "{},{},{},{}".format(*results["physchem_ownchain_wt"])
         features["physchem_mut"] = "{},{},{},{}".format(*results["physchem_mut"])
-        features["physchem_mut_ownchain"] = "{},{},{},{}".format(
-            *results["physchem_ownchain_mut"]
-        )
+        features["physchem_mut_ownchain"] = "{},{},{},{}".format(*results["physchem_ownchain_mut"])
 
         features["secondary_structure_wt"] = results["secondary_structure_wt"]
         features["solvent_accessibility_wt"] = results["solvent_accessibility_wt"]
@@ -568,18 +532,12 @@ class PrepareMutation:
         features["mutation_modeller"] = results["mutation_modeller"]
 
         if len(self.model.sequence_seqrecords) > 1:
-            features[
-                "interface_area_hydrophobic"
-            ] = self.model.interface_area_hydrophobic
-            features[
-                "interface_area_hydrophilic"
-            ] = self.model.interface_area_hydrophilic
+            features["interface_area_hydrophobic"] = self.model.interface_area_hydrophobic
+            features["interface_area_hydrophilic"] = self.model.interface_area_hydrophilic
             features["interface_area_total"] = self.model.interface_area_total
 
             features["analyse_complex_energy_wt"] = results["analyse_complex_energy_wt"]
-            features["analyse_complex_energy_mut"] = results[
-                "analyse_complex_energy_mut"
-            ]
+            features["analyse_complex_energy_mut"] = results["analyse_complex_energy_mut"]
             features["contact_distance_wt"] = results["contact_distance_wt"]
             features["contact_distance_mut"] = results["contact_distance_mut"]
 

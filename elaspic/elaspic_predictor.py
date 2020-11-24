@@ -33,16 +33,12 @@ def _get_foldx_features(core_or_interface):
     if core_or_interface in [False, 0, "core"]:
         feature_columns += call_foldx.names_stability_wt
         feature_columns += [
-            c[:-4] + "_change"
-            for c in call_foldx.names_stability_mut
-            if c.endswith("_mut")
+            c[:-4] + "_change" for c in call_foldx.names_stability_mut if c.endswith("_mut")
         ]
     else:
         feature_columns += call_foldx.names_stability_complex_wt
         feature_columns += [
-            c[:-4] + "_change"
-            for c in call_foldx.names_stability_complex_mut
-            if c.endswith("_mut")
+            c[:-4] + "_change" for c in call_foldx.names_stability_complex_mut if c.endswith("_mut")
         ]
     return feature_columns
 
@@ -81,15 +77,11 @@ def _get_remaining_features():
 
 
 FEATURE_COLUMNS_CORE = (
-    _get_foldx_features("core")
-    + _get_physicochem_features()
-    + _get_remaining_features()
+    _get_foldx_features("core") + _get_physicochem_features() + _get_remaining_features()
 )
 
 FEATURE_COLUMNS_INTERFACE = (
-    _get_foldx_features("interface")
-    + _get_physicochem_features()
-    + _get_remaining_features()
+    _get_foldx_features("interface") + _get_physicochem_features() + _get_remaining_features()
 )
 
 
@@ -149,9 +141,7 @@ def format_mutation_features(df):
     for col in df.columns:
         if "secondary_structure" in col:
             df[col] = df[col].apply(
-                lambda x: float(secondary_structure_to_int[x])
-                if pd.notnull(x)
-                else np.nan
+                lambda x: float(secondary_structure_to_int[x]) if pd.notnull(x) else np.nan
             )
 
     # FoldX
@@ -267,12 +257,8 @@ WHERE (mut.uniprot_id, mut.mutation) in ({values})
     results_df["alignment_identity"] = np.sqrt(
         results_df["identical_1"] * results_df["identical_2"]
     )
-    results_df["alignment_coverage"] = np.sqrt(
-        results_df["coverage_1"] * results_df["coverage_2"]
-    )
-    results_df["alignment_score"] = np.sqrt(
-        results_df["score_1"] * results_df["score_2"]
-    )
+    results_df["alignment_coverage"] = np.sqrt(results_df["coverage_1"] * results_df["coverage_2"])
+    results_df["alignment_score"] = np.sqrt(results_df["score_1"] * results_df["score_2"])
 
     # Format predictor features
     results_df = format_mutation_features(results_df)
@@ -292,9 +278,7 @@ def get_final_predictor(data, features, options):
     accepted_options = inspect.getargspec(CLF)[0]
     clf_options = {k: v for (k, v) in options.items() if k in accepted_options}
     if clf_options != options:
-        extra_options = {
-            k: v for (k, v) in options.items() if k not in accepted_options
-        }
+        extra_options = {k: v for (k, v) in options.items() if k not in accepted_options}
         warnings.warn("Warning, unknown options provided:\n{}".format(extra_options))
 
     # Remove rows with NULLs

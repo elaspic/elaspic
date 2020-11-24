@@ -71,7 +71,7 @@ def run(system_command, **vargs):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         preexec_fn=lambda: _set_process_group(os.getpgrp()),
-        **vargs
+        **vargs,
     )
     p.stdout = p.stdout.strip()
     p.stderr = p.stderr.strip()
@@ -101,9 +101,7 @@ def retry_database(fn):
     from retrying import retry
 
     r = retry(
-        retry_on_exception=lambda exc: _check_exception(
-            exc, valid_exc=sa.exc.OperationalError
-        ),
+        retry_on_exception=lambda exc: _check_exception(exc, valid_exc=sa.exc.OperationalError),
         wait_exponential_multiplier=1000,
         wait_exponential_max=60000,
         stop_max_attempt_number=7,
@@ -118,9 +116,7 @@ def retry_archive(fn):
     from elaspic import errors
 
     r = retry(
-        retry_on_exception=lambda exc: _check_exception(
-            exc, valid_exc=errors.Archive7zipError
-        ),
+        retry_on_exception=lambda exc: _check_exception(exc, valid_exc=errors.Archive7zipError),
         wait_fixed=2000,
         stop_max_attempt_number=2,
     )
@@ -165,9 +161,7 @@ def lock(fn):
         elif fn.__name__ == "calculate_model":
             lock_filename = "{}_modeller.json".format(self.pdb_id)
         elif fn.__name__ == "calculate_mutation":
-            lock_filename = "{}{}_mutation_{}.json".format(
-                self.pdb_id, args[0], args[1]
-            )
+            lock_filename = "{}{}_mutation_{}.json".format(self.pdb_id, args[0], args[1])
         else:
             raise Exception("Function {} is not supported!".format(fn))
 

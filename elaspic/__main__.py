@@ -62,9 +62,7 @@ def elaspic_cli(args):
     if args.uniprot_id:
         # Run database pipeline
         if args.uniprot_domain_pair_ids:
-            logger.debug(
-                "uniprot_domain_pair_ids: {}".format(args.uniprot_domain_pair_ids)
-            )
+            logger.debug("uniprot_domain_pair_ids: {}".format(args.uniprot_domain_pair_ids))
             uniprot_domain_pair_ids_asint = [
                 int(x) for x in args.uniprot_domain_pair_ids.split(",") if x
             ]
@@ -96,9 +94,7 @@ def elaspic_cli(args):
 
 def validate_args(args):
     if args.config_file and not os.path.isfile(args.config_file):
-        raise Exception(
-            "The configuration file {} does not exist!".format(args.config_file)
-        )
+        raise Exception("The configuration file {} does not exist!".format(args.config_file))
 
     if (args.uniprot_id is None and args.structure_file is None) or (
         args.uniprot_id is not None and args.structure_file is not None
@@ -111,8 +107,7 @@ def validate_args(args):
         )
 
     if args.uniprot_id and (
-        (args.config_file is None)
-        and (args.blast_db_dir is None or args.archive_dir is None)
+        (args.config_file is None) and (args.blast_db_dir is None or args.archive_dir is None)
     ):
         raise Exception(
             dedent(
@@ -348,9 +343,7 @@ def elaspic_database_cli(args):
             LOGGER={"level": LOGGING_LEVELS[args.verbose]},
         )
     else:
-        raise Exception(
-            "Either 'config_file' or 'connection_string' must be specified!"
-        )
+        raise Exception("Either 'config_file' or 'connection_string' must be specified!")
 
     tables_basic = [
         "domain",
@@ -397,9 +390,7 @@ def create_database(args):
 
 def load_data_to_database(args, tables):
     if not args.url:
-        raise Exception(
-            "URL argument was not provided; don't know where to load the data from!"
-        )
+        raise Exception("URL argument was not provided; don't know where to load the data from!")
     from elaspic import elaspic_database
 
     db = elaspic_database.MyDatabase()
@@ -429,9 +420,7 @@ def load_data_to_database(args, tables):
 
 
 def load_table_to_database(table_name, table_url, engine):
-    logger.info(
-        "Loading table {} from {} into database...".format(table_name, table_url)
-    )
+    logger.info("Loading table {} from {} into database...".format(table_name, table_url))
     engine.execute("DELETE FROM {}".format(table_name))
     df_header = pd.read_sql_query("select * from {} limit 0".format(table_name), engine)
     csv_file = op.join(table_url, table_name + ".tsv.gz")
@@ -463,9 +452,7 @@ def configure_database_parser(sub_parsers):
 
     """
     )
-    parser = sub_parsers.add_parser(
-        "database", help=help, description=description, epilog=example
-    )
+    parser = sub_parsers.add_parser("database", help=help, description=description, epilog=example)
     parser.add_argument(
         "-c", "--config_file", nargs="?", type=str, help="ELASPIC configuration file."
     )
@@ -493,9 +480,7 @@ def configure_database_parser(sub_parsers):
         choices=["create", "load_basic", "load_complete", "delete"],
         help="Action to perform",
     )
-    parser.add_argument(
-        "url", nargs="?", help="URL (or file path) from which to load data."
-    )
+    parser.add_argument("url", nargs="?", help="URL (or file path) from which to load data.")
     parser.set_defaults(func=elaspic_database_cli)
 
 
@@ -505,9 +490,7 @@ def configure_database_parser(sub_parsers):
 
 def elaspic_train(args):
     # Core predictor
-    core_training_set = pd.read_csv(
-        op.join(DATA_DIR, "core_training_set.tsv.gz"), sep="\t"
-    )
+    core_training_set = pd.read_csv(op.join(DATA_DIR, "core_training_set.tsv.gz"), sep="\t")
     with open(op.join(DATA_DIR, "core_options.json"), "rt") as ifh:
         core_options = json.load(ifh)
 

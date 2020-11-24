@@ -65,9 +65,7 @@ def get_table_args(table_name, index_columns=[], db_specific_params=[]):
         table_args.append(sa.Index(index_name, *column_names, **kwargs))
     # Other table parameters, such as schemas, etc.
     for db_specific_param in db_specific_params:
-        table_args.append(
-            db_specific_properties[conf.CONFIGS["db_type"]][db_specific_param]
-        )
+        table_args.append(db_specific_properties[conf.CONFIGS["db_type"]][db_specific_param])
     table_args.append({"mysql_engine": "InnoDB"})  # this has to be last
     return tuple(table_args)
 
@@ -125,9 +123,7 @@ class Domain(Base):
     cath_id = sa.Column(
         sa.String(
             SHORT,
-            collation=db_specific_properties[conf.CONFIGS["db_type"]][
-                "BINARY_COLLATION"
-            ],
+            collation=db_specific_properties[conf.CONFIGS["db_type"]]["BINARY_COLLATION"],
         ),
         primary_key=True,
     )
@@ -135,9 +131,7 @@ class Domain(Base):
     pdb_chain = sa.Column(
         sa.String(
             SHORT,
-            collation=db_specific_properties[conf.CONFIGS["db_type"]][
-                "BINARY_COLLATION"
-            ],
+            collation=db_specific_properties[conf.CONFIGS["db_type"]]["BINARY_COLLATION"],
         ),
         nullable=False,
     )
@@ -345,9 +339,7 @@ class Provean(Base):
 
     uniprot_id = sa.Column(
         None,
-        sa.ForeignKey(
-            UniprotSequence.uniprot_id, onupdate="cascade", ondelete="cascade"
-        ),
+        sa.ForeignKey(UniprotSequence.uniprot_id, onupdate="cascade", ondelete="cascade"),
         primary_key=True,
     )
     provean_supset_filename = sa.Column(sa.String(MEDIUM))
@@ -366,9 +358,7 @@ class Provean(Base):
         uselist=False,
         cascade="expunge",
         lazy="joined",
-        backref=sa.orm.backref(
-            "provean", uselist=False, cascade="expunge", lazy="joined"
-        ),
+        backref=sa.orm.backref("provean", uselist=False, cascade="expunge", lazy="joined"),
     )
 
 
@@ -418,14 +408,10 @@ class UniprotDomain(Base):
 
     __tablename__ = "uniprot_domain"
 
-    uniprot_domain_id = sa.Column(
-        sa.Integer, nullable=False, primary_key=True, autoincrement=True
-    )
+    uniprot_domain_id = sa.Column(sa.Integer, nullable=False, primary_key=True, autoincrement=True)
     uniprot_id = sa.Column(
         None,
-        sa.ForeignKey(
-            UniprotSequence.uniprot_id, onupdate="cascade", ondelete="cascade"
-        ),
+        sa.ForeignKey(UniprotSequence.uniprot_id, onupdate="cascade", ondelete="cascade"),
         nullable=False,
     )
     pdbfam_name = sa.Column(sa.String(LONG), nullable=False)
@@ -503,16 +489,12 @@ class UniprotDomainPair(Base):
     uniprot_domain_pair_id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
     uniprot_domain_id_1 = sa.Column(
         None,
-        sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id, onupdate="cascade", ondelete="cascade"
-        ),
+        sa.ForeignKey(UniprotDomain.uniprot_domain_id, onupdate="cascade", ondelete="cascade"),
         nullable=False,
     )
     uniprot_domain_id_2 = sa.Column(
         None,
-        sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id, onupdate="cascade", ondelete="cascade"
-        ),
+        sa.ForeignKey(UniprotDomain.uniprot_domain_id, onupdate="cascade", ondelete="cascade"),
         nullable=False,
     )
     rigids = sa.Column(sa.Text)  # Interaction references from iRefsa.Index
@@ -612,9 +594,7 @@ class UniprotDomainTemplate(Base):
 
     uniprot_domain_id = sa.Column(
         None,
-        sa.ForeignKey(
-            UniprotDomain.uniprot_domain_id, onupdate="cascade", ondelete="cascade"
-        ),
+        sa.ForeignKey(UniprotDomain.uniprot_domain_id, onupdate="cascade", ondelete="cascade"),
         nullable=False,
         primary_key=True,
     )
@@ -628,12 +608,8 @@ class UniprotDomainTemplate(Base):
     domain_start = sa.Column(sa.Integer, index=True)
     domain_end = sa.Column(sa.Integer, index=True)
     domain_def = sa.Column(sa.String(MEDIUM))
-    alignment_identity = sa.Column(
-        sa.Float, sa.CheckConstraint("alignment_identity <= 1")
-    )
-    alignment_coverage = sa.Column(
-        sa.Float, sa.CheckConstraint("alignment_coverage <= 1")
-    )
+    alignment_identity = sa.Column(sa.Float, sa.CheckConstraint("alignment_identity <= 1"))
+    alignment_coverage = sa.Column(sa.Float, sa.CheckConstraint("alignment_coverage <= 1"))
     alignment_score = sa.Column(sa.Float, sa.CheckConstraint("alignment_score <= 1"))
     t_date_modified = sa.Column(
         sa.DateTime,
@@ -740,9 +716,7 @@ class UniprotDomainModel(Base):
         uselist=False,
         cascade="expunge",
         lazy="joined",
-        backref=sa.orm.backref(
-            "model", uselist=False, cascade="expunge", lazy="joined"
-        ),
+        backref=sa.orm.backref("model", uselist=False, cascade="expunge", lazy="joined"),
     )
 
 
@@ -875,17 +849,13 @@ class UniprotDomainMutation(Base):
 
     uniprot_id = sa.Column(
         None,
-        sa.ForeignKey(
-            UniprotSequence.uniprot_id, onupdate="cascade", ondelete="cascade"
-        ),
+        sa.ForeignKey(UniprotSequence.uniprot_id, onupdate="cascade", ondelete="cascade"),
         nullable=False,
         primary_key=True,
     )
     uniprot_domain_id = sa.Column(
         None,
-        sa.ForeignKey(
-            UniprotDomainModel.uniprot_domain_id, onupdate="cascade", ondelete="cascade"
-        ),
+        sa.ForeignKey(UniprotDomainModel.uniprot_domain_id, onupdate="cascade", ondelete="cascade"),
         nullable=False,
         primary_key=True,
         index=True,
@@ -1235,9 +1205,7 @@ class UniprotDomainPairModel(Base):
         uselist=False,
         cascade="expunge",
         lazy="joined",
-        backref=sa.orm.backref(
-            "model", uselist=False, cascade="expunge", lazy="joined"
-        ),
+        backref=sa.orm.backref("model", uselist=False, cascade="expunge", lazy="joined"),
     )
 
 
@@ -1345,9 +1313,7 @@ class UniprotDomainPairMutation(Base):
 
     uniprot_id = sa.Column(
         None,
-        sa.ForeignKey(
-            UniprotSequence.uniprot_id, onupdate="cascade", ondelete="cascade"
-        ),
+        sa.ForeignKey(UniprotSequence.uniprot_id, onupdate="cascade", ondelete="cascade"),
         nullable=False,
         primary_key=True,
     )

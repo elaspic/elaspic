@@ -38,12 +38,8 @@ names_rows_stability = [
     ["number_of_residues", 23],
 ]
 names_stability = list(next(zip(*names_rows_stability)))
-names_stability_wt = [name + "_wt" for name in names_stability[:-1]] + [
-    "number_of_residues"
-]
-names_stability_mut = [name + "_mut" for name in names_stability[:-1]] + [
-    "number_of_residues"
-]
+names_stability_wt = [name + "_wt" for name in names_stability[:-1]] + ["number_of_residues"]
+names_stability_mut = [name + "_mut" for name in names_stability[:-1]] + ["number_of_residues"]
 
 names_rows_stability_complex = [
     ["intraclashes_energy_1", 3],
@@ -53,9 +49,9 @@ names_stability_complex = list(next(zip(*names_rows_stability_complex)))
 names_stability_complex_wt = [name + "_wt" for name in names_stability_complex[:-1]] + [
     "number_of_residues"
 ]
-names_stability_complex_mut = [
-    name + "_mut" for name in names_stability_complex[:-1]
-] + ["number_of_residues"]
+names_stability_complex_mut = [name + "_mut" for name in names_stability_complex[:-1]] + [
+    "number_of_residues"
+]
 
 
 def read_build_model(output_file, wt_pdb_id, mut_pdb_id):
@@ -74,9 +70,7 @@ def read_build_model(output_file, wt_pdb_id, mut_pdb_id):
 
 
 def read_stability(output_file):
-    df = pd.read_csv(
-        output_file, sep="\t", names=["pdb"] + names_stability, index_col=False
-    )
+    df = pd.read_csv(output_file, sep="\t", names=["pdb"] + names_stability, index_col=False)
     # Format dataframe
     df = df.rename(columns=str.lower)
     logger.debug(df.head())
@@ -170,9 +164,7 @@ class FoldX:
         """
         pdb_file = op.abspath(pdb_file)
         try:
-            pdb_file = shutil.copy(
-                pdb_file, op.join(self._tempdir, op.basename(pdb_file))
-            )
+            pdb_file = shutil.copy(pdb_file, op.join(self._tempdir, op.basename(pdb_file)))
         except shutil.SameFileError:
             pass
         structure_file = self._repair_pdb(op.abspath(pdb_file))
@@ -183,9 +175,7 @@ class FoldX:
 
         # Run FoldX
         system_command = (
-            "foldx --rotabaseLocation {} --command=BuildModel ".format(
-                self._foldx_rotabase
-            )
+            "foldx --rotabaseLocation {} --command=BuildModel ".format(self._foldx_rotabase)
             + "--pdb='{}' ".format(op.basename(structure_file))
             + "--mutant-file='{}'".format(mutation_file)
         )
@@ -241,9 +231,7 @@ class FoldX:
 
         # Run FoldX
         system_command = (
-            "foldx --rotabaseLocation {} --command=AnalyseComplex ".format(
-                self._foldx_rotabase
-            )
+            "foldx --rotabaseLocation {} --command=AnalyseComplex ".format(self._foldx_rotabase)
             + "--pdb='{}' ".format(op.basename(structure_file))
             + "--analyseComplexChains={},{}".format(chain_id_1, chain_id_2)
         )

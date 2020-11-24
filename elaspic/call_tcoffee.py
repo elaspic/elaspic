@@ -39,24 +39,14 @@ class TCoffee(object):
             with open(self.alignment_template_file, "w") as fh:
                 fh.writelines(
                     [
-                        ">"
-                        + self.target_seqrecord.id
-                        + " _P_ "
-                        + self.pdb_id.upper()
-                        + "\n"
-                        ">"
-                        + self.template_seqrecord.id
-                        + " _P_ "
-                        + self.pdb_id.upper()
-                        + "\n"
+                        ">" + self.target_seqrecord.id + " _P_ " + self.pdb_id.upper() + "\n"
+                        ">" + self.template_seqrecord.id + " _P_ " + self.pdb_id.upper() + "\n"
                     ]
                 )
 
     def _clean_pdb(self, pdb_file):
         """Write a template PDB file in a format that is compatible with t_coffee."""
-        message = "Cleaning pdb {} to serve as a template for t_coffee...".format(
-            pdb_file
-        )
+        message = "Cleaning pdb {} to serve as a template for t_coffee...".format(pdb_file)
         logger.debug(message)
 
         pdb_id = structure_tools.get_pdb_id(pdb_file)
@@ -130,10 +120,7 @@ class TCoffee(object):
             "export {}={}".format(x, tcoffee_env.get(x, "$" + x))
             for x in t_coffee_environment_variables
         ]
-        message = (
-            "\nSystem command for setting environmental variables:\n"
-            + " && ".join(exports)
-        )
+        message = "\nSystem command for setting environmental variables:\n" + " && ".join(exports)
         logger.debug(message)
 
         # ### System command
@@ -151,9 +138,7 @@ class TCoffee(object):
             if conf.CONFIGS["n_cores"] and int(conf.CONFIGS["n_cores"]) > 1
             else "no"
         )
-        n_core_option = (
-            "{}".format(conf.CONFIGS["n_cores"]) if conf.CONFIGS["n_cores"] else "1"
-        )
+        n_core_option = "{}".format(conf.CONFIGS["n_cores"]) if conf.CONFIGS["n_cores"] else "1"
         protein_db = op.join(conf.CONFIGS["blast_db_dir"], "nr")
         pdb_db = op.join(conf.CONFIGS["blast_db_dir"], "pdbaa")
         if mode == "3dcoffee":
@@ -270,9 +255,7 @@ class TCoffee(object):
             Name of file which contains the alignment in fasta format.
         """
         # try the alignment in expresso mode (structure based with sap alignment)
-        alignment_output_file = op.join(
-            conf.CONFIGS["tcoffee_dir"], self.alignment_id + ".aln"
-        )
+        alignment_output_file = op.join(conf.CONFIGS["tcoffee_dir"], self.alignment_id + ".aln")
         system_command, tcoffee_env = self._get_tcoffee_system_command(
             self.alignment_fasta_file,
             self.alignment_template_file,
@@ -300,9 +283,7 @@ class TCoffee(object):
             return alignment_output_file
         else:
             logger.error(
-                "Structural alignment failed with the following error: {}".format(
-                    p.stderr
-                )
+                "Structural alignment failed with the following error: {}".format(p.stderr)
             )
             logger.error("Running quickalign alignment instead...")
             system_command, tcoffee_env = self._get_tcoffee_system_command(
@@ -311,15 +292,11 @@ class TCoffee(object):
                 alignment_output_file,
                 "quick",
             )
-            p = helper.run(
-                system_command, cwd=conf.CONFIGS["tcoffee_dir"], env=tcoffee_env
-            )
+            p = helper.run(system_command, cwd=conf.CONFIGS["tcoffee_dir"], env=tcoffee_env)
             if p.returncode == 0:
                 return alignment_output_file
             else:
-                logger.error(
-                    "Even quickaln didn't work. Cannot create an alignment. Giving up."
-                )
+                logger.error("Even quickaln didn't work. Cannot create an alignment. Giving up.")
                 raise errors.TcoffeeError(
                     p.stdout, p.stderr, self.alignment_fasta_file, system_command
                 )

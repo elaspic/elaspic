@@ -173,21 +173,17 @@ def make_connection_string(**vargs):
     """
     vargs["db_password"] = (
         ":{}".format(vargs["db_password"])
-        if vargs.get("db_password") is not None
-        and not vargs.get("db_schema", "").startswith("/")
+        if vargs.get("db_password") is not None and not vargs.get("db_schema", "").startswith("/")
         else ""
     )
     vargs["db_url"] = "@{}".format(vargs["db_url"]) if vargs.get("db_url") else ""
     vargs["db_port"] = ":{}".format(vargs["db_port"]) if vargs.get("db_port") else ""
-    vargs["db_schema"] = (
-        "/{}".format(vargs["db_schema"]) if vargs.get("db_schema") else "/"
-    )
+    vargs["db_schema"] = "/{}".format(vargs["db_schema"]) if vargs.get("db_schema") else "/"
     vargs["db_socket"] = (
         "?unix_socket={}".format(vargs["db_socket"]) if vargs.get("db_socket") else ""
     )
     connection_string = (
-        "{db_type}://{db_username}{db_password}"
-        "{db_url}{db_port}{db_schema}{db_socket}"
+        "{db_type}://{db_username}{db_password}" "{db_url}{db_port}{db_schema}{db_socket}"
     ).format(**vargs)
     return connection_string
 

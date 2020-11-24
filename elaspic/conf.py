@@ -150,9 +150,7 @@ def read_database_configs(config):
         CONFIGS["db_password"] = config.get("db_password")
         CONFIGS["db_url"] = config.get("db_url")
         CONFIGS["db_port"] = config.get("db_port")
-        CONFIGS["db_socket"] = _get_db_socket(
-            config, CONFIGS["db_type"], CONFIGS["db_url"]
-        )
+        CONFIGS["db_socket"] = _get_db_socket(config, CONFIGS["db_type"], CONFIGS["db_url"])
         CONFIGS["connection_string"] = make_connection_string(**CONFIGS)
     CONFIGS["db_is_immutable"] = config.get("db_is_immutable", fallback=False)
 
@@ -204,9 +202,7 @@ def read_logger_configs(config):
 
     .. todo:: This needs a cleanup.
     """
-    default_format = (
-        "%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s"
-    )
+    default_format = "%(asctime)s %(hostname)s %(name)s[%(process)d] %(levelname)s %(message)s"
     coloredlogs.install(
         logger=logging.getLogger("elaspic"),
         level=config.get("level", "ERROR"),

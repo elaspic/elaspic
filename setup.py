@@ -5,7 +5,8 @@ try:
     from pypandoc import convert
 
     def read_md(file):
-        return convert(file, 'rst')
+        return convert(file, "rst")
+
 
 except ImportError:
     print("warning: pypandoc module not found, could not convert Markdown to RST")
@@ -25,6 +26,7 @@ class TrainPredictors(Command):
     def run(self):
         """Train the ELASPIC classifier."""
         from elaspic.__main__ import elaspic_train
+
         elaspic_train(None)
 
     def finalize_options(self):
@@ -33,23 +35,22 @@ class TrainPredictors(Command):
 
 
 setup(
-    name='elaspic',
-    version='0.1.45',
+    name="elaspic",
+    version="0.1.45",
     description=(
         "Ensemble Learning Approach for Stability Prediction of "
-        "Interface and Core mutations (ELASPIC)."),
+        "Interface and Core mutations (ELASPIC)."
+    ),
     url="https://github.com/kimlaborg/elaspic",
-    author='kimlab',
-    author_email='alex.strokach@utoronto.ca',
-    packages=['elaspic'],
-    package_data={'elaspic': ['data/*']},
+    author="kimlab",
+    author_email="alex.strokach@utoronto.ca",
+    packages=["elaspic"],
+    package_data={"elaspic": ["data/*"]},
     long_description=read_md("README.md"),
-    entry_points={
-        'console_scripts': 'elaspic = elaspic.__main__:main'
-    },
+    entry_points={"console_scripts": "elaspic = elaspic.__main__:main"},
     classifiers=[
         "Programming Language :: Python :: 3 :: Only",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    cmdclass={'train': TrainPredictors},
+    cmdclass={"train": TrainPredictors},
 )

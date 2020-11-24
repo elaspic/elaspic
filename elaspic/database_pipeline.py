@@ -95,26 +95,18 @@ class DatabasePipeline(Pipeline):
         if not isinstance(d_list, list):
             d_list = [d_list]
         for d in d_list:
-            if not d.path_to_data or any(
-                [len(x) > 255 for x in d.path_to_data.split("/")]
-            ):
-                logger.debug(
-                    "Updating 'path_to_data' from '{}'...".format(d.path_to_data)
-                )
+            if not d.path_to_data or any([len(x) > 255 for x in d.path_to_data.split("/")]):
+                logger.debug("Updating 'path_to_data' from '{}'...".format(d.path_to_data))
                 d.path_to_data = elaspic_database.get_uniprot_base_path(
                     d
                 ) + elaspic_database.get_uniprot_domain_path(d)
                 logger.debug("to '{}'...".format(d.path_to_data))
                 self.db.merge_row(d)
-            os.makedirs(
-                op.join(conf.CONFIGS["archive_temp_dir"], d.path_to_data), exist_ok=True
-            )
+            os.makedirs(op.join(conf.CONFIGS["archive_temp_dir"], d.path_to_data), exist_ok=True)
 
     def run(self):
         if not self.uniprot_domains:
-            logger.info(
-                "Warning! Uniprot {} has no pfam domains!".format(self.uniprot_id)
-            )
+            logger.info("Warning! Uniprot {} has no pfam domains!".format(self.uniprot_id))
 
         # Find provean
         if (
@@ -141,9 +133,7 @@ class DatabasePipeline(Pipeline):
             for d in self.uniprot_domains + self.uniprot_domain_pairs:
                 self.get_model(d)
             logger.info(
-                "Finished processing all models for {} {}".format(
-                    self.uniprot_id, self.mutations
-                )
+                "Finished processing all models for {} {}".format(self.uniprot_id, self.mutations)
             )
 
         # Analyse mutations
@@ -211,20 +201,14 @@ class _PrepareSequence:
 
     def __enter__(self):
         d = self.d
-        self.sequence_file = op.join(
-            conf.CONFIGS["sequence_dir"], d.uniprot_id + ".fasta"
-        )
-        self.seqrecord = SeqRecord(
-            id=d.uniprot_id, seq=Seq(d.uniprot_sequence.uniprot_sequence)
-        )
+        self.sequence_file = op.join(conf.CONFIGS["sequence_dir"], d.uniprot_id + ".fasta")
+        self.seqrecord = SeqRecord(id=d.uniprot_id, seq=Seq(d.uniprot_sequence.uniprot_sequence))
         with open(self.sequence_file, "w") as ofh:
             SeqIO.write(self.seqrecord, ofh, "fasta")
         assert op.isfile(self.sequence_file)
 
     def run(self):
-        self.sequence = elaspic_sequence.Sequence(
-            self.sequence_file, self.provean_supset_file
-        )
+        self.sequence = elaspic_sequence.Sequence(self.sequence_file, self.provean_supset_file)
 
     #            if provean:
     #                if self.run_type == 1:
@@ -245,9 +229,7 @@ class _PrepareSequence:
         if self.provean_supset_file is None:
             provean = elaspic_database_tables.Provean()
             provean.uniprot_id = d.uniprot_id
-            provean.provean_supset_filename = op.basename(
-                self.sequence.provean_supset_file
-            )
+            provean.provean_supset_filename = op.basename(self.sequence.provean_supset_file)
             provean.provean_supset_length = self.sequence.provean_supset_length
             self.db.merge_provean(
                 provean,
@@ -292,16 +274,12 @@ class _PrepareModel:
         elif isinstance(d, elaspic_database.UniprotDomain) and not (
             d.template and d.template.cath_id
         ):
-            logger.error(
-                "No structural template availible for this domain. Skipping..."
-            )
+            logger.error("No structural template availible for this domain. Skipping...")
             self.skip = True
         elif isinstance(d, elaspic_database.UniprotDomainPair) and not (
             d.template and d.template.cath_id_1 and d.template.cath_id_2
         ):
-            logger.error(
-                "No structural template availible for this domain pair. Skipping..."
-            )
+            logger.error("No structural template availible for this domain pair. Skipping...")
             self.skip = True
         elif d.template.model and d.template.model.model_filename:
             logger.info("Model already calculated.")
@@ -463,9 +441,7 @@ class _PrepareModel:
                 )
                 assert len(bad_domains) == 1
                 bad_domain = bad_domains[0]
-                bad_domain.domain_errors = (
-                    str(d.uniprot_domain_id) + ": " + str(exc_type)
-                )
+                bad_domain.domain_errors = str(d.uniprot_domain_id) + ": " + str(exc_type)
                 logger.error(
                     "Making a homology model failed!!!\n"
                     "Adding error '{0}' to the domain with cath_id {1}...".format(
@@ -508,9 +484,7 @@ class _PrepareModel:
                         )
                     )
                 else:
-                    logger.error(
-                        "Found 0 or too many templates in the `domain_contact` table!"
-                    )
+                    logger.error("Found 0 or too many templates in the `domain_contact` table!")
                     logger.error("bad_domains: {}".format(bad_domains))
                     return True
 
@@ -540,9 +514,7 @@ class _PrepareModel:
                 d.template.model = elaspic_database_tables.UniprotDomainModel()
                 d.template.model.uniprot_domain_id = d.uniprot_domain_id
 
-            d.template.model.model_filename = op.basename(
-                self.model.modeller_results["model_file"]
-            )
+            d.template.model.model_filename = op.basename(self.model.modeller_results["model_file"])
             d.template.model.norm_dope = self.model.modeller_results["norm_dope"]
             d.template.model.chain = self.model.chain_ids[0]
             d.template.model.alignment_filename = op.basename(
@@ -550,9 +522,7 @@ class _PrepareModel:
             )
 
             sasa_score = self.model.relative_sasa_scores[self.model.chain_ids[0]]
-            d.template.model.sasa_score = ",".join(
-                "{:.2f}".format(x) for x in sasa_score
-            )
+            d.template.model.sasa_score = ",".join("{:.2f}".format(x) for x in sasa_score)
 
             d.template.model.model_domain_def = self._truncate_domain_defs(
                 d.template.domain_def,
@@ -564,9 +534,7 @@ class _PrepareModel:
             if d.template.model == None:  # noqa
                 d.template.model = elaspic_database.UniprotDomainPairModel()
                 d.template.model.uniprot_domain_pair_id = d.uniprot_domain_pair_id
-            d.template.model.model_filename = op.basename(
-                self.model.modeller_results["model_file"]
-            )
+            d.template.model.model_filename = op.basename(self.model.modeller_results["model_file"])
             d.template.model.norm_dope = self.model.modeller_results["norm_dope"]
             d.template.model.chain_1 = self.model.chain_ids[0]
             d.template.model.chain_2 = self.model.chain_ids[1]
@@ -605,12 +573,8 @@ class _PrepareModel:
             )
 
             # Get interacting amino acids and interface area
-            d.template.model.interface_area_hydrophobic = (
-                self.model.interface_area_hydrophobic
-            )
-            d.template.model.interface_area_hydrophilic = (
-                self.model.interface_area_hydrophilic
-            )
+            d.template.model.interface_area_hydrophobic = self.model.interface_area_hydrophobic
+            d.template.model.interface_area_hydrophilic = self.model.interface_area_hydrophilic
             d.template.model.interface_area_total = self.model.interface_area_total
 
             # Save model_domain_defs, which might be truncated compared to uniprot_domain_template
@@ -639,9 +603,7 @@ class _PrepareModel:
         )
         return domain_def_new
 
-    def _write_domain_sequence_file(
-        self, protein_ids, protein_domain_defs, protein_sequences
-    ):
+    def _write_domain_sequence_file(self, protein_ids, protein_domain_defs, protein_sequences):
         """Write a fasta file containing target domain sequences."""
         sequence_seqrecords = []
         for protein_id, protein_domain_def, protein_sequence in zip(
@@ -660,9 +622,7 @@ class _PrepareModel:
             sequence_seqrecords.append(seqrecord)
 
         sequence_filename = "_".join(seqrec.id for seqrec in sequence_seqrecords)
-        sequence_file = op.join(
-            conf.CONFIGS["unique_temp_dir"], sequence_filename + ".fasta"
-        )
+        sequence_file = op.join(conf.CONFIGS["unique_temp_dir"], sequence_filename + ".fasta")
         with open(sequence_file, "w") as ofh:
             SeqIO.write(sequence_seqrecords, ofh, "fasta")
 
@@ -671,13 +631,9 @@ class _PrepareModel:
     def _write_domain_structure_file(self, pdb_id, pdb_chains, pdb_domain_defs):
         """Write a pdb file containing template domain chains (cut to domain bounaries)."""
         if conf.CONFIGS["pdb_dir"] is not None:
-            pdb_file = structure_tools.get_pdb_file(
-                pdb_id, conf.CONFIGS["pdb_dir"], "ent"
-            )
+            pdb_file = structure_tools.get_pdb_file(pdb_id, conf.CONFIGS["pdb_dir"], "ent")
         elif conf.CONFIGS["allow_internet"]:
-            pdb_file = structure_tools.download_pdb_file(
-                pdb_id, conf.CONFIGS["unique_temp_dir"]
-            )
+            pdb_file = structure_tools.download_pdb_file(pdb_id, conf.CONFIGS["unique_temp_dir"])
         else:
             raise Exception
         sp = structure_tools.StructureParser(pdb_file, pdb_chains, pdb_domain_defs)
@@ -733,18 +689,13 @@ class _PrepareMutation:
         if not mutation:
             logger.debug("Not evaluating mutations because no mutations specified...")
             self.skip = True
-        elif (
-            isinstance(d, elaspic_database_tables.UniprotDomain)
-            and not d.template.domain
-        ) or (
+        elif (isinstance(d, elaspic_database_tables.UniprotDomain) and not d.template.domain) or (
             isinstance(d, elaspic_database_tables.UniprotDomainPair)
             and not (d.template.domain_1 and d.template.domain_2)
         ):
             logger.debug("Skipping because no structural template is availible...")
             self.skip = True
-        elif (
-            d.template.model == None or d.template.model.model_filename == None  # noqa
-        ):
+        elif d.template.model == None or d.template.model.model_filename == None:  # noqa
             logger.debug("d.template.model: {}".format(d.template.model))
             logger.debug(
                 "d.template.model.model_filename: {}".format(
@@ -756,23 +707,15 @@ class _PrepareMutation:
 
         mutation_prototype = re.compile("^[A-z][0-9]+[A-z]$")
         if not mutation_prototype.match(mutation) or int(mutation[1:-1]) == 0:
-            logger.error(
-                "The mutation {} is not a supported format! Skiping!".format(mutation)
-            )
+            logger.error("The mutation {} is not a supported format! Skiping!".format(mutation))
             self.skip = True
 
         # Check to see if we have a precalculated mutation. Skip if all
         # parameters have been calculated; otherwise analyse the remaining
         # parameters. Create an empty mutation if the mutation has not
         # been precalculated.
-        precalculated_mutation = self.db.get_uniprot_mutation(
-            d, mutation, self.uniprot_id, True
-        )
-        logger.info(
-            "Have the following precalculated mutation: {}".format(
-                precalculated_mutation
-            )
-        )
+        precalculated_mutation = self.db.get_uniprot_mutation(d, mutation, self.uniprot_id, True)
+        logger.info("Have the following precalculated mutation: {}".format(precalculated_mutation))
         if (
             precalculated_mutation
             and precalculated_mutation.provean_score
@@ -848,13 +791,9 @@ class _PrepareMutation:
         self.mut.stability_energy_mut = results["stability_energy_mut"]
         #
         self.mut.physchem_wt = "{},{},{},{}".format(*results["physchem_wt"])
-        self.mut.physchem_wt_ownchain = "{},{},{},{}".format(
-            *results["physchem_ownchain_wt"]
-        )
+        self.mut.physchem_wt_ownchain = "{},{},{},{}".format(*results["physchem_ownchain_wt"])
         self.mut.physchem_mut = "{},{},{},{}".format(*results["physchem_mut"])
-        self.mut.physchem_mut_ownchain = "{},{},{},{}".format(
-            *results["physchem_ownchain_mut"]
-        )
+        self.mut.physchem_mut_ownchain = "{},{},{},{}".format(*results["physchem_ownchain_mut"])
         #
         self.mut.secondary_structure_wt = results["secondary_structure_wt"]
         self.mut.solvent_accessibility_wt = results["solvent_accessibility_wt"]
@@ -888,9 +827,7 @@ class _PrepareMutation:
 
         if isinstance(d, elaspic_database.UniprotDomain):
             logger.debug("Analyzing core mutation for uniprot: %s" % uniprot_id_1)
-            logger.debug(
-                "model_domain_def: {}".format(d.template.model.model_domain_def)
-            )
+            logger.debug("model_domain_def: {}".format(d.template.model.model_domain_def))
             domain_start, domain_end = structure_tools.decode_domain_def(
                 d.template.model.model_domain_def
             )
@@ -916,14 +853,9 @@ class _PrepareMutation:
             ]
             logger.debug("sequence: {}".format(self.sequence.sequence))
 
-            if (
-                uniprot_id_1 == d.uniprot_domain_1.uniprot_id
-                and mutation_pos in interacting_aa_1
-            ):
+            if uniprot_id_1 == d.uniprot_domain_1.uniprot_id and mutation_pos in interacting_aa_1:
                 logger.debug("Mutation is inside the first domain.")
-                logger.debug(
-                    "model_domain_def: {}".format(d.template.model.model_domain_def_1)
-                )
+                logger.debug("model_domain_def: {}".format(d.template.model.model_domain_def_1))
                 domain_start, domain_end = structure_tools.decode_domain_def(
                     d.template.model.model_domain_def_1
                 )
@@ -934,14 +866,9 @@ class _PrepareMutation:
                 domain_start = domain_start or 1  # if None
                 domain_end = domain_end or len(self.sequence.sequence)
 
-            elif (
-                uniprot_id_1 == d.uniprot_domain_2.uniprot_id
-                and mutation_pos in interacting_aa_2
-            ):
+            elif uniprot_id_1 == d.uniprot_domain_2.uniprot_id and mutation_pos in interacting_aa_2:
                 logger.debug("Mutation is inside the second domain.")
-                logger.debug(
-                    "model_domain_def: {}".format(d.template.model.model_domain_def_2)
-                )
+                logger.debug("model_domain_def: {}".format(d.template.model.model_domain_def_2))
                 domain_start, domain_end = structure_tools.decode_domain_def(
                     d.template.model.model_domain_def_2
                 )
@@ -952,15 +879,11 @@ class _PrepareMutation:
 
             else:
                 # Mutation is outside the interface
-                error_message = (
-                    "Mutated residue {} not involved in the interaction!".format(
-                        mutation[:-1]
-                    )
+                error_message = "Mutated residue {} not involved in the interaction!".format(
+                    mutation[:-1]
                 )
                 logger.error(error_message)
-                logger.error(
-                    "Uniprot ID: {}\tMutation: {}".format(uniprot_id_1, mutation)
-                )
+                logger.error("Uniprot ID: {}\tMutation: {}".format(uniprot_id_1, mutation))
                 logger.error(
                     "Uniprot ID 1: {}\tInteracting AA 1: {}".format(
                         d.uniprot_domain_1.uniprot_id, interacting_aa_1
@@ -995,11 +918,7 @@ class _PrepareMutation:
         else:
             raise Exception("`domain_1or2` should be either '1' or '2'!")
         return (
-            [
-                int(uniprot_num)
-                for uniprot_num in interacting_aa.split(",")
-                if uniprot_num
-            ]
+            [int(uniprot_num) for uniprot_num in interacting_aa.split(",") if uniprot_num]
             if interacting_aa
             else []
         )
@@ -1015,9 +934,7 @@ class _PrepareMutation:
            Contains information about the mutation in question
         """
         feature_dict = {
-            key: value
-            for (key, value) in mut.__dict__.items()
-            if not key.startswith("_")
+            key: value for (key, value) in mut.__dict__.items() if not key.startswith("_")
         }
 
         feature_dict.update(
@@ -1060,12 +977,8 @@ class _PrepareMutation:
                     "clan_name_1": d.uniprot_domain_1.pfam_clan,
                     "clan_name_2": d.uniprot_domain_2.pfam_clan,
                     # Feature columns
-                    "alignment_identity": np.sqrt(
-                        d.template.identical_1 * d.template.identical_2
-                    ),
-                    "alignment_coverage": np.sqrt(
-                        d.template.coverage_1 * d.template.coverage_2
-                    ),
+                    "alignment_identity": np.sqrt(d.template.identical_1 * d.template.identical_2),
+                    "alignment_coverage": np.sqrt(d.template.coverage_1 * d.template.coverage_2),
                     "alignment_score": np.sqrt(d.template.score_1 * d.template.score_2),
                     #
                     "interface_area_hydrophobic": d.template.model.interface_area_hydrophobic,

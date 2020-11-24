@@ -48,9 +48,7 @@ class AnalyzeStructure:
     The interface is then given by the substracting.
     """
 
-    def __init__(
-        self, pdb_file, working_dir, vdw_distance=5.0, min_contact_distance=4.0
-    ):
+    def __init__(self, pdb_file, working_dir, vdw_distance=5.0, min_contact_distance=4.0):
         self.pdb_file = pdb_file
         #: Folder with all the binaries (i.e. ./analyze_structure)
         self.working_dir = working_dir
@@ -153,17 +151,12 @@ class AnalyzeStructure:
 
         # Find the mutated residue (assuming mutation is in resnum)
         for residue in mutated_chain:
-            if (
-                residue.resname in structure_tools.AMINO_ACIDS
-                and not residue.id[0].strip()
-            ):
+            if residue.resname in structure_tools.AMINO_ACIDS and not residue.id[0].strip():
                 if str(residue.id[1]) == mutation[1:-1]:
                     self._validate_mutation(residue.resname, mutation)
                     mutated_residue = residue
                     break
-        mutated_atoms = [
-            atom for atom in mutated_residue if atom.name not in main_chain_atoms
-        ]
+        mutated_atoms = [atom for atom in mutated_residue if atom.name not in main_chain_atoms]
 
         # Go through each atom in each residue in each partner chain...
         opposite_chain_contacts = {
@@ -225,18 +218,14 @@ class AnalyzeStructure:
     ):
         # For each residue each atom of the mutated residue has to be checked
         for mutated_atom in mutated_atoms:
-            mutated_atom_type = self._get_atom_type(
-                mutated_residue.resname, mutated_atom
-            )
+            mutated_atom_type = self._get_atom_type(mutated_residue.resname, mutated_atom)
             # And each partner residue and partner atom
             for partner_atom in partner_residue:
                 r = structure_tools.calculate_distance(
                     mutated_atom, partner_atom, self.vdw_distance
                 )
                 if r is not None:
-                    partner_atom_type = self._get_atom_type(
-                        partner_residue.resname, partner_atom
-                    )
+                    partner_atom_type = self._get_atom_type(partner_residue.resname, partner_atom)
                     if partner_atom_type == "ignore":
                         continue
                     if mutated_atom_type == "carbon" and partner_atom_type == "carbon":
@@ -244,17 +233,13 @@ class AnalyzeStructure:
                         # nonredundant. Thus, the atomic coordinates are
                         # used to keep track of which interactions where
                         # already counted. Does not matter as much for others.
-                        contact_features_dict["carbon_contact"].append(
-                            tuple(partner_atom.coord)
-                        )
+                        contact_features_dict["carbon_contact"].append(tuple(partner_atom.coord))
                     if r <= self.min_contact_distance:
                         if (
                             mutated_atom_type == "charged_plus"
                             and partner_atom_type == "charged_plus"
                         ):
-                            contact_features_dict["equal_charge"].append(
-                                tuple(mutated_atom.coord)
-                            )
+                            contact_features_dict["equal_charge"].append(tuple(mutated_atom.coord))
                         if (
                             mutated_atom_type == "charged_minus"
                             and partner_atom_type == "charged_plus"
@@ -273,30 +258,13 @@ class AnalyzeStructure:
                             mutated_atom_type == "charged_minus"
                             and partner_atom_type == "charged_minus"
                         ):
-                            contact_features_dict["equal_charge"].append(
-                                tuple(mutated_atom.coord)
-                            )
-                        if (
-                            mutated_atom_type == "charged"
-                            and partner_atom_type == "polar"
-                        ):
-                            contact_features_dict["h_bond"].append(
-                                tuple(mutated_atom.coord)
-                            )
-                        if (
-                            mutated_atom_type == "polar"
-                            and partner_atom_type == "charged"
-                        ):
-                            contact_features_dict["h_bond"].append(
-                                tuple(mutated_atom.coord)
-                            )
-                        if (
-                            mutated_atom_type == "polar"
-                            and partner_atom_type == "polar"
-                        ):
-                            contact_features_dict["h_bond"].append(
-                                tuple(mutated_atom.coord)
-                            )
+                            contact_features_dict["equal_charge"].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == "charged" and partner_atom_type == "polar":
+                            contact_features_dict["h_bond"].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == "polar" and partner_atom_type == "charged":
+                            contact_features_dict["h_bond"].append(tuple(mutated_atom.coord))
+                        if mutated_atom_type == "polar" and partner_atom_type == "polar":
+                            contact_features_dict["h_bond"].append(tuple(mutated_atom.coord))
 
     def _get_atom_type(self, residue, atom):
         """Get the type of atom we are dealing with (i.e. charged, polar, carbon).
@@ -358,12 +326,8 @@ class AnalyzeStructure:
                 seasa_by_chain, seasa_by_residue = self._run_msms(structure_file)
                 seasa_by_chain_separately.append(seasa_by_chain)
                 seasa_by_residue_separately.append(seasa_by_residue)
-            seasa_by_chain_separately = pd.concat(
-                seasa_by_chain_separately, ignore_index=True
-            )
-            seasa_by_residue_separately = pd.concat(
-                seasa_by_residue_separately, ignore_index=True
-            )
+            seasa_by_chain_separately = pd.concat(seasa_by_chain_separately, ignore_index=True)
+            seasa_by_residue_separately = pd.concat(seasa_by_residue_separately, ignore_index=True)
             return [
                 seasa_by_chain,
                 seasa_by_chain_separately,
@@ -384,9 +348,7 @@ class AnalyzeStructure:
         # Convert pdb to xyz coordiates
         assert os.path.isfile(op.join(self.working_dir, filename))
 
-        system_command = "pdb_to_xyzrn {0}.pdb".format(
-            op.join(self.working_dir, base_filename)
-        )
+        system_command = "pdb_to_xyzrn {0}.pdb".format(op.join(self.working_dir, base_filename))
         logger.debug("msms system command 1: %s" % system_command)
         p = helper.run(system_command, cwd=self.working_dir)
         if p.returncode != 0:
@@ -536,25 +498,19 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
                             if str(residue_2.id[1]) != pdb_mutation[1:-1]:
                                 continue
                             if (
-                                structure_tools.convert_aa(residue_2.resname)
-                                != pdb_mutation[0]
+                                structure_tools.convert_aa(residue_2.resname) != pdb_mutation[0]
                             ) and (
-                                structure_tools.convert_aa(residue_2.resname)
-                                != pdb_mutation[-1]
+                                structure_tools.convert_aa(residue_2.resname) != pdb_mutation[-1]
                             ):
                                 logger.debug(pdb_mutation)
-                                logger.debug(
-                                    structure_tools.convert_aa(residue_2.resname)
-                                )
+                                logger.debug(structure_tools.convert_aa(residue_2.resname))
                                 logger.debug(residue_2.id)
                                 raise errors.MutationMismatchError()
                         # Atom 1
                         for atom_1 in residue_1:
                             # Atom 2
                             for atom_2 in residue_2:
-                                r = structure_tools.calculate_distance(
-                                    atom_1, atom_2, min_r
-                                )
+                                r = structure_tools.calculate_distance(atom_1, atom_2, min_r)
                                 if min_r is None or (r is not None and r < min_r):
                                     min_r = r
 
@@ -571,9 +527,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         _shortest_interchain_distances_complement = {}
         for key in shortest_interchain_distances:
             for key_2, value in shortest_interchain_distances[key].items():
-                _shortest_interchain_distances_complement.setdefault(key_2, dict())[
-                    key
-                ] = value
+                _shortest_interchain_distances_complement.setdefault(key_2, dict())[key] = value
         shortest_interchain_distances.update(_shortest_interchain_distances_complement)
 
         all_chains = {key for key in shortest_interchain_distances}
@@ -614,17 +568,13 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         """
         assert len(chain_ids) == 2
 
-        termination, rc, e = self.__run_pops_area(
-            self.get_structure_file("".join(chain_ids))
-        )
+        termination, rc, e = self.__run_pops_area(self.get_structure_file("".join(chain_ids)))
         if rc != 0:
             if termination != "Clean termination":
                 logger.warning("Pops error for pdb: %s:" % self.pdb_file)
                 logger.warning(e)
                 return [None, None, None]
-        result = self.__read_pops_area(
-            self.get_structure_file("".join(chain_ids)) + ".out"
-        )
+        result = self.__read_pops_area(self.get_structure_file("".join(chain_ids)) + ".out")
 
         # Distinguish the surface area by hydrophobic, hydrophilic, and total
         for item in result:
@@ -685,8 +635,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
 
     def __run_pops_area(self, full_filename):
         system_command = (
-            "pops --chainOut"
-            " --pdb " + full_filename + " --popsOut " + full_filename + ".out"
+            "pops --chainOut" " --pdb " + full_filename + " --popsOut " + full_filename + ".out"
         )
         p = helper.run(system_command, cwd=self.working_dir)
         # The returncode can be non zero even if pops calculated the surface
@@ -697,9 +646,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         logger.debug(system_command)
         #        logger.debug('pops result: %s' % result) # Prints the entire POPs output
         #        logger.debug('pops error: %s' % e)
-        error_message_1 = (
-            "Warning: Atom distance too short! Probably incorrect POPS results!"
-        )
+        error_message_1 = "Warning: Atom distance too short! Probably incorrect POPS results!"
         if error_message_1 in p.stderr:
             logger.warning(error_message_1)
         logger.debug("pops rc: %s" % p.returncode)
@@ -719,11 +666,7 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         """
         keep = ["hydrophobic:", "hydrophilic:", "total:"]
         with open(filename, "r") as pops:
-            result = [
-                x.split(" ")
-                for x in pops.readlines()
-                if x != "" and x.split(" ")[0] in keep
-            ]
+            result = [x.split(" ") for x in pops.readlines() if x != "" and x.split(" ")[0] in keep]
             result = [[x.strip() for x in item if x != ""] for item in result]
         if not result or len(result) != 3:
             result = self.__read_pops_area_new(filename)

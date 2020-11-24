@@ -202,9 +202,7 @@ def calculate_distance(atom_1, atom_2, cutoff=None):
     cutoff : float, optional
         The maximum distance allowable between two points.
     """
-    if (type(atom_1) == type(atom_2) == list) or (
-        type(atom_1) == type(atom_2) == tuple
-    ):
+    if (type(atom_1) == type(atom_2) == list) or (type(atom_1) == type(atom_2) == tuple):
         a = atom_1
         b = atom_2
     elif hasattr(atom_1, "coord") and hasattr(atom_2, "coord"):
@@ -237,9 +235,7 @@ def get_chain_seqres_sequence(chain, aa_only=False):
     return sequence
 
 
-def get_chain_sequence_and_numbering(
-    chain, domain_def_tuple=None, include_hetatms=False
-):
+def get_chain_sequence_and_numbering(chain, domain_def_tuple=None, include_hetatms=False):
     """Get the amino acid sequence and a list of residue ids for the given chain.
 
     Parameters
@@ -394,15 +390,9 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
     try:
         from Bio.PDB import NeighborSearch
     except ImportError as e:
-        logger.warning(
-            "Importing Biopython NeighborSearch returned an error: {}".format(e)
-        )
-        logger.warning(
-            "Using the the slow version of the neighbour-finding algorithm..."
-        )
-        return get_interactions_between_chains_slow(
-            model, chain_id_1, chain_id_2, r_cutoff
-        )
+        logger.warning("Importing Biopython NeighborSearch returned an error: {}".format(e))
+        logger.warning("Using the the slow version of the neighbour-finding algorithm...")
+        return get_interactions_between_chains_slow(model, chain_id_1, chain_id_2, r_cutoff)
 
     # Extract the chains of interest from the model
     chain_1 = None
@@ -413,9 +403,7 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
         if child.id == chain_id_2:
             chain_2 = child
     if chain_1 is None or chain_2 is None:
-        raise Exception(
-            "Chains %s and %s were not found in the model" % (chain_id_1, chain_id_2)
-        )
+        raise Exception("Chains %s and %s were not found in the model" % (chain_id_1, chain_id_2))
 
     ns = NeighborSearch(list(chain_2.get_atoms()))
     interactions_between_chains = OrderedDict()
@@ -425,9 +413,7 @@ def get_interactions_between_chains(model, chain_id_1, chain_id_2, r_cutoff=6):
             resaa_1 = convert_aa(residue_1.get_resname(), quiet=True)
             interacting_residues = set()
             for atom_1 in residue_1:
-                interacting_residues.update(
-                    ns.search(atom_1.get_coord(), r_cutoff, "R")
-                )
+                interacting_residues.update(ns.search(atom_1.get_coord(), r_cutoff, "R"))
             interacting_resids = []
             for residue_2 in interacting_residues:
                 resnum_2 = str(residue_2.id[1]) + residue_2.id[2].strip()
@@ -467,9 +453,7 @@ def get_interactions_between_chains_slow(model, pdb_chain_1, pdb_chain_2, r_cuto
         if child.id == pdb_chain_2:
             chain_2 = child
     if chain_1 is None or chain_2 is None:
-        raise Exception(
-            "Chains %s and %s were not found in the model" % (pdb_chain_1, pdb_chain_2)
-        )
+        raise Exception("Chains %s and %s were not found in the model" % (pdb_chain_1, pdb_chain_2))
 
     interactions_between_chains = OrderedDict()
     for idx, residue_1 in enumerate(chain_1):
@@ -570,10 +554,8 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
     # Chain 1
     for chain_1_idx, chain_1 in enumerate(model):
         if skip_hetatm_chains and chain_is_hetatm(chain_1):
-            message = (
-                "Skipping chain_1 with idx {} because it contains only hetatms.".format(
-                    chain_1_idx
-                )
+            message = "Skipping chain_1 with idx {} because it contains only hetatms.".format(
+                chain_1_idx
             )
             logger.debug(message)
             continue
@@ -608,9 +590,7 @@ def get_interacting_residues(model, r_cutoff=5, skip_hetatm_chains=True):
                 )
                 interacting_residues = set()
                 for atom_1 in residue_1:
-                    interacting_residues.update(
-                        ns.search(atom_1.get_coord(), r_cutoff, "R")
-                    )
+                    interacting_residues.update(ns.search(atom_1.get_coord(), r_cutoff, "R"))
 
                 # Residue 2
                 interacting_residue_ids = []
@@ -648,9 +628,7 @@ def decode_domain_def(domains, merge=True, return_string=False):
     if return_string:
         domain_fragments = [[r.strip() for r in ro.split(":")] for ro in x.split(",")]
     else:
-        domain_fragments = [
-            [int(r.strip()) for r in ro.split(":")] for ro in x.split(",")
-        ]
+        domain_fragments = [[int(r.strip()) for r in ro.split(":")] for ro in x.split(",")]
     domain_merged = [domain_fragments[0][0], domain_fragments[-1][-1]]
     if merge:
         return domain_merged
@@ -672,9 +650,7 @@ class SelectChains(Select):
         chain_id = residue.parent.id
         if chain_id in self.chain_letters:
             return True
-        elif (self.ns_chain_letters and self.ns) and (
-            chain_id in self.ns_chain_letters
-        ):
+        elif (self.ns_chain_letters and self.ns) and (chain_id in self.ns_chain_letters):
             for atom in residue:
                 if self.ns.search(atom.get_coord(), self.r_cutoff, "C"):
                     return True
@@ -740,9 +716,7 @@ class StructureParser:
         """
         logger.debug("Extracting {}...".format(self.unique_id))
 
-        model = self.input_structure[
-            0
-        ]  # assuming that model 0 is always the desired one
+        model = self.input_structure[0]  # assuming that model 0 is always the desired one
         new_structure = Bio.PDB.Structure.Structure(self.pdb_id)
         new_model = Bio.PDB.Model.Model(0)
 
@@ -779,9 +753,7 @@ class StructureParser:
 
                 # Move water to the hetatm chain
                 if res.id[0] == "W":
-                    self._move_hetatm_to_hetatm_chain(
-                        chain, hetatm_chain, res, echo=False
-                    )
+                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=False)
                     continue
 
                 # # Move heteroatoms to the hetatm chain
@@ -869,9 +841,7 @@ class StructureParser:
 
         try:
             # Save all chains together
-            outFile = op.join(
-                output_dir, self.pdb_id + "".join(self.chain_ids) + ".pdb"
-            )
+            outFile = op.join(output_dir, self.pdb_id + "".join(self.chain_ids) + ".pdb")
             io.save(outFile)
             if len(self.chain_ids) > 1:
                 # Save each chain individually
@@ -880,9 +850,7 @@ class StructureParser:
                     if chain_is_hetatm(chain):
                         continue
                     outFile = op.join(output_dir, self.pdb_id + chain_id + ".pdb")
-                    atom_list = [
-                        atom for atom in self.structure[0][chain_id].get_atoms()
-                    ]
+                    atom_list = [atom for atom in self.structure[0][chain_id].get_atoms()]
                     hetatm_chain_ns = NeighborSearch(atom_list)
                     select = SelectChains(
                         chain_id, self.hetatm_chain_id, hetatm_chain_ns, self.r_cutoff
@@ -891,9 +859,7 @@ class StructureParser:
             if len(self.chain_ids) > 2:
                 # Save each interacting chain pair.
                 for chain_ids in self.interacting_chain_ids:
-                    outFile = op.join(
-                        output_dir, self.pdb_id + "".join(chain_ids) + ".pdb"
-                    )
+                    outFile = op.join(output_dir, self.pdb_id + "".join(chain_ids) + ".pdb")
                     atom_list = [
                         atom
                         for atom in self.structure[0][chain_id].get_atoms()
@@ -945,9 +911,7 @@ class StructureParser:
         new_resname = "LYS"
         new_resid = (" ", res.id[1], res.id[2])
         logger.debug(
-            "Renaming residue {} {} to {} {}".format(
-                res.resname, res.id, new_resname, new_resid
-            )
+            "Renaming residue {} {} to {} {}".format(res.resname, res.id, new_resname, new_resid)
         )
         res.resname = new_resname
         res.id = new_resid
@@ -956,9 +920,7 @@ class StructureParser:
             atom_id = res.child_list[atom_idx].id
             if atom_id not in LYSINE_ATOMS:
                 logger.debug(
-                    "Removing atom {} from residue {} {}.".format(
-                        atom_id, res.resname, res.id
-                    )
+                    "Removing atom {} from residue {} {}.".format(atom_id, res.resname, res.id)
                 )
                 res.detach_child(atom_id)
             else:
@@ -997,9 +959,9 @@ class StructureParser:
     def _remove_distant_hatatms(self, new_model, hetatm_chain):
         """Detach hetatms that are more than ``self.r_cutoff`` away from the main chain(s)."""
         ns = NeighborSearch(list(new_model.get_atoms()))
-        hetatm_chain.id = [
-            c for c in reversed(string.ascii_uppercase) if c not in self.chain_ids
-        ][0]
+        hetatm_chain.id = [c for c in reversed(string.ascii_uppercase) if c not in self.chain_ids][
+            0
+        ]
         res_idx = 0
         while res_idx < len(hetatm_chain):
             res_1 = hetatm_chain.child_list[res_idx]
@@ -1021,9 +983,7 @@ class StructureParser:
 
         Otherwise, Biopython may crash when saving the PDB structure.
         """
-        logger.debug(
-            "Setting all residues and atoms marked as disorded to non-disorded"
-        )
+        logger.debug("Setting all residues and atoms marked as disorded to non-disorded")
         for m in self.structure:
             for c in m:
                 for r in c:

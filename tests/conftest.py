@@ -18,10 +18,8 @@ def pytest_runtest_setup(item):
 
 # Command line options
 def pytest_addoption(parser):
-    parser.addoption("--quick", default=False, action="store_true",
-                     help="Run only quick tests.")
-    parser.addoption("--config-file", default=None,
-                     help="Name of the configuration file.")
+    parser.addoption("--quick", default=False, action="store_true", help="Run only quick tests.")
+    parser.addoption("--config-file", default=None, help="Name of the configuration file.")
 
 
 @pytest.fixture
@@ -34,4 +32,4 @@ def config_file(request):
     return request.config.getoption("--config-file")
 
 
-print('Conftest loaded!')
+print("Conftest loaded!")
