@@ -23,7 +23,7 @@ requirements:
     - retrying
     - coloredlogs
     # Scientific python
-    - numpy
+    - numpy >=1.14
     - scipy
     - pandas
     - scikit-learn
@@ -43,7 +43,7 @@ requirements:
     - retrying
     - coloredlogs
     # Scientific python
-    - numpy
+    - numpy >=1.14
     - scipy
     - pandas
     - scikit-learn
