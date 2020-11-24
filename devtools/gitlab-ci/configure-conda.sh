@@ -21,7 +21,8 @@ case "${PACKAGE_VERSION}" in
     conda config --append channels kimlab;
   ;;
   esac
-conda config --append channels https://conda.anaconda.org/t/$ANACONDA_TOKEN/kimlab
+conda config --append channels https://${KIMLAB_CONDA_LOGIN}@conda.proteinsolver.org
+
 
 # Update conda and conda-build
 conda update conda conda-build
