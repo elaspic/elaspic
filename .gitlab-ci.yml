@@ -113,7 +113,7 @@ test-unittest-sqlite:
     - build-py37
   variables:
     PYTHON_VERSION: "3.7"
-    ELASPIC_DB_STRING: "sqlite:///${HOME}/elaspic.db"
+    ELASPIC_DB_STRING: "sqlite:///${CI_PROJECT_DIR}/elaspic.db"
 
 test-unittest-mysql:
   <<: [*test-unittest-database]
