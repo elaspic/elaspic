@@ -62,6 +62,7 @@ build-py37:
     # Conda install
     - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
       "python=${PYTHON_VERSION}" ${CI_PROJECT_NAME} foldx libfaketime "bioconda::msms"
+    - ln -s /usr/lib64/librt.so.1 /opt/conda/lib/
     # Test
     - pip install -q pytest pytest-cov pytest-logging flake8 hypothesis
     - flake8
@@ -151,6 +152,7 @@ test-unittest-postgresql:
     # Conda install
     - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
      "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx libfaketime "bioconda::msms"
+    - ln -s /usr/lib64/librt.so.1 /opt/conda/lib/
     # Run tests
     # - ./tests/configure_tests.sh
     - pip install -q pytest pytest-cov pytest-logging
@@ -176,6 +178,7 @@ test-standalone-pipeline:
     # Conda install
     - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
      "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx libfaketime "bioconda::msms"
+    - ln -s /usr/lib64/librt.so.1 /opt/conda/lib/
     # Run tests
     # - ./tests/test_database_pipeline.sh
     - pip install -q pytest pytest-cov pytest-logging
