@@ -41,15 +41,15 @@ variables:
     paths:
     - conda-bld
 
-build-py35:
+build-py37:
   <<: [*conda_configure, *build]
   variables:
-    PYTHON_VERSION: "3.5"
+    PYTHON_VERSION: "3.7"
 
-build-py36:
+build-py38:
   <<: [*conda_configure, *build]
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
 
 ###############################################################################
 # Test unittest
@@ -71,19 +71,19 @@ build-py36:
     paths:
     - environment-py${PYTHON_VERSION/./}.yml
 
-test-unittest-py35:
+test-unittest-py37:
   <<: [*conda_configure, *test-unittest]
   dependencies:
-    - build-py35
+    - build-py37
   variables:
-    PYTHON_VERSION: "3.5"
+    PYTHON_VERSION: "3.7"
 
-test-unittest-py36:
+test-unittest-py38:
   <<: [*conda_configure, *test-unittest]
   dependencies:
-    - build-py36
+    - build-py38
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
 
 
 ###############################################################################
@@ -108,19 +108,19 @@ test-unittest-py36:
 test-unittest-sqlite:
   <<: [*test-unittest-database]
   dependencies:
-    - build-py36
+    - build-py38
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
     ELASPIC_DB_STRING: "sqlite:///${HOME}/elaspic.db"
 
 test-unittest-mysql:
   <<: [*test-unittest-database]
   dependencies:
-    - build-py36
+    - build-py38
   services:
     - "mysql:5.7"
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
     MYSQL_DATABASE: "elaspic"
     MYSQL_ROOT_PASSWORD: "rootpass"
     ELASPIC_DB_STRING: "mysql://root:rootpass@mysql/elaspic"
@@ -128,11 +128,11 @@ test-unittest-mysql:
 test-unittest-postgresql:
   <<: [*test-unittest-database]
   dependencies:
-    - build-py36
+    - build-py38
   services:
     - "postgres:9.6"
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
     POSTGRES_DB: "elaspic"
     POSTGRES_USER: "root"
     POSTGRES_PASSWORD: "rootpass"
@@ -158,9 +158,9 @@ test-unittest-postgresql:
 test-standalone-pipeline:
   <<: [*conda_configure, *test-standalone-pipeline]
   dependencies:
-    - build-py36
+    - build-py38
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
     TEST_NUMBER: "1"
 
 ###############################################################################
@@ -183,17 +183,17 @@ test-standalone-pipeline:
 test-database-pipeline:
   <<: [*conda_configure, *test-database-pipeline]
   dependencies:
-    - build-py36
+    - build-py38
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
     # TEST_NUMBER: "1"
 
 # test-database-2:
 #   <<: [*conda_configure, *test-database]
 #   dependencies:
-#     - build-py36
+#     - build-py38
 #   variables:
-#     PYTHON_VERSION: "3.6"
+#     PYTHON_VERSION: "3.8"
 #     TEST_NUMBER: "2"
 
 ###############################################################################
@@ -213,9 +213,9 @@ test-database-pipeline:
 test-pages:
   <<: [*conda_configure, *docs]
   dependencies:
-    - build-py36
+    - build-py38
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
   except:
     - master
     - tags
@@ -223,9 +223,9 @@ test-pages:
 pages:
   <<: [*conda_configure, *docs]
   dependencies:
-    - build-py36
+    - build-py38
   variables:
-    PYTHON_VERSION: "3.6"
+    PYTHON_VERSION: "3.8"
   only:
     - master
     - tags
@@ -249,12 +249,12 @@ pages:
   except:
     - triggers
 
-deploy-py35:
+deploy-py37:
   <<: *deploy
   dependencies:
-    - build-py35
+    - build-py37
 
-deploy-py36:
+deploy-py38:
   <<: *deploy
   dependencies:
-    - build-py36
+    - build-py38
