@@ -5,7 +5,6 @@ import shlex
 import shutil
 import subprocess
 
-import faketime.config
 import pandas as pd
 
 from elaspic import conf, errors
@@ -108,8 +107,6 @@ class FoldX:
 
     def _run(self, system_command, cwd):
         env = os.environ.copy()
-        env["LD_PRELOAD"] = faketime.config.libfaketime_so_file
-        env["FAKETIME"] = "2015-12-26 00:00:00"
         logger.debug(system_command)
         process = subprocess.run(
             shlex.split(system_command),
@@ -142,8 +139,10 @@ class FoldX:
     def _repair_pdb(self, structure_file):
         """Run FoldX ``RepairPDB``."""
         # Run FoldX
-        system_command = "foldx --rotabaseLocation {} --command=RepairPDB ".format(
-            self._foldx_rotabase
+        system_command = (
+            (
+                "faketime '2015-12-26 00:00:00' foldx --rotabaseLocation {} --command=RepairPDB "
+            ).format(self._foldx_rotabase)
         ) + "--pdb='{}'".format(op.basename(structure_file))
         self._run(system_command, op.dirname(structure_file))
 
