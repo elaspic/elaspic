@@ -2,5 +2,3 @@
 
 echo `which elaspic`
 ${PREFIX}/bin/elaspic train
-
-
