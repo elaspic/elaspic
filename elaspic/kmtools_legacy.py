@@ -22,13 +22,13 @@ def decompress(filename):
         logger.info("Gunzipping file '{}'...".format(filename))
         subprocess.check_call(shlex.split("gunzip '{}'".format(filename)))
     except Exception as e:
-        logger.error('Unzipping the file failed with an error: {}'.format(e))
+        logger.error("Unzipping the file failed with an error: {}".format(e))
         raise e
     else:
         yield op.splitext(filename)[0]
     finally:
         logger.info("Gzipping the file back again...")
-        subprocess.check_call(shlex.split("gzip '{}'".format(filename.rstrip('.gz'))))
+        subprocess.check_call(shlex.split("gzip '{}'".format(filename.rstrip(".gz"))))
 
 
 @contextmanager
@@ -101,30 +101,40 @@ def parse_connection_string(connection_string):
      'db_username': 'user'}
     """
     db_params = {}
-    (db_params['db_type'], db_params['db_username'], db_params['db_password'], db_params['db_url'],
-     db_params['db_port'], db_params['db_schema'], db_params['db_socket']) = (
-         re.match(
-             '^(\w*)'  # db_type
-             '://'
-             '(|\w*)'  # db_username
-             '(|:\w*)'  # db_password
-             '(|@localhost|@[a-zA-Z0-9\.-]*|@[0-9\.]*)'  # db_url
-             '(|:[0-9]*)'  # db_port
-             '(|\/[^?]*)'  # db_schema
-             '(|\?unix_socket=.*)$',  # db_socket
-             connection_string).groups())
-    if db_params['db_password'].startswith(':'):
-        if db_params['db_password'] == ':':
-            db_params['db_password'] = ''
+    (
+        db_params["db_type"],
+        db_params["db_username"],
+        db_params["db_password"],
+        db_params["db_url"],
+        db_params["db_port"],
+        db_params["db_schema"],
+        db_params["db_socket"],
+    ) = re.match(
+        "^(\w*)"  # db_type
+        "://"
+        "(|\w*)"  # db_username
+        "(|:\w*)"  # db_password
+        "(|@localhost|@[a-zA-Z0-9\.-]*|@[0-9\.]*)"  # db_url
+        "(|:[0-9]*)"  # db_port
+        "(|\/[^?]*)"  # db_schema
+        "(|\?unix_socket=.*)$",  # db_socket
+        connection_string,
+    ).groups()
+    if db_params["db_password"].startswith(":"):
+        if db_params["db_password"] == ":":
+            db_params["db_password"] = ""
         else:
-            db_params['db_password'] = db_params['db_password'][1:]
+            db_params["db_password"] = db_params["db_password"][1:]
     else:
-        db_params['db_password'] = None
-    db_params['db_url'] = db_params['db_url'].lstrip('@')
-    db_params['db_port'] = db_params['db_port'].lstrip(':')
-    db_params['db_schema'] = (db_params['db_schema'][1:] if db_params['db_schema'].startswith('/')
-                              else db_params['db_schema'])
-    db_params['db_socket'] = db_params['db_socket'].partition('?unix_socket=')[-1]
+        db_params["db_password"] = None
+    db_params["db_url"] = db_params["db_url"].lstrip("@")
+    db_params["db_port"] = db_params["db_port"].lstrip(":")
+    db_params["db_schema"] = (
+        db_params["db_schema"][1:]
+        if db_params["db_schema"].startswith("/")
+        else db_params["db_schema"]
+    )
+    db_params["db_socket"] = db_params["db_socket"].partition("?unix_socket=")[-1]
     return db_params
 
 
@@ -161,17 +171,23 @@ def make_connection_string(**vargs):
         'db_username': ''})
     'sqlite:////absolute/path/to/foo.db'
     """
-    vargs['db_password'] = (':{}'.format(vargs['db_password'])
-                            if vargs.get('db_password') is not None and
-                            not vargs.get('db_schema', '').startswith('/') else '')
-    vargs['db_url'] = ('@{}'.format(vargs['db_url']) if vargs.get('db_url') else '')
-    vargs['db_port'] = (':{}'.format(vargs['db_port']) if vargs.get('db_port') else '')
-    vargs['db_schema'] = ('/{}'.format(vargs['db_schema']) if vargs.get('db_schema') else '/')
-    vargs['db_socket'] = ('?unix_socket={}'.format(vargs['db_socket'])
-                          if vargs.get('db_socket') else '')
-    connection_string = (
-        '{db_type}://{db_username}{db_password}{db_url}{db_port}{db_schema}{db_socket}'.format(
-            **vargs))
+    vargs["db_password"] = (
+        ":{}".format(vargs["db_password"])
+        if vargs.get("db_password") is not None
+        and not vargs.get("db_schema", "").startswith("/")
+        else ""
+    )
+    vargs["db_url"] = "@{}".format(vargs["db_url"]) if vargs.get("db_url") else ""
+    vargs["db_port"] = ":{}".format(vargs["db_port"]) if vargs.get("db_port") else ""
+    vargs["db_schema"] = (
+        "/{}".format(vargs["db_schema"]) if vargs.get("db_schema") else "/"
+    )
+    vargs["db_socket"] = (
+        "?unix_socket={}".format(vargs["db_socket"]) if vargs.get("db_socket") else ""
+    )
+    connection_string = "{db_type}://{db_username}{db_password}{db_url}{db_port}{db_schema}{db_socket}".format(
+        **vargs
+    )
     return connection_string
 
 
@@ -181,10 +197,10 @@ def lock_tables(tablenames, engine):
     if type(tablenames) not in {list, tuple}:
         tablenames = [tablenames]
     try:
-        engine.execute('set innodb_lock_wait_timeout=14400')
-        engine.execute('lock tables ' + ' '.join([t + ' write' for t in tablenames]))
+        engine.execute("set innodb_lock_wait_timeout=14400")
+        engine.execute("lock tables " + " ".join([t + " write" for t in tablenames]))
         yield
     except:
         raise
     finally:
-        engine.execute('unlock tables')
+        engine.execute("unlock tables")

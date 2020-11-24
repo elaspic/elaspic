@@ -29,28 +29,28 @@ class Pipeline:
 
     _valid_run_types = {
         # Sequence
-        '1': 'sequence',
-        'sequence': 'sequence',
+        "1": "sequence",
+        "sequence": "sequence",
         # Model
-        '2': 'model',
-        'model': 'model',
+        "2": "model",
+        "model": "model",
         # Mutation
-        '3': 'mutation',
-        'mutation': 'mutation',
+        "3": "mutation",
+        "mutation": "mutation",
         # Sequence - model
-        '6': 'sequence.model',
-        'sequence,model': 'sequence.model',
-        'sequence.model': 'sequence.model',
+        "6": "sequence.model",
+        "sequence,model": "sequence.model",
+        "sequence.model": "sequence.model",
         # Model - mutation
-        '4': 'model.mutation',
-        'model,mutation': 'model.mutation',
-        'model.mutation': 'model.mutation',
+        "4": "model.mutation",
+        "model,mutation": "model.mutation",
+        "model.mutation": "model.mutation",
         # Sequence - model - mutation
-        '5': 'sequence.model.mutation',
-        'sequence,model,mutation': 'sequence.model.mutation',
-        'sequence.model.mutation': 'sequence.model.mutation',
+        "5": "sequence.model.mutation",
+        "sequence,model,mutation": "sequence.model.mutation",
+        "sequence.model.mutation": "sequence.model.mutation",
         # All
-        'all': 'sequence.model.mutation',
+        "all": "sequence.model.mutation",
     }
 
     def __init__(self, configurations):
@@ -66,7 +66,7 @@ class Pipeline:
             configs.update(**configurations)
 
         # Initialize a logger
-        for line in ELASPIC_LOGO.split('\n'):
+        for line in ELASPIC_LOGO.split("\n"):
             logger.info(line)
 
         self.PWD = os.getcwd()
@@ -86,7 +86,7 @@ class Pipeline:
             return []
         elif not isinstance(mutations, str):
             return mutations
-        for sep in [',', ':']:
+        for sep in [",", ":"]:
             if sep in mutations:
                 return mutations.split(sep)
         return [mutations]

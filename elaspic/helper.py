@@ -25,7 +25,7 @@ class WritableObject:
 
 def slugify(filename_string):
     valid_chars = "-_.()" + string.ascii_letters + string.digits
-    return ''.join(c if c in valid_chars else '_' for c in filename_string)
+    return "".join(c if c in valid_chars else "_" for c in filename_string)
 
 
 @contextmanager
@@ -38,7 +38,7 @@ def log_print_statements(logger):
     original_formatters = []
     for i in range(len(logger.handlers)):
         original_formatters.append(logger.handlers[0].formatter)
-        logger.handlers[i].formatter = logging.Formatter('%(message)s')
+        logger.handlers[i].formatter = logging.Formatter("%(message)s")
     wo = WritableObject(logger)
     try:
         sys.stdout = wo
@@ -71,26 +71,27 @@ def run(system_command, **vargs):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         preexec_fn=lambda: _set_process_group(os.getpgrp()),
-        **vargs)
+        **vargs
+    )
     p.stdout = p.stdout.strip()
     p.stderr = p.stderr.strip()
     return p
 
 
 def get_hostname():
-    return run('hostname | cut -d. -f1').stdout
+    return run("hostname | cut -d. -f1").stdout
 
 
 def get_which(bin_name):
-    return run('which ' + bin_name).stdout
+    return run("which " + bin_name).stdout
 
 
 # Retry
 def _check_exception(exc, valid_exc):
-    logger.error('The following exception occured:\n{}'.format(exc))
+    logger.error("The following exception occured:\n{}".format(exc))
     to_retry = isinstance(exc, valid_exc)
     if to_retry:
-        logger.error('Retrying...')
+        logger.error("Retrying...")
     return to_retry
 
 
@@ -98,11 +99,15 @@ def retry_database(fn):
     """Decorator to keep probing the database untill you succeed."""
     from retrying import retry
     import sqlalchemy as sa
+
     r = retry(
-        retry_on_exception=lambda exc: _check_exception(exc, valid_exc=sa.exc.OperationalError),
+        retry_on_exception=lambda exc: _check_exception(
+            exc, valid_exc=sa.exc.OperationalError
+        ),
         wait_exponential_multiplier=1000,
         wait_exponential_max=60000,
-        stop_max_attempt_number=7)
+        stop_max_attempt_number=7,
+    )
     return r(fn)
 
 
@@ -110,10 +115,14 @@ def retry_archive(fn):
     """Decorator to keep probing the database untill you succeed."""
     from retrying import retry
     from elaspic import errors
+
     r = retry(
-        retry_on_exception=lambda exc: _check_exception(exc, valid_exc=errors.Archive7zipError),
+        retry_on_exception=lambda exc: _check_exception(
+            exc, valid_exc=errors.Archive7zipError
+        ),
         wait_fixed=2000,
-        stop_max_attempt_number=2)
+        stop_max_attempt_number=2,
+    )
     return r(fn)
 
 
@@ -150,30 +159,35 @@ def lock(fn):
 
         """
         # Get the lock filename
-        if fn.__name__ == 'calculate_provean':
-            lock_filename = '{}{}_provean.json'.format(self.pdb_id, args[0])
-        elif fn.__name__ == 'calculate_model':
-            lock_filename = '{}_modeller.json'.format(self.pdb_id)
-        elif fn.__name__ == 'calculate_mutation':
-            lock_filename = '{}{}_mutation_{}.json'.format(self.pdb_id, args[0], args[1])
+        if fn.__name__ == "calculate_provean":
+            lock_filename = "{}{}_provean.json".format(self.pdb_id, args[0])
+        elif fn.__name__ == "calculate_model":
+            lock_filename = "{}_modeller.json".format(self.pdb_id)
+        elif fn.__name__ == "calculate_mutation":
+            lock_filename = "{}{}_mutation_{}.json".format(
+                self.pdb_id, args[0], args[1]
+            )
         else:
             raise Exception("Function {} is not supported!".format(fn))
 
         # Make sure that we can get exclusive rights on the lock
         try:
-            lock = open(lock_filename, 'x')
+            lock = open(lock_filename, "x")
         except FileExistsError:
             try:
-                results = json.load(open(lock_filename, 'r'))
-                info_message = ("Results have already been calculated and are in file: '{}'.\n"
-                                .format(lock_filename, results))
+                results = json.load(open(lock_filename, "r"))
+                info_message = "Results have already been calculated and are in file: '{}'.\n".format(
+                    lock_filename, results
+                )
                 logger.info(info_message)
                 return lock_filename, results
             except ValueError:
                 info_message = (
                     "Another process is currently running this function.\n"
-                    "If you believe this is an error, delete lock file '{}' and try again."
-                    .format(lock_filename))
+                    "If you believe this is an error, delete lock file '{}' and try again.".format(
+                        lock_filename
+                    )
+                )
                 logger.info(info_message)
                 return lock_filename, None
 
