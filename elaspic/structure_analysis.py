@@ -419,8 +419,8 @@ msms -probe_radius {probe_radius:.1f} -surface ases -if '{input_file}' -af '{are
         seasa_df = pd.DataFrame(data=file_data, columns=msms_columns)
         seasa_df["atom_num"] = seasa_df["atom_num"].apply(lambda x: x + 1)
         seasa_df["rel_sasa"] = [
-            x[0] / STANDARD_SASA.get(x[1], x[0]) * 100
-            for x in zip(seasa_df["abs_sasa"], seasa_df["res_name"])
+            (abs_sasa / STANDARD_SASA[res_name] * 100 if res_name in STANDARD_SASA else 100.0)
+            for abs_sasa, res_name in zip(seasa_df["abs_sasa"], seasa_df["res_name"])
         ]
 
         seasa_gp_by_chain = seasa_df.groupby(["pdb_chain"])
