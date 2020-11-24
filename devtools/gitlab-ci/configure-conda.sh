@@ -9,8 +9,8 @@ if [[ -z ${PACKAGE_VERSION} || \
 fi
 
 # Add conda channels
+conda config --add channels bioconda
 conda config --add channels ostrokach-forge
-conda config --append channels bioconda
 conda config --append channels salilab
 case "${PACKAGE_VERSION}" in
   *dev*)
