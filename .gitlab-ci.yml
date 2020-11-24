@@ -59,10 +59,8 @@ build-py36:
   stage: test-basic
   script:
     # Conda install
-    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/ ||
-      echo -e "\033[31mNo packages to copy!\e[0m"
-    - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} "foldx=4"
+    - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
+      "python=${PYTHON_VERSION}" ${CI_PROJECT_NAME} "foldx=4"
     # Test
     - pip install -q pytest pytest-cov pytest-logging flake8 hypothesis
     - flake8
@@ -99,9 +97,8 @@ test-unittest-py36:
     # Configure conda
     - ./devtools/gitlab-ci/configure-conda.sh
     # Install prebuilt package
-    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
-    - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
+    - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
+      "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
   script:
     - elaspic database create
     - elaspic database load_basic http://elaspic.kimlab.org/static/download/latest/homo_sapiens_test/
@@ -151,9 +148,8 @@ test-unittest-postgresql:
     - local  # Don't want to download the blast NR database...
   script:
     # Conda install
-    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
-    - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} "foldx=4"
+    - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
+     "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} "foldx=4"
     # Run tests
     # - ./tests/configure_tests.sh
     - pip install -q pytest pytest-cov pytest-logging
@@ -177,9 +173,8 @@ test-standalone-pipeline:
     - local  # Don't want to download the blast NR database...
   script:
     # Conda install
-    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
-    - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} "foldx=4"
+    - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
+     "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} "foldx=4"
     # Run tests
     # - ./tests/test_database_pipeline.sh
     - pip install -q pytest pytest-cov pytest-logging
@@ -209,11 +204,9 @@ test-database-pipeline:
   stage: test-basic
   script:
     # Conda install
-    - cp -r $CI_PROJECT_DIR/conda-bld/* /opt/conda/conda-bld/
-    - conda index /opt/conda/conda-bld/
-    - conda install -y -q --use-local "python=$PYTHON_VERSION" ${CI_PROJECT_NAME}
+    - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
+      "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} nbconvert ipython ipykernel pandoc
     # Build docs
-    - conda install -yq nbconvert ipython ipykernel pandoc
     - pip install -q sphinx sphinx_rtd_theme recommonmark nbsphinx
     - sphinx-build docs public
 
