@@ -137,9 +137,9 @@ class StandalonePipeline(Pipeline):
                     parsed_mutations = self._parse_mutations(mutations, mutation_format)
                     break
                 except (IndexError, ValueError, errors.MutationMismatchError) as e:
-                    error_message = "Error parsing mutations '{}' using mutation_format '{}':\n{} {}".format(
-                        mutations, mutation_format, type(e), e
-                    )
+                    error_message = (
+                        "Error parsing mutations '{}' using mutation_format '{}':\n{} {}"
+                    ).format(mutations, mutation_format, type(e), e)
                     logger.error(error_message)
                     continue
             if not parsed_mutations:
@@ -306,9 +306,9 @@ class StandalonePipeline(Pipeline):
             mutation_results.append(mutation_result)
             for idxs in self.sp.interacting_chain_idxs:
                 if not all(i in range(len(self.seqrecords)) for i in idxs):
-                    warning = "Skipping idxs: '{}' because we lack the corresponding seqrecord!".format(
-                        idxs
-                    )
+                    warning = (
+                        "Skipping idxs: '{}' because we lack the corresponding seqrecord!"
+                    ).format(idxs)
                     logger.warning(warning)
                     continue
                 if mutation_idx in idxs:

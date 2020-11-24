@@ -767,15 +767,17 @@ class MyDatabase(object):
         with self.session_scope() as session:
             if isinstance(d, UniprotDomain):
                 session.execute(
-                    "delete from {0}.uniprot_domain_model where uniprot_domain_id = {1}".format(
-                        conf.CONFIGS["db_schema"], d.uniprot_domain_id
-                    )
+                    (
+                        "delete from {0}.uniprot_domain_model "
+                        "where uniprot_domain_id = {1}"
+                    ).format(conf.CONFIGS["db_schema"], d.uniprot_domain_id)
                 )
             elif isinstance(d, UniprotDomainPair):
                 session.execute(
-                    "delete from {0}.uniprot_domain_pair_model where uniprot_domain_pair_id = {1}".format(
-                        conf.CONFIGS["db_schema"], d.uniprot_domain_pair_id
-                    )
+                    (
+                        "delete from {0}.uniprot_domain_pair_model "
+                        "where uniprot_domain_pair_id = {1}"
+                    ).format(conf.CONFIGS["db_schema"], d.uniprot_domain_pair_id)
                 )
             else:
                 raise Exception("'d' is of incorrect type!")
@@ -902,7 +904,9 @@ def get_uniprot_base_path(d=None, uniprot_name=None, uniprot_id=None):
         assert uniprot_name is not None and uniprot_id is not None
 
     # TODO: Screw the splitting of uniprot ids!
-    uniprot_base_path = "{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/".format(
+    uniprot_base_path = (
+        "{organism_name}/{uniprot_id_part_1}/{uniprot_id_part_2}/{uniprot_id_part_3}/"
+    ).format(
         organism_name=uniprot_name.split("_")[-1].lower(),
         uniprot_id_part_1=uniprot_id[:3],
         uniprot_id_part_2=uniprot_id[3:5],

@@ -170,10 +170,9 @@ class TCoffee(object):
                 + " -outorder=input"
                 + " -output=fasta_aln"
                 + " -pdb_min_sim=30"
-                +
                 # " -quiet" +
                 # " -no_warning" +
-                " -outfile="
+                + " -outfile="
                 + alignment_output_file
                 + " -multi_core=no"
                 + " -n_core="

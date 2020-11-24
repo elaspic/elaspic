@@ -777,7 +777,7 @@ class _PrepareMutation:
             precalculated_mutation
             and precalculated_mutation.provean_score
             and precalculated_mutation.stability_energy_wt
-            and precalculated_mutation.ddg != None
+            and precalculated_mutation.ddg is not None
         ):  # noqa
             logger.info("Mutation has already been completely evaluated. Skipping...")
             self.mut = precalculated_mutation

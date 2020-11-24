@@ -97,8 +97,8 @@ def _check_exception(exc, valid_exc):
 
 def retry_database(fn):
     """Decorator to keep probing the database untill you succeed."""
-    from retrying import retry
     import sqlalchemy as sa
+    from retrying import retry
 
     r = retry(
         retry_on_exception=lambda exc: _check_exception(
@@ -114,6 +114,7 @@ def retry_database(fn):
 def retry_archive(fn):
     """Decorator to keep probing the database untill you succeed."""
     from retrying import retry
+
     from elaspic import errors
 
     r = retry(
@@ -176,9 +177,9 @@ def lock(fn):
         except FileExistsError:
             try:
                 results = json.load(open(lock_filename, "r"))
-                info_message = "Results have already been calculated and are in file: '{}'.\n".format(
-                    lock_filename, results
-                )
+                info_message = (
+                    "Results have already been calculated and are in file: '{}'.\n"
+                ).format(lock_filename)
                 logger.info(info_message)
                 return lock_filename, results
             except ValueError:

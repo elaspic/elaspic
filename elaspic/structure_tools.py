@@ -784,10 +784,10 @@ class StructureParser:
                     )
                     continue
 
-                #                # Move heteroatoms to the hetatm chain
-                #                if res.id[0] != ' ':
-                #                    self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=True)
-                #                    continue
+                # # Move heteroatoms to the hetatm chain
+                # if res.id[0] != ' ':
+                #     self._move_hetatm_to_hetatm_chain(chain, hetatm_chain, res, echo=True)
+                #     continue
 
                 # Now treating all unusual amino acids as hetatms
                 # Convert methylated lysines to regular lysines

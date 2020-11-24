@@ -185,9 +185,10 @@ def make_connection_string(**vargs):
     vargs["db_socket"] = (
         "?unix_socket={}".format(vargs["db_socket"]) if vargs.get("db_socket") else ""
     )
-    connection_string = "{db_type}://{db_username}{db_password}{db_url}{db_port}{db_schema}{db_socket}".format(
-        **vargs
-    )
+    connection_string = (
+        "{db_type}://{db_username}{db_password}"
+        "{db_url}{db_port}{db_schema}{db_socket}"
+    ).format(**vargs)
     return connection_string
 
 

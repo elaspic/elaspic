@@ -17,6 +17,7 @@ import re
 import tempfile
 
 import coloredlogs
+
 from elaspic import DATA_DIR, helper
 from elaspic.kmtools_legacy import make_connection_string, parse_connection_string
 

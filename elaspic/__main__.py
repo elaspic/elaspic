@@ -8,7 +8,7 @@ from textwrap import dedent
 
 import pandas as pd
 
-from elaspic import CACHE_DIR, DATA_DIR, conf, elaspic_predictor, pipeline
+from elaspic import CACHE_DIR, DATA_DIR, conf, elaspic_predictor
 
 logger = logging.getLogger(__name__)
 
@@ -328,9 +328,7 @@ def configure_run_parser(sub_parsers):
                 evaluate mutations.
             6 | sequence.model:
                 Precalculate Provean supporting sets and homology models.
-        """.format(
-                pipeline.Pipeline._valid_run_types
-            )
+            """
         ),
     )
 
