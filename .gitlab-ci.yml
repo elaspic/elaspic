@@ -12,7 +12,7 @@ stages:
 ###############################################################################
 
 variables:
-  PACKAGE_VERSION: 0.1.46.dev0
+  PACKAGE_VERSION: 0.1.46
   PYTHON_VERSION: "3.7"
   SRC_DIR: "${CI_PROJECT_DIR}"
   SCRIPTS_DIR: "${CI_PROJECT_DIR}/_tests"
