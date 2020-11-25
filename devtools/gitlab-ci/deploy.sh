@@ -9,7 +9,7 @@ case "${PACKAGE_VERSION}" in
       --force
   ;;
   *)
-    anaconda
+    anaconda \
       -t $ANACONDA_TOKEN upload $CI_PROJECT_DIR/conda-bld/linux-64/*.tar.bz2 \
       -u kimlab
   ;;
