@@ -42,7 +42,7 @@ build:
     - cp -r /opt/conda/conda-bld/{linux-64,noarch} ${CI_PROJECT_DIR}/conda-bld
   artifacts:
     paths:
-    - conda-bld
+      - conda-bld
 
 ###############################################################################
 # Test unittest
@@ -64,7 +64,7 @@ test-unittest:
   coverage: /^TOTAL.* (\d+\%)/
   artifacts:
     paths:
-    - environment-py${PYTHON_VERSION/./}.yml
+      - environment-py${PYTHON_VERSION/./}.yml
 
 ###############################################################################
 # Test SQLite database
@@ -73,7 +73,7 @@ test-unittest:
 .test-unittest-database: &test-unittest-database
   stage: test-basic
   before_script:
-    - echo ${HOME}  # To see where to store SQLite database
+    - echo ${HOME} # To see where to store SQLite database
     # Configure conda
     - ./devtools/gitlab-ci/configure-conda.sh
     # Install prebuilt package
@@ -119,57 +119,47 @@ test-unittest-postgresql:
 # Test standalone pipeline
 ###############################################################################
 
-.test-standalone-pipeline: &test-standalone-pipeline
+.test-standalone-pipeline:
+  <<: [*conda_configure]
   stage: test-comprehensive
   tags:
-    - local  # Don't want to download the blast NR database...
+    - local # Don't want to download the blast NR database...
   script:
     # Conda install
     - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
-     "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx libfaketime "bioconda::msms"
+      "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx libfaketime "bioconda::msms"
     - ln -s /usr/lib64/librt.so.1 /opt/conda/lib/
     # Run tests
     # - ./tests/configure_tests.sh
     - pip install -q pytest pytest-cov pytest-logging
     - py.test --quick ./tests/test_standalone_pipeline.py
-
-test-standalone-pipeline:
-  <<: [*conda_configure, *test-standalone-pipeline]
   dependencies:
     - build
   variables:
     TEST_NUMBER: "1"
+  allow_failure: true
 
 ###############################################################################
 # Test database pipeline
 ###############################################################################
 
-.test-database-pipeline: &test-database-pipeline
+.test-database-pipeline:
+  <<: [*conda_configure]
   stage: test-comprehensive
   tags:
-    - local  # Don't want to download the blast NR database...
+    - local # Don't want to download the blast NR database...
   script:
     # Conda install
     - conda install -y -q -c file://${CI_PROJECT_DIR}/conda-bld
-     "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx libfaketime "bioconda::msms"
+      "python=$PYTHON_VERSION" ${CI_PROJECT_NAME} foldx libfaketime "bioconda::msms"
     - ln -s /usr/lib64/librt.so.1 /opt/conda/lib/
     # Run tests
     # - ./tests/test_database_pipeline.sh
     - pip install -q pytest pytest-cov pytest-logging
     - py.test --quick ./tests/test_database_pipeline.py
-
-test-database-pipeline:
-  <<: [*conda_configure, *test-database-pipeline]
   dependencies:
     - build
-
-# test-database-2:
-#   <<: [*conda_configure, *test-database]
-#   dependencies:
-#     - build
-#   variables:
-#     PYTHON_VERSION: "3.7"
-#     TEST_NUMBER: "2"
+  allow_failure: true
 
 ###############################################################################
 # Pages
@@ -204,7 +194,7 @@ pages:
     - triggers
   artifacts:
     paths:
-    - public
+      - public
 
 ###############################################################################
 # Deploy
