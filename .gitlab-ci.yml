@@ -59,7 +59,13 @@ test-unittest:
     # Test
     - pip install -q pytest pytest-cov pytest-logging flake8 hypothesis
     - flake8
-    - py.test -vv
+    - PKG_INSTALL_DIR=$(python -c "import elaspic; print(elaspic.__path__[0])")
+    - python -m pytest
+      -c setup.cfg
+      --cov="${PKG_INSTALL_DIR}"
+      --cov-config=setup.cfg
+      --color=yes
+      "tests/"
     - conda env export -f $CI_PROJECT_DIR/environment-py${PYTHON_VERSION/./}.yml
   coverage: /^TOTAL.* (\d+\%)/
   artifacts:
