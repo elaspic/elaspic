@@ -60,6 +60,7 @@ test-unittest:
     - pip install -q pytest pytest-cov pytest-logging flake8 hypothesis
     - flake8
     - PKG_INSTALL_DIR=$(python -c "import elaspic; print(elaspic.__path__[0])")
+    - rm -rf elaspic/
     - python -m pytest
       -c setup.cfg
       --cov="${PKG_INSTALL_DIR}"
