@@ -59,8 +59,8 @@ def read_build_model(output_file, wt_pdb_id, mut_pdb_id):
     df = df.rename(columns=str.lower)
     logger.debug(df.head())
     logger.info(df.head())
-    df_wt = df.loc[df["pdb"] == wt_pdb_id, :].drop("pdb", axis=1)
-    df_mut = df.loc[df["pdb"] == mut_pdb_id, :].drop("pdb", axis=1)
+    df_wt = df.loc[df["pdb"] == wt_pdb_id, :].drop("pdb", axis=1).drop_duplicates()
+    df_mut = df.loc[df["pdb"] == mut_pdb_id, :].drop("pdb", axis=1).drop_duplicates()
     assert df_wt.shape[0] == 1 and df_mut.shape[0] == 1
     # Compile results
     stability_values_wt = df_wt.iloc[0].tolist()
