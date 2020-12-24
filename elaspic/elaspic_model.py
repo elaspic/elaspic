@@ -487,7 +487,7 @@ class Model:
 
         #######################################################################
         # 2nd: use the 'Repair' feature of FoldX to optimise the structure
-        foldx = call_foldx.FoldX(model_file, chain_id, mutation_dir)
+        foldx = call_foldx.FoldX(mutation_dir)
 
         #######################################################################
         # 3rd: introduce the mutation using FoldX
@@ -500,7 +500,7 @@ class Model:
             structure_file_mut,
             stability_values_wt,
             stability_values_mut,
-        ) = foldx.build_model(foldx_mutation)
+        ) = foldx.build_model(model_file, foldx_mutation)
         logger.debug("structure_file_wt: %s", structure_file_wt)
         logger.debug("structure_file_mut: %s", structure_file_mut)
 
@@ -790,8 +790,8 @@ def run_modeller(
     chains = structure[0].child_list
     logger.debug("Modeller chain ids: " + ", ".join(chain.id for chain in chains))
     for i in range(len(chains)):
-        if chains[i]._id != new_chains[i]:
-            chains[i]._id = new_chains[i]
+        if chains[i].id != new_chains[i]:
+            chains[i].id = new_chains[i]
     assert len(set(chain.id for chain in chains)) == len(chains)
     logger.debug("Corrected chain ids: " + ", ".join(chain.id for chain in chains))
     io.set_structure(structure)
