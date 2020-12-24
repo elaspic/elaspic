@@ -498,6 +498,9 @@ class PrepareMutation:
         features["provean_score"] = results["provean_score"]
         features["matrix_score"] = results["matrix_score"]
 
+        if pd.isnull(features["provean_score"]):
+            raise ValueError("Provean score is null")
+
         # Structure features
         results = self.model.mutate(self.mutation_idx, self.mutation)
 
